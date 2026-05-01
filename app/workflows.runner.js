@@ -32,7 +32,8 @@ window.DPRWorkflowRunner = (function () {
       dispatchInputs: {
         top_k: '50',
         rrf_top_n: '200',
-        run_rerank: 'false',
+        run_rerank: 'true',
+        run_llm_refine: 'true',
       },
     },
   ];

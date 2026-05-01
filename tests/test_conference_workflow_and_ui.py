@@ -17,7 +17,8 @@ class ConferenceWorkflowAndUiTest(unittest.TestCase):
         self.assertIn("years", inputs)
         self.assertEqual((inputs.get("top_k") or {}).get("default"), "50")
         self.assertEqual((inputs.get("rrf_top_n") or {}).get("default"), "200")
-        self.assertEqual((inputs.get("run_llm_refine") or {}).get("default"), "false")
+        self.assertEqual((inputs.get("run_rerank") or {}).get("default"), "true")
+        self.assertEqual((inputs.get("run_llm_refine") or {}).get("default"), "true")
         self.assertIn("MKL_THREADING_LAYER: GNU", text)
         self.assertIn("DEEPSEEK_API_KEY", text)
         self.assertIn("python src/conference_pipeline.py", text)
@@ -32,6 +33,8 @@ class ConferenceWorkflowAndUiTest(unittest.TestCase):
 
         self.assertIn("conference-paper-retrieval.yml", runner)
         self.assertIn("runConferenceRetrieval", runner)
+        self.assertIn("run_rerank: 'true'", runner)
+        self.assertIn("run_llm_refine: 'true'", runner)
         self.assertIn("runConferenceRetrieval(conf, years)", manager)
         self.assertIn("会议论文检索", manager)
         self.assertNotIn("runConferenceMaintain(conf, years)", manager)
