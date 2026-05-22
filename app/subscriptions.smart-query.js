@@ -51,18 +51,25 @@ window.SubscriptionsSmartQuery = (function () {
     '}',
     'Requirements:',
     '1) keywords: output 5-12 objects; each item must include keyword and query, keyword_cn optional.',
-    '2) keywords are used for recall and should be atomic phrases (prefer 1-3 core words).',
-    '3) Keep keywords atomic and avoid packing multiple concepts into one phrase.',
-    '4) Do not include concrete example topics in the prompt.',
-    '5) intent_queries: output 1-4 actionable intent queries. Each item should include query and optional query_cn.',
-    '6) Do not output extra fields like must_have / optional / exclude / rewrite_for_embedding.',
-    '7) Return pure JSON only, no explanations.',
-    '8) intent_queries should be concise, timeless, and must not include years or year-like tokens.',
-    '9) Tag suggestion should be concise, preferably under 6 characters.',
-    '10) Tag suggestion must NOT include any year. Do not append or embed years (including digits like 2026/2025/2024 etc.) in tag.',
+    '2) keyword and query MUST be English retrieval text only. Do not put Chinese in keyword or query.',
+    '3) keyword_cn and query_cn MUST be Chinese translations/explanations when present.',
+    '4) keywords are used for recall and should be atomic phrases (prefer 1-3 core words).',
+    '5) Keep keywords atomic and avoid packing multiple concepts into one phrase.',
+    '6) Do not include concrete example topics in the prompt.',
+    '7) intent_queries: output 1-4 actionable intent queries. The query field MUST be English only; query_cn should be Chinese.',
+    '8) Do not output extra fields like must_have / optional / exclude / rewrite_for_embedding.',
+    '9) Return pure JSON only, no explanations.',
+    '10) intent_queries should be concise, timeless, and must not include years or year-like tokens.',
+    '11) Tag suggestion should be concise, preferably under 6 characters.',
+    '12) Tag suggestion must NOT include any year. Do not append or embed years (including digits like 2026/2025/2024 etc.) in tag.',
   ].join('\n');
 
   const normalizeText = (v) => String(v || '').trim();
+  const containsCjk = (v) => /[\u3400-\u9fff\uf900-\ufaff]/.test(String(v || ''));
+  const isEnglishRetrievalText = (v) => {
+    const text = normalizeText(v);
+    return !!text && !containsCjk(text);
+  };
   const PAPER_SOURCE_ORDER = [
     'arxiv',
     'biorxiv',
@@ -678,21 +685,28 @@ window.SubscriptionsSmartQuery = (function () {
     let keywords = rawKeywords
       .map((item, idx) => {
         if (!item) return null;
-        const keyword =
+        const rawKeyword =
           typeof item === 'string' ? normalizeText(item) : normalizeText(item.keyword || item.text || item.expr || '');
-        if (!keyword) return null;
+        if (!isEnglishRetrievalText(rawKeyword)) return null;
         const keywordCn = normalizeText(
           typeof item === 'string'
             ? ''
             : normalizeText(item.keyword_cn || item.keyword_zh || item.zh || ''),
         );
-        const query = normalizeText(
-          typeof item === 'string' ? keyword : normalizeText(item.query || item.rewrite || keyword),
+        const rawQuery = normalizeText(
+          typeof item === 'string' ? rawKeyword : normalizeText(item.query || item.rewrite || rawKeyword),
         );
+        const queryCn = normalizeText(
+          typeof item === 'string'
+            ? ''
+            : normalizeText(item.query_cn || item.query_zh || item.note || ''),
+        );
+        const query = isEnglishRetrievalText(rawQuery) ? rawQuery : rawKeyword;
         return {
-          keyword,
+          keyword: rawKeyword,
           keyword_cn: keywordCn,
-          query: query || keyword,
+          query: query || rawKeyword,
+          query_cn: queryCn || (containsCjk(rawQuery) ? rawQuery : ''),
         };
       })
       .filter(Boolean);
@@ -752,7 +766,9 @@ window.SubscriptionsSmartQuery = (function () {
     });
 
     const rawIntentQueries = normalizeIntentSource(data);
-    const intentQueries = normalizeIntentQueryEntries(rawIntentQueries);
+    const intentQueries = normalizeIntentQueryEntries(rawIntentQueries).filter((item) =>
+      isEnglishRetrievalText(item && item.query),
+    );
 
     return {
       tag: cleanedTag,
@@ -939,7 +955,7 @@ window.SubscriptionsSmartQuery = (function () {
     const parsed = loadJsonLenient(content);
     const candidates = normalizeGenerated(parsed);
     if (!candidates.keywords.length) {
-      throw new Error('模型未返回可用候选，请调整描述后重试。');
+      throw new Error('模型未返回可用英文候选，请调整描述后重试。');
     }
     return candidates;
   };
@@ -2486,5 +2502,12 @@ window.SubscriptionsSmartQuery = (function () {
     attach,
     render,
     clearPendingDeletedProfileIds,
+    __test: {
+      buildPromptFromTemplate,
+      defaultPromptTemplate,
+      containsCjk,
+      isEnglishRetrievalText,
+      normalizeGenerated,
+    },
   };
 })();
