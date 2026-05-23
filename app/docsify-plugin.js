@@ -3942,6 +3942,30 @@ window.$docsify = {
             return `<span class="tag-label ${css}">${escapeHtml(label)}</span>`;
           }).join(' ');
         };
+        const renderSourceChips = (source) => {
+          const text = String(source || '').trim();
+          if (!text) return '';
+          const parts = text.split('-').map((item) => item.trim()).filter(Boolean);
+          if (parts.length >= 3 && /^\d{4}$/.test(parts[1])) {
+            const statusRaw = parts.slice(2).join('-');
+            const statusLower = statusRaw.toLowerCase();
+            let statusLabel = statusRaw;
+            let statusClass = 'tag-source';
+            if (statusLower.startsWith('accepted')) {
+              statusLabel = 'Accepted';
+              statusClass = 'tag-accepted';
+            } else if (statusLower.startsWith('rejected')) {
+              statusLabel = 'Rejected';
+              statusClass = 'tag-rejected';
+            }
+            return [
+              `<span class="tag-label tag-source">${escapeHtml(parts[0].toUpperCase())}</span>`,
+              `<span class="tag-label tag-source">${escapeHtml(parts[1])}</span>`,
+              `<span class="tag-label ${statusClass}">${escapeHtml(statusLabel)}</span>`,
+            ].join(' ');
+          }
+          return `<span class="tag-label tag-source">${escapeHtml(text)}</span>`;
+        };
 
         const lines = [];
 
@@ -3973,7 +3997,7 @@ window.$docsify = {
         lines.push('<div class="paper-meta-right">');
         lines.push(`<p><strong>Authors</strong>: ${escapeHtml(meta.authors || 'Unknown')}</p>`);
         if (meta.source) {
-          lines.push(`<p><strong>Source</strong>: ${escapeHtml(meta.source)}</p>`);
+          lines.push(`<p><strong>Source</strong>: ${renderSourceChips(meta.source)}</p>`);
         }
         lines.push(`<p><strong>Date</strong>: ${escapeHtml(meta.date || 'Unknown')}</p>`);
         if (meta.pdf) {

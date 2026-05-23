@@ -409,7 +409,7 @@ def build_conference_markdown(
     except Exception:
         score_text = norm_text(score)
 
-    tags = [f"paper:{conference.upper()}", f"paper:{years.replace(',', '/')}"]
+    tags: List[str] = []
     matched_tag = norm_text(ranked_item.get("matched_query_tag"))
     if matched_tag:
         kind, label = normalize_sidebar_tag(matched_tag)
@@ -424,7 +424,8 @@ def build_conference_markdown(
     lines.append(f"date: {yaml_escape_value(published)}")
     if pdf_url:
         lines.append(f"pdf: {yaml_escape_value(pdf_url)}")
-    lines.append(f"tags: [{', '.join(yaml_escape_value(tag) for tag in tags)}]")
+    if tags:
+        lines.append(f"tags: [{', '.join(yaml_escape_value(tag) for tag in tags)}]")
     if score_text:
         lines.append(f"score: {score_text}")
     if evidence:
