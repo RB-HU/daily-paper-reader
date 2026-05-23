@@ -596,6 +596,18 @@
   // 可选 progress 回调用于在 UI 中展示上传进度：progress(currentIndex, total, secretName)
   async function saveSummarizeSecretsToGithub(token, options, progress) {
     try {
+      if (!window.sodium && typeof window.DPRLoadAssets === 'function') {
+        await window.DPRLoadAssets([
+          {
+            type: 'script',
+            path: 'app/vendor/libsodium/0.7.10/dist/modules/libsodium.js',
+          },
+          {
+            type: 'script',
+            path: 'app/vendor/libsodium-wrappers/0.7.9/dist/modules/libsodium-wrappers.js',
+          },
+        ]);
+      }
       // 等待 libsodium-wrappers 就绪（通过 CDN 注入全局 sodium）
       if (!window.sodium || !window.sodium.ready) {
         if (
