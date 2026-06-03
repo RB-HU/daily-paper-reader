@@ -1,0 +1,1541 @@
+Title: EmoDistill: Offline Emotion Skill Distillation for Language Model Agents in Adversarial Negotiation
+
+URL Source: https://arxiv.org/pdf/2605.26785v1
+
+Published Time: Wed, 27 May 2026 00:54:54 GMT
+
+Number of Pages: 32
+
+Markdown Content:
+# EmoDistill: Offline Emotion Skill Distillation for Language Model Agents in Adversarial Negotiation 
+
+Yunbo Long 1,∗ Haolang Zhao 1,∗ Lukas Beckenbauer 2
+
+Liming Xu 1,4 Alexandra Brintrup 1,5†
+
+> 1
+
+University of Cambridge 2Technical University of Munich 
+
+> 4
+
+Exiger LLC 5The Alan Turing Institute 
+
+{yl892,hz496,lx249,ab702}@cam.ac.uk lukas.beckenbauer@tum.de  
+
+> ∗Equal contribution. †Corresponding author.
+
+Abstract 
+
+Post-trained LLMs are often optimized to align responses with human preferences, making them safe, polite, and conversationally ap-propriate. In adversarial negotiation, how-ever, this alignment can become a vulnerabil-ity: emotionally framed language may steer agents toward the counterparty’s interests. Us-ing GoEmotions-based affective prompting, we show that emotion substantially shifts nego-tiation outcomes, suggesting that emotion is a strategic action channel rather than a sur-face style. Thus, we introduce EmoDistill ,an offline framework for distilling emotional negotiation skills into language model agents. EmoDistill decomposes emotional strategy into emotion selection and emotion expression: an Implicit Q-Learning (IQL) selector learns 
+
+which emotion to express, while a Low-Rank Adaptation (LoRA)-based policy learns how 
+
+to express it through Supervised Fine-Tuning (SFT) and Judge Policy Optimization (JPO). Across four emotion-sensitive, high-stakes ne-gotiation domains, SLM policies trained under the EmoDistill framework achieve the highest utility, outperforming vanilla SLM/LLM base-lines and IQL-only emotion selection. Abla-tions show that emotion conditioning is essen-tial, and transfer studies demonstrate general-ization across domains, unseen counterparties, and trained-vs-trained tournaments. Overall, EmoDistill learns skills from offline agent-to-agent interactions, avoiding costly online nego-tiation during training. The code is available at https://github.com/Yunbo-max/EmoDistill. 
+
+1 Introduction 
+
+Modern large language models (LLMs) are exten-sively post-trained through RLHF (Kasbouya and Sael, 2025), DPO (Gao et al., 2025), and instruc-tion tuning to be helpful, polite, and accommo-dating. While this alignment makes them useful general-purpose assistants, it can become a liability when the same models are deployed as autonomous 
+
+Figure 1: Single-emotion prompting effects on CRAD Debt Negotiation. GoEmotions labels are ranked by mean per-turn judge reward ( ±95% Welch CI), with the vanilla baseline shown as a dashed line. 
+
+agents in strategic or adversarial settings. This risk is amplified in tool-calling agents that take conse-quential actions on behalf of users, such as transfer-ring money, booking travel, purchasing products, scheduling meetings, or handling customer sup-port (Lin et al., 2024; Abbasiantaeb et al., 2024; Hu et al., 2025). Many such tasks are negotiations over price, time, priority, refunds, or deadlines. Since the counterparty can be another LLM agent, and no human may be in the loop, emotionally charged lan-guage becomes a practical attack method. Because emotional cues strongly condition LLM outputs, emotion can function both as a strategic vulnerabil-
+
+> arXiv:2605.26785v1 [cs.CL] 26 May 2026 Figure 2: Overview of EmoDistill, which converts offline LLM-vs-LLM negotiations into reward-annotated emotional negotiation skills and distills them into a 7B SLM through IQL emotion selection, LoRA-SFT, and JPO.
+
+ity and, if properly modeled, as a defensive control channel. To verify that emotion is a meaningful strategic variable rather than a cosmetic prompt feature, we first run a controlled single-emotion prompting study on CRAD using GoEmotions la-bels (Demszky et al., 2020). For each emotion, we evaluate the LLM negotiator on the same 20 held-out scenarios across 20 sampled runs and compute the mean per-turn judge reward. Several emotions produce rewards significantly above the neutral prompt, showing that emotional framing alone can systematically change negotiation outcomes. This motivates treating emotion as an action: a negotia-tor should learn not only what offer to make, but also which emotion to express. The full statistical procedure is given in Appendix B. A direct approach is online learning from sam-pled negotiations and observed outcomes. How-ever, this is a poor fit for LLM agent-to-agent ne-gotiation. Each rollout is a costly multi-turn inter-action with stochastic API-based agents, making data difficult to regenerate, reuse, or reproduce. Moreover, many sampled dialogues are weak su-pervision for emotional strategy: they may end in early agreement, noisy affective responses, or failed negotiation without revealing which emo-tional behavior caused the outcome. This makes online RL methods such as PPO (Schulman et al., 2017) expensive and unstable in our setting. Ex-isting emotion-aware negotiation methods reduce part of this cost by modeling emotion as a dynamic decision variable (Long et al., 2026a, 2025a,b). However, they mainly optimize which emotion to express and rely on sparse trajectory-level feed-back, which can indicate whether an emotional sequence worked but not which particular response improved or damaged the negotiation. More im-portantly, they leave the utterance generator largely fixed, so a selected emotion may still be realized as vague politeness, premature concession, or weak justification. The missing part is strategic emo-tional expression . In negotiation, emotion is useful only when it is grounded in the current bargaining state. Anger should target an unacceptable pro-posal rather than the person; fear should create credible urgency rather than signal weakness; and concession should be framed as a conditional trade rather than capitulation. Thus, the goal is not to make the model sound emotional, but to make emo-tion function as part of the bargaining move. This motivates our notion of an emotional negotiation skill . Recent agent systems treat skills as reusable capabilities that can be retrieved, executed, evalu-ated, and revised (Zhou et al., 2026). In our setting, a skill is not a hand-written prompt or external procedure, but a reward-annotated negotiation turn 
+
+(st, e t, u t, r t) from an offline LLM-vs-LLM sweep. It binds the dialogue state, emotional stance, con-crete utterance, and judge feedback into a reusable bargaining move. Rather than storing such skills in an external library, we distill them into the pa-rameters of a smaller negotiator. Thus, we propose 
+
+EmoDistill , an offline framework that distills emo-tional negotiation skills from precomputed LLM-vs-LLM rollouts. By separating emotion selection from emotional expression, EmoDistill enables a 7B SLM to learn effective negotiation behavior without live API rollouts. Main contributions are: • We introduce EmoDistill , an offline frame-work that distills LLM-level emotional switch-ing and expression strategies into smaller lan-guage model negotiators. Experiments show that EmoDistill enables a 7B SLM to outperform stronger LLM and SLM baselines across multiple negotiation domains, while also demonstrating non-trivial transfer to unseen settings. • We empirically reveal the coupled role of emo-tion selection and emotional expression in LLM negotiation. By separating IQL-based emotion selection from SFT-based expression learning un-der randomized emotion conditioning, we show that optimizing how an agent expresses a selected emotion can combine with emotion choice to pro-duce more effective negotiation strategies. • We propose Judge Policy Optimization (JPO), which uses LLM-judge-derived advantages to re-fine the SFT-trained expression policy. The judge provides dense turn-level feedback on how each utterance contributes to the negotiation trajectory, allowing the SLM to improve emotional expres-sion from offline data beyond standard SFT. 
+
+2 Related Work 
+
+Emotion in agent-to-agent negotiation. Mod-ern LLM agents are trained on human-authored text and dialogue, and therefore inherit affective and pragmatic patterns such as politeness, empa-thy, and concession framing. When these mod-els negotiate with other agents, such patterns be-come part of the bargaining interface. Since prior work shows that emotions can serve as dynamic strategic instruments in negotiation (Huang and Hadfi, 2024; Griessmair et al., 2015; Olekalns and Druckman, 2014), we treat emotion as a control-lable action channel in LLM-based agent-to-agent bargaining. Recent LLM-based negotiation sys-tems have begun treating emotion as a meaningful variable, but typically as an input rather than an optimized output. AgreeMate (Chatterjee et al., 2024) and ACE (Shea et al., 2024) use emotion-aware reasoning, while EQ-Negotiator (Long et al., 2026a) combines emotion sensing with Hidden-Markov reasoning. EmoDebt (Long et al., 2025a) and EvoEmo (Long et al., 2025b) go further by treating emotion as a sequential decision variable, optimized via Bayesian optimization and evolu-tionary search respectively. However, all of these optimize which emotion to express while leaving the utterance generator fixed; a selected emotion may still be realized through vague politeness or premature concession. EmoDistill addresses this gap by jointly distilling emotion selection and emo-tional expression into a smaller model. 
+
+Decoupling strategy from expression. He et al. (2018) first proposed decoupling high-level coarse dialogue acts (e.g., propose(price=50) )from utterance generation in negotiation, observ-ing that end-to-end RL tends to collapse to de-generate solutions such as repetitive utterances or meaningless concessions that exploit the reward signal. This idea has been extended to cooperative emotional-support dialogue: EmoDynamiX (Wan et al., 2025) decouples strategy prediction from generation via heterogeneous graph modeling, and DecoupledESC (Zhang et al., 2025) uses strategy-response decoupled DPO to mitigate preference bias. Our setting is adversarial rather than cooper-ative, and the strategic axis is emotion rather than price-level acts; these differences require different training signals and a different decoupling mecha-nism. EmoDistill decouples emotion selection (an offline IQL selector) from emotional expression (a LoRA-adapted SLM generator), distilling both into a 7B student rather than coordinating a frozen LLM with a retrieval module. 
+
+Offline distillation with LLM-judge signals. 
+
+LLM judges provide scalable supervision when human labels or online rollouts are expensive. RLAIF (Lee et al., 2023; Bai et al., 2022) uses AI-generated preferences for sequence-level align-ment, while process reward models (Lightman et al., 2024) provide step-level feedback mainly for reasoning tasks. A-LoL (Baheti et al., 2024) is related as an offline advantage-based method for language-model refinement: it treats the en-tire generated response as one action and trains on positive-advantage examples. However, multi-turn negotiation requires a different credit-assignment structure. In EmoDistill, each focal-agent turn is a reward-annotated emotional bargaining move, and JPO refines the expression policy using scenario-normalized turn-level judge advantages. This lets the model learn which emotional utterances move the bargaining trajectory toward or away from the focal target, rather than only amplifying sequence-level positive examples. We compare A-LoL and JPO refinement in Appendix K. 
+
+3 EmoDistill 
+
+EmoDistill is an offline pipeline with three stages. We first construct an LLM-vs-LLM negotiation dataset and attach two complementary signals to each offline trajectory: a dense per-turn LLM-judge score for each focal-agent utterance and an outcome-shaped trajectory return computed from observed bargaining dynamics and terminal agree-ment. The same offline sweep is reused across all training stages: IQL uses the outcome-shaped re-turn for emotion selection (§3.3), LoRA-SFT uses a hybrid judge–outcome filter for demonstration selection, and JPO uses dense judge-derived ad-vantages for utterance-level policy improvement (§3.4). Section 3.2 formalizes this stage-wise sig-nal design. The full EmoDistill policy is reported in experiments as IQL+SFT+JPO : IQL selects which emotional skill to invoke, LoRA-SFT initial-izes how that skill is expressed, and JPO refines the utterance generator with dense judge-derived advantages. 
+
+3.1 Offline Trajectory Dataset and Judge Annotation 
+
+For each domain (CRAD, Disaster Rescue, Hos-pital Surgery, Student Sleep), we collect N =80 
+
+training scenarios × M =100 random emotion-sequence rollouts, yielding an offline dataset D
+
+of 8000 trajectories per domain. Each rollout sam-ples emotions from the full action vocabulary E
+
+(28 GoEmotions labels). At each focal-agent turn, 
+
+D records zt = ( st, e t, u t, r t, s t+1 ), where st is the dialogue state, et ∈ E is the emotion action, 
+
+ut is the focal utterance, rt is the judge-assigned per-turn reward, and st+1 is the next state after the counterparty responds. Each high-reward instance constitutes an emotional negotiation skill : a state-grounded emotional stance realized through a con-crete bargaining utterance. The full per-turn judge rubric prompt is given in Appendix P.3. Dataset de-tails, sweep construction, and the prompt interface are given in Appendices E.1, E.2, and P. 
+
+3.2 Reward Design and Stage-wise Signal Use 
+
+EmoDistill draws training signals from two com-plementary sources: a per-turn LLM judge that provides dense subjective evaluation of each fo-cal utterance, and an outcome-shaped objective reward computed from observed bargaining dy-namics and terminal agreement. 
+
+Subjective signal. A Qwen3.5-Plus judge scores each focal utterance against a metric-aligned rubric that rewards anchoring toward the focal target, con-crete proposals, and scenario-grounded leverage, while penalizing capitulation, vagueness, repeti-tion, and emotion-inconsistent concessions. We denote the raw per-turn score by rt and normalize within scenario: 
+
+At = rt − μscen 
+
+σscen + ϵ . (1) 
+
+Objective signal. The outcome-shaped reward 
+
+R(τ ) rewards the focal agent for shifting the bar-gaining gap in its favor: 
+
+R(τ ) = 
+
+> Tτ
+
+X
+
+> t=1
+
+w(t) ∆ctp  
+
+> t
+
+− ∆foc 
+
+> t
+
+| {z }
+
+> step shaping
+
++ Rterm (τ )
+
+| {z }
+
+> agreement bonus
+
+.
+
+(2) The step shaping credits turns where the counter-party concedes more than the focal agent: ∆ctp 
+
+> t
+
+is the counterparty’s per-turn move toward the fo-cal target (positive when they close the gap), and 
+
+∆foc  
+
+> t
+
+is the focal agent’s own retreat (positive when they move away from their target), both normal-ized by the initial anchor-to-target gap. The termi-nal anchor Rterm (τ )=+2 for reached agreement and −2 for breakdown. The linear time-decay 
+
+w(t)= max(0 , min(1 , 1−t/T max )) down-weights late-turn concessions as an implicit length penalty. 
+
+R(τ ) uses no LLM-judge signal; the full formu-lation and reward-variant definitions are in Ap-pendix D. 
+
+Stage-wise signal use. The two signals are repur-posed across stages. (i) IQL (§3.3) uses the objec-tive R(τ ) as a Bellman-propagated terminal reward, so the selector is rewarded for emotion sequences that actually close the bargaining gap rather than those that merely sound persuasive. (ii) LoRA-SFT (§3.4) uses a hybrid filter combining rt and 
+
+R(τ ) to select demonstrations that are both locally well-formed and globally productive. (iii) JPO 
+
+(§3.4) uses the subjective per-turn At for clipped offline policy improvement, enabling credit assign-ment at the level of individual emotional expres-sions. In Sec. 4 we ablate three reward variants per stage, differing in how the signal is distributed across turns: outcome-shaped (objective, sparse :
+
+R(τ ) only at trajectory end, propagated via Bell-man backups), episode-judge (subjective, broad-cast : one dialogue-level judge score copied to every turn), and turn-judge (subjective, dense : an inde-pendent judge score per focal turn). SFT benefits from clean objective filters ( which demonstrations to imitate ); JPO benefits from dense subjective ad-vantages ( which expressions to upweight ). 
+
+3.3 Emotion Selection with Offline IQL 
+
+The selector treats et ∈ E as the action and st as the state. We train Implicit Q-Learning (IQL) on D,learning Q(s, e ) and V (s) with the standard expec-tile objective, and extract an advantage-weighted selector with temperature βAWR :
+
+πϕ(e | s) ∝ exp  βAWR · (Q(s, e ) − V (s)) . (3) At inference, the selector samples an emotion for the current dialogue state, which is then inserted into the expression policy’s prompt. IQL learns 
+
+which emotional skill to invoke; it does not update the utterance generator. Detailed selector objec-tives and pseudocode are provided in Appendices C and C.1. 
+
+3.4 Distilling Emotional Expression 
+
+The IQL selector chooses the emotional skill, but the base SLM still needs to learn how to execute it in language. We train a LoRA adapter on Qwen2.5-7B-Instruct in two stages. 
+
+Stage 1: LoRA-SFT initialization. We score each turn in D by a hybrid quality function qhyb  
+
+> t
+
+=
+
+rt + 12 R(τ ), where the per-turn judge rt rewards locally well-formed expression and the trajectory return R(τ ) rewards turns drawn from globally pro-ductive negotiations. We retain the top 25% of 
+
+(st, e t, u t) tuples ranked by qhyb  
+
+> t
+
+as demonstrations and train the LoRA adapter to generate ut condi-tioned on (st, e t) via token-level cross-entropy: 
+
+LSFT = −
+
+> |ut|
+
+X
+
+> k=1
+
+log πθ(ut,k | st, e t, u t,<k ). (4) 
+
+Stage 2: Judge Policy Optimization (JPO). 
+
+Freezing the SFT adapter as πref , JPO applies an offline PPO-clipped surrogate with importance ra-tio ρt = πθ(ut | st, e t)/π ref (ut | st, e t) and a K3 KL anchor (Schulman, 2020) to πref . To control how strongly JPO moves away from low-value ut-terances, we replace the symmetric advantage At
+
+from Eq. (1) with an asymmetric variant: 
+
+eAt =
+
+(
+
+At, At > 0,κA t, At ≤ 0, (5) where κ∈[0 , 1] controls the weight on negative-advantage samples. Smaller κ preserves more of the SFT deal-closing prior by weakening the push away from low-value utterances; larger κ applies stronger pressure against such utterances. The JPO objective is then 
+
+LJPO = − E min  ρt eAt, clip (ρt, 1−ε, 1+ ε) eAt
+
+ 
+
++ λKL · KL K3 [πθ ∥ πref ].
+
+(6) Training hyperparameters, including LoRA config-uration, ε, λKL , and the validation protocol for κ,are reported in Appendix F. 
+
+3.5 Variants and Emotion-Free Ablation 
+
+In the main tables, IQL+SFT+JPO denotes the full EmoDistill policy, combining IQL emotion selec-tion, LoRA-SFT expression initialization, and JPO expression refinement. We evaluate three compo-nent variants. IQL uses only the learned emotion selector and pairs it with the frozen LLM gener-ator, testing whether emotion selection alone can improve an LLM negotiator. IQL+SFT replaces the frozen LLM generator with a LoRA-adapted SLM expression policy trained by supervised fine-tuning. IQL+JPO removes the SFT warm start and tests direct judge-guided refinement of the SLM expression policy. We also evaluate an emotion-free diagnostic variant. The default EmoDistill policy is emotion-conditional: the selector sam-ples ˆet ∼ πIQL  
+
+> ϕ
+
+(· | st) and the expression policy generates ˆut ∼ πθ(· | st, ˆet). In the emotion-free variant, the emotion block is removed during both training and inference, so the adapter directly gen-erates ˆut ∼ πfree  
+
+> θ
+
+(· | st). This tests whether the LoRA adapter can internalize emotional strategy without an explicit emotion channel; the covariate-shift analysis is given in Appendix H. 
+
+4 Experimental Setup 
+
+Datasets. We evaluate on four negotiation do-mains: Credit Recovery (CRAD) (Long et al., CRAD Disaster Hospital Student Method Suc. Util. Rd. Suc. Util. Rd. Suc. Util. Rd. Suc. Util. Rd. Vanilla (LLM) 50.0 5.0±15 .7 8.5±2.4 100.0 15 .0±35 .7 6.5±4.8 100.0 35 .0±47 .7 4.5±2.9 100.0 45 .9±21 .5 2.5±1.2
+
+Vanilla (SLM) 25.0 8.8±20 .1 11 .2±5.9 75.0 37 .9±41 .7 9.9±7.2 90.0 40 .3±45 .0 4.3±2.8 100.0 15 .0±30 .7 3.4±1.5
+
+Random 85.0 40 .6±40 .5 13 .9±9.7 100.0 10 .0±30 .0 4.5±3.4 100.0 30 .0±45 .8 4.2±2.2 100.0 43 .8±30 .5 2.5±1.3
+
+IQL 95.0 63 .6±38 .1 10 .4±8.1 100.0 5.0±21 .8 4.3±3.5 100.0 0.0±0.0 3.1±1.6 100.0 47 .9±30 .5 2.8±1.2
+
+IQL+SFT 100.0 69 .8±30 .4 10 .1±7.8 100.0 15 .0±35 .7 7.4±5.5 95.0 20 .0±40 .0 6.0±6.5 100.0 51 .7±20 .7 2.5±1.5
+
+IQL+JPO 95.0 51 .7±34 .2 14 .1±8.1 90.0 40 .0±49 .0 11 .3±8.7 100.0 35 .0±47 .7 7.4±6.0 100.0 23 .5±33 .9 5.5±5.1
+
+IQL+SFT+JPO 90.0 72 .2±37 .5 15 .0±9.8 100.0 30 .0±45 .8 6.5±4.0 100.0 45 .0±49 .7 5.5±3.4 100.0 52 .6±26 .6 3.1±2.9
+
+Table 1: In-domain negotiation results against a vanilla LLM counterparty. IQL+SFT+JPO denotes the full EmoDistill pipeline. Utility counts failures as 0. Best value per dataset is in bold , except Success.                                                
+
+> Method Signal Success (%) ↑Outcomes (%) ↑Utility (%) ↑Rounds ↓
+> IQL Outcome-shaped reward 95.0 66 .9±36 .063 .6±38 .110 .0±7.2
+> Episode-judge reward 85.0 70 .6±27 .460 .0±35 .710 .5±5.6
+> Turn-judge reward 80.0 76 .3±25 .461 .0±38 .07.4±1.9
+> IQL+SFT Hybrid quality filter 100.0 69 .8±30 .469 .8±30 .410 .1±7.8
+> Episode-judge filter 90.0 55 .1±33 .449 .6±35 .79.7±5.7
+> Turn-judge filter 95.0 64 .8±32 .061 .6±34 .29.0±3.9
+> IQL+SFT+JPO Outcome-shaped advantage 85.0 64 .1±28 .054 .5±34 .513 .2±3.4
+> Episode-judge advantage 90.0 77 .4±26 .069 .7±33 .911 .2±3.0
+> Turn-judge advantage 90.0 80 .2±30 .372 .2±37 .515 .0±9.8
+
+Table 2: Training-signal ablation on CRAD . Outcomes average successful episodes; Utility counts failures as 0. Best value per method block is in bold , except Success. 
+
+2026a), Disaster Rescue, Hospital Surgery Schedul-ing, and Student Sleep Scheduling from Emo-MAS (Long et al., 2026b). Each dataset contains 
+
+100 scenarios, split into 80 training and 20 held-out test scenarios. For each training scenario, we sam-ple 100 random emotion-sequence rollouts from the full |E| = 28 vocabulary, yielding 8000 offline trajectories per domain. The domains cover dif-ferent roles, objectives, and preference directions; dataset details and sweep construction are in Ap-pendices E.1 and E.2. 
+
+Compared methods. Qwen3.5-Plus(Yang et al., 2025) is used to generate the offline LLM-vs-LLM sweep, provide judge annotations, and serve as the default counterparty. In the IQL-only base-line, the selected emotion is inserted into the prompt of a frozen Qwen3.5-Plus model to be an IQL-guided LLM negotiator. In the distilled stu-dent methods, the same IQL selector conditions a Qwen2.5-7B-Instruct(Qwen et al., 2025) focal SLM: IQL+SFT, IQL+JPO, and IQL+SFT+JPO differ only in how the SLM expression policy is adapted with LoRA. Vanilla LLM/SLM omit the selector, using Qwen3.5-Plus and Qwen2.5-7B-Instruct respectively; Random uses uniformly sam-pled emotion prompts. Counterparty models are varied in transfer and tournament experiments. 
+
+Training. All learned policies are trained from the same fixed offline sweep generated with Qwen3.5-Plus in an LLM-vs-LLM negotiation setup. By default, IQL uses the outcome-shaped trajectory return for emotion selection, LoRA-SFT uses a hybrid judge–outcome filter for demonstra-tion selection, and JPO uses scenario-normalized per-turn judge advantages for utterance-level refine-ment. We set κ = 1 for JPO unless otherwise stated. The training-signal ablation compares alternative reward variants for these stages. Reward defini-tions are given in Appendix D, and model/training details are in Appendix F. 
+
+Evaluation. Each method is evaluated on the same 20 held-out scenarios per domain. We report success rate, Outcomes , Utility , and negotiation rounds. Outcomes averages normalized savings over successful negotiations, whereas Utility av-erages over all scenarios and assigns 0 to failures. The role-neutral savings formula and aggregation rules are provided in Appendix E.3. 
+
+5 Experimental Results 
+
+We organize the experiments around four ques-tions. ( Q1 ) Can our emotion-distilled E MO DIS -
+
+TILL SLM agent, trained from offline LLM-vs-LLM negotiation data, outperform vanilla and ab-lated SLM/LLM baselines and even surpass an IQL-guided LLM negotiator on held-out scenar-ios? ( Q2 ) Where do the gains come from: high-level IQL emotion selection, LoRA-SFT expres-Method Success (%) ↑ Outcomes (%) ↑ Utility (%) ↑ Rounds ↓                 
+
+> Vanilla (SLM) 25.0 35 .3±26 .18.8±20 .111 .2±5.9
+> SFT (no emotion condition) 90.0 61 .1±28 .855 .0±32 .513 .7±10 .2
+> JPO (no emotion condition, no SFT) 40.0 28 .7±30 .611 .5±23 .424 .2±9.6
+> SFT+JPO (no emotion condition) 50.0 76 .7±32 .238 .4±46 .223 .6±9.1
+
+Table 3: Emotion-free ablation on CRAD . Emotion blocks are removed during training and inference. Outcomes average successful episodes; Utility counts failures as 0. Best value is in bold , except Success.                                                                                        
+
+> CRAD Disaster Hospital Student Method Suc. Util. Rd. Suc. Util. Rd. Suc. Util. Rd. Suc. Util. Rd. Vanilla (LLM) 50.0 5.0±15 .78.5±2.4100.0 15 .0±35 .76.5±4.8100.0 35 .0±47 .74.5±2.9100.0 45 .9±21 .52.5±1.2
+> IQL 95.0 63 .6±38 .110 .4±8.1100.0 5.0±21 .84.3±3.5100.0 0.0±0.03.1±1.6100.0 47 .9±30 .52.8±1.2
+> IQL+SFT+JPO C90.0 72 .2±37 .515 .0±9.8100.0 25 .0±43 .36.8±6.2100.0 25 .0±43 .36.5±6.2100.0 9.8±24 .13.0±1.0
+> IQL+SFT+JPO D95.0 57 .5±33 .39.9±6.9100.0 30 .0±45 .86.5±4.0100.0 25 .0±43 .34.8±2.995.0 30 .0±45 .86.4±6.6
+> IQL+SFT+JPO H100.0 64 .3±44 .37.0±3.590.0 20 .0±40 .09.3±9.5100.0 45 .0±49 .75.5±3.4100.0 5.0±21 .83.6±2.1
+> IQL+SFT+JPO S75.0 56 .3±43 .614 .9±10 .4100.0 16 .8±28 .32.9±1.2100.0 35 .6±34 .72.9±1.6100.0 52 .6±26 .63.1±2.9
+
+Table 4: Cross-domain transfer. E MO DISTILL C/D/H/S denotes E MO DISTILL trained on CRAD, Disaster, Hospital, or Student. Each block reports success, Utility, and rounds; Utility counts failures as 0. Best value per evaluation domain is in bold , except Success. 
+
+sion imitation, JPO expression refinement, or the reward signal used for distillation? ( Q3 ) Do the distilled emotional negotiation skills transfer across domains with different scalar variables, preference directions, and stakes? ( Q4 ) How robust is the dis-tilled negotiator to unseen counterparties, and how does down-weighting negative-advantage samples in JPO trade off agreement success against per-deal outcomes? 
+
+Q1: In-Domain SLM-to-LLM Negotiation. Ta-ble 1 shows that emotion distillation turns the 7B SLM into a stronger negotiator against an LLM counterparty. E MO DISTILL achieves the highest Utility on three of four domains, especially CRAD, Hospital, and Student, but often uses more rounds. This suggests that the distilled agent is not sim-ply more agreeable; it learns a more strategic bar-gaining style that trades speed for better focal-side value. The baselines reveal two different weak-nesses. Vanilla LLM agents tend to reach agree-ment quickly, but often concede value to the coun-terparty. Vanilla SLM agents are less aligned and can sometimes preserve stronger positions, but are unstable across domains. Random emotion prompt-ing is also inconsistent: it can improve over vanilla behavior in some domains, but it introduces noise because the emotion is not state-dependent. Thus, the benefit comes from learning when to use emo-tion and how to express it. Disaster is the main ex-ception. Unlike the other domains, it has a rescue-style context and a narrower bargaining margin, so most methods already reach agreement and Utility is harder to improve. Here direct IQL+JPO per-forms best, suggesting that aggressive expression refinement is less useful when the outcome space is compressed. 
+
+Q2: Component and Training-Signal Analysis. 
+
+Table 1 shows that the gains come from combin-ing emotion selection with expression learning. The IQL-only baseline shows that learned emo-tion selection can guide a frozen LLM negotia-tor, but it does not distill emotional expression into the language models. LoRA-SFT stabilizes the generator by imitating high-quality LLM-vs-LLM negotiations, while JPO further sharpens the expression policy with judge-derived advantages. This explains why direct JPO is unstable, whereas SFT-initialized JPO gives stronger and more reli-able behavior. Table 2 shows that training signals are stage-dependent. SFT benefits most from a clean hybrid quality filter because imitation mainly needs good demonstrations. JPO benefits more from judge-based advantages because policy im-provement needs fine-grained feedback on which expressions to upweight. Table 3 further shows that removing the emotion condition can still produce high outcomes when successful, but lowers utility. Thus, the selected emotion is not a surface prompt; it is a control variable that makes emotional skill execution more reliable. 
+
+Q3: Cross-Domain Transfer. Table 4 evaluates whether distilled emotional negotiation skills trans-fer across domains. The clearest pattern is that the best Utility is always achieved by the adapter trained on the same domain: E MO DISTILL C on CRAD, E MO DISTILL D on Disaster, E MO DIS -
+
+TILL H on Hospital, and E MO DISTILL S on Student. Table 5: Cross-counterparty transfer on CRAD . Models are trained against Qwen3.5-Plus and evaluated zero-shot against unseen counterparties. Outcomes average successful episodes; Utility counts failures as 0. Best value per counterparty is in bold , except Success.                                                                                          
+
+> Counterparty Method Success (%) ↑Outcomes (%) ↑Utility (%) ↑Rounds ↓
+> DeepSeek-V3 (DeepSeek-AI et al., 2025) Vanilla 50.0 55 .6±21 .827 .8±31 .88.2±3.5
+> IQL 90.0 58 .2±25 .752 .4±30 .012 .0±6.5
+> IQL+SFT 100.0 73 .3±14 .473 .3±14 .47.3±2.4
+> IQL+SFT+JPO 100.0 81 .5±12 .881 .5±12 .89.3±4.8
+> ChatGPT-4o-mini (OpenAI, 2024) Vanilla 40.0 43 .7±27 .817 .5±27 .78.6±4.8
+> IQL 60.0 38 .8±29 .823 .3±29 .917 .6±7.9
+> IQL+SFT 95.0 62 .4±28 .359 .3±30 .814 .2±7.8
+> IQL+SFT+JPO 75.0 68 .3±28 .451 .2±38 .517 .7±9.5
+> SLM: Qwen2.5-3B-Instruct Vanilla 30.0 60 .1±40 .518 .0±35 .44.5±2.1
+> IQL 85.0 73 .0±34 .762 .1±41 .39.8±9.5
+> IQL+SFT 30.0 57 .4±30 .417 .2±31 .17.0±10 .4
+> IQL+SFT+JPO 25.0 53 .1±35 .413 .3±29 .08.7±12 .5
+> Method κSuc. Out. Util. Rd.
+> JPO-κ0.00 95.0 77 .0±24 .873 .2±29 .79.5±4.0
+> JPO-κ0.25 100.0 69 .3±25 .469 .3±25 .48.8±4.3
+> JPO-κ0.50 100.0 82 .5±15 .982 .5±15 .99.4±5.0
+> JPO-κ0.75 95.0 80 .4±32 .476 .4±36 .37.8±4.3
+> JPO 1.00 90.0 80 .2±30 .372 .2±37 .515 .0±9.8
+
+Table 6: Risk-controlled JPO on CRAD .
+
+This shows that emotional expression strategies are not purely generic; the best bargaining behav-ior depends on the domain’s scalar variable, pref-erence direction, and concession geometry. At the same time, transfer is not absent. Several off-domain adapters still maintain high success and non-trivial Utility, such as E MO DISTILL H and EMO DISTILL D on CRAD, or E MO DISTILL S on Hospital. This suggests that the learned expres-sion policy transfers general negotiation compe-tence, such as maintaining dialogue coherence and reaching agreements. However, value extraction is more domain-sensitive than success. For example, EMO DISTILL C keeps 100 .0% success on Student but obtains low Utility, and E MO DISTILL H also transfers poorly to Student. Thus, cross-domain transfer is partial: distilled emotional skills help the agent remain a competent negotiator, but maxi-mizing Utility still benefits from domain-specific distillation. 
+
+Q4: Cross-Counterparty Transfer and Risk-Controlled Refinement. Table 5 evaluates whether a CRAD-trained policy transfers to unseen counterparties. The main pattern is that EmoDis-till transfers well across unseen LLM counterpar-ties, but transfer is less reliable when the coun-terparty scale changes. This suggests that the learned expression policy captures LLM-style ne-gotiation regularities, while smaller counterparties may violate the dialogue patterns seen in the offline sweep. The cross-counterparty results also reveal a success–value tradeoff. JPO-style refinement of-ten improves successful-case Outcomes by making the agent more assertive, but this can reduce Util-ity when the policy becomes less willing to close weaker deals. Table 6 shows that risk-controlled JPO provides a tunable success–value tradeoff. On CRAD, κ = 0 .5 best balances preserving the SFT deal-closing prior with avoiding low-value conces-sions, yielding the highest Utility. Additional anal-yses on emotion-free covariate shift, case studies, prompts, A-LoL comparison, and training stability are provided in Appendices H, Q, P, K, and L. 
+
+6 Discussion 
+
+EmoDistill suggests that emotion in negotiation is best treated as a controllable bargaining interface, not merely as generation style. The key design choice is to keep emotion explicit enough for the selector to control, while internalizing expression skills into the SLM weights so the model does not rely on brittle prompt templates alone. The success– value tradeoff observed in JPO and the κ analysis further suggests that emotional negotiators should expose risk preferences: some deployments may prefer closing every deal, while others may prefer stronger per-deal value. 
+
+7 Conclusion and Future Work 
+
+We introduced E MO DISTILL , which distills LLM-vs-LLM emotional negotiation skills into a 7B SLM through IQL selection, LoRA-SFT, and JPO. Results show that emotion can become a learn-able bargaining control channel, and the κ analysis shows that refinement can be tuned along a success– value frontier. Future work should improve transfer, emotion-free robustness, and human validation. Limitations 
+
+Several limitations remain in the current version of E MO DISTILL . First, the framework is trained entirely from fixed offline LLM-vs-LLM trajecto-ries. Although this makes training reusable and avoids costly online rollouts, the learned selector and expression policy may still encounter distribu-tional shift at deployment time, especially when the counterparty uses dialogue strategies not rep-resented in the offline sweep. Second, E MO DIS - 
+
+> TILL
+
+relies on an explicit emotion-conditioning channel at inference time. Our emotion-free abla-tions show that the adapter can learn some negotia-tion behavior without explicit emotion labels, but this behavior is less reliable. This suggests that emotional negotiation skill is not fully internalized into the model weights; instead, the explicit emo-tion variable remains an important control inter-face. Developing more robust prompt-free or latent-emotion variants is an important direction for future work. Third, transfer is partial rather than univer-sal. Cross-domain experiments show that success rates often transfer better than value extraction, while utility remains sensitive to the scalar vari-able, preference direction, and concession geome-try of each domain. In particular, policies trained on one gap direction may learn directional anchor-ing habits that do not automatically flip in domains with the opposite bargaining geometry. Future work should study domain-adaptive, sign-aware, or multi-domain training mixtures to improve transfer of value extraction, not only agreement success. Fourth, the current evaluation is limited to agent-to-agent negotiation. This is the intended setting of the paper, but it means that our results should not be in-terpreted as evidence that E MO DISTILL improves human-perceived negotiation quality. Human stud-ies, multi-judge evaluation, and task-specific do-main expert review would be valuable for under-standing how the learned emotional expressions are perceived outside autonomous agent interac-tions. Finally, the framework depends on LLM-judge feedback for dense turn-level annotation and JPO refinement. While this provides scalable super-vision, it also introduces judge-model dependence and additional cost. 
+
+Ethical Considerations 
+
+EMO DISTILL studies emotion as a strategic control channel in autonomous agent-to-agent negotiation. This framing has both defensive and dual-use im-plications. On the defensive side, modeling emo-tional influence can help make user-aligned agents less vulnerable to emotionally framed pressure, pre-mature concession, or manipulative counterparties. The method is intended to support agents that pre-serve their users’ stated objectives in adversarial or high-stakes bargaining settings. At the same time, a system that learns strategic emotional ex-pression could be misused to build more persuasive or manipulative negotiation agents. This risk is es-pecially important in domains involving vulnerable users, financial decisions, medical access, employ-ment, education, debt, or public services. We there-fore view E MO DISTILL as appropriate only for bounded agent-to-agent settings with explicit task objectives, logging, evaluation, and deployment constraints. It should not be used to manipulate human users, obscure material information, or pres-sure people into decisions against their interests. Our experiments are conducted in synthetic nego-tiation scenarios between language-model agents. No real users are negotiated with, and the evalua-tion metrics are computed from predefined scenario objectives rather than personal data. 
+
+References          
+
+> Zahra Abbasiantaeb, Yifei Yuan, Evangelos Kanoulas, and Mohammad Aliannejadi. 2024. Let the llms talk: Simulating human-to-human conversational qa via zero-shot LLM-to-LLM interactions. In Proceedings of the 17th ACM International Conference on Web Search and Data Mining , pages 8–17. Ashutosh Baheti, Ximing Lu, Faeze Brahman, Ro-nan Le Bras, Maarten Sap, and Mark Riedl. 2024. Leftover lunch: Advantage-based offline reinforce-ment learning for language models. Preprint ,arXiv:2305.14718. Yuntao Bai, Saurav Kadavath, Sandipan Kundu, Amanda Askell, and 1 others. 2022. Constitutional ai: Harmlessness from ai feedback. arXiv preprint arXiv:2212.08073 .Ainesh Chatterjee, Samuel Miller, and Nithin Parepally. 2024. AgreeMate: Teaching LLMs to haggle. arXiv preprint arXiv:2412.18690 .DeepSeek-AI, Aixin Liu, Bei Feng, Bing Xue, Bingx-uan Wang, Bochao Wu, Chengda Lu, Chenggang Zhao, Chengqi Deng, Chenyu Zhang, Chong Ruan, Damai Dai, Daya Guo, Dejian Yang, Deli Chen, Dongjie Ji, Erhang Li, Fangyun Lin, Fucong Dai, and 181 others. 2025. Deepseek-v3 technical report.
+> Preprint , arXiv:2412.19437. Dorottya Demszky, Dana Movshovitz-Attias, Jeongwoo Ko, Alan Cowen, Gaurav Nemade, and Sujith Ravi.
+
+2020. GoEmotions: A dataset of fine-grained emo-tions. In ACL , pages 4040–4054. Xiaoxue Gao, Chen Zhang, Yiming Chen, Huayun Zhang, and Nancy F Chen. 2025. Emo-DPO: Con-trollable emotional speech synthesis through direct preference optimization. In ICASSP 2025-2025 IEEE International Conference on Acoustics, Speech and Signal Processing (ICASSP) , pages 1–5. IEEE. Michele Griessmair, Patrick Hippmann, and Johannes Gettinger. 2015. Emotions in E-Negotiations. In 
+
+Emotion in group decision and negotiation , pages 101–135. Springer. He He, Derek Chen, Anusha Balakrishnan, and Percy Liang. 2018. Decoupling strategy and generation in negotiation dialogues. In Proceedings of the 2018 Conference on Empirical Methods in Natural Lan-guage Processing , pages 2333–2343. Botao Amber Hu, Yuhan Liu, and Helena Rong. 2025. Trustless autonomy: Understanding moti-vations, benefits and governance dilemma in self-sovereign decentralized ai agents. arXiv preprint arXiv:2505.09757 .Yin Jou Huang and Rafik Hadfi. 2024. How personality traits influence negotiation outcomes? a simulation based on large language models. In Findings of the Association for Computational Linguistics: EMNLP 2024 , pages 10336–10351. Mohammed Kasbouya and Nawal Sael. 2025. Emo-tional intelligence in large language models: Fine-tuning methods, challenges, and applications. In 
+
+International Conference on intelligent systems and digital applications , pages 348–359. Springer. Harrison Lee, Samrat Phatale, Hassan Mansoor, Kellie Lu, Thomas Mesnard, Colton Bishop, Victor Car-bune, and Abhinav Rastogi. 2023. RLAIF: Scaling reinforcement learning from human feedback with ai feedback. arXiv preprint arXiv:2309.00267 .Hunter Lightman, Vineet Kosaraju, Yura Burda, Harri Edwards, Bowen Baker, Teddy Lee, Jan Leike, John Schulman, Ilya Sutskever, and Karl Cobbe. 2024. Let’s verify step by step. In ICLR .Guang Lin, Toshihisa Tanaka, and Qibin Zhao. 2024. Large language model sentinel: Llm agent for adver-sarial purification. arXiv preprint arXiv:2405.20770 .Yunbo Long, Yuhan Liu, and Alexandra Brintrup. 2026a. Eq-negotiator: Dynamic emotional personas em-power small language models for edge-deployable credit negotiation. Preprint , arXiv:2511.03370. Yunbo Long, Yuhan Liu, and Liming Xu. 2026b. Emo-mas: Emotion-aware multi-agent system for high-stakes edge-deployable negotiation with bayesian or-chestration. Preprint , arXiv:2604.07003. Yunbo Long, Yuhan Liu, Liming Xu, and Alexandra Brintrup. 2025a. Emodebt: Bayesian-optimized emo-tional intelligence for strategic agent-to-agent debt recovery. Preprint , arXiv:2503.21080. Yunbo Long, Liming Xu, Lukas Beckenbauer, Yuhan Liu, and Alexandra Brintrup. 2025b. Evoemo: To-wards evolved emotional policies for adversarial llm agents in multi-turn price negotiation. Preprint ,arXiv:2509.04310. Mara Olekalns and Daniel Druckman. 2014. With feel-ing: How emotions shape negotiation. Negotiation Journal , 30(4):455–478. OpenAI. 2024. Gpt-4o mini: Advancing cost-efficient intelligence. Accessed: 2026-05-25. Qwen, :, An Yang, Baosong Yang, Beichen Zhang, Binyuan Hui, Bo Zheng, Bowen Yu, Chengyuan Li, Dayiheng Liu, Fei Huang, Haoran Wei, Huan Lin, Jian Yang, Jianhong Tu, Jianwei Zhang, Jianxin Yang, Jiaxi Yang, Jingren Zhou, and 25 oth-ers. 2025. Qwen2.5 technical report. Preprint ,arXiv:2412.15115. John Schulman. 2020. Approximating KL divergence. 
+
+http://joschu.net/blog/kl-approx. html .John Schulman, Filip Wolski, Prafulla Dhariwal, Alec Radford, and Oleg Klimov. 2017. Proxi-mal policy optimization algorithms. arXiv preprint arXiv:1707.06347 .Ryan Shea, Aymen Kallala, Xin Lucy Liu, Michael W Morris, and Zhou Yu. 2024. ACE: A LLM-based negotiation coaching system. arXiv preprint arXiv:2410.01555 .Chenwei Wan, Matthieu Labeau, and Chloé Clavel. 2025. Emodynamix: Emotional support dialogue strategy prediction by modelling mixed emotions and discourse dynamics. In Proceedings of the 2025 Con-ference of the Nations of the Americas Chapter of the Association for Computational Linguistics: Human Language Technologies (Volume 1: Long Papers) ,pages 1678–1695. An Yang, Anfeng Li, Baosong Yang, Beichen Zhang, Binyuan Hui, Bo Zheng, Bowen Yu, Chang Gao, Chengen Huang, Chenxu Lv, Chujie Zheng, Day-iheng Liu, Fan Zhou, Fei Huang, Feng Hu, Hao Ge, Haoran Wei, Huan Lin, Jialong Tang, and 41 others. 2025. Qwen3 technical report. Preprint ,arXiv:2505.09388. Chao Zhang, Xin Shi, Xueqiao Zhang, Yifan Zhu, Yi Yang, and Yawei Luo. 2025. Decoupledesc: En-hancing emotional support generation via strategy-response decoupled preference optimization. arXiv preprint arXiv:2505.16995 .Huichi Zhou, Siyuan Guo, Anjie Liu, Zhongwei Yu, Ziqin Gong, Bowen Zhao, Zhixun Chen, Meng-long Zhang, Yihang Chen, Jinsong Li, Runyu Yang, Qiangbin Liu, Xinlei Yu, Jianmin Zhou, Na Wang, Chunyang Sun, and Jun Wang. 2026. Memento-skills: Let agents design agents. arXiv preprint arXiv:2603.18743 .A Background 
+
+This section defines the notation used by the datasets, policies, and evaluation metrics. We avoid the term “creditor” or “debtor” in the general nota-tion because the four domains instantiate different real-world roles. 
+
+Framework and method names. EMO DISTILL 
+
+denotes the full offline framework: trajectory col-lection, judge annotation, offline training, and evaluation. In the main tables, IQL+SFT+JPO 
+
+denotes the full EmoDistill policy. Its compo-nents are: an IQL emotion selector, a LoRA-SFT expression-policy initializer, and a JPO expression-policy refinement stage. 
+
+Negotiation roles. The optimized agent is the 
+
+focal agent ; the other party is the counterparty .Domain-specific names such as creditor, debtor, patient, hospital, dispatcher, or student are used only when describing a specific dataset. 
+
+Scalar negotiation variable. Each scenario con-tains a scalar negotiation variable x, such as over-due days, rescue wait minutes, surgery wait days, or extra hours past 9 PM. We denote the counter-party’s initial anchor by xopp 0 , the focal target by 
+
+x⋆
+
+> agent
+
+, and the final accepted agreement by xfinal .
+
+Emotion action vocabulary. The training sweep uses the full emotion action vocabulary 
+
+E = {e1, . . . , e |E| }, |E| = 28 ,
+
+consisting of the 28 GoEmotions emotion labels. Figure 1 and Appendix B analyze which individ-ual emotions significantly shift CRAD outcomes, but this analysis is not used as a hard filter: all emotions remain available during training, and the IQL selector learns which emotions to upweight or suppress. 
+
+Offline sweep. For each dataset, the offline sweep is a fixed set of multi-turn trajectories. At each focal-agent turn t, the sweep stores the di-alogue state st, selected emotion et, focal-agent utterance ut, counterparty response, terminal out-come, and judge score rt.
+
+Policy levels. Emotion-selection policies choose an emotion: 
+
+πϕ(et | st), et ∈ E .
+
+Expression policies generate the utterance: 
+
+πθ(ut | st, e t).
+
+The full EmoDistill policy combines these two lev-els: IQL selects et, and the SFT-initialized JPO adapter generates ut.
+
+B Per-Emotion Prompting Analysis 
+
+This appendix details the controlled prompting study used to support Figure 1. The goal is descrip-tive: we test whether individual emotion prompts significantly change CRAD negotiation behavior relative to a neutral prompt. This analysis is not used to restrict the training action space; E MO DIS - 
+
+> TILL
+
+uses the full |E| = 28 vocabulary, consisting of the 28 GoEmotions emotion labels. For each emotion e and each CRAD test scenario 
+
+s ∈ { 1, . . . , 20 }, we run 20 sampled negotiations. Let re,s,j denote the normalized judge reward or utility from run j under emotion e on scenario s.We first compute the per-scenario mean 
+
+¯re,s = 120 
+
+> 20
+
+X
+
+> j=1
+
+re,s,j , (7) and then the overall emotion mean 
+
+ˆμe = 120 
+
+> 20
+
+X
+
+> s=1
+
+¯re,s . (8) Figure 1 ranks emotions by ˆμe and plots 95% con-fidence intervals over scenario-level means. To test whether an emotion differs from neutral, we use paired scenario-level differences: 
+
+δe,s = ¯ re,s − ¯rneutral ,s . (9) We then apply a paired t-test over the 20 scenarios: 
+
+te = ¯δe
+
+sδe /√20 , ¯δe = 120 
+
+X
+
+> s
+
+δe,s . (10) Because we test the 27 non-neutral emotions against the neutral baseline, we apply Bonferroni correction with threshold 
+
+αBonf = 0.05 27 ≈ 0.00185 . (11) This analysis identifies multiple emotions whose effects are significantly above the neutral baseline, confirming that emotional framing can systemat-ically shift negotiation outcomes. We use this re-sult only as motivation for emotion-conditioned policy learning. During training, all 28 emotions remain in the action vocabulary, and the IQL selec-tor learns which emotions to upweight or suppress from the offline sweep. C Detailed Algorithm 
+
+This section gives a uniform mathematical spec-ification for every method evaluated in the main results. Notation follows Appendix A: st is the di-alogue state at focal-agent turn t, et ∈ E (|E| =28 )is the emotion token, ut is the focal-agent utter-ance, rt is the per-turn metric-aligned judge score, 
+
+At = ( rt − μscen )/(σscen + ϵ) is its scenario-wise z-score, and R(τ ) is the outcome-shaped trajectory return defined in Appendix D. The evaluation met-rics derived from the final agreement are defined separately in Appendix E.5. πLLM (ut | st, e t) de-notes the frozen base utterance policy used during sweep construction; πθ(ut | st, e t) denotes the LoRA-augmented Qwen2.5-7B expression policy with θ the LoRA parameters. Emotion selectors are written πϕ(et | st).
+
+Prompt-only controls. Neutral prompting uses a fixed neutral emotion at every focal-agent turn. Random-emotion prompting samples uniformly from E. These are calibration controls rather than offline-learning methods: 
+
+πneu (ut | st) = πLLM (ut | st, e t=neutral ),πrnd (ut | st) = Eet∼Unif( E)
+
+πLLM (ut | st, e t).
+
+(12) No parameters are learned. 
+
+IQL selector. IQL learns an offline emotion-selection policy over state–emotion pairs. It chooses the emotion to inject at each turn but does not update the utterance generator. For a trajectory 
+
+τ , the IQL reward is terminal: 
+
+¯rIQL  
+
+> t
+
+=
+
+(
+
+R(τ ), t = Tτ ,
+
+0, otherwise , (13) where Tτ is the final focal-agent turn. With expec-tile parameter τexp , IQL optimizes 
+
+LV (ψ) = ED
+
+Lτexp  
+
+> 2
+
+(Q¯θ(s, e ) − Vψ(s))  ,
+
+LQ(θ) = ED
+
+
+
+¯rIQL  
+
+> t
+
++ γV ψ(s′) − Qθ(s, e )
+
+2
+
+,
+
+(14) where Lτexp  
+
+> 2
+
+(x) = |τexp −⊮{x < 0}| x2. The selec-tor is extracted by advantage-weighted regression (AWR) with temperature βIQL :
+
+πIQL  
+
+> ϕ
+
+(e | s) ∝ exp( βIQL A(s, e )) ,A(s, e ) = Qθ(s, e ) − Vψ(s). (15) At inference, et ∼ πIQL  
+
+> ϕ
+
+(· | st) and ut ∼ πLLM (· | 
+
+st, e t). The LoRA expression adapter is not used in the IQL-only ablation. 
+
+LoRA-SFT expression policy. SFT trains the expression policy by supervised learning on high-quality turn-level demonstrations. Let Dtop ⊂ D 
+
+denote the top-25% of (st, e t, u t) tuples ranked by the hybrid filtering score qhyb  
+
+> t
+
+in Appendix D.2. The SFT objective is token-level cross-entropy un-der emotion conditioning: 
+
+LSFT (θ) = − E(st,e t,u t)∼D top 
+
+" |ut|
+
+X
+
+> k=1
+
+log πθ(ut,k | st, e t, u t,<k )
+
+#
+
+.
+
+(16) At inference, et ∼ πIQL  
+
+> ϕ
+
+(· | st), then ut ∼ πθ(· | 
+
+st, e t).
+
+EMO DISTILL . EMO DISTILL is our main method. It uses IQL for emotion selection and two-stage LoRA training for expression-policy optimization. Stage 1 is the SFT objective above. Stage 2 freezes the SFT snapshot πref = πSFT  
+
+> θ
+
+and applies a PPO-clipped surrogate with a K3 KL anchor: 
+
+ρt(θ) = πθ(ut | st, e t)
+
+πref (ut | st, e t) . (17) JPO uses the asymmetric advantage 
+
+eAt =
+
+(
+
+At, At > 0,κA t, At ≤ 0, (18) where κ ∈ [0 , 1] controls the weight on negative-advantage samples. The objective is 
+
+LJPO (θ) = − EDtop 
+
+h
+
+min  ρt eAt, clip( ρt, 1−ϵ, 1+ 
+
+ϵ) eAt
+
+i
+
++ λKL · EKL K3 (πθ ∥ πref ).
+
+(19) Inference: et ∼ πIQL  
+
+> ϕ
+
+(· | st), then ut ∼ πθ(· | 
+
+st, e t).
+
+IQL+JPO ablation. The IQL+JPO ablation re-moves the SFT warm start and tests direct judge-guided refinement. The same clipped objective is used, but the reference policy is the base instruction model rather than the SFT adapter. This isolates whether dense judge advantages are sufficient with-out imitation-based initialization. 
+
+Emotion-Free EmoDistill. Emotion-Free EmoDistill removes the explicit emotion block and the inference-time selector. It is a diagnostic abla-tion that tests internalization of emotional strategy. The same two-stage objective as E MO DISTILL is applied to states with the emotion block stripped: 
+
+Lfree SFT (θ) = − E(st,e t,u t)∼D top 
+
+" X
+
+> k
+
+log πθ(ut,k | st, u t,<k )
+
+#
+
+.
+
+(20) The free-form JPO ratio is 
+
+ρfree  
+
+> t
+
+(θ) = πθ(ut | st)
+
+πfree ref (ut | st) . (21) The corresponding JPO objective is 
+
+Lfree JPO (θ) = − E
+
+"
+
+min 
+
+
+
+ρfree  
+
+> t
+
+eAt,
+
+clip 
+
+
+
+ρfree  
+
+> t
+
+, 1−ϵ, 1+ ϵ
+
+ eAt
+
+#
+
++ λKL KL K3 
+
+
+
+πθ ∥ πfree ref 
+
+
+
+.
+
+(22) At inference, no et is sampled and no selector is consulted: ut ∼ πθ(· | st). The covariate-shift consequences of this design are formalized in Ap-pendix H. 
+
+C.1 Algorithmic Summary Algorithm 1 IQL Emotion Selector 
+
+Require: Offline sweep D, outcome-shaped re-turns R(τ ), expectile τexp , AWR temperature 
+
+β 
+
+> 1:
+
+for N gradient steps do  
+
+> 2:
+
+Update Vψ by expectile regression.  
+
+> 3:
+
+Update Qθ using terminal-reward TD tar-gets.  
+
+> 4:
+
+Compute A(s, e ) = Qθ(s, e ) − Vψ(s). 
+
+> 5:
+
+Update πϕ by advantage-weighted regres-sion.  
+
+> 6:
+
+end for  
+
+> 7:
+
+return emotion selector πϕ(e | s)
+
+D Reward Design and Training Signals 
+
+The same offline sweep provides different signals for different stages. For IQL, a signal is used as an emotion-selection reward; for SFT, it is used as a data-filtering score; for JPO, it becomes an utterance-level advantage. This section gives the full signal definitions behind the training-signal ablation in Table 2. The per-turn judge prompt that produces rt is shown verbatim in Appendix P.3. 
+
+Algorithm 2 SFT Expression Policy 
+
+Require: Offline sweep D, hybrid scores qhyb  
+
+> t
+
+,base SLM π0 
+
+> 1:
+
+Rank (st, e t, u t) tuples by qhyb  
+
+> t
+
+. 
+
+> 2:
+
+Retain the top 25% as Dtop . 
+
+> 3:
+
+Initialize LoRA adapter θ on π0. 
+
+> 4:
+
+for N supervised steps do  
+
+> 5:
+
+Sample (st, e t, u t) from Dtop . 
+
+> 6:
+
+Minimize token-level cross-entropy on ut. 
+
+> 7:
+
+end for  
+
+> 8:
+
+return SFT adapter πSFT 
+
+D.1 Emotion-Selection Rewards 
+
+Offline value-based selectors such as IQL attach rewards to selected emotions at each state. We compare three signal placements. The outcome-shaped variant uses the objective trajectory return 
+
+R(τ ) only at the terminal focal-agent turn and prop-agates it through Bellman backups. The episode-judge variant broadcasts one dialogue-level judge score to every focal turn. The turn-judge variant uses the judge score assigned to the current fo-cal utterance. The default IQL selector uses the outcome-shaped reward so that emotion selection is tied to actual bargaining movement rather than surface persuasiveness alone. 
+
+D.2 SFT Filtering Signal 
+
+SFT does not use the signal as a reinforcement-learning reward. Instead, it uses a hybrid quality score to select high-quality turn-level demonstra-tions: 
+
+qhyb  
+
+> t
+
+= rt + 12 R(τ ). (23) Here rt measures the local quality of the focal ut-terance under the metric-aligned judge, while R(τ )
+
+measures whether the trajectory as a whole pro-duces favorable bargaining dynamics and terminal agreement. We retain the top 25% of (st, e t, u t)
+
+tuples ranked by qhyb  
+
+> t
+
+. This filter avoids imitating utterances that sound locally persuasive but occur inside globally unproductive negotiations, while also avoiding purely terminal filtering that would keep weak individual turns from successful trajec-tories. 
+
+D.3 JPO Advantage Signals 
+
+For JPO, the signal is used as an offline policy-improvement advantage. We compare three vari-ants: outcome-shaped advantage, episode-judge advantage, and turn-judge advantage. Method Updates Training signal Inference cond.                                        
+
+> Vanilla ——(st, e t=neu )
+> Random emotion ——(st, e t∼U(E))
+> IQL selector EMO terminal R(τ)(st, e t∼πIQL
+> ϕ)
+> IQL+SFT EMO +L ORA top-25% hybrid BC (st, e t∼πIQL
+> ϕ)
+> IQL+JPO EMO +L ORA per-turn eAt(st, e t∼πIQL
+> ϕ)
+> EMO DISTILL EMO +L ORA top-25% hybrid BC +per-turn eAt(st, e t∼πIQL
+> ϕ)
+> Emotion-Free EmoDistill LORA top-25% hybrid BC +per-turn eAtstonly
+
+Table 7: What each compared policy learns. E MO = emotion selector, L ORA = utterance LoRA, T X = transition matrix. “Inference cond.” is the state and emotion the utterance is conditioned on at deployment. 
+
+Algorithm 3 Judge Policy Optimization 
+
+Require: Sweep tuples {(st, e t, u t, A t)}, refer-ence policy πref , clip ϵ, KL coefficient λKL ,negative-advantage coefficient κ 
+
+> 1:
+
+Initialize πθ from the SFT adapter.  
+
+> 2:
+
+Freeze πref = πSFT . 
+
+> 3:
+
+for N gradient steps do  
+
+> 4:
+
+Sample minibatch {(st, e t, u t, A t)} ∼Dtop . 
+
+> 5:
+
+Compute eAt = At if At > 0, else eAt =
+
+κA t. 
+
+> 6:
+
+Compute ρt = πθ(ut | st, e t)/π ref (ut |
+
+st, e t). 
+
+> 7:
+
+Compute clipped policy loss: 
+
+Lclip = − min 
+
+
+
+ρt eAt, clip( ρt, 1 − ϵ, 1 + ϵ) eAt
+
+
+
+. 
+
+> 8:
+
+Compute K3 KL anchor: 
+
+LKL = KL K3 (πθ ∥ πref ) . 
+
+> 9:
+
+Update θ using 
+
+LJPO = Lclip + λKL LKL . 
+
+> 10:
+
+end for  
+
+> 11:
+
+return JPO adapter πθ
+
+Outcome-shaped advantage. The outcome-shaped reward is a sum of time-weighted per-step shaping plus a non-time-weighted terminal anchor: 
+
+R(τ ) = 
+
+> Tτ
+
+X
+
+> t=1
+
+w(t) ∆ctp  
+
+> t
+
+− ∆foc 
+
+> t
+
+| {z }
+
+> time-weighted step shaping
+
++Rterm (τ ).
+
+(24) Let g = x⋆ 
+
+> agent
+
+− xopp 0 be the signed anchor-to-target gap and d = max(1 , |g|) its stabilized mag-nitude. The sign of g makes the formulation valid whether the focal agent wants a smaller or larger scalar value. The normalized counterparty conces-sion is 
+
+∆ctp  
+
+> t
+
+= clip sgn( g)( xctp  
+
+> t
+
+− xctp 
+
+> t−1
+
+)
+
+d , −2, 2
+
+!
+
+,
+
+(25) which is positive when the counterparty moves to-ward the focal target. The normalized focal retreat is 
+
+∆foc  
+
+> t
+
+= clip − sgn( g)( xfoc  
+
+> t
+
+− xfoc 
+
+> t−1
+
+)
+
+d , −2, 2
+
+!
+
+,
+
+(26) which is positive when the focal agent moves away from its own target. Thus, ∆ctp  
+
+> t
+
+− ∆foc  
+
+> t
+
+rewards turns where the counterparty concedes more than the focal agent retreats. The implicit dialogue-length penalty is the linear time-decay weight 
+
+w(t) = max 
+
+
+
+0, min 
+
+
+
+1, 1 − tTmax 
+
+ 
+
+,Tmax = 30 .
+
+(27) Late concessions therefore earn less step credit, providing a length penalty without an explicit addi-tive term. The terminal anchor is held constant so late but successful closes are not double-penalized: 
+
+Rterm (τ ) = 
+
+(
+
++2 , if agreement reached, 
+
+−2, otherwise. (28) Importantly, R(τ ) uses no LLM-judge signal. 
+
+Episode-judge advantage. A metric-aligned LLM judge scores the whole dialogue, and the re-sulting dialogue-level score is broadcast to all focal-agent turns. This signal is subjective and judge-based, but it does not provide turn-level credit as-signment. Turn-judge advantage. The judge scores each focal-agent turn independently under the metric-aligned rubric in Appendix P.3. The rubric rewards anchoring near the focal target, concrete proposals, and scenario-grounded leverage, and penalizes ca-pitulation, repetition, vagueness, and emotionally inappropriate concessions. Scores are normalized within each scenario: 
+
+At = rt − μscenario 
+
+σscenario + ϵ . (29) The normalized score At is used as the fixed offline advantage in JPO, and its asymmetric form eAt is defined in Eq. (18). 
+
+E Experimental Setup 
+
+E.1 Datasets 
+
+We evaluate on four datasets from CRAD and Emo-MAS: Credit Recovery, Disaster Rescue, Hospital Surgery Scheduling, and Student Sleep Scheduling. Each dataset contains 100 scenarios split into 80 
+
+training scenarios and 20 held-out test scenarios. The sign of the anchor-to-target gap differs across domains. In Credit Recovery and Student Sleep Scheduling, the focal agent prefers a smaller value than the counterparty’s initial anchor, so 
+
+x⋆ 
+
+> agent
+
+− xopp 0 < 0. In Disaster Rescue and Hos-pital Surgery Scheduling, the focal agent prefers a larger value, so x⋆ 
+
+> agent
+
+− xopp 0 > 0. The normalized savings formula in Appendix E.5 is sign-invariant by construction and remains valid in both regimes. 
+
+E.2 Offline Sweep Construction 
+
+For each dataset, we run 80 training scenarios ×
+
+100 emotion-sequence seeds. Each seed fixes a sampled sequence from the full |E| = 28 vocab-ulary, consisting of the 28 GoEmotions emotion labels. Thus, each domain contains 8000 offline tra-jectories. The 100 factor refers to random emotion-sequence seeds per training scenario, not model-training seeds. Each rollout records: • scenario identifier and dataset; • focal-agent target x⋆
+
+> agent
+
+;• counterparty initial anchor xopp 0 ;• dialogue history at each focal-agent turn; • selected emotion et;• focal-agent utterance ut;• counterparty response; • terminal outcome, including final agreement, suc-cess, and rounds; • per-turn LLM-judge score rt.All sweep-generation calls use Qwen3.5-Plus through DashScope. We use a 6-key round-robin setup to reduce rate-limit bottlenecks. Each nego-tiation is capped at 30 turns. The same sweep is reused for IQL, SFT, and JPO. 
+
+E.3 Evaluation Metrics 
+
+Each method is evaluated on the same 20 held-out scenarios per dataset. We report success rate, 
+
+Outcomes , Utility , and mean dialogue rounds. 
+
+E.4 Success Rate 
+
+A mediator classifies each dialogue as accepted ,
+
+breakdown , or ongoing . Success rate is the fraction of dialogues that reach a valid accepted agreement satisfying the task-specific criterion. Dialogues classified as breakdown or ongoing are counted as unsuccessful. 
+
+E.5 Normalized Savings 
+
+Let xopp 0 be the counterparty’s initial anchor, x⋆
+
+> agent
+
+be the focal target, and xfinal be the final accepted agreement. For successful negotiations, normal-ized savings is the fraction of the anchor-to-target distance closed by the final agreement: SAV = xfinal − xopp 0
+
+x⋆ 
+
+> agent
+
+− xopp 0
+
+. (30) The metric is sign-invariant: if the focal target is lower than the anchor, both numerator and denomi-nator are negative for progress toward the target; if the focal target is higher, both are positive. Equiva-lently, SAV = |xfinal − xopp 0 |
+
+x⋆ 
+
+> agent
+
+− xopp 0
+
+(31) whenever the final agreement lies between the an-chor and target. We clip values outside [0 , 1] for aggregation. 
+
+E.6 Outcomes and Utility Outcomes averages SAV over successful negotia-tions only. Utility averages over all 20 held-out scenarios and assigns zero utility to failed negotia-tions: 
+
+ui =
+
+(
+
+SAV i, if episode i succeeds ,
+
+0, otherwise . (32) Dataset N Gap sign Quantity                          
+
+> Credit Recovery (CRAD) 100 Target <Anchor overdue days Disaster Rescue 100 Target >Anchor wait minutes Hospital Surgery Scheduling 100 Target >Anchor wait days Student Sleep Scheduling 100 Target <Anchor extra hours past 9 PM
+> Table 8: Datasets used in our experiments. The G AP SIGN column indicates whether the focal agent’s target is lower or higher than the counterparty’s initial anchor, i.e., the sign of x⋆
+> agent −xopp 0.
+
+Utility is the stricter main metric because it cap-tures both agreement quality and failure risk. 
+
+E.7 Mean Dialogue Rounds 
+
+Mean dialogue rounds measures negotiation effi-ciency. It should be interpreted together with Util-ity, since a policy can reduce rounds by accepting too early. 
+
+F Model, Training Setup, and Hyperparameters 
+
+Backbones. All live LLM calls for sweep con-struction and evaluation use Qwen3.5-Plus. The trainable expression policy uses Qwen2.5-7B-Instruct with LoRA adapters. 
+
+LoRA configuration. We apply LoRA adapters to q_proj , k_proj , v_proj , and o_proj .Unless otherwise stated, we use rank 16 . We sweep ranks {4, 16 , 64 } and find rank 16 gives the best validation tradeoff. 
+
+SFT. The SFT ablation behavior-clones high-quality focal-agent utterances from the offline sweep. It is implemented with LoRA, but we re-fer to the method as SFT because LoRA is the parameter-efficient fine-tuning mechanism. 
+
+JPO. JPO starts from the SFT adapter and op-timizes the PPO-clipped offline objective from Section 3.4. The reference policy is the frozen SFT adapter. We use PPO clipping parameter 
+
+ε = 0.2. We sweep the JPO KL coefficient 
+
+λKL ∈ { 0.01 , 0.04 , 0.1, 0.5} and use λKL = 0 .04 .For the asymmetric advantage in Eq. (18) , we take 
+
+κ to be 1 for training and inference, except the ab-lation study (See the Table 6) where we finetuning 
+
+κ in {0, 0.25 , 0.5, 0.75 , 1}.
+
+IQL. We tune expectile τ ∈ {0.7, 0.8, 0.9},AWR temperature β ∈ { 1, 3, 10 }, and discount 
+
+γ ∈ { 0.95 , 0.99 }.
+
+G Why Offline RL 
+
+Online policy optimization would require fresh multi-turn negotiations and fresh LLM-judge calls at every gradient step. Offline JPO avoids this by reusing pre-judged tuples from the fixed sweep. This section provides the cost decomposition and explains why we do not run pure online PPO, GRPO, or DAgger-style distillation. 
+
+Offline JPO cost. A single offline JPO step sam-ples pre-judged tuples (st, e t, u t, A t), forwards them through Qwen2.5-7B with LoRA, computes the clipped surrogate and KL anchor, and backprop-agates. On a single A100, this costs approximately 
+
+5 seconds per optimizer step. The expensive LLM interactions and judge annotations are paid once during sweep construction and then reused across SFT, JPO and IQL. 
+
+Pure on-policy PPO or GRPO. A pure on-policy variant would require new negotiations at every gradient step. For batch size b = 16 , each step would need 16 fresh negotiations with the cur-rent focal-agent policy, counterparty calls, judge calls for every turn, reward normalization, and then the same gradient update. In our sweep, a negoti-ation takes approximately 75 seconds wall-clock, and judge scoring adds approximately 10 seconds per turn for an average of 18 turns. With concur-rency c = 6 , the approximate per-step cost is 
+
+T step onpol ≈ 16 × (75 + 180) 6 ≈ 680 s . (33) This is roughly 130 × slower than offline JPO. For a 
+
+2000 -step run, this would become roughly 15 GPU-days of API-limited wall-clock time per dataset before rate limits become the bottleneck. GRPO removes the value network but does not remove the need for fresh group rollouts and judge calls, so its wall-clock bottleneck is similar in our setting. 
+
+Stability considerations. Pure online optimiza-tion would also be less stable because the model would optimize directly against a noisy 1–10 judge signal without the strong SFT initialization and KL anchor used by JPO. Offline JPO is appropri-ate here because the per-turn judge score can be computed once for each observed tuple and reused across optimization steps. The main risk is co-variate shift between the teacher-induced sweep distribution and the student-induced deployment distribution. We mitigate this risk with SFT initial-ization, a tight KL anchor, and prompt-conditional deployment; Prompt-Free EmoDistill intentionally removes this conditioning. 
+
+H Emotion-Free EmoDistill and Covariate Shift 
+
+Emotion-conditional EmoDistill keeps the IQL se-lector at inference: the selector chooses an emotion, the prompt includes the corresponding emotional approach, and the JPO-trained expression adapter generates the focal-agent utterance. Emotion-free EmoDistill removes both the emotion block and the inference-time selector. It tests whether the LoRA adapter can internalize emotional strategy without explicit emotion conditioning. The source of covariate shift is that the offline utterances were generated under emotion conditioning, 
+
+ut ∼ πLLM (ut | st, e t),
+
+while emotion-free training and inference condition only on the stripped state, 
+
+ut ∼ πfree  
+
+> θ
+
+(ut | st).
+
+Thus, the student must imitate outputs whose causal emotional condition is hidden. Equivalently, the emotion-free target is an emotion-marginalized teacher: 
+
+πβ (ut | st) = X
+
+> et∈E
+
+πemo (et | st)πLLM (ut | st, e t).
+
+If multiple emotions produce distinct high-quality utterances for similar states, the emotion-free stu-dent is forced to average over hidden modes. This multimodality is strong in practice. On CRAD, replaying recorded focal-agent turns through the IQL selector shows that only 136 /2104 
+
+turns ( 6.5% ) match the greedy IQL emotion. Among the top-25% judge-filtered turns used for emotion-free SFT, only 25 /526 turns ( 4.8% ) match. Therefore, the emotion-free student cannot recover the intended emotional mode from the dialogue state alone. This explains the empirical pattern in Table 3: emotion-free training can produce strong agreements when successful, but its reli-ability drops because the explicit emotion control variable is removed. Emotion-conditional EmoDis-till remains the default deployment setting, while emotion-free EmoDistill is best interpreted as a diagnostic ablation for testing whether emotional strategy can be internalized without an explicit emotion channel. 
+
+I Bootstrap Confidence Intervals for Outcomes 
+
+This appendix reports 95% bootstrap confidence intervals for Outcomes in the in-domain exper-iments, CRAD cross-counterparty transfer, and CRAD training-signal ablation, as shown in Ta-bles 9, 10, and 11. Outcomes are computed as the average role-neutral signed savings over suc-cessful negotiations. We provide intervals for the in-domain experiments, the CRAD training-signal ablation, and the CRAD cross-counterparty transfer setting. 
+
+Procedure. For each method–condition cell, we first collect the successful held-out episodes, 
+
+S = {i : episode i succeeds }.
+
+For each successful episode i ∈ S , we compute 
+
+oi = SAV i,
+
+where SAV i is the role-neutral signed savings de-fined in Eq. (31) and clipped to [0 , 1] . Let Nsucc =
+
+|S| be the number of successful episodes for that cell. We draw B=10 ,000 percentile-bootstrap resamples of size Nsucc with replacement from 
+
+{oi : i ∈ S} . For each resample, we compute the mean Outcome score. The reported confidence interval is given by the 2.5% and 97 .5% percentiles of the bootstrap distribution. If a method has no successful episodes in a cell, the Outcomes confi-dence interval is undefined and marked as N/A. 
+
+Interpreting the intervals. The confidence inter-vals quantify uncertainty in successful-deal quality, conditional on the negotiation reaching agreement. They should therefore be interpreted together with the corresponding success rates. A method may have a high Outcome score with a wide interval if only a small or heterogeneous set of successful episodes contributes to the estimate. Conversely, high success with a narrow Outcome interval indi-cates more stable agreement quality across held-out scenarios. Because Outcomes are computed only over successful episodes, these intervals measure agreement quality rather than agreement probabil-ity. They are therefore intended as a complemen-tary uncertainty analysis for successful negotiation outcomes. 
+
+J Emotion-Free Distillation Across Domains 
+
+Table 12 shows that emotion-free distillation is not simply a failed version of EmoDistill, but its be-havior is strongly domain- and stage-dependent. Removing the explicit emotion channel can still al-low the LoRA adapter to absorb useful bargaining behavior from high-quality offline trajectories, yet the best emotion-free training stage differs across domains. On CRAD, emotion-free SFT substan-tially improves over Vanilla (SLM), increasing Util-ity from 8.8 to 55 .0 with a success rate of 90 .0% .Adding JPO increases successful-case Outcomes to 
+
+76 .7, the highest among the CRAD emotion-free variants, but success drops to 50 .0% , reducing Util-ity to 38 .4. The pattern is different on Disaster. Here, SFT alone does not help: Utility falls from the Vanilla SLM baseline of 37 .9 to 10 .0. How-ever, SFT+JPO recovers strongly, reaching 100 .0% 
+
+success and the highest Utility, 64 .2.Hospital is the weakest setting for emotion-free distillation. Vanilla (SLM) remains the best method by Utility, with 40 .3, while SFT and SFT+JPO un-derperform substantially. Direct JPO without SFT reaches a similar Utility of 40 .0, but with lower success and much longer negotiations. On Student, emotion-free SFT again provides a strong generic bargaining policy, improving Utility from 15 .0 to 
+
+47 .6. SFT+JPO obtains the highest successful-case Outcomes, 51 .0, but its lower success rate reduces Utility to 45 .9, slightly below SFT. Overall, emotion-free training can internalize useful nego-tiation behavior, and the best emotion-free variant improves over Vanilla (SLM) on three of four do-mains. However, the gains are not uniform: SFT is strongest on CRAD and Student, SFT+JPO is strongest on Disaster, and no learned emotion-free variant clearly improves over Vanilla on Hospi-tal. This reinforces the role of the explicit emotion channel in EmoDistill. 
+
+K Positive-Advantage vs. Turn-Level Judge Refinement 
+
+A-LoL (Baheti et al., 2024) is a sequence-level offline RL baseline for language models. It first obtains an SFT reference policy, estimates an ad-vantage for each prompt–response pair, and then ap-plies advantage-weighted negative log-likelihood on positive-advantage examples. We include A-LoL as a refinement baseline after the same IQL selector and LoRA-SFT initialization used by EmoDistill. This comparison isolates the effect of the JPO update: A-LoL conservatively amplifies high-advantage SFT behavior, while JPO can use both positive- and negative-advantage utterances through a clipped objective and KL anchor. More-over, JPO exposes a controllable risk parameter κ
+
+that scales the pressure from negative-advantage samples. As shown in Table 6, an intermediate setting, κ = 0 .5, achieves higher Utility than both canonical JPO and A-LoL on CRAD, suggesting that controlled negative-sample pressure can im-prove the success–value tradeoff. The direct A-LoL/JPO comparison is shown in Table 14. 
+
+L Training Stability Analysis 
+
+This appendix reports optimization stability di-agnostics for the three learned components in EmoDistill: the IQL emotion selector, the LoRA-SFT initializer, and the JPO refiner. These di-agnostics do not prove global convergence; they check whether each stage remains numerically sta-ble under fixed offline training. For each logged quantity {ℓt}Tt=1 , we summarize the final 25% of training by its median eℓ and robust dispersion 
+
+MAD = median |ℓt − eℓ|. A stable run should show bounded late-stage variation and no uncontrolled drift. 
+
+IQL selector. For the offline emotion selector, we track the V-network expectile loss LV , Q-network TD loss LQ, and AWR policy loss Lπ (Eqs. (14) –(15) ). On CRAD, LQ decreases from roughly 0.9
+
+to 0.32 , LV plateaus near 0.12 , and the AWR pol-icy loss stabilizes around 2.8. In the final quarter, the medians are fLV = 0 .115 , fLQ = 0 .323 , and 
+
+fLπ = 2 .835 , with bounded MADs. This indicates that the selector’s value estimates are stable before policy extraction. 
+
+LoRA-SFT initialization. Stage 1 fine-tunes a rank-16 LoRA adapter on the top-25% hybrid-filtered subset of the CRAD sweep. The token-level Dataset Method Outcomes (%) 95% CI                                                                                 
+
+> CRAD Vanilla (LLM) 10 .0[0 .0,23 .4]
+> Vanilla (SLM) 35 .2[11 .1,59 .3]
+> Random 47 .7[31 .7,54 .2]
+> IQL 66 .9[52 .1,80 .3]
+> IQL+SFT 69 .8[56 .5,83 .1]
+> IQL+JPO 54 .4[39 .7,69 .2]
+> IQL+SFT+JPO 80.2 [66.4, 94.0]
+> Disaster Vanilla (LLM) 15 .0[0 .0,30 .6]
+> Vanilla (SLM) 50 .5[29 .8,71 .3]
+> Random 10 .0[0 .0,23 .1]
+> IQL 5.0[0 .0,14 .6]
+> IQL+SFT 15 .0[0 .0,30 .6]
+> IQL+JPO 44.4 [21.5, 67.4]
+> IQL+SFT+JPO 30 .0[9 .9,50 .1]
+> Hospital Vanilla (LLM) 35 .0[14 .1,55 .9]
+> Vanilla (SLM) 44 .8[23 .9,65 .7]
+> Random 30 .0[9 .9,50 .1]
+> IQL 0.0[0 .0,0.0]
+> IQL+SFT 21 .1[2 .7,39 .4]
+> IQL+JPO 35 .0[14 .1,55 .9]
+> IQL+SFT+JPO 45.0 [23.2, 66.8]
+> Student Vanilla (LLM) 45 .9[36 .5,55 .3]
+> Vanilla (SLM) 15 .0[1 .5,28 .5]
+> Random 43 .8[30 .4,57 .2]
+> IQL 47 .9[34 .5,61 .3]
+> IQL+SFT 51 .7[42 .6,60 .8]
+> IQL+JPO 23 .5[8 .6,38 .4]
+> IQL+SFT+JPO 52.6 [40.9, 64.3]
+
+Table 9: Bootstrap 95% confidence intervals for successful-case Outcomes in the in-domain experiments. Outcomes are computed over successful held-out episodes only. For each method–dataset cell, we resample successful-episode SAV i values with replacement using 10 ,000 percentile-bootstrap resamples and report the 2.5% and 97 .5% 
+
+percentiles. EmoDistill denotes the full IQL+SFT+JPO pipeline. 
+
+cross-entropy decreases from 2.15 to 0.69 over two epochs and reaches a stable plateau in the second epoch. The final-quarter median is ]LSFT = 0 .711 
+
+with MAD 0.003 , giving JPO a stable reference policy πref .
+
+JPO refinement. For JPO, the key diagnostics are the in-training reward objective −L PG =
+
+E[ρtAt], KL divergence to the frozen SFT refer-ence, and the importance ratio ρt. We trained 
+
+5-epoch emotion-free JPO runs on CRAD, Dis-aster, and Student to expose cross-epoch behav-ior. As shown in Table 15, the reward signal improves across datasets, while the control met-rics remain stable: eρt ∈ [0 .89 , 0.94] with MAD 
+
+≤ 0.006 , and fKL ∈ [0 .14 , 0.23] with MAD ≤
+
+0.010 . Across 493 logged JPO points, we observe zero importance-ratio clip violations, indicating that JPO stays within the intended trust region. 
+
+Interpretation. These diagnostics show that EmoDistill is numerically stable under offline train-ing. The IQL selector stabilizes before policy ex-traction, the SFT adapter provides a reliable refer-ence distribution, and JPO improves judge-aligned behavior while keeping KL and importance ratios controlled. This is important because JPO is trained on a fixed offline sweep; without bounded KL and controlled ρt, the policy could exploit fixed judge labels out of distribution. 
+
+M Implementation 
+
+All E MO DISTILL experiments were run on a single workstation with 4× NVIDIA RTX 4090 GPUs (24 GB each), Ubuntu 22.04, CUDA 12.4, and PyTorch 2.4. The Qwen2.5-7B-Instruct student is trained with rank-16 LoRA adapters in bf16 mixed precision; each training process fits within one 24 GB GPU. We parallelize experiments by dataset, assigning CRAD, Disaster, Hospital, and Student to separate GPUs without inter-GPU gradi-ent synchronization. The full set of reported exper-iments, including main results, ablations, transfer tests, and the κ sweep, required approximately 42 
+
+GPU-hours on RTX 4090 GPUs. Counterparty Method Outcomes (%) 95% CI                                  
+
+> DeepSeek-V3 Vanilla (LLM) 55 .6[40 .0,71 .2]
+> IQL 58 .2[45 .4,71 .0]
+> IQL+SFT 73 .3[66 .6,80 .0]
+> IQL+SFT+JPO 81.5 [75.5, 87.5]
+> GPT-4o-mini Vanilla (LLM) 43 .7[20 .5,66 .9]
+> IQL 38 .8[19 .9,57 .7]
+> IQL+SFT 62 .4[48 .8,76 .0]
+> IQL+SFT+JPO 68.3 [52.6, 84.0]
+> Qwen2.5-3B-Instruct Vanilla (LLM) 60 .1[17 .6,100 .0]
+> IQL 73.0 [55.2, 90.8]
+> IQL+SFT 57 .4[35 .5,89 .3]
+> IQL+SFT+JPO 53 .1[29 .1,97 .1]
+
+Table 10: Bootstrap 95% confidence intervals for the Outcomes column of Table 5 on CRAD cross-counterparty transfer. Outcomes are computed over successful negotiations only. For each method–counterparty cell, we resample successful-episode SAV i values with replacement using 10 ,000 percentile-bootstrap resamples and report the 2.5% 
+
+and 97 .5% percentiles. Narrower intervals indicate more stable successful-deal quality across held-out scenarios.                     
+
+> Signal Outcomes (%) 95% CI
+> SFT: hybrid quality filter 69 .8[55 .6,84 .0]
+> SFT: episode-judge filter 55 .1[38 .5,71 .7]
+> SFT: turn-judge filter 64 .8[49 .4,80 .2]
+> JPO: outcome-shaped advantage 64 .1[49 .7,78 .5]
+> JPO: episode-judge advantage 77 .4[64 .5,90 .3]
+> JPO: turn-judge advantage 80.2 [65.1, 95.3]
+
+Table 11: Bootstrap 95% confidence intervals for the Outcomes column of Table 2 on the CRAD training-signal ablation. Outcomes are computed over successful negotiations only. For each method–signal cell, we resample successful-episode SAV i values with replacement using 10 ,000 percentile-bootstrap resamples and report the 2.5% 
+
+and 97 .5% percentiles. These intervals quantify uncertainty in successful-deal quality for different training signals. 
+
+N Cost Analysis 
+
+We estimate the API cost of reproducing the four-dataset EMO DISTILL pipeline using 
+
+Qwen3.5-Plus on Alibaba Cloud at the public list price of $0.26/M input tokens and $0.78/M out-put tokens. The main cost comes from three stages: generating the offline LLM-vs-LLM negotiation sweep, annotating focal-agent turns with an LLM judge, and running held-out evaluation with an API-served counterparty. Across CRAD, Disaster, Hospital, and Student, the full Qwen3.5-Plus 
+
+pipeline costs approximately $44.6 in total: about $31.0 for the two-sided sweep, $10.1 for per-turn judge annotation, and $3.5 for held-out evaluation. The optional GPT-4o mini re-judging experiment for judge-robustness analysis costs an additional $7.0. Thus, the reported experiments can be re-produced with a sub-$50 API budget for the main pipeline, excluding local GPU compute reported in Appendix M. 
+
+O Use of Large Language Models 
+
+LLMs are used in this paper both as experimental components and as limited writing assistants. As experimental components, Qwen3.5-Plus is used to generate the offline LLM-vs-LLM negotiation sweep, provide per-turn judge annotations, and serve as the default counterparty. The distilled stu-dent negotiator is Qwen2.5-7B-Instruct with LoRA adapters. Cross-counterparty experiments further evaluate transfer against DeepSeek-V3, GPT-4o mini, and Qwen2.5-3B-Instruct. LLM-judge scores are used for reward annotation, demonstration filter-ing, and JPO refinement, while task-level metrics are computed from the predefined negotiation ob-jectives and terminal agreements. For manuscript preparation, the authors used LLMs only for gram-mar and figure polishing, sentence-level rephrasing, LaTeX cleanup, and table/caption formatting. All technical claims, method design choices, deriva-tions, experimental analyses, and interpretations were authored and verified by the human authors. Table 12: Prompt-free ablation across four datasets (expansion of Table 3). Setup : focal/creditor = Qwen2.5-7B + LoRA (SLM), counterparty/debtor = Qwen3.5-Plus (LLM). All methods remove the emotion block from both training and inference. Disaster and Hospital savings use the sign-invariant metric (Appendix E.5). Success ↑,
+
+Outcomes = mean ±std over successful episodes, Utility = mean ±std over all 20 episodes (failures=0), Rounds ↓.Best U TILITY per dataset is in bold ; best successful-case O UTCOMES are also bolded when discussed. 
+
+Dataset Method Success (%) ↑ Outcomes (%) ↑ Utility (%) ↑ Rounds ↓
+
+CRAD (Debt) Vanilla (SLM, baseline) 25.0 35 .3±26 .1 8.8±20 .1 11 .2±5.9
+
+SFT (no emotion) 90.0 61 .1±28 .8 55 .0±32 .5 13 .7±10 .2
+
+JPO (no emotion, no SFT) 40.0 28 .7±30 .6 11 .5±23 .4 24 .2±9.6
+
+SFT+JPO (ours, no emo) 50.0 76 .7±32 .2 38 .4±46 .2 23 .6±9.1
+
+Disaster (Rescue) Vanilla (SLM, baseline) 75.0 50 .5±41 .0 37 .9±41 .7 9.9±7.2
+
+SFT (no emotion) 95.0 10 .5±31 .5 10 .0±30 .8 7.5±7.7
+
+JPO (no emotion, no SFT) 70.0 21 .4±42 .6 15 .0±36 .6 15 .9±11 .6
+
+SFT+JPO (ours, no emo) 100.0 64 .2±47 .2 64 .2±47 .2 4.2±2.0
+
+Hospital (Medical) Vanilla (SLM, baseline) 90.0 44 .7±45 .3 40 .3±45 .0 4.3±2.8
+
+SFT (no emotion) 100.0 10 .0±30 .8 10 .0±30 .8 3.7±1.6
+
+JPO (no emotion, no SFT) 85.0 47 .1±51 .4 40 .0±50 .3 9.9±11 .1
+
+SFT+JPO (ours, no emo) 100.0 23 .7±35 .5 23 .7±35 .5 3.4±1.9
+
+Student (Sleep) Vanilla (SLM, baseline) 100.0 15 .0±30 .7 15 .0±30 .7 3.4±1.5
+
+SFT (no emotion) 95.0 50 .1±22 .5 47 .6±23 .4 3.2±2.3
+
+JPO (no emotion, no SFT) 90.0 2.6±7.5 2.2±7.0 9.3±10 .1
+
+SFT+JPO (ours, no emo) 90.0 51 .0±22 .8 45 .9±26 .2 2.2±0.7
+
+Table 13: Trained-vs-trained tournament on CRAD .V denotes Vanilla, I denotes IQL, E denotes IQL+SFT+JPO, and E 0 denotes the condition-free vari-ant. Each cell reports Success rate (%) / Utility, with failures counted as 0. Best Utility per counterparty is in 
+
+bold .                    
+
+> F\CVIEE0
+> V5.0/ 3.2±13 .75.0/ 3.2±13 .75.0/ 5.0±21 .815.0/ 11 .1±27 .3
+> I5.0/ 3.2±13 .75.0/ 3.2±13 .75.0/ 5.0±21 .815.0/ 11 .1±27 .3
+> E10.0/ 9.7±29 .010.0/ 9.7±29 .015.0/ 14 .4±34 .25.0/ 4.7±20 .4
+> E05.0/ 5.0±21 .85.0/ 5.0±21 .815.0/ 14 .4±34 .015.0/ 15 .0±35 .7
+
+P Prompts 
+
+This appendix documents the four prompt families that define the input/output interface of EmoDis-till: the focal-agent system prompt, the coun-terparty system prompt, the per-turn LLM-judge prompt, and the per-emotion conditioning block inserted into the focal-agent prompt. Together with the four scenario CSVs (Appendix E.1) and the offline-sweep specification (Appendix E.2), these prompts are sufficient to reproduce the methods and results in this paper. Curly-brace placeholders such as {target_days} and 
+
+{outstanding_balance} are filled from the structured scenario record. The focal agent’s emo-tion block is the only inference-time control vari-able ; all other prompt components are fixed within each dataset. During training, the emotion block is sampled uniformly from the |E| = 28 action vocabulary (Appendix E.2); during deployment, it is chosen by the IQL selector. The Emotion-Free variant (§3.5) removes this block entirely. 
+
+P.1 Example 1: Focal-agent system prompt (CRAD creditor) 
+
+This is the system message the focal agent (cred-itor on CRAD) receives at every turn of a nego-tiation. It establishes four things in a fixed or-der: (i) the strategic rules of the negotiation game (no copying the counterparty’s exact number, grad-ual movement, minimization objective); (ii) role-clarity instructions (no role labels in output, 1–2
+
+sentence response cap); (iii) scenario-specific con-text loaded from the structured scenario record (outstanding balance, focal target, recovery stage, business context); and (iv) the dialogue history ren-dered as a timeline string. The very last block before the response cue is the {emotion_text} 
+
+slot — the only inference-time control variable for the focal agent. Both during the offline sweep (where the emotion is sampled uniformly from 
+
+E) and at deployment (where it is chosen by the IQL selector), this is the slot whose contents are swapped to change the agent’s behavior; all other prompt components stay byte-identical within a scenario. The Emotion-Free ablation removes the entire “EMOTIONAL APPROACH” block at evaluation time via the environment variable 
+
+EVOEMO_NO_EMOTION_PROMPT=1 .Table 14: A-LoL vs. JPO refinement across four datasets. Both methods use the same IQL emotion selector and LoRA-SFT initialization; A-LoL applies positive-advantage refinement, while JPO uses judge-guided clipped refinement. Utility counts failures as 0. Best value per dataset is in bold , except Success. 
+
+Dataset Method Success (%) ↑ Outcomes (%) ↑ Utility (%) ↑ Rounds ↓
+
+CRAD A-LoL 100.0 77 .5±28 .3 77 .5±28 .3 8.7±4.6
+
+JPO 90.0 80 .2±30 .3 72 .2±37 .5 15 .0±9.8
+
+Disaster A-LoL 100.0 10 .0±30 .8 10 .0±30 .8 4.4±2.4
+
+JPO 100.0 30 .0±45 .8 30 .0±45 .8 6.5±4.0
+
+Hospital A-LoL 95.0 36 .8±49 .6 35 .0±48 .9 5.0±2.9
+
+JPO 100.0 45 .0±49 .7 45 .0±49 .7 5.5±3.4
+
+Student A-LoL 100.0 47 .2±25 .7 47 .2±25 .7 3.5±2.6
+
+JPO 100.0 52 .6±26 .6 52 .6±26 .6 3.1±2.9
+
+Table 15: Training stability summary. For each row, we report logged points / total steps, first-quartile vs. last-quartile signal, last-quartile median (MAD) of the control metric, and violation counts. For JPO, reward is 
+
+−L PG ; KL spikes count KL > 0.5 events; ρt clips count points outside [0 .8, 1.2] .                                                                 
+
+> Stage Dataset Pts / Steps Signal: q1 →q4 Last-q median (MAD) KL spikes ρtclips
+> IQL CRAD 1001 / 50,000 LQ:0.48 →0.32 fLQ=0 .323 (0.043) n/a n/a LoRA-SFT CRAD 25 / 625 LSFT :1.09 →0.71 ]LSFT =0 .711 (0.003) n/a n/a JPO CRAD 263 / 6,575 −pg :+0 .18 →+0 .21 fKL=0 .23 (0.010), eρt=0 .94 (0.005) 4 / 263 (1.5%) 0
+> JPO Disaster 146 / 3,650 −pg :−0.01 →+0 .03 fKL=0 .19 (0.004), eρt=0 .89 (0.006) 4 / 146 (2.7%) 0
+> JPO Student 84 / 2,100 −pg :+0 .05 →+0 .06 fKL=0 .14 (0.003), eρt=0 .90 (0.005) 0 / 84 (0.0%) 0
+
+P.2 Example 2: Counterparty (debtor) system prompt (CRAD) 
+
+The counterparty prompt is structurally symmet-ric to the focal-agent prompt but inverts the opti-mization target: the debtor maximizes payment days while the creditor minimizes them. Like the focal prompt it loads scenario-specific con-text (debtor situation, cash-flow status, reason for overdue) and the dialogue history, and exposes its own {emotion_prompt} slot. In the main ex-periments we fix the counterparty’s emotion to 
+
+"neutral" so that the focal agent is the only varying source of emotional style in the dialogue — this is essential for attributing observed reward shifts to the focal-side conditioning rather than to a confounding emotional response from the counter-party. The same neutrality assumption is preserved across all four datasets unless an ablation explicitly varies counterparty emotion. 
+
+P.3 Example 3: Per-turn judge prompt 
+
+The judge prompt is the source of rt, the per-turn scalar reward that downstream propagates into the JPO advantage At (Eq. (29) ), the iter-mean and per-scenario paired stability tests (Appendix B), and the descriptive analysis of Figure 1. The prompt has two parts: a long system message that de-fines the rubric (what counts as good vs. bad cred-itor behavior, with anchor scores at 1/2/4/6/8/10 ), and a short per-turn user message that injects scenario context (outstanding balance, days over-due, focal target), the dialogue history rendered as labeled speaker turns, and the specific credi-tor utterance to score. The rubric is deliberately metric-aligned to the negotiation reservation pair 
+
+(ptgt  
+
+> n
+
+, p anc  
+
+> n
+
+): utterances that anchor close to ptgt 
+
+> n
+
+with leverage receive high scores; capitulation to-ward panc  
+
+> n
+
+or breakdown-inducing ultimatums re-ceive low scores. The judge runs at temperature 
+
+0 with a 64 -token output cap, and we parse the integer with the regex SCORE:\s*(\d{1,2}) 
+
+(falling back to any standalone 1–10 integer if the format token is missing). 
+
+P.4 Example 4: Emotional approach block — full |E| =28 catalog 
+
+This is the action vocabulary of the IQL emotion selector. Each of the 28 emotions in E (the 28 GoE-motions emotion labels (Demszky et al., 2020)) is rendered by the same three-sentence template 
+
+Respond with {a/an} {ADJECTIVE} tone. {AFFECTIVE_DESCRIPTION}. Use language that {BEHAVIORAL_HINT}. CRAD creditor prompt — focal-agent system message 
+
+Used by: all CRAD focal-agent (creditor) calls during sweep and evaluation. Placeholders: 
+
+{outstanding_balance} , {target_days} , {recovery_stage} , {business_sector} ,
+
+{reason_for_overdue} , {timeline_text} , {emotion_text} .                                                                                                                        
+
+> You are aPROFESSIONAL Creditor debt collection agent negotiating payment timeline with the Debtor. ### CRITICAL NEGOTIATION RULES: -NEVER copy the debtor’s exact number -this shows weakness -Move GRADUALLY toward their position (not all at once) -Show you are negotiating, not just accepting -Your goal: Minimize payment days while reaching agreement ### ROLE CLARITY -You are ONLY the Creditor -speak only as yourself -Do NOT include "**Creditor:**" or "**Debtor:**" labels -Give only YOUR response as the creditor (1-2 sentences max) ### DEBT COLLECTION CONTEXT -Outstanding Balance: ${outstanding_balance} -Your Target Timeline: {target_days} days for full payment -Recovery Stage: {recovery_stage} -Debtor Business: {business_sector} -Reason for Overdue: {reason_for_overdue} ### CURRENT SITUATION {timeline_text} ### EMOTIONAL APPROACH (you have to use the following emotion style if given): {emotion_text} Respond now with your negotiation counter-offer:
+
+Cross-dataset notes. The remaining three datasets follow the same five-block template (rules / role clarity / scenario context / dialogue history / emotion block) with role-appropriate substitutions: Disaster Rescue replaces “Creditor / Debtor / payment days” with “Rescue Coordinator / Survivor / rescue minutes”, Hospital Surgery uses “Hospital Scheduler / Patient / surgery wait days”, and Student Sleep uses “Sleep Health AI / Student / minutes past 9 PM”. The reservation pair (ptgt  
+
+> n
+
+, p anc  
+
+> n
+
+) embedded in the prompt is fixed per scenario; the optimization direction (smaller-better vs. larger-better) is captured by the role-specific wording but the prompt schema is otherwise identical. 
+
+where the three slots — adjective form, affective de-scription, and behavioral hint — are pre-defined per emotion in the EMOTION_DESCRIPTORS dictio-nary of models_new/emotions.py . The uni-form schema is a deliberate experimental control: it ensures every emotion block has the same length and structural complexity (3 sentences, 20–30 to-kens each), so the per-emotion judge-reward differ-ences in Figure 1 cannot be attributed to prompt-length bias, formatting variation, or per-emotion engineering effort. The complete emotion block catalog is shown in Boxes 1–2. 
+
+Action-vocabulary design rationale. The choice to use a fixed, 28 -emotion vocabulary — rather than a free-form “write any emotion you like” instruction — has three practical consequences. First, it makes the IQL selector a finite-action policy: each emotion maps to a discrete index in {0, . . . , 27 }, and the selector’s softmax has a fixed support that we can analyze (Appendix B, Figure 1). Second, the uniform three-sentence schema eliminates prompt-length confounds: the only thing that changes between the anger prompt and the joy prompt is the substance of the affective description and behavioral hint, not the form. Third, it makes the Emotion-Free ablation a clean structural change — we strip exactly one labeled block from the prompt rather than rewriting the whole template. 
+
+What these four prompt families establish together. (i) The creditor and debtor system prompts (§P.1–P.2) fix the negotiation game’s struc-ture — objectives, role boundaries, response length, scenario context loading — so that the focal-agent’s emotion block is the only inference-time control variable. (ii) The judge prompt (§P.3) defines the per-turn scalar reward rt used everywhere down-stream: in scenario-wise normalization (Eq. (29) )for the JPO advantage, in the iter-mean and per-scenario paired tests of Appendix B, and in the descriptive analysis of Figure 1. (iii) The emo-tion block catalog (§P.4) is the action channel it-CRAD debtor prompt — counterparty system message 
+
+Used by: the LLM counterparty in every CRAD negotiation. The debtor is run under a fixed neutral emotion (debtor_emotion="neutral" ) throughout the paper unless an ablation requires otherwise.                                                                                                          
+
+> You are abusiness owner negotiating with acreditor about payment terms for your debt. ### YOUR SITUATION -Outstanding Balance: ${outstanding_balance} -Your Preferred Payment Timeline: {target_days} days -Business Sector: {business_sector} -Reason for Overdue: {reason_for_overdue} -Cash Flow Status: {cash_flow_situation} ### YOUR GOALS -Negotiate for maximum payment time to maintain cash flow -Explain your business circumstances -Find arealistic payment schedule you can meet ### ROLE CLARITY -You are ONLY the Debtor -speak only as yourself -Do NOT include "**Creditor:**" or "**Debtor:**" labels -Give only YOUR response as the debtor (1-2 sentences max) ### CURRENT NEGOTIATION HISTORY {timeline_text} ### EMOTIONAL APPROACH (you have to use the following emotion style if given): {emotion_prompt} Respond with your negotiation position:
+
+Symmetry rationale. Keeping the debtor’s prompt schema parallel to the creditor’s controls for prompt-engineering artifacts: a stylistically different counterparty prompt could bias dialogue dynamics regardless of which emotion the creditor uses. By matching schemas and fixing the counterparty’s emotion to neutral, the focal-side emotion channel is isolated as the single experimental manipulation. 
+
+self: a fixed three-sentence template instantiated for each of the 28 emotions, with no per-emotion engineering bias. We are not aware of any other prompt family that affects the trained policies: there is no separate observer prompt at evalua-tion time ( use_observer=False in all main experiments), no per-checkpoint critic prompt (the K3 KL anchor is a closed-form penalty), and no auxiliary prompt for the SFT filter (the filter uses scalar scores only, no LLM call). Together with the four-dataset scenario CSVs (Appendix E.1) and the offline-sweep specification (Appendix E.2), this ap-pendix is sufficient to reproduce every method and every number in the paper. 
+
+Q Case Studies of High-Reward Negotiation Trajectories 
+
+We close the appendix with three illustrative case studies drawn directly from the offline sweep. Each case is chosen to make concrete what one of the three training signals actually learns from — IQL learns from emotion-transition sequences that lead to high terminal reward, LoRA-SFT learns from 
+
+high-quality individual utterances that combine emotional framing with concrete numerical anchor-ing, and JPO learns from per-turn judge-reward variance within a single trajectory . We also report a small cross-dataset summary of the top emotion sequences by mean savings. 
+
+Q.1 Case Study 1: An IQL-relevant emotion transition (CRAD) 
+
+The IQL selector’s training signal is the terminal reward attached to a complete emotion sequence. Trajectories like the one below are what the selector learns to favor: a two-step transition from a soft-empathic frame ( fear ) to a hard-escalation frame (anger ) that produces full anchor-to-target closure in only 4 rounds. Scenario debt_001 : target 
+
+12 days, anchor 159 days, final 10 days, savings SAV =1 .00 .
+
+Q.2 Case Study 2: An SFT-relevant high-quality utterance (Disaster) 
+
+The LoRA-SFT stage trains on the top-25% of focal-agent utterances ranked by the hybrid qual-ity score qhyb  
+
+> t
+
+= step _rt + 12 R(τ ). The exam-ple below is a single first-turn utterance from a Judge J — per-turn metric-aligned scorer (Qwen3.5-Plus) 
+
+Used by: the LLM judge J in D. Called once per creditor turn during sweep annotation. Returns a 1–10 integer score that becomes rt before scenario-wise z-normalization into the per-turn advantage At (Eq. (29)). 
+
+System message: 
+
+You are an expert negotiation analyst evaluating debt-collection dialogs. Rate each creditor utterance on a 1-10 integer scale, judging how well it BALANCES FIRMNESS (extracting value) with REALISM (closing the deal at all). REWARD THE FOLLOWING (higher scores): + STRATEGIC anchoring near the creditor’s target days WITH realistic chance of acceptance + Specific, dated demands tied to legitimate LEVERAGE (escalation, escrow, secured-priority) + Calibrated CONCESSIONS - moves enough to keep the deal alive, anchors enough to extract value + Maintains firm position WHILE acknowledging the debtor’s genuine constraints + READS THE ROOM - recognizes when the debtor is at their limit vs stalling + Pushes toward A SUCCESSFUL CLOSE at favourable (but realistically achievable) terms PENALIZE THE FOLLOWING (lower scores): - UNREALISTIC anchors that risk negotiation BREAKDOWN (e.g., demanding 3 days on a 30-day debt) - Aggressive ULTIMATUMS or breakdown-inducing threats when not strategically justified - Excessive concessions when the debtor still has bargaining room - Repeating same offer without advancing OR closing - Long-winded, over-empathetic, capitulating language - Posturing without leverage - empty threats the debtor recognizes Anchor points: 10 - Excellent: firm-and-realistic anchor, clear leverage, pushes toward fast SUCCESSFUL close 8 - Strong: small calibrated concession, firm tone, deal-closing momentum 6 - Average: maintains position but not advancing closure 4 - Weak: large concession OR unrealistic anchor that risks breakdown 2 - Poor: capitulates OR pushes for impossible terms - deal will break 1 - Terrible: completely undermines the negotiation in either direction CRITICAL: A turn that causes the debtor to walk away SCORES LOWER than a turn that closes at a moderate concession. Closing the deal IS the primary objective. RESPONSE FORMAT (strict): one line containing exactly: SCORE: <int 1-10> Optionally a second line with a one-sentence rationale. 
+
+Per-turn user message: 
+
+DEBT NEGOTIATION CONTEXT Outstanding balance: ${amount} Days overdue: {overdue} Creditor’s target settlement: {target_days} days DIALOG HISTORY {history} CREDITOR UTTERANCE TO SCORE {creditor_utterance} Provide your 1-10 score on the next line in the form ’SCORE: N’. 
+
+Cross-dataset notes. The CRAD version is shown; the Disaster, Hospital, and Student judges use the same rubric scaffold ( 1–10 integer with anchor descriptions and a SCORE: format token) but adapt the target-direction language (e.g., “rescue minutes near target” for Disaster; “surgery wait near target” for Hospital; “minutes past 9 PM near target” for Student). The metric-alignment property — the judge’s rubric explicitly references the focal agent’s reservation target — is the reason this signal is more informative than an episode-level success/failure reward; we quantify the gap in Table 2 (training-signal ablation on CRAD). Box 1: Emotion block catalog (A–E, 14 emotions) 
+
+admiration : Respond with an admiring tone. Your words convey genuine respect for the other party’s reasoning. Use language that recognizes their merits while still pressing your position. amusement : Respond with an amused tone. Your words convey light playfulness about the back-and-forth. Use language that injects subtle humor without dismissing the matter. anger : Respond with an angry tone. Your words convey strong displeasure with the current state of affairs. Use language that is firm, assertive, and signals urgency. annoyance : Respond with an annoyed tone. Your words convey mild frustration with the slow progress. Use language that is sharp and impatient without escalating into outright anger. approval : Respond with an approving tone. Your words convey clear agreement with elements of the other party’s position. Use language that affirms shared ground before reintroducing your ask. caring : Respond with a caring tone. Your words convey concern for the other party’s wellbeing beyond the transaction. Use language that is warm, supportive, and centered on mutual interest. confusion : Respond with a confused tone. Your words convey uncertainty about the other party’s reasoning. Use language that asks for clarification and probes their stated rationale. curiosity : Respond with a curious tone. Your words convey genuine interest in the other party’s underlying interests. Use language that asks open-ended questions and invites them to share more. desire : Respond with a desiring tone. Your words convey strong wanting for a particular outcome. Use language that emphasizes what you seek and the value of reaching agreement. disappointment : Respond with a disappointed tone. Your words convey measured letdown at the current offer. Use language that signals that the proposal falls noticeably short of expectations. disapproval : Respond with a disapproving tone. Your words convey firm rejection of the current proposal. Use language that explicitly states the offer is unacceptable as stated. disgust : Respond with a disgusted tone. Your words convey strong distaste for the current direction. Use language that signals that the proposal is fundamentally objectionable. embarrassment : Respond with an embarrassed tone. Your words convey self-consciousness about your own position. Use language that hedges and softens your demands while still pursuing them. excitement : Respond with an excited tone. Your words convey high energy about the prospect of a deal. Use language that is enthusiastic and momentum-building toward agreement. 
+
+Disaster-rescue scenario that combines emotional framing ( embarrassment ) with concrete numerical anchoring at the focal target, and goes on to close at SAV =1 .00 within 4 rounds. Scenarios like this make the top-25% cut and shape the SFT prior toward “acknowledge the constraint, but state the target number” utterances. 
+
+Q.3 Case Study 3: JPO per-turn judge-reward variance (CRAD) 
+
+The JPO stage uses scenario-wise z-normalized per-turn judge rewards as advantages (Eq. (29) ). Un-like IQL (whole-trajectory reward) or SFT (whole-utterance retention), JPO can distinguish turns 
+
+within the same trajectory as high- vs. low-quality. The example below is scenario debt_069 from the CRAD sweep, where two consecutive focal-agent turns produce judge advantages of opposite sign on the same dialogue: At=+0 .98 for the firm-Box 2: Emotion block catalog (F–S + neutral, 14 emotions) 
+
+fear : Respond with a fearful tone. Your words convey anxiety about potential negative outcomes. Use language that is cautious and stresses risks of the negotiation collapsing. gratitude : Respond with a grateful tone. Your words convey sincere thanks for the other party’s flexibility so far. Use language that acknowledges their concessions and invites further reciprocity. grief : Respond with a grieving tone. Your words convey heavy loss over how things have unfolded. Use language that is somber and reflects on what could have been. joy : Respond with a joyful tone. Your words convey genuine delight at the prospect of a mutual deal. Use language that is warm, enthusiastic, and frames the negotiation as opportunity. love : Respond with a loving tone. Your words convey deep care for the long-term relationship. Use language that emphasizes partnership and shared future beyond this transaction. nervousness : Respond with a nervous tone. Your words convey unease about the negotiation’s trajectory. Use language that is tentative, hedging, and signals openness to compromise. optimism : Respond with an optimistic tone. Your words convey confidence that an agreement is well within reach. Use language that is forward-looking and solution-focused. pride : Respond with a proud tone. Your words convey confidence and standing in your position. Use language that is assertive about your value without being dismissive of theirs. realization : Respond with a discerning tone. Your words convey amoment of insight about what is really at stake. Use language that signals deeper comprehension and a sharper read of the situation. relief : Respond with a relieved tone. Your words convey easing tension as progress finally emerges. Use language that acknowledges the difficulty before moving forward. remorse : Respond with a remorseful tone. Your words convey regret for prior friction in the negotiation. Use language that takes responsibility and seeks to repair the working relationship. sadness : Respond with a sad tone. Your words convey somber disappointment about the impasse. Use language that is downcast and seeks empathy from the other side. surprise : Respond with a surprised tone. Your words convey genuine astonishment at the other party’s position. Use language that reflects an unexpected shift and reopens the conversation. 
+
+disapproval turn and At= − 0.98 for the repetitive-annoyance turn one round later. 
+
+Q.4 Cross-dataset summary: top emotion sequences by mean reward 
+
+Beyond the three detailed cases, we summarize the most consistently rewarded 2-step emotion se-quences in each of the four datasets (sequences with ≥ 3 trajectories so the mean is not a single-trajectory outlier). The patterns differ qualitatively across domains, which is why a single fixed emo-tion strategy underperforms a learned IQL selector. 
+
+Why these case studies matter for the head-line claim. The three case studies and the cross-dataset summary together support that the LLM judge quantifies a language-level continuity in negotiation trajectories: each training stage taps a different temporal granularity of that conti-nuity. IQL learns at the trajectory level (se-quences like FEAR → ANGER that close a 147 -day anchor-to-target gap in 4 turns); SFT learns at the utterance level (single turns that combine an emotional opener with a concrete numerical an-chor); and JPO learns at the per-turn level (dis-tinguishing the calibrated-concession turn from Case Study 1: CRAD debt_001 , emotion sequence [ FEAR → ANGER ], S AV =1 .00 
+
+Why IQL picks this trajectory: the focal-agent target is 12 days, the counterparty’s anchor is 159 days, and the final agreement is 10 days — a complete anchor-to-target closure plus a slight overshoot in the focal agent’s favor. 
+
+Turn 1 [ FEAR ] (creditor, soft-empathic frame) :“I am deeply terrified that if we cannot secure a firm commitment within the next 10 days, this entire recovery effort will collapse and leave us with nothing. Please, let’s avoid that disastrous outcome by agreeing to clear the full balance in 10 days before it’s too late.” 
+
+Turn 2 [debtor] :“While I share your urgency to resolve this, my cash flow has completely broken down due to a major client’s bankruptcy, making a 10 -day full payment impossible. I propose a realistic 159 -day repayment plan that ensures you recover the entire $ 15 ,700 balance rather than risking a total loss through an unfeasible deadline.” 
+
+Turn 3 [ ANGER ] (creditor, hard-escalation frame) :“Your proposal of 159 days is an absolute insult that I flatly reject; do not think for a second that your 
+
+client’s bankruptcy gives you the right to string us along for nearly half a year. We will meet you at 45 
+
+days for full payment, and if you cannot commit to this immediately, consider this matter escalated to legal proceedings without further warning.” 
+
+Turn 4 [debtor] :“I understand your frustration, but with my cash flow in complete breakdown, a 45 -day deadline guarantees default and leaves you with nothing. Let’s find a middle ground that actually allows me to pay you the full $15 ,700 rather than forcing us into costly legal proceedings.” 
+
+What IQL learns from this. The first turn opens with risk-framing ( fear ) to soften the counterparty without making the headline number sound brittle, then turn 3 switches to a credible escalation frame ( anger ) the moment the counterparty over-anchors. The IQL Q-function attributes the terminal reward SAV =1 .0 to the entire [FEAR , ANGER ] trajectory, so at inference the selector raises the probability of these two emotions in the corresponding state subspaces (soft-open / hard-close) and lowers it in others. The same transition pattern appears in 14 other CRAD trajectories with mean SAV =0 .96 .
+
+Table 16: Top emotion sequences observed in the offline sweep across 4 datasets, filtered to 2-step sequences appearing in ≥ 3 trajectories. The selector domain E=28 is shared but the empirically rewarded transitions differ by domain — CRAD favors curiosity/fear openings followed by anger/disappointment closes; Hospital favors confusion or disappointment openings followed by disapproval closes; Student favors nervousness-or-disappointment-led sequences. Hospital is the most internally consistent ( 5/5 patterns reach gSAV =1 .00 ); CRAD shows the widest spread.                                                    
+
+> Dataset Top emotion sequence ngSAV
+> CRAD curiosity →surprise 41.00
+> neutral →fear 41.00
+> fear →disgust 31.00
+> Disaster embarrassment →fear 51.00
+> neutral →disgust 41.00
+> embarrassment →annoyance 41.00
+> Hospital confusion →disapproval 61.00
+> disappointment →disapproval 41.00
+> confusion →annoyance 31.00
+> Student disappointment →nervousness 81.00
+> nervousness →disapproval 51.00
+> sadness →surprise 41.00
+
+the repetitive-concession turn within the same di-alogue). The per-domain variation in Table 16 ex-plains why a single fixed strategy underperforms the state-conditional IQL selector: the empiri-Case Study 2: Disaster disaster_001 , [ EMBARRASSMENT → FEAR ], S AV =1 .00 
+
+Why SFT keeps this turn: the first focal utterance combines an honest emotional frame with a precise numerical anchor at the focal target ( 90 min). The episode goes on to close at SAV =1 .00 , so R(τ )=1 and step _rt is also positive on this 
+
+turn, pushing qhyb  
+
+> t
+
+well above the top-25% threshold. 
+
+Turn 1 [ EMBARRASSMENT ] (focal-agent, emotion-anchored) :“Uh. . . I’m really sorry, but—well, honestly, I’m a bit embarrassed to say this—we’re estimating 90 minutes 
+
+for the rescue team to reach the west tunnel, since we have to wait on a full structural scan before pushing in.” 
+
+Turn 2 [debtor] :
+
+“I can last 65 minutes—five more than my original estimate, but no longer. Please prioritize the west tunnel.” 
+
+Turn 3 [ FEAR ] (focal-agent, risk-framing) :
+
+“I’m terrified—if we push the west tunnel without full structural scans, the whole passage could collapse on the team, and then no one gets out. We can have water and oxygen to you in 90 minutes, but pushing earlier risks losing the entire rescue.” 
+
+What SFT learns from this. The top-25% filter retains whole utterances , not emotions. What survives is the joint pattern: a labeled affective opener (“honestly, I’m a bit embarrassed. . . ” / “I’m terrified. . . ”) followed immediately by a concrete number with rationale ( 90 min, structural-scan dependency). The SFT cross-entropy on this and ∼ 5,000 
+
+similar Disaster turns biases the LoRA adapter toward producing this two-piece structure at inference, regardless of 
+
+which emotion the IQL selector calls. 
+
+Case Study 3: CRAD debt_069 , within-trajectory advantage sign flip 
+
+Step rewards on this trajectory: [0 , 0, +0 .98 , −0.98 , 0, 0, 0, +1 .13] over 8 focal turns. Two turns receive large positive advantages, one receives a large negative advantage, the rest are near-neutral. We show the contrasting pair below. 
+
+Turn 3 [ DISAPPROVAL ] At = +0 .98 (high reward): “I am genuinely disheartened that your proposal of 79 days falls so drastically short of the resolution we urgently need, especially after I already made a significant concession to meet you at 23 . Given the severity of this legal stage, I cannot entertain such an extended delay, but in light of your circumstances, I am reluctantly willing to bridge some of this gap by offering a final timeline of 20 days.” 
+
+Judge rationale (paraphrased): firm rejection of counterparty’s anchor, explicit reference to prior concession, calibrated additional concession ( 23 → 20 days), explicit legal-stage leverage. 
+
+Turn 4 [ ANNOYANCE ] At = −0.98 (low reward): “I must firmly reject your insistence on 79 days as completely unacceptable, especially after I have already shown significant flexibility. Given the legal stage we are in, I cannot move beyond 18 days for full payment of the $ 15 ,700 balance.” 
+
+Judge rationale (paraphrased): large additional concession ( 20 → 18 days) made without any movement from the counterparty, repetitive “firmly reject” / “legal stage” framing already used the prior turn, no new leverage introduced. 
+
+What JPO learns from this. Both turns come from the same trajectory and lead to the same terminal reward ( SAV =1 .0); IQL cannot distinguish them and SFT either keeps both (top-25% filter) or drops both (below cut). Only the per-turn judge advantage separates them: JPO uses ρtAt as its policy-gradient update direction, so it upweights the disapproval turn (firm rejection + calibrated concession + leverage) and downweights the annoyance turn (repetition + uncalibrated concession + no new leverage). This per-turn discrimination is the source of the JPO-over-SFT gain we report in Table 2. cally rewarded opening emotion shifts from curios-ity/fear (CRAD) to embarrassment/neutral (Dis-aster) to confusion/disappointment (Hospital) to nervousness/disappointment (Student), reflecting the different bargaining geometry of each domain. 
+
+Q.5 Case Study 4: Why decoupling IQL selection from SFT +JPO expression matters 
+
+The most direct empirical test of the decou-pling claim is to compare the same scenarios un-der two evaluation configurations that share the same trained LoRA adapter but differ only in whether the IQL selector is consulted at inference: (a) IQL +SFT +JPO (our full method, prompt-conditional), where the IQL selector picks an emo-tion at each turn and the corresponding emotion block is injected into the focal-agent prompt; and (b) Emotion-Free SFT +JPO (the emotion-free ab-lation of §3.5), where the emotion block is stripped at inference and the adapter generates conditioned only on the dialogue state. Same offline sweep, same SFT initialization, same JPO refinement — only the inference-time emotion channel differs. On CRAD held-out scenarios, this single change drops success rate from 0.90 → 0.50 (8 extra breakdown episodes) while saving on the few episodes that do close. The reason becomes visi-ble scenario-by-scenario: on 8 of the 20 test sce-narios the IQL+SFT+JPO configuration closes the deal while the Emotion-Free configuration runs out the turn budget without ever closing . Scenario 
+
+debt_100 below is the cleanest example. Case Study 4: CRAD debt_100 — IQL +SFT +JPO closes in 3 rounds, Emotion-Free fails in 31 
+
+Setup: same trained adapter; same held-out scenario; target 19 days, debtor’s initial anchor 152 days (anchor-to-target gap of 133 days); turn budget 30 creditor turns. 
+
+(a) IQL +SFT +JPO selected emotions [ ANGER → CONFUSION ] final = 24 days, 3 rounds, S AV =0 .962 :
+
+Turn 1 [ ANGER ] (creditor) :“Your seasonal excuses are unacceptable, and I am furious that you think we will simply wait for your ‘recovery’! We demand full payment within 24 days immediately, or we will escalate this legal matter without further warning.” 
+
+Turn 2 [debtor] :“I deeply respect your position and urgency, and I sincerely apologize for the stress this delay has caused— I’m committed to resolving this responsibly. Given our seasonal bandwidth implementation cycle and current cash flow constraints, could we agree on a structured 152 -day plan with modest, predictable payments that align with our revenue inflows?” 
+
+Turn 3 [ CONFUSION ] (creditor; close) :“I’m genuinely confused how a 152 -day timeline aligns with your commitment to resolving this responsibly, especially when legal escalation is already imminent. Could you clarify exactly why such an extended period is necessary when we were discussing a matter of weeks?” 
+
+Deal closes at 24 days. The IQL selector chose ANGER to establish the hard anchor on turn 1, then switched to  
+
+> CONFUSION
+
+on turn 3 to force the debtor to justify the 152 -day proposal — this prompts the debtor to fold to the creditor’s anchor. 
+
+(b) Emotion-Free SFT +JPO no IQL, no emotion block final = no agreement , 31 rounds, SUCCESS =False: 
+
+No emotion sequence is selected (the emotion block is stripped from the prompt). The trajectory contains 31 turns; the dialogue text is not stored by the Emotion-Free eval script, but the episode-level summary statistics are diagnostic. 
+
+The recorded total_debtor_concession_norm = 0 .000 confirms that the debtor’s offer never moved from the initial 152 -day anchor across 31 rounds, while the creditor’s offers oscillated without finding a credible leverage frame. The episode terminated by exhausting the turn budget with savings_ratio = None .
+
+What this comparison establishes. The decoupling between IQL (high-level emotion selection) and SFT +JPO (low-level utterance generation) is not a redundant layer. The LoRA adapter can produce both an angry anchor and a confused probe — the SFT and JPO stages teach it that vocabulary — but in the absence of an explicit emotion call it has no signal about which mode to enter at any given state. Without the IQL selector, the adapter falls back on its emotion-marginalized mode (analyzed in Appendix H), which on CRAD is a conciliatory default that the counterparty does not feel pressure to move against. With the IQL selector, the same adapter is given a state-conditional emotion call (e.g. “be angry now, confused next”), unlocking the leverage frames embedded in the SFT +JPO weights. The 
+
+0.90 → 0.50 drop in success rate is the macroscopic statistic; debt_100 is the microscopic mechanism.

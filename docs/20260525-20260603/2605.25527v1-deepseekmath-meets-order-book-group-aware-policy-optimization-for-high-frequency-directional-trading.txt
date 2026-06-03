@@ -1,0 +1,378 @@
+Title: DeepSeekMath Meets Order Book: Group-Aware Policy Optimization for High-Frequency Directional Trading
+
+URL Source: https://arxiv.org/pdf/2605.25527v1
+
+Published Time: Tue, 26 May 2026 02:23:40 GMT
+
+Number of Pages: 9
+
+Markdown Content:
+# DEEP SEEK MATH MEETS ORDER BOOK : G ROUP -A WARE POLICY 
+
+# OPTIMIZATION FOR HIGH -F REQUENCY DIRECTIONAL TRADING 
+
+Sayak Chakrabarty †
+
+Department of Computer Science Northwestern University Evanston, IL 60208, USA 
+
+sayakchakrabarty2025@u.northwestern.edu 
+
+Souradip Pal †
+
+School of Electrical and Computer Engineering Purdue University West Lafayette, IN 47906, USA 
+
+pal43@purdue.edu 
+
+May 26, 2026 
+
+# ABSTRACT 
+
+This paper studies reinforcement learning for high-frequency trading on limit order books by pairing an Order-Flow-based state model with policy-gradient methods. Instead of value-based RL tech-niques like tabular Q-learning, our approach deploys policy-based methods like vanilla PPO and DeepSeekMath-inspired variants like GRPO and GSPO, that use group-normalized updates and downside-aware shaping. On backtests with financial assets AMZN, AAPL, and GOOG under a simplified backtesting setup based on spread-scaled rewards, these new policies improve net average PnL, profitability, and drawdown over the Q-Learning baseline. Our results show that (1) Order-Flow signals are an adequate state for policy RL and (2) group-aware PPO surrogates are preferable over value-based baselines. 
+
+Keywords High-Frequency Trading · Limit Order Books · DeepSeek · Group Relative Policy Optimization (GRPO) ·
+
+Group Sequence Policy Optimization (GSPO) · Order-Flow Imbalance (OFI) · Drawdown Control · Risk-Aware Reinforcement Learning 
+
+# 1 Introduction 
+
+Directional trading using limit-order-book signals is a central task in quantitative finance. A market facilitates the exchange of assets between buyers and sellers, where profits are made by buying low and selling high (or vice versa through short selling). Orders are matched in a first-in-first-out (FIFO) manner, with limit orders queued until filled by opposing market orders. More than half of modern exchanges now operate electronic limit order books (LOBs). The average of the best bid and ask represents the current market price (also known as mid-price), while the bid-ask spread measures liquidity. Market movements occur when orders are filled or new limit orders are placed within the spread, shifting the best bid or ask levels. An LOB records every resting order; thus, the LOB’s dimensionality is enormous, complicating any conditional analysis. Effective modeling, therefore, requires a compact representation that preserves the crucial micro-structural signals [ 1 ]. Against this backdrop, building an autonomous directional trading agent is both practical and challenging. We emphasize that the environment studied in this paper is a directional trading environment rather than a full market-making environment: the agent selects directional actions from forecast-based states, and does not post bid and ask quotes, manage queue position, or optimize inventory around two-sided liquidity provision. In this paper, our focus is on forecasting returns across multiple horizons using Order-Flow Imbalance (OFI) features and training three policy-based reinforcement learning models on three financial instruments (AAPL, AMZN, GOOG) that provide trading signals. These new adaptive directional trading agents, trained in simulation includes a deep neural network architecture, serving as the function approximator that extracts features directly from OFI values derived from LOB states. The study addresses three limitations of previous RL based approaches: (i) actor-critic and other methods like PPO are notoriously unstable due to sparse, noisy, and delayed rewards, (ii) financial data is generally 
+
+> †
+
+These authors contributed equally to this work. 
+
+> arXiv:2605.25527v1 [cs.LG] 25 May 2026
+
+A PREPRINT - M AY 26, 2026 non-stationary in practice with high variance in returns and state transitions which is not effectively captured and (iii) it becomes computationally infeasible with the use of critic network for such high-dimensional data like the limit order book. Our main contributions are: • First adaptation of DeepSeek-style group-aware RL to finance: To the best of our knowledge, this is among the first applications of DeepSeekMath-inspired Group Relative Policy Optimization (GRPO) and Qwen’s Group Sequence Policy Optimization (GSPO) to high-frequency trading, redesigning their group-normalized baselines and sequence-level importance ratio objectives to work with trading episodes and noisy market rewards. While these group-aware objectives have not previously been studied in trading, they have shown strong empirical stability and performance in large language model training [2]. • Empirical comparison of group-aware policy optimization in a directional trading setting: Under this limited experimental setup, GRPO and GSPO show higher observed average PnL/profitability and lower observed drawdown than PPO and Q-learning. We present these findings as empirical observations specific to this setup rather than as a general claim of superiority across trading environments. Prior work in this setting [3 ] primarily relied on value-based methods, which are often observed to exhibit training instability and comparatively weaker performance under similar market-simulation conditions. Our goal is not to provide a production-ready trading system or a comprehensive market-microstructure evaluation. Rather, we study whether group-aware policy optimization objectives originally developed in LLM training can be adapted to a short-horizon LOB-based directional trading setting and whether they exhibit improved empirical behavior relative to PPO and tabular Q-learning under a common backtesting protocol. Accordingly, the conclusions of this paper should be interpreted within the limits of the chosen assets, sample, reward design, and simplified execution assumptions. 
+
+# 2 Related Work 
+
+Early directional trading theory begins with [ 4], who viewed the bid-ask spread as compensation for immediacy. [ 5 ]developed an inventory-based MM model, later extended to multiple dealers [ 6 ]. [ 7 ], following [ 8 ], used stochastic control to derive optimal quotes, assuming continuous prices; [ 9] adapted the framework to discrete ticks. In all such models, closed-form strategies require restrictive assumptions on price and order arrivals [ 10 ]. The advent of millisecond-level LOB data spurred empirical micro-structure studies as in [ 5, 11 ]. Reinforcement-learning (RL) methods [ 12 , 13 , 14 , 15 ] have been applied to trading [ 16 , 3, 17 ], optimal execution [ 18 ], and portfolio allocation [19 , 20 ]. Here, we evaluate two recent group-based policy-optimization algorithms originally proposed to successfully stabilize Large Language Model(LLM) training: Group Relative Policy Optimization (GRPO) [ 2] from DeepSeekMath and Group Sequence Policy Optimization (GSPO) [ 21 ] from Qwen (Alibaba Inc.). No recent studies have applied GRPO or GSPO to directional trading or trading-strategy problems. Hence, our goal is to adapt these popular methods to the trading setting and perform an empirical comparison against a standard value-based baseline (tabular Q-Learning). It is also important to distinguish the present setting from classical market-making formulations. Traditional market-making models study two-sided quoting, inventory control, spread placement, and queue dynamics, often under stylized stochastic assumptions. By contrast, the present paper studies a directional trading problem in which the agent acts on forecast-based states extracted from the limit order book. 
+
+# 3 Methodology 
+
+3.1 Datasets 
+
+Our experiments use the LOBSTER dataset [ 22 ], which is derived from the NASDAQ TotalView-ITCH feed and provides high-frequency order-book information together with order-event messages. For each ticker, we use level-10 order-book data and construct the supervised and reinforcement-learning inputs from the resulting event stream. Throughout the paper, the dataset should be interpreted as a limited-sample empirical testbed rather than as a broad multi-regime study. The event counts reported below correspond to the number of usable state transitions after preprocessing. For each instrument, we use data for the ticker-date pair(s) listed in Table 1. The train/validation/test partition is applied chronologically at the episode level using an 80%/10%/10% split. The split is chronological, and the forecasting model is trained only on the training portion; validation is used for early stopping, and the test split is held out for final RL evaluation. Each datapoint corresponds to one trading day dated June 21, 2013 with timestamps between 9:30 to 10:30 hours having decimal precision of at least milliseconds and up to nanoseconds. Because the evaluation uses three 2A PREPRINT - M AY 26, 2026 instruments over a single one-hour window from one trading day, the results should be interpreted as a preliminary exploratory study rather than evidence of broad market-regime robustness. 
+
+AMZN AAPL GOOG 
+
+Total Data Points 269,748 400,391 147,916 Table 1: LOBSTER Level-10 datasets for AMZN, AAPL, and GOOG 
+
+3.2 Order Book Feature Extraction 
+
+Let the observable order-book quantities at time t be the prices and aggregated volumes at the first ten non-empty levels: 
+
+{ait, v i,a t , b it, v i,b t }10 
+
+> i=1
+
+, where ait and bit are the ask and bid prices at level i and vi,a t , v i,b t are the aggregated limit order volumes at that level. By following the order-flow extraction method in [ 3], for each level i, we compute the ask order flow aOF t,i and bid order flow bOF t,i as the piecewise quantities as shown below: 
+
+aOF t,i =
+
+
+
+v i,a t , if ait < a it−1,v i,a t − v i,a t−1, if ait = ait−1,
+
+− v i,a t−1, if ait > a it−1,bOF t,i =
+
+
+
+v i,b t , if bit > b it−1,v i,b t − v i,b t−1, if bit = bit−1,
+
+− v i,b t−1, if bit < b it−1.
+
+Next, we form the order-flow imbalance (OFI) per level as the bid minus ask flows OFI t = bOF t − aOF t ∈ R10 . Our pipeline uses a supervised feature vector xt defined as xt = OFI t optionally normalized per sample by its maximum absolute component: xt ← OFI t
+
+> max
+
+ 1, ∥OFI t∥∞
+
+ .Thus, each learning instance is anchored at an event index t and uses a ten-dimensional OFI vector derived from the first ten non-empty book levels. The optional normalization above is applied elementwise through division by the maximum absolute component of the OFI vector so that unusually large instantaneous imbalances do not dominate the scale of the state representation. Unless otherwise stated, time indices in the sequel refer to decision steps aligned with the event stream after preprocessing. 
+
+3.3 State-Transition Model 
+
+A regression network fθ maps this 10 -dimensional OFI vector to H horizon alphas ˆαt = fθ (xt), which are then concatenated with the previous discrete action to form the state st = [ˆ αt; at−1] ∈ RH+1 for the MDP M =(S, A, R, Ω) used by the RL agents. The extractor fθ is an multilayer perceptron(MLP) model with 4 hidden layers of dimension 2048 trained by minimizing mean squared error(MSE). Optimization uses ADAM with per-instrument learning rates, weight decay, and early stopping on validation loss. The trained fθ supplies ˆαt to downstream agents, which are concatenated to represent the state with horizon value H = 6 . The action space consists of discrete directional trading actions. Reward per episode is computed based on the change in mid-price after the action is taken, scaled by a factor depending on the bid-ask spread. Let mt denote the mid-price at decision step t, defined from the best bid and ask prices as 
+
+mt = a1 
+
+> t
+
++ b1
+
+> t
+
+2 .
+
+The supervised forecasting module predicts returns over a fixed set of horizons 
+
+H = {h1, . . . , h H }.
+
+For each horizon h ∈ H , we define the target return as 
+
+y(h) 
+
+> t
+
+= mt+h − mt
+
+mt
+
+,
+
+3A PREPRINT - M AY 26, 2026             
+
+> (a) QTable - Histogram (b) QTable - Equity (c) QTable - Returns (d) QTable - Drawdown
+> (e) PPO - Histogram (f) PPO - Equity (g) PPO - Returns (h) PPO - Drawdown
+> (i) GRPO - Histogram (j) GRPO - Equity (k) GRPO - Returns (l) GRPO - Drawdown
+> (m) GSPO - Histogram (n) GSPO - Equity (o) GSPO - Returns (p) GSPO - Drawdown
+
+Figure 1: Held-out evaluation plots for GOOG showing the trade-PnL histogram, equity curve (scaled by 10 6), episode-level PnL returns, and drawdown under the backtesting protocol where the horizon is measured in event steps/message arrivals in the preprocessed LOBSTER event stream. The forecasting network fθ maps the OFI feature vector xt ∈ R10 to the H-dimensional vector of predicted returns 
+
+ˆαt = fθ (xt) =  ˆy(h1) 
+
+> t
+
+, . . . , ˆy(hH )
+
+> t
+
+ ∈ RH .
+
+The forecaster is trained by minimizing mean squared error over all available training indices and horizons: 
+
+Lsup (θ) = 1
+
+N
+
+> N
+
+X
+
+> t=1
+
+X
+
+> h∈H
+
+ ˆy(h) 
+
+> t
+
+− y(h)
+
+> t
+
+2.
+
+In our implementation, fθ is a multi-layer perceptron with four hidden layers of width 2048. Optimization uses Adam with instrument-specific learning rates, weight decay, and early stopping based on validation loss. After training, the forecasting network is frozen and used only as a state-construction module for reinforcement learning. The RL state at time t is defined as 
+
+st = [ˆ αt; at−1] ∈ RH+1 ,
+
+that is, the concatenation of the multi-horizon predicted return vector and the previous discrete action. This construction yields a compact state representation that summarizes short-horizon directional information from the order book while preserving the agent’s most recent trading decision. The paper therefore evaluates RL methods on top of a fixed learned representation rather than jointly optimizing forecasting and control. 4A PREPRINT - M AY 26, 2026             
+
+> (a) QTable - Histogram (b) QTable - Equity (c) QTable - Returns (d) QTable - Drawdown
+> (e) PPO - Histogram (f) PPO - Equity (g) PPO - Returns (h) PPO - Drawdown
+> (i) GRPO - Histogram (j) GRPO - Equity (k) GRPO - Returns (l) GRPO - Drawdown
+> (m) GSPO - Histogram (n) GSPO - Equity (o) GSPO - Returns (p) GSPO - Drawdown
+
+Figure 2: Held-out evaluation plots for AMZN showing the trade-PnL histogram, equity curve (scaled by 10 6), episode-level PnL returns, and drawdown under the backtesting protocol described in Section 2. 
+
+3.4 Simulation & Training 
+
+The experimental pipeline has two stages. In the first stage, we train the forecasting network fθ for up to 100 epochs with early stopping and retain the best checkpoint according to validation loss. In the second stage, the frozen forecasts 
+
+ˆαt are used to form the RL state, and the trading policy is trained on the training split of episodes. 
+
+Tabular Q-learning. As a value-based baseline, we discretize the continuous forecast vector using a map 
+
+I : RH → { 1, . . . , S },
+
+which assigns each forecast state to one of S discrete bins. Q-learning then applies standard one-step temporal-difference updates with an ε-greedy exploration schedule during training. At evaluation time, actions are selected greedily from the learned Q-table. 
+
+PPO. For PPO, let 
+
+ρt(θ) = πθ (at | st)
+
+πθold (at | st)
+
+5A PREPRINT - M AY 26, 2026 
+
+(a) QTable - Histogram (b) QTable - Equity (c) QTable - Returns (d) QTable - Drawdown 
+
+(e) PPO - Histogram (f) PPO - Equity (g) PPO - Returns (h) PPO - Drawdown 
+
+(i) GRPO - Histogram (j) GRPO - Equity (k) GRPO - Returns (l) GRPO - Drawdown 
+
+(m) GSPO - Histogram (n) GSPO - Equity (o) GSPO - Returns (p) GSPO - Drawdown 
+
+Figure 3: Held-out evaluation plots for AAPL showing the trade-PnL histogram, equity curve (scaled by 10 6), episode-level PnL returns, and drawdown under the backtesting protocol denote the standard per-step importance ratio, and let ˆAt denote the generalized-advantage estimate at step t. The clipped PPO objective is 
+
+LPPO (θ) = Et
+
+h
+
+min 
+
+
+
+ρt(θ) ˆAt, clip( ρt(θ), 1 − ϵ, 1 + ϵ) ˆAt
+
+i 
+
+.
+
+We use the standard PPO loss with value-function and entropy regularization. 
+
+GRPO. To adapt GRPO to trading, each policy update is formed from a batch of G complete episodes 
+
+{τ1, . . . , τ G}.
+
+For episode τi, define the episode return 
+
+Ri = X
+
+> t∈τi
+
+rt, ¯R = 1
+
+G
+
+> G
+
+X
+
+> i=1
+
+Ri.
+
+We then define the update-level group advantage by 
+
+Agrp  
+
+> i
+
+= Ri − ¯R
+
+6A PREPRINT - M AY 26, 2026 or, when standardized in implementation, 
+
+Agrp  
+
+> i
+
+= Ri − ¯RσR + ε , σ2 
+
+> R
+
+= 1
+
+G
+
+> G
+
+X
+
+> i=1
+
+(Ri − ¯R)2.
+
+Unlike LLM-style GRPO, where grouping is performed over multiple responses to the same prompt, grouping here is performed over the batch of episodes collected in one policy update. The baseline is therefore an update-level empirical baseline rather than a prompt-conditional baseline. The resulting clipped surrogate is applied across the pooled timesteps of the grouped episodes. 
+
+GSPO. GSPO uses sequence-level rather than per-timestep importance ratios. For each episode τi, define 
+
+ρi(θ) = exp X
+
+> t∈τi
+
+log πθ (at | st) − X
+
+> t∈τi
+
+log πθold (at | st)
+
+!
+
+Using the same grouped episode-level advantage Agrp  
+
+> i
+
+, the GSPO objective is 
+
+LGSPO (θ) = 1
+
+G
+
+> G
+
+X
+
+> i=1
+
+min ( ρi(θ)Agrp  
+
+> i
+
+, clip( ρi(θ), 1 − ϵ, 1 + ϵ)Agrp  
+
+> i
+
+)
+
+Hence, GSPO constrains the policy update at the level of full trading trajectories rather than individual decision steps. 
+
+Interpretation of the group-aware objectives. We do not claim a theoretical explanation for why GRPO or GSPO should outperform PPO in trading. However, their adaptation suggests a plausible mechanism. Update-level centering in GRPO reduces sensitivity to the absolute scale of returns within a batch, while sequence-level clipping in GSPO constrains policy updates at the full-trajectory level rather than only locally per action. In noisy episodic trading environments, these design choices may reduce the influence of unusually good or unusually bad episodes on the update. We present this as a mechanistic interpretation of the objectives, not as a theorem or causal proof. 
+
+Ticker Method Avg Return Volatility Avg P/L Profitability Max DD 
+
+AMZN Q-Learning -10.40 2061.59 7.99 10.90 -92352.93 PPO -49.31 1567.98 2.16 29.06 -9293.30 GRPO 1796.64 10745.69 5341.55 62.12 -715.42 GSPO 1815.45 10864.15 767.52 62.24 -733.42 AAPL Q-Learning 19.24 1404.80 5.61 15.41 -53564.33 PPO -44.33 1538.85 1.66 34.98 -12346.35 GRPO 1925.01 6408.17 97.69 72.86 -1235.17 GSPO 1835.91 6059.83 51.82 70.82 -1428.34 GOOG Q-Learning -63.75 2462.16 4.16 18.46 -94733.55 PPO -5.25 1498.13 2.02 32.73 -8364.61 GRPO 2069.98 5575.11 668.53 68.86 -749.61 GSPO 2077.68 5721.89 187.62 66.86 -1128.92 Table 2: Backtest results over the held-out one-hour test window for AMZN, AAPL and GOOG showing the average PnL returns, episode volatility, average Profit-Loss ratio, Profitability %, and Max Drawdown using different RL methods like Q-Learning, PPO, GRPO and GSPO. 
+
+3.5 Performance Metrics 
+
+Given E episode returns R(e) ∗ e = 1 E and M trade returns gj ∗ j = 1 M , and instrument scaling cinstr =PRICE _TO _PNL[ instrument ], we report Episode average return = 1
+
+E
+
+> E
+
+X
+
+> e=1
+
+cinstr R(e)
+
+Episode volatility =
+
+vuut 1
+
+E
+
+> E
+
+X
+
+> e=1
+
+ cinstr R(e) − R2
+
+7A PREPRINT - M AY 26, 2026 Average profit/loss ratio = E[gj | gj > 0] 
+
+E[gj | gj < 0] 
+
+Profitability (%) = 100 · #j : gj > 0#j : gj̸ = 0 
+
+Maximum drawdown is the minimum cumulative PnL observed across episodes scaled by cinstr . This differs from the conventional peak-to-trough maximum drawdown and should be interpreted as a downside-risk proxy. 
+
+# 4 Results 
+
+Table 2 and Figures 1, 2, and 3 summarize the held-out backtest results for AMZN, AAPL, and GOOG under the protocol described in the previous section. Under this setup, GRPO and GSPO achieve higher average return and profitability and lower observed maximum drawdown than PPO and tabular Q-learning across all three tickers. The magnitude of the improvement is substantial in the reported tables: while Q-learning and PPO produce negative or near-zero average returns for several assets and exhibit much larger drawdowns, the group-aware methods produce positive average returns together with markedly smaller worst-case drawdowns. Because we do not report repeated-seed uncertainty, bootstrap confidence intervals, or additional market regimes, the numerical gaps should be viewed as indicative rather than conclusive. These results should be interpreted as empirical observations under a fixed experimental design rather than as a general statement of method superiority. In particular, the results are reported for the selected ticker-date samples, the chosen train/validation/test partition, the fixed forecasting front-end, and the simplified reward and execution assumptions described earlier. We therefore view the comparison as evidence that the group-aware objectives are promising in this setting, but not as a claim that they are universally superior across assets, regimes, or trading environments. A tentative interpretation is that update-level centering in GRPO and sequence-level clipping in GSPO may yield more conservative or less variance-sensitive policy updates than vanilla PPO in this noisy episodic setting. However, because the present study does not include repeated-seed uncertainty estimates, training-curve diagnostics, or ablation experiments, this interpretation remains suggestive rather than definitive. 
+
+# 5 Future Work 
+
+Future work should focus on improving robustness, interpretability, and market realism in a way that makes the proposed framework easier to extend and validate. A first step is to evaluate GRPO and GSPO on a broader universe of assets, over longer sample periods, and across distinct market regimes, while also reporting repeated-seed results, confidence intervals, and sensitivity to train/validation/test splits. This would help determine whether the gains observed here persist under stronger distribution shift and are not tied to a narrow experimental setting. A second direction is to better understand why the group-aware objectives help. In particular, future studies should compare training curves, convergence speed, and reward variance across PPO, GRPO, and GSPO, and include ablations that isolate the effect of group normalization, sequence-level clipping, and reward shaping. Such analysis would make it easier to identify which components are responsible for improved stability and downside control. Another important extension is to make the simulator more realistic by incorporating explicit transaction costs, slippage, latency, and inventory-related penalties. Studying performance under progressively stronger frictions would provide a clearer picture of how robust these methods remain when the environment more closely resembles practical high-frequency trading. Finally, future work should evaluate the alpha forecaster as a standalone module and compare the RL agents against simpler forecast-driven baselines, such as threshold or sign-based policies. It would also be valuable to enrich the state with longer-horizon order-book dynamics and inventory information, and to expand the action space and reward design toward richer directional trading objectives rather than directional trading alone. 
+
+# References 
+
+[1] Martin D Gould, Mason A Porter, Stacy Williams, Mark McDonald, Daniel J Fenn, and Sam D Howison. Limit order books. Quantitative Finance , 13(11):1709–1742, 2013. [2] Zhihong Shao, Peiyi Wang, Qihao Zhu, Runxin Xu, Junxiao Song, Xiao Bi, Haowei Zhang, Mingchuan Zhang, Y. K. Li, Y. Wu, and Daya Guo. Deepseekmath: Pushing the limits of mathematical reasoning in open language models, 2024. 8A PREPRINT - M AY 26, 2026 [3] Koti S. Jaddu and Paul A. Bilokon. Combining deep learning on order books with reinforcement learning for profitable trading, 2023. [4] Harold Demsetz. The cost of transacting. The quarterly journal of economics , 82(1):33–53, 1968. [5] Mark B Garman. Market microstructure. Journal of financial Economics , 3(3):257–275, 1976. [6] Hans R Stoll. The pricing of security dealer services: An empirical study of nasdaq stocks. The journal of finance ,33(4):1153–1172, 1978. [7] Marco Avellaneda and Sasha Stoikov. High-frequency trading in a limit order book. Quantitative Finance ,8(3):217–224, 2008. [8] Thomas Ho and Hans R Stoll. On dealer markets under competition. The Journal of Finance , 35(2):259–267, 1980. [9] Fabien Guilbaud and Huyen Pham. Optimal high-frequency trading with limit and market orders. Quantitative Finance , 13(1):79–94, 2013. [10] Nicholas Tung Chan and Christian Shelton. An electronic market-maker. 2001. [11] Maureen O’hara. Market microstructure theory . John Wiley & Sons, 1998. [12] Youzhi Zhang, Sayak Chakrabarty, Rui Liu, Andrea Pugliese, and VS Subrahmanian. A new dynamically changing attack on review fraud systems and a dynamically changing ensemble defense. in 2022 ieee intl conf on dependable, autonomic and secure computing, intl conf on pervasive intelligence and computing, intl conf on cloud and big data computing, intl conf on cyber science and technology congress (dasc/picom/cbdcom/cyberscitech), 2022. [13] Sayak Chakrabarty and Souradip Pal. Time-constrained recommendations: Reinforcement learning strategies for e-commerce. arXiv preprint arXiv:2512.13726 , 2025. [14] Riddhiman Bhattacharyya, Sayak Chakrabarty, and Imon Banerjee. Adaptive estimation and optimal control in offline contextual mdps without stationarity. arXiv preprint arXiv:2605.03393 , 2026. [15] Imon Banerjee and Sayak Chakrabarty. Small resamples, sharp guarantees: Convergence rates for resampled studentized quantile estimators. Advances in Neural Information Processing Systems , 38:62434–62482, 2026. [16] Yue Deng, Feng Bao, Youyong Kong, Zhiquan Ren, and Qionghai Dai. Deep direct reinforcement learning for financial signal representation and trading. IEEE transactions on neural networks and learning systems ,28(3):653–664, 2016. [17] Haoran Wei, Yuanbo Wang, Lidia Mangu, and Keith Decker. Model-based reinforcement learning for predictions and control for limit order books. arXiv preprint arXiv:1910.03743 , 2019. [18] Yuriy Nevmyvaka, Yi Feng, and Michael Kearns. Reinforcement learning for optimized trade execution. In 
+
+Proceedings of the 23rd international conference on Machine learning , pages 673–680, 2006. [19] Zhicheng Wang, Biwei Huang, Shikui Tu, Kun Zhang, and Lei Xu. Deeptrader: A deep reinforcement learning approach for risk-return balanced portfolio management with market conditions embedding. In Proceedings of the AAAI Conference on Artificial Intelligence , volume 35, pages 643–650, 2021. [20] Olivier Jin and Hamza El-Saawy. Portfolio management using reinforcement learning. Stanford University , 2016. [21] Chujie Zheng, Shixuan Liu, Mingze Li, Xiong-Hui Chen, Bowen Yu, Chang Gao, Kai Dang, Yuqiong Liu, Rui Men, An Yang, Jingren Zhou, and Junyang Lin. Group sequence policy optimization. arXiv preprint arXiv:2507.18071 , 2025. [22] Ruihong Huang and Tomas Polak. LOBSTER: Limit order book reconstruction system. SSRN Electron. J. , 2011. 9
