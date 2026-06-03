@@ -1,0 +1,5030 @@
+Title: Can RLHF be More Efficient with Imperfect Reward Models?  A Policy Coverage Perspective
+
+URL Source: https://openreview.net/pdf?id=8u5bzM2XfI
+
+Number of Pages: 36
+
+Markdown Content:
+# Can RLHF be More Efficient with Imperfect Reward Models? A Policy Coverage Perspective 
+
+Jiawei Huang 1 Bingcong Li 1 Christoph Dann 2 Niao He 1
+
+## Abstract 
+
+Sample efficiency is critical for online Reinforce-ment Learning from Human Feedback (RLHF). While existing works investigate sample-efficient online exploration strategies, the potential of uti-lizing misspecified yet relevant reward models to accelerate learning remains underexplored. This paper studies how to transfer knowledge from those imperfect reward models in online RLHF. We start by identifying a novel property due to KL-regularization in the RLHF objective: a policy’s coverability of the optimal policy is captured by its sub-optimality . Building on this insight, we pro-pose novel transfer learning principles and a theo-retical algorithm— Transfer Policy Optimization (TPO )—with provable benefits compared to stan-dard online learning. Empirically, inspired by our theoretical findings, we develop a win-rate-based transfer policy selection strategy with improved computational efficiency. Moreover, our empiri-cal transfer learning technique is modular and can be integrated with various policy optimization methods, such as DPO, IPO and XPO, to further enhance their performance. We validate the effec-tiveness of our method through experiments on summarization tasks. 
+
+## 1. Introduction 
+
+Reinforcement Learning from Human Feedback (RLHF) has achieved remarkable success in fine-tuning Large-Language Models (LLMs) to align with human preferences (Bai et al., 2022; Christiano et al., 2017; Ouyang et al., 2022). Using datasets annotated with human preferences reflecting human intrinsic reward model, RLHF optimizes LLM policies with reinforcement learning (RL) techniques. Due to the high cost of collecting large amounts of human      
+
+> 1ETH Zurich 2Google Research. Correspondence to: Jiawei Huang <jiawei.huang@inf.ethz.ch >.
+> Proceedings of the 42 nd International Conference on Machine Learning , Vancouver, Canada. PMLR 267, 2025. Copyright 2025 by the author(s).
+
+preference labels, there has been significant attention in re-ducing the sample complexity —the amount of data required for training—of online RLHF through efficient exploration strategies (Cen et al., 2024; Wang et al., 2023; Xie et al., 2024; Zhang et al., 2024). However, a largely overlooked op-portunity is to additionally leverage existing reward models for annotation, which have already aligned partially with the human preferences. The growing number of available open-source and high-quality reward models trained on diverse tasks provide a rich pool of candidates for transfer learn-ing. Harnessing guidance embedded in such reward models holds great potential for improving sample efficiency. There are a variety of practical scenarios where such source reward models can be effectively utilized. Firstly, reward models trained on relevant tasks often prove to be valuable in similar tasks. A notable example is cross-lingual reward transfer (Hong et al., 2024; Wu et al., 2024), where reward models in one language can provide effective guidance for tasks in another. Secondly, informative evaluation can also be obtained from well-trained LLMs, such as GPT, LLaMA and Gemini (Achiam et al., 2023; Dubey et al., 2024; Team et al., 2024). For certain tasks, such models can provide evaluation closely aligned with human preferences; see e.g., Ji et al. (2023); Lee et al. (2023). Lastly, there are scenar-ios where rule-based or heuristic reward functions—built upon experts knowledge and accumulated experience—are inexpensive to obtain and instructive in evaluating the LLM. Taking summarization tasks as an example, expert sum-maries are available on datasets such as XSum (Narayan et al., 2018) and TL-DR (V ¨olske et al., 2017). Similarity with those expert solutions can be measured through metrics such as ROUGE (Lin, 2004) and BERTScore (Zhang et al., 2019), and be employed for scoring the LLM generations. Motivated by these considerations, this paper studies how to leverage imperfect reward models to learn a near-optimal policy with fewer human annotations. We consider the case where several source reward models are available, yet their quality, i.e., the similarity to human rewards, is unknown a priori . Our contributions are summarized as follows. • In Sec. 3, we identify a distinctive property of RLHF aris-ing from its KL regularization: for any prospective policy 
+
+1Can RLHF be More Efficient with Imperfect Reward Models? A Policy Coverage Perspective 
+
+candidates, its coverability for the optimal policy improves as its policy value increases . Enlightened by this, we pro-pose two new principles for transfer learning in the context of RLHF (illustrated in Fig. 1). Firstly, policy value serves as a crucial criterion to se-lect the transfer policy, since exploiting policies with high values does not conflict with exploration. Secondly, com-bining insights from offline RL theory, we prove that the policy distilled by offline learning techniques from the online data generated by any no-regret online algorithm, converges to the optimal one at a rate of eO(T − 12 ) after a finite time. Such a bound improves existing sample complexity results and regret bounds in online RLHF by eliminating the dependencies on the size of the state and action space, or the complexity of the policy class (up to log-covering number). This suggests the offline policy computed with the data from the online learning process is a promising candidate to transfer from, which we term as “self-transfer learning” .• In Sec. 4, following above principles, we design a transfer learning algorithm named Transfer Policy Optimization (TPO ; Alg. 1) with provable benefits. At the core of TPO is the self-transfer learning and an adaptive policy selection strategy that picks transfer policies based on estimated value gaps. In the early stage, the cumulative online regret of TPO can be significantly reduced, as long as one of the source rewards is of high quality. After finite time, the self-transfer mechanism ensures the regret of TPO grows only at a rate of eO(√T ), independent of the standard structural complexity measures. Compared with transfer learning in the pure-reward maximization RL, our result is novel in that it exploits the policy coverage property induced by the regularization term in RLHF. • To reduce computational overheads and improve scalablity to practical RLHF scenarios, in Sec. 5, we propose an empirical version of TPO that selects transfer policy based on the win rates competing with the learning policy, rather than relying on the estimated policy values. On the one hand, win rates can be estimated much more efficiently than the policy values. On the other hand, as justified by our theory, win rates help to identify lower bounds for the coverability of the optimal policy. Notably, our empirical TPO is general: its core transfer learning technique can be modularized and combined with various reward-model-free policy optimization methods, such as DPO (Rafailov et al., 2024), IPO (Azar et al., 2024), XPO (Xie et al., 2024), to boost their performance. The effectiveness of our approach is demonstrated in fine-tuning T5 models on summarization tasks in Sec. 6. 
+
+1.1. Related Work 
+
+We summarize the most related ones on sample complexity and transfer RL here and defer the others to Appx. B.2. Offline learning 
+
+> with online data
+
+Reward Transfer in Online RLHF 
+
+# 𝜋 ∼ Online Data            
+
+> (𝑠 !,𝑎 !,𝑎 %!,𝕀 [𝑎 !≻𝑎 %!])
+> (𝑠 ",𝑎 ",𝑎 %",𝕀 [𝑎 "≻𝑎 %"])
+> …
+> …𝑟 !𝑟 "
+> 𝑟 ∗
+> Imperfect Reward Models
+> (Unknown Quality)
+
+Online Human 
+
+Annotation 
+
+Transfer 
+
+Learning   
+
+> Ground -Truth
+> Human Feedback
+> …𝜋 $!
+> ∗𝜋 $"
+> ∗𝜋 %&'(
+> 𝜋 )*+,&-.*
+> argmax policy value
+> Transfer Policy Candidates
+
+Figure 1. The standard online RLHF pipeline only involves learn-ing from online human feedback (left). Our setting additionally 
+
+leverages available imperfect reward models via transfer learning (right). Inspired by the structure induced by KL regularization, we propose novel principles for transfer learning in online RLHF: (1) selecting transfer policy πTransfer with the highest policy value; (2) self-transfer learning—involving as a candidate the policy πDstl 
+
+distilled from online collected data by offline learning techniques. 
+
+Sample Complexity in RLHF Online RLHF emphasizes strategic exploration for sample-efficient learning in tabular and linear settings (Du et al., 2024; Novoseller et al., 2020; Pacchiano et al., 2021; Xu et al., 2020), as well as more general function approximation cases (Cen et al., 2024; Chen et al., 2022; Wang et al., 2023; Xie et al., 2024; Xiong et al., 2024; Ye et al., 2024; Zhang et al., 2024). Our work further improves sample efficiency by leveraging imperfect reward models that are readily available in a variety of practical scenarios. As an alternative, offline RLHF (Huang et al., 2024; Liu et al., 2024; Zhan et al., 2023) focuses on exploiting pre-collected datasets without exploration. What lies in between online/offline RL is hybrid RL (Chang et al., 2024; Gao et al., 2024). These methods harness online feedback, while assuming the reference policy provides good coverage and only engaging in passive exploration. 
+
+Transfer Learning in RL and RLHF Transfer learning in pure-reward maximization RL has been extensively investi-gated in previous literature (Taylor & Stone, 2009; Zhu et al., 2023), and theoretical guarantees have been established un-der various conditions (Golowich & Moitra, 2022; Huang & He, 2023; Huang et al., 2022; Mann & Choe, 2013). Unlike previous works, this paper unveils new insights for trans-fer learning enabled by the KL regularization in RLHF. In particular, it enables us to design a policy-value-based trans-fer policy selection strategy, and identify a unique regime, i.e., “self-transfer learning”, that can significantly improve sample efficiency. We defer more discussions to Sec. 3.2. Most works on transfer learning in RLHF focus on empirical 2Can RLHF be More Efficient with Imperfect Reward Models? A Policy Coverage Perspective 
+
+approaches. For example, (Hong et al., 2024; Wu et al., 2024) investigate the cross-lingual reward transfer. To our knowledge, our empirical algorithm (Alg. 3) is novel in that it studies active transfer policy selection, which is still underexplored in existing literature. We further distinguish our work from RLAIF (Ji et al., 2023; Lee et al., 2023) or reward model selection literature (Nguyen et al., 2024). Their goal is to align LLM policies with surrogate reward models, while we study how to leverage those surrogates to accelerate the alignment with ground-truth human rewards. 
+
+## 2. Preliminary 
+
+In this section, we review the mathematical formulation of RLHF for LLMs and introduce our reward transfer setting. 
+
+2.1. Mathematical Formulation of RLHF 
+
+We adopt the contextual bandits framework (Lattimore & Szepesv ´ari, 2020; Ouyang et al., 2022), where we treat the prompt space as the state space S and the response space as the action space A. Without loss of generality, we assume that both |S| and |A| are finite. We denote ρ ∈ ∆( S) as the prompt distribution. An LLM can be modeled by a policy 
+
+π : S → ∆( A), where, given a prompt s ∈ S , the responses are generated from the conditional distribution a ∼ π(·| s).Throughout this paper, we assume that all considered LLM policy π have positive support over the entire state-action space, that is, min s,a π(a|s) > 0. This is ensured in practice by the softmax layer in LLM architectures. 
+
+Reward Model and Preference Model A reward model is a function r : S × A → [0 , R ], where R is a constant indicating the largest possible reward value. In the RLHF setting, the reward r is unobservable and we can only access its induced preference model, denoted by Pr . Pr (y|s, a, ea)
+
+denotes the probability that a is preferable to ea given s (y =1) or not ( y = 0 ), by reward model r. Following previous works, we consider the Bradley-Terry (BT) model (Bradley & Terry, 1952): Pr (y = 1 |s, a, ea) = σ(r(s, a ) − r(s, a ′)) ,
+
+where σ(x) := 1 /(1 + e−x) is the sigmoid function. 
+
+RLHF Learning Setting Given a reward model r, in the context of RLHF for LLM fine-tuning, we are interested in optimizing the following the KL-regularized objective: 
+
+π∗ 
+
+> r
+
+← arg max  
+
+> π
+
+Jβ (π; r)
+
+with Jβ (π; r) := Es∼ρ,a ∼π [r(s, a )] − βKL (π∥πref ), (1) where we use πref to denote the pretrained reference pol-icy and KL (π∥πref ) := Es∼ρ,a ∼π(·| s)[log π(a|s) 
+
+> πref (a|s)
+
+]. The above optimization problem yields a closed-form solution: 
+
+π∗ 
+
+> r
+
+(a|s) ∝ πref (a|s)e r(s,a ) 
+
+> β
+
+. (2) Here β > 0 is a moderate constant and is critical for RLHF in practice, for detailed reasons discussed in Appx. B.1. We use r∗ : S × A → [0 , R ] to denote the unknown true reward function determining the human’s preference Pr∗ .For simplicity, we omit r∗ and use Jβ (π) as a short note for Jβ (π; r∗). Following previous works (Xie et al., 2024; Zhang et al., 2024), we consider the function approximation setting with access to a policy candidates class Π (|Π| <
+
++∞) satisfying standard assumptions as follows: 
+
+Assumption A. The policy class Π satisfies: (I) Realiz-ability : The optimal policy π∗ 
+
+> r∗
+
+∈ Π. (II) Bounded Policy Ratio : For any π ∈ Π, max s,a | log π(a|s) 
+
+> πref (a|s)
+
+| ≤ Rβ .
+
+Note that max s,a | log π∗  
+
+> r(a|s)
+> πref (a|s)
+
+| ≤ Rβ holds as long as r ∈
+
+[0 , R ] (see Lem. B.1 in Appx. B.1). Thus, Assump. A-(II) is not actually an assumption, but can be interpreted as an additional filtering step by leveraging the boundary of r∗.
+
+Additional Notation We use the standard big-O notations and use f(·) (e.g. eO) to suppress logarithmic terms, including log-covering numbers . Given Π satisfying Assump. A, conv (Π) denotes its convex hull, and RΠ denotes the reward class induced by Π via Eq. (2) , s.t., (1) ∀r ∈ R Π, r ∈ [0 , R ];(2) ∃r ∈ R Π, π ∗ 
+
+> r
+
+= π∗ 
+
+> r∗
+
+. We defer to Appx. B.1 for detailed converting process. Besides, we denote [n] := {1, 2, ..., n }
+
+and a ∧ b := min {a, b }. We refer the reader to Appx. A for a table of commonly used notation in this paper. 
+
+2.2. Reward Transfer Setting 
+
+We assume there are W source reward models available, de-noted by {rw}Ww=1 , s.t. ∀w, s, a , rw(s, a ) ∈ [0 , R ]. As mo-tivated in Sec. 1, those reward models are accessible in many scenes. Given a source reward rw, let π∗ 
+
+> rw
+
+be the correspond-ing source policy and denote ∆( w) := Jβ (π∗ 
+
+> r∗
+
+) − Jβ (π∗ 
+
+> rw
+
+)
+
+as its policy value gap. We define ∆min := min w∈[W ] ∆( w)
+
+to be the minimal gap for all source policies. Note that 
+
+∆min ≥ 0 and ∆min = 0 implies r∗ ∈ { rw}w∈[W ]. We do not assume prior knowledge on {∆( w)}w∈[W ].
+
+LLM Policy as Reward Model Eq. (2) implies that there is a way to convert a given LLM policy π to a reward model. Concretely, by choosing an arbitrary distribution π0, we can interpret β log π(·|· ) 
+
+> π0(·|· )
+
+as a reward function that π aligns with given π0 as the reference policy (Rosset et al., 2024). There-fore, while we consistently use the term “reward transfer” throughout the paper for clarity, our framework is general to handle transfer learning from any LLM policy through the underlying reward function it aligns with. 
+
+2.3. Background on Policy Coverability 
+
+We first introduce the formal definition of the policy cov-erage coefficient, which measures how well a given policy distribution covers the other. 3Can RLHF be More Efficient with Imperfect Reward Models? A Policy Coverage Perspective 
+
+Definition 2.2. Given any π, eπ, the coverage coefficient for 
+
+eπ by π is defined by Cov eπ|π := Es∼ρ,a ∼eπ(·| s)[ eπ(a|s) 
+
+> π(a|s)
+
+].
+
+The concept of policy coverage originally emerged from offline RL (Chen & Jiang, 2019; Yang et al., 2020; Zhan et al., 2022), where one aims to find a good policy given a fixed dataset. The coverage of the optimal policy by the data-generating policy naturally governs the size of the dataset required to find the optimal policy. Policy coverage was later extended to online RL, inducing novel complexity measures to characterize intrinsic statistical difficulty of the underlying MDP (Amortila et al., 2024; Xie et al., 2022). Compared to alternative complexity measures, policy cover-age is particularly suited for studying sample complexity in RLHF, since optimizing or exploring directly on the policy (LLM) space is preferred for its computational tractability. We use coverage as an analytical tool for reward transfer, and our results are based on RPO (Liu et al., 2024) and XPO (Xie et al., 2024) for offline and online RLHF, respectively: 
+
+Lemma 2.3 (Offline RLHF; Thm. 5.3 in (Liu et al., 2024); Informal) . Given a dataset D generated by a policy πD ,running RPO with any R including r∗ and eΠ yields bπ, s.t., 
+
+∀π ∈ eΠ, J β (π) − Jβ (bπ) = eO(e2RCov π|πD
+
+|D| − 12 ).
+
+Lemma 2.4 (Online RLHF; Thm. 3.1 in (Xie et al., 2024); Informal) . Running XPO with Π satisfying As-sump. A for T steps yields a policy sequence {πt}Tt=1 , s.t. 
+
+PTt=1 Jβ (π∗ 
+
+> r∗
+
+) − Jβ (πt) = eO(R · e2R · pCov ∞(Π) T ).
+
+Lem. 2.3 states that it is possible to compute an offline policy competitive with any policy well-covered by the dataset. Lem. 2.4 suggests that the sample efficiency of online RLHF can be characterized by the L∞ coverability Cov ∞(Π) .Here, Cov ∞(Π) by Xie et al. (2022) is a worst-case version of our Def. 2.2 as it takes the maximum over s, a and eπ. See Appx. D for the formal definition. 
+
+## 3. The Blessing of Regularization: A Policy Coverage Perspective 
+
+Unlike classical pure-reward maximization RL, the RLHF objective in (1) incorporates regularization with respect to 
+
+πref . We start by identifying distinctive properties associ-ated with such regularization in Sec. 3.1, and discuss their implications on transfer learning in RLHF in Sec. 3.2. 
+
+3.1. Structural Property Induced by Regularization Lemma 3.1. Under Assump. A and assume rw ∈ [0 , R ] for all w ∈ [W ], then, for any policy π ∈ conv (Π) ∪ { π∗ 
+
+> rw
+
+}Ww=1 ,
+
+Cov π∗  
+
+> r∗|π
+
+≤ 1 + κ(e 2Rβ ) · Jβ (π∗ 
+
+> r∗
+
+) − Jβ (π)
+
+β , (3) 
+
+where κ(x) := (x−1) 2  
+
+> x−1−log x
+
+= O(x).
+
+The key insight of Lem. 3.1 is that: for any prospective candidates of the optimal policy (i.e., conv (Π) 1) or any transfer candidates (i.e., {π∗ 
+
+> rw
+
+}Ww=1 ), its coverability of π∗
+
+> r∗
+
+is controlled by its policy value gap . Intuitively, Cov eπ|π
+
+becomes extremely large or even unbounded if there is a significant distribution shift between π and eπ. However, in the presence of regularization ( β > 0), we should only consider policies with bounded policy ratio relative to πref 
+
+(see Assump. A-(II)), and exclude those (near-)deterministic ones from our policy candidate class Π, because none of them can be (near-)optimal. In other words, regularization leverages prior knowledge from πref and enables a free policy filtration step before learning begins, ensuring that the remaining policies exhibit a favorable structure (Lem. 3.1). To understand why such property is uniquely arising from regularization, consider a bandit instance with a single op-timal arm and multiple suboptimal arms yields rewards R
+
+and R − 2ε, respectively. In pure reward maximization RL ( β = 0 ), the optimal policy π∗ 
+
+> r∗
+
+is deterministic. Apolicy class Π satisfying Assump. A may include several suboptimal deterministic policies. The coverage coefficient between any of them and π∗ 
+
+> r∗
+
+is infinity, while their subopti-mal gaps are 2ε and can be arbitrarily small. 
+
+3.2. New Insights for Transfer Learning in RLHF 
+
+In the online RLHF, the primary goal of exploration is to discover high-reward regions, i.e., the states and actions cov-ered by the optimal policy. Therefore, in our reward transfer setup, we propose to transfer from the policy with the best coverage of π∗ 
+
+> r∗
+
+. Inspired by Lem. 3.1, we identify two novel principles for transfer learning for RLHF objective, which we will further explore in later sections. 
+
+Principle 1: Select Transfer Policies with High Policy Value By Lem. 3.1, exploiting a policy with high value for data collection could “help” exploration, because such a policy inherently provides good coverage for π∗ 
+
+> r∗
+
+. In other words, regularization reconciles the trade-off between explo-ration and exploitation. This insight allows us to use policy value as a criterion and transfer from the policy achieving the highest value among all candidates. This strategy is also practical given that policy values can be estimated well. We emphasize that this principle is unique in the regular-ized setting. As exemplified by the bandit instance before, near-optimality does not imply good coverage for π∗ 
+
+> r∗
+
+in the absence of regularization. To avoid negative transfer in pure reward maximization setting, previous algorithms typically rely on additional assumptions about task similarity and employ sophisticated strategies to balance exploiting good source tasks with exploration (Golowich & Moitra, 2022;  
+
+> 1Here we consider the convex hull in order to incorporate all possible uniform mixture policies induced by Π.
+
+4Can RLHF be More Efficient with Imperfect Reward Models? A Policy Coverage Perspective 
+
+Huang & He, 2023), which can be challenging to general-ize beyond the tabular setting. In contrast, regularization enables us to filter transfer policies directly with their policy value, facilitating the applicablity beyond the tabular setup. 
+
+Principle 2: Transfer from the Policy Distilled from Online Data—the “Self-Transfer Learning” We first introduce a key result by combining Lem. 3.1 and offline RLHF result in Lem. 2.3. 
+
+Theorem 3.2. Under Assump. A, w.p. 1 − δ, given an online dataset D generated 2 by a policy series {πt}Tt=1 ∈ conv (Π) ,running RPO with conv (Π) and RΠ on D yields a distilled policy πDstl , such that, 
+
+Jβ (π∗ 
+
+> r∗
+
+) − Jβ (πDstl ) ≤ (4) 
+
+eO
+
+
+
+e2R
+
+1 + κ(e 2Rβ )
+
+> T
+
+X
+
+> t=1
+
+Jβ (π∗ 
+
+> r∗
+
+) − Jβ (πt)
+
+βT 
+
+r 1
+
+T
+
+
+
+.
+
+To understand the significance of Thm. 3.2, consider the case when {πt}t∈[T ] are produced by a no-regret online learning algorithm, such as XPO in Lem. 2.4. As a result, the term PTt=1     
+
+> Jβ(π∗
+> r∗)−Jβ(πt)
+> βT
+
+in Eq. (4) diminishes to 0 as T increases. This implies that the policy πDstl distilled from online data by offline learning techniques converges to π∗ 
+
+> r∗
+
+at a rate of O(T − 12 ), which does not depend on 
+
+|S| , |A| or other complexity measures such as Cov ∞(Π) in Lem. 2.4. This result not only strictly improves the sample complexity bounds 3 for existing online RLHF algorithms (Cen et al., 2024; Xie et al., 2024; Xiong et al., 2024; Zhang et al., 2024), but also reveals a fundamental difference from the pure reward maximization setting, where lower bounds depending on those structural complexity factors have been established (Auer et al., 2002; Dani et al., 2008). We defer detailed discussions to Appx. E.3. More importantly, the faster rate of the convergence of πDstl 
+
+to π∗ 
+
+> r∗
+
+also indicates the potential of using πDstl as a candi-date for policy transfer. We term this regime as “ self-transfer learning ”, and refer πDstl as the “ self-transfer policy ”. No-tably, πDstl continuously improves and converges to π∗ 
+
+> r∗
+
+as the dataset grows, while the source policies {π∗ 
+
+> rw
+
+}Ww=1 re-tain fixed non-zero value gaps due to the imperfections in reward models {rw}Ww=1 . This reveals another benefit of self-transfer learning: it helps to avoid being restricted by suboptimal source reward models. 
+
+## 4. Provably Efficient Transfer Learning 
+
+In this section, we develop provably efficient transfer learn-ing algorithms based on the principles in Sec. 3.2.    
+
+> 2See Cond. C.1 for the definition of data generation process.
+> 3Beyond sample complexity, a regret bound improved to
+> eO(√T)for online RLHF can be established. We defer it to Coro. 4.5 after presenting our main results.
+
+Outline of Main Algorithm Our main algorithm TPO is provided in Alg. 1, which leverages Alg. 2— Transfer Policy 
+
+Selection ( TPS )—as a subroutine to select source policies to transfer from. TPO can be regarded as a mixture of standard online learning and transfer learning, balanced through a hyper-parameter α ∈ (0 , 1) . Motivated by the implication of Thm. 3.2, TPO returns the detailed policy computed with all the data collected. For convenience, we divide the total number of iterations T into K = T /N blocks, each containing N sub-iterations. In each block, we first run αN iterations of an OnLine learning algorithm Alg OL ,followed by (1 − α)N iterations of transfer learning with policy selected by Alg. 2. Here, Alg OL can be any online algorithm with per-step no-regret guarantees, for example, XPO in Lem. 2.4. To save space, we defer to Appx. D the formal behavior assumption on Alg OL (Def. D.2) and concrete examples with verifications. 
+
+A Preview of Main Theorem Before diving into the de-tails, we first highlight the benefits of transfer learning by presenting an informal corollary regarding the regret bound of TPO, under concrete choices of Alg OL and α.
+
+Corollary 4.1. Choosing XPO (Xie et al., 2024) as Alg OL 
+
+and α = e− Rβ , TPO achieves eO(W √T ) regret when T is small and eO(√T ) regret after T is large enough. 
+
+Coro. 4.1 is implied by our main result in Thm. 4.4. We refer to Remark F.3 for a detailed quantification of “small” and “large enough”. Compared with previous online RLHF results without transfer learning, in the early stage, TPO im-proves the structural complexity measure coefficients (e.g. 
+
+Cov ∞ in XPO ) to the number of source tasks W , which is usually much smaller. Besides, it even gets rid of such coefficient term and achieves eO(√T ) regret over time. Next, we take a closer look at the transfer policy selection steps in Alg. 2 in Sec. 4.1, and provide detailed analyses and discussion of TPO in Sec. 4.2. 
+
+4.1. Details for Alg. 2: The Transfer Policy Selection 
+
+The design of Alg. 2 follows the two principles in Sec. 3.2, which are: (1) transfer the policy with the highest (esti-mated) policy value, because higher policy value implies better coverage for π∗ 
+
+> r∗
+
+; (2) include the self-transfer policy as a candidate, because it progressively converges to π∗ 
+
+> r∗
+
+at a faster rate than the best-known ones for online policies. We first clarify some notation. Given a dataset D := 
+
+{(si, a i, eai, y i, π i)}|D| 
+
+> i=1
+
+, LD (r) denotes the average nega-tive log-likelihood (NLL) loss regarding the reward r:
+
+LD (r) := 1
+
+|D| 
+
+X
+
+> i≤|D|
+
+−yi log σ
+
+
+
+r(si, a i) − r(si, eai)
+
+
+
+− (1 − yi) log σ
+
+
+
+r(si, eai) − r(si, a i)
+
+
+
+. (5) 5Can RLHF be More Efficient with Imperfect Reward Models? A Policy Coverage Perspective 
+
+Algorithm 1: T ransfer Policy Optimization (TPO)  
+
+> 1
+
+Input : Block size N ; Number of blocks K = T /N ; {rw}Ww=1 ; Π; α ∈ (0 , 1) ; δ ∈ (0 , 1)  
+
+> 2
+
+For all (k, n ), Dk,n denotes all the data collected up to (k, n ), and Dk,n  
+
+> OL
+
+only includes those collected by Alg OL .See detailed definitions in Appx. F.1.  
+
+> 3
+
+for k = 1 , 2..., K do  
+
+> 4
+
+for n = 1 , ..., N do  
+
+> 5
+
+if n ≤ αN then πk,n ← Alg OL (αT, Π, δ ; Dk,n  
+
+> OL
+
+) else πk,n ← TPS (T, Π, δ, {rw}Ww=1 ; Dk,n ) 
+
+> 6
+
+Collect data (sk,n , a k,n , eak,n , y k,n ) ∼ ρ × πk,n × πref × Pr∗ (·|· , ·, ·). 
+
+> 7
+
+end  
+
+> 8
+
+end  
+
+> 9
+
+return bπ∗ 
+
+> r∗
+
+computed by RPO with DK,N +1 .We will use Eρ,π [r] := Es∼ρ,a ∼π [r(s, a )] as a short note. In Line 4 of Alg. 2, N (w; D) := P 
+
+> i≤|D|
+
+I[πi = π∗ 
+
+> rw
+
+] denotes the number samples collected with π∗ 
+
+> rw
+
+in the dataset, fol-lowing the convention that 1/N (·, ·) = + ∞ if N (·, ·) = 0 .In Line 6, we leverage RPO (Liu et al., 2024) to compute the self-transfer policy πDstl and a reward function brDstl . To save space, we defer the details of RPO to Appx. C. Next, we explain our value estimation strategy. Note that in RLHF setting, we cannot access r∗ directly but only the pref-erence comparison samples following the BT model. Thus, we instead estimate the value gain relative to Jβ (πref ).
+
+Optimistic Estimation for Jβ (π∗ 
+
+> rw
+
+) − Jβ (πref ) For poli-cies induced by imperfect source reward models, we adopt UCB-style optimistic policy evaluation to efficiently balance exploration and exploitation. Intuitively, by utilizing the MLE reward estimator brMLE , the estimation error brMLE − r∗
+
+under the distribution of π∗ 
+
+> rw
+
+is related to the number of samples from π∗ 
+
+> rw
+
+occurring in the dataset. Therefore, we can quantify the value estimation error as follows. 
+
+Lemma 4.2 (Value Est Error for {π∗ 
+
+> rw
+
+}w∈[W ]). Under As-sump. A and Def. D.2, w.p. 1 − δ, in each call of Alg. 2: 
+
+∀w ∈ [W ], Jβ (π∗ 
+
+> rw
+
+) − Jβ (πref ) ≤ bV (π∗ 
+
+> rw
+
+; D)
+
+≤Jβ (π∗ 
+
+> rw
+
+) − Jβ (πref ) + eO( e2R
+
+pN (w; D) ).
+
+Pessimistic Estimation for Jβ (πDstl )−Jβ (πref ) The main challenge in estimating the value of πDstl is that, πDstl is not fixed but changing and improving. The previous optimistic strategy is not applicable here, since the coverage of πDstl 
+
+by the dataset is unclear, making it difficult to quantify the uncertainty in estimation via count-based bonus term. For-tunately, given that πDstl is improving over time, it is more important when it surpasses all the other source policies. Therefore, it suffices to construct a tight lower bound for 
+
+Jβ (πDstl )−Jβ (πref ); see line 7. By leveraging brMLE and the optimality of (πDstl , brDstl ) for the RPO loss, we can show: 
+
+Lemma 4.3 (Value Est Error for πDstl ). Under Assump. A and Def. D.2, w.p. 1 − δ, in each call of Alg. 2: 
+
+Jβ (π∗ 
+
+> r∗
+
+) − Jβ (πref ) − eO
+
+ Re 2R
+
+p|D| · (Cov π∗  
+
+> r∗|πD
+> mix
+
+∧
+
+pC(Π) 
+
+α )
+
+
+
+≤ bV (πDstl ; D) ≤ Jβ (πDstl ) − Jβ (πref ). (6) Here πD 
+
+> mix
+
+:= 1
+
+> |D|
+
+P 
+
+> i≤|D|
+
+πi denotes the mixture policy. In the LHS, the coefficient takes minimum over two factors 
+
+Cov π∗  
+
+> r∗|πD
+> mix
+
+and pC(Π) /α , resulting from two different ways to estimate the value gap of πDstl . According to offline RLHF theory (see Lem. C.2), πDstl is competitive with any 
+
+π ∈ conv (Π) well-covered by the dataset distribution, or equivalently, Jβ (π∗ 
+
+> r∗
+
+) − Jβ (πDstl ) = Jβ (π∗ 
+
+> r∗
+
+) − Jβ (π) + 
+
+eO(|D| − 12 Cov π|πD 
+
+> mix
+
+). By choosing π = π∗ 
+
+> r∗
+
+, we obtain the first bound with the factor Cov π∗  
+
+> r∗|πD
+> mix
+
+. Next, considering 
+
+π = 1
+
+> αkN
+
+P 
+
+> i≤k,j ≤αN
+
+πi,j , the uniform mixture of poli-cies generated by Alg OL so far, leads to the second bound involving pC(Π) /α . This also explains why we still in-volve normal online learning in TPO —to provide another safeguard for the quality of the transfer policy. 
+
+4.2. Main Theorem and Interpretation 
+
+We establish the per-step regret bound for TPO below. 
+
+Theorem 4.4 (Total Regret) . Suppose Alg OL is a no-regret instance satisfying Def. D.2, whose regret grows as 
+
+eO(Re 2R
+
+q
+
+C(Π) eT ) for any intermediate step eT and some policy class complexity measure C(Π) . Then, w.p. 1 − 2δ,for any T /K ≤ t ≤ T , running TPO yields a regret bound: 
+
+X 
+
+> τ≤t
+
+Jβ (π∗ 
+
+> r∗
+
+)−Jβ (πk(τ ),n (τ )) = Reg (t) 
+
+> OL
+
++ Reg (t)
+
+> Trf
+
+Reg (t) 
+
+> OL
+
+:= eO(Re 2RpαC(Π) t), (7) 
+
+Reg (t) 
+
+> Trf
+
+:= eO
+
+ X  
+
+> τ≤t:αN <n (τ)≤N
+
+∆min ∧ ιk(τ ),n (τ ) (8) 
+
++ e2Rp(1 − α)W t ∧ X
+
+> w:∆( w)>0
+
+e4R
+
+∆( w)
+
+
+
+.
+
+6Can RLHF be More Efficient with Imperfect Reward Models? A Policy Coverage Perspective 
+
+Algorithm 2: T ransfer Policy Selection (TPS)  
+
+> 1
+
+Input : Source tasks {rw}Ww=1 ; Policy class Π; T , δ; Dataset D := {(si, a i, eai, y i, π i)}i≤|D| . 
+
+> 2
+
+// Optimistic estimation for Jβ (π∗ 
+
+> rw
+
+) − Jβ (πref ). 
+
+> 3
+
+brMLE ← arg min r∈R Π LD (r). 
+
+> 4
+
+∀w ∈ [W ], bV (π∗ 
+
+> rw
+
+; D) ← Eρ,π ∗ 
+
+> rw
+
+[brMLE ] − Eρ,π ref [brMLE ] − βKL (π∗ 
+
+> rw
+
+∥πref ) + 16 e2R
+
+q 1  
+
+> N(w;D)
+
+log |Π|W T δ . 
+
+> 5
+
+// Pessimistic estimation for Jβ (πDstl ) − Jβ (πref ). 
+
+> 6
+
+πDstl , brDstl ← RPO (conv (Π) , RΠ, D, η ) with η = c · (1 + eR)−2
+
+q 1 
+
+> |D|
+
+log |Π|Tδ . 
+
+> 7
+
+bV (πDstl ; D) ← Eρ,π Dstl [brDstl ] − Eρ,π ref [brDstl ] − βKL (πDstl ∥πref ) + 1 
+
+> η
+
+LD (brDstl ) − 1 
+
+> η
+
+LD (brMLE ) − 2ce 2R
+
+q 1 
+
+> |D|
+
+log |Π|Tδ . 
+
+> 8
+
+return arg max π∈{ π∗   
+
+> rw}w∈[W]∪{ πDstl }
+
+bV (π; D). // Selecting Transfer Policy by Estimated Value 
+
+Here we denote k(τ ) := ⌈ τN ⌉ and n(τ ) := τ mod N to be the block index and inner iteration index for step τ ;
+
+ιk(τ ),n (τ ) := eO(Re 2R
+
+
+
+Cov π∗  
+
+> r∗|πτ
+> mix
+
+∧√C(Π) 
+
+> α
+
+q 1 
+
+> τ
+
+), where 
+
+πτ 
+
+> mix
+
+:= 1
+
+> τ
+
+P 
+
+> i≤τ
+
+πk(i),n (i) is the mixture policy up to τ ;
+
+∆( w) and ∆min denote value gaps as defined in Sec. 2.2. 
+
+We decompose the total regret into two parts depending on their origins. Reg (t) 
+
+> OL
+
+comes from the regret by running the online algorithm Alg OL . It is weighted by α since we only allocate α-proportion of the samples for Alg OL . Reg (t)
+
+> Trf
+
+represents the regret from transfer policies. The first term in Eq. (8) reflects the benefits of utilizing transfer policy over online learning. Here ∆min is contributed by source reward models {rw}w∈[W ], and the term ιk(τ ),n (τ ) is due to the “self-transfer policy” πDstl , as we derived in Lem. 4.3. The second term in Eq. (8) results from the imperfection of source reward models: without prior knowledge on their quality, additional cost has to be paid during exploration. Next, we elaborate the benefits of transfer learning by taking a closer look at Reg (t) 
+
+> Trf
+
+in Eq. (8) . Note that the lower Reg (t) 
+
+> Trf
+
+is, the faster bπ∗ 
+
+> r∗
+
+in TPO converges to π∗ 
+
+> r∗
+
+. When 
+
+∆min = 0 , i.e. r∗ is realizable in {rw}w∈[W ], we have Reg (t) 
+
+> Trf
+
+= eO(√W t ∧ P  
+
+> w:∆( w)>01∆( w)
+
+) and the benefit of transfer learning is clear. Thus, in the following, we only focus on the case ∆min > 0. We separately consider two scenarios, according to the relationship between t and ∆min .For clarity, we will omit the constant terms R and eR.
+
+Stage 1: t < W 2
+
+> ∆2min
+
+This corresponds to the early learning stage, when t is relatively small. In this case, Thm. 4.4 implies the following regret bound: Reg (t) 
+
+> Trf
+
+= eO(√1 − α(√W t + ∆ min t)) = eO(W √t), (9) which can be further improved to eO(√W t ) if t < W
+
+> ∆2min
+
+.This suggests at the earlier stage, the benefits of transfer is contributed mostly by the source reward models {rw}w∈[W ].In general, we can expect the number of source tasks W
+
+much lower than the policy class complexity measure C(Π) .Therefore, Eq. (9) implies a significant improvement over the typical online learning regret bound without transfer. 
+
+Stage 2: t ≥ W 2
+
+> ∆2min
+
+In this case, the second term in Eq. (8) is controlled by O(P   
+
+> w∈[W]1∆( w)
+
+) = O( W 
+
+> ∆min
+
+) = O(√t),and we have the following regret bound: Reg (t) 
+
+> Trf
+
+= eO
+
+q C(Π) tα2 ∧ P 
+
+> τ≤t
+
+(Cov π∗  
+
+> r∗|πτ
+> mix
+
+)2
+
+
+
+. (10) At the first glance, the RHS is controlled by eO(pC(Π) t/α ),which implies transfer learning at most suffer a factor of 1/α 
+
+larger regrets than no transfer. However, in fact, the term qP 
+
+> τ≤t
+
+(Cov π∗  
+
+> r∗|πτ
+> mix
+
+)2 yields a much tighter bound, which only grows as eO(√t) after finite time, and is independent of C(Π) . To see this, by Lem. 3.1 and the concavity of 
+
+Jβ (·), we have Cov π∗  
+
+> r∗|πt
+> mix
+
+= 1+ eO(κ(e 2Rβ )· Reg (t)  
+
+> OL +Reg (t)
+> Trf
+> βt
+
+).Note that Eq. (9) and (10) already indicate a regret upper bound Reg (t) 
+
+> Trf
+
+= eO(Γ √t), where Γ is a short note of a coefficient depending on α, W, {∆( w)}w∈[W ] and C(Π) ,but not t. This implies Cov π∗  
+
+> r∗|πt
+> mix
+
+converges to 1 at the rate of O(1 /√t), and Reg (t) 
+
+> Trf
+
+= eO(√t) after finite time. Although the above provable benefits in Stage 2 result pri-marily from “self-transfer learning”, high-quality source reward models also play an important role here. According to Eq. (9) , small ∆min can lead to small Γ and therefore, accelerate the convergence of Cov π∗  
+
+> r∗|πt
+> mix
+
+towards 1.
+
+Remarks on choice of α We treat α as a hyperparameter. Without prior knowledge, a simple choice is α = e− Rβ with guarantee in Coro. 4.1. Under prior beliefs that high-quality source reward models are available, we may prefer smaller 
+
+α. Besides, due to the self-transfer learning, it is wise to gradually decay α to 0 as the iteration number grows. 
+
+Improved regret bound for standard online RLHF as a implication Although our focus is transfer learning, the standard online RLHF setting can be recovered when no 7Can RLHF be More Efficient with Imperfect Reward Models? A Policy Coverage Perspective 
+
+Algorithm 3: Empirical TPO  
+
+> 1
+
+Input : K, N and {rw}w∈[W ]; Initialize : π1 
+
+> OL
+
+← πref ; 
+
+> 2
+
+For all (k, n ) ∈ [K] × [N ], and all w ∈ [W ], Dk,n := ∪n−1 
+
+> j=1
+
+{(sk,j , a k,j , eak,j , y k,j )},
+
+N k,n (·) := P 
+
+> j<n
+
+I[· = πk,j ], and bPk,n r∗ (· ≻ πk
+
+> OL
+
+) := 1 
+
+> Nk,n (·)
+
+P 
+
+> j<n
+
+I[· = πk,j ]yk,j . 
+
+> 3
+
+for k = 1 , 2..., K do  
+
+> 4
+
+for n = 1 , ...N do  
+
+> 5
+
+∀w ∈ [W ], dWR π∗
+
+> rw
+
+← bPk,n r∗ (π∗ 
+
+> rw
+
+≻ πk
+
+> OL
+
+) + c
+
+q
+
+log 1 
+
+> δ
+
+/N k,n (π∗ 
+
+> rw
+
+); 
+
+> 6
+
+dWR πk
+
+> OL
+
+← Pr∗ (πk 
+
+> OL
+
+≻ πk
+
+> OL
+
+) = 0 .5. // dWR πk
+
+> OL
+
+can be treated as a hyperparameter taking value other than 0.5.  
+
+> 7
+
+πk,n ← arg max π∈{ π∗  
+
+> rw}Ww=1 ∪{ πk
+> OL }
+
+dWR π
+
+. 
+
+> 8
+
+Collect online data (sk,n , a k,n , eak,n , y k,n ) ∼ ρ × πk,n × πk 
+
+> OL
+
+× Pr∗ (·|· , ·, ·). 
+
+> 9
+
+end  
+
+> 10
+
+πk+1  
+
+> OL
+
+← Alg PO (πk
+
+> OL
+
+, Dk,N +1 ); 
+
+> 11
+
+end  
+
+> 12
+
+return πK+1  
+
+> OL
+
+.source tasks are present, i.e., W = 0 . As stated below, TPO achieves eO(√T ) regret over time by purely utilizing “self-transfer learning”, thereby strictly improving existing results (Cen et al., 2024; Xie et al., 2024; Xiong et al., 2024; Zhang et al., 2024) 4.
+
+Corollary 4.5. When W = 0 , under the same condition of Thm. 4.4, TPO reduces to a standard online RLHF method with eO(√T ) regret after finite time. 
+
+## 5. From Theory to an Empirical Algorithm 
+
+In terms of computational overheads, TPO requires solving multiple minimax optimization problems, which restricts its applicability to fine-tune LLMs in practice. To address this, adhering to the design principles of TPO , we introduce a more computationally efficient alternative in Alg. 3. 
+
+Key Insight: Estimating Win Rates instead of Policy Values As discussed in Sec. 4, several optimization steps are designed to estimate policy values used for transfer policy selection, because they help to identify the policies’ coverability for optimal policy (i.e. Cov π∗ 
+
+> r∗|·
+
+). The key insight in our empirical algorithm design is to find a more accessible indicator to infer Cov π∗ 
+
+> r∗|·
+
+. This leads us to the policy win rates, i.e., the probability that human prefer the generation by one policy over another. Formally, given two policies π, eπ, the win rate of eπ over π is defined by: 
+
+Pr∗ (eπ ≻ π) := Es∼ρ,a ∼eπ,a ′∼π [Pr∗ (y = 1 |s, a, a ′)] .
+
+Win rates between two policies can be unbiasedly estimated by querying human preferences with their generated re-sponses. Moreover, win rates can be used to construct a lower bound for Cov π∗ 
+
+> r∗|·
+
+, as stated in Lem. 5.1 below. 
+
+> 4
+
+While omitted in our result, the dependence on the log-covering number (e.g., log |Π|) matches with those previous works. 
+
+Lemma 5.1. Under BT-model 5, for any π: Cov π∗  
+
+> r∗|π
+
+≥
+
+max 
+
+> γ> 0,¯π
+
+(
+
+q
+
+(γ +2 Pr∗ (π ≻ ¯π)) log 1+ γγ +
+
+q Jβ (π∗   
+
+> r∗)−Jβ(¯ π)2β
+
+)−1.
+
+Note that we may not identify the policy with the best cov-erage for π∗ 
+
+> r∗
+
+through the lower bound above. However, it still provides useful guidance for practice: we can filter out policies yielding high lower bound. In Lem. 5.1, for any fixed γ and comparator ¯π, the lower bound for Cov π∗ 
+
+> r∗|π
+
+increases as Pr∗ (π ≻ ¯π) decay to 0, suggesting prioritizing transferring from policies with high win rates. The key question now is how to choose the comparator ¯π.According to Lem. 5.1, ideally, the comparator should be close to π∗ 
+
+> r∗
+
+, so that Jβ (π∗ 
+
+> r∗
+
+) − Jβ (¯ π) becomes negligible, allowing the win rate term to dominate the lower bound. Since we do not know π∗ 
+
+> r∗
+
+in advance, empirically, we can choose the learning policy as the comparator, which is optimized and progressively converges to π∗ 
+
+> r∗
+
+.
+
+From Insights to Practice Next, we walk through em-pirical TPO in Alg. 3 and explain how we integrate these insights into the algorithm design. Alg. 3 utilizes an itera-tive online learning framework, which repeatedly collects online data and optimizes the policy. We start by initializ-ing the online learning policy π1 
+
+> OL
+
+with the reference pol-icy πref . For computational efficiency, in each iteration k,we avoid separately computing online exploration policies and self-transfer learning policies as done in TPO . Instead, we only compute one policy πk 
+
+> OL
+
+(updated from πk−1 
+
+> OL
+
+) by Alg PO . Here Alg PO is a placeholder for an arbitrary Policy 
+
+Optimization algorithm, and we do not restrict the concrete choice. Such a design increases the modularity of our em-
+
+> 5
+
+Lem. 5.1 can be generalized beyond BT-model. Besides, it is possible to construct a lower bound involving Pr∗ (¯ π ≻ π) instead. See Lem. G.3 and Remark G.4 in Appx. G for more details. 
+
+8Can RLHF be More Efficient with Imperfect Reward Models? A Policy Coverage Perspective 
+
+pirical TPO, making it possible to combine with various policy optimization methods and enhance their performance. For example, Alg PO may be instantiated by DPO (Rafailov et al., 2024), resulting in a transfer learning framework built on iterative-DPO (Xiong et al., 2024; Yuan et al., 2024). Be-sides, one may consider other advanced (online) methods, such as XPO (Xie et al., 2024), IPO (Azar et al., 2024), etc. As the core ingredients of our empirical TPO, during data collection, the algorithm selects the policy πk,n ∈{π∗ 
+
+> r∗
+
+}Ww=1 ∪ { πk
+
+> OL
+
+} with the highest win rate when compet-ing against πk
+
+> OL
+
+. Intuitively, we encourage transfer learning if {π∗ 
+
+> r∗
+
+}Ww=1 includes high-quality candidates; otherwise, the algorithm conducts standard iterative policy optimiza-tion with Alg PO by default. This strategy also aligns with the heuristic principle: learn from an expert until surpassing it . Lastly, since the win rates are unknown in advance, the selection process is formulated as a multi-armed bandit prob-lem. We employ a UCB subroutine (line 7) to balance the exploration and exploitation during the win rates estimation. 
+
+## 6. Experiments 
+
+In this section, we evaluate Alg. 3 on the summarization task using the XSum dataset (Narayan et al., 2018). We consider T5 series models (Raffel et al., 2020) and choose T5-small (80M) as the base model for fine-tuning. Human reward 
+
+r∗ is simulated by the reward model (Dong et al., 2024) distilled from Llama3-8B (Dubey et al., 2024). For the source rewards in transfer learning, we consider a collection of imperfect reward models and LLM policies, including, (a) ROUGE-Lsum score (Lin, 2004), (b) BERTScore (Zhang et al., 2019), (c) T5-base (250M), (d) T5-large (770M). As illustrated in Sec. 2.2, for LLM policies (c) and (d), we treat their log-probability predictions on the given prompt s and response a as the reward scores. For Alg PO , we consider three instantiations: DPO (Rafailov et al., 2024), IPO (Azar et al., 2024) and XPO (Xie et al., 2024). To save space, we present and interpret the results with DPO as the choice below and defer other experiment results and also the concrete setups to Appx. I. 
+
+Experiment Results and Discussion We run Alg. 3 for 
+
+K = 3 iterations and compare its performance with three baselines: (I) vanilla iterative- DPO without transfer learn-ing (i.e., setting Alg PO = DPO and W = 0 ); (II) purely exploiting the worst source reward—ROUGE score; (III) purely exploiting the best source reward—T5-large. Con-cretely, baseline (I) removes the transfer learning compo-nent in Alg. 3 by assigning πk,n = πk 
+
+> OL
+
+for all n ∈ [N ]. For baselines (II) and (III), the worst (ROUGE-LSum) and best (T5-Large) reward models from the candidates (a)-(d) are selected, and pure transfer learning is then performed using the responses recommended by the chosen reward models, Without Transfer Purely Exploit ROUGE-Lsum Purely Exploit T5-Large Iter 1 52 .1 ± 1.2 53 .1 ± 1.1 49 .5 ± 0.9
+
+Iter 2 53 .3 ± 1.6 54 .5 ± 1.3 49 .1 ± 0.4
+
+Iter 3 54 .0 ± 1.2 53 .3 ± 1.5 50 .6 ± 0.3    
+
+> Table 1. Win rates (%) of the policies trained by empirical TPO (Alg. 3) are competed with 3 baselines, presented across 3 columns. Baseline (I): without transfer, i.e., iterative-DPO . Baseline (II): purely utilizing ROUGE-LSum (the lowest-quality source task) in transfer learning. Baseline (III): purely utilizing T5-Large (the highest-quality source task) in transfer learning. Results are aver-aged with 3 random seeds and 95% confidence levels are reported.
+
+i.e., πk,n = π∗ 
+
+> rw
+
+in Alg. 3 for the selected rw. Here the worst and best reward models are selected based on the final policy value when aligning with the given reward model. Table. 1 reports the win rates of the policies learned by Alg. 3 competing with the three baselines. As shown in Col-umn 1, comparing with normal online learning, our transfer strategy demonstrates clear advantages. Furthermore, Col-umn 2 and 3 suggest that, without prior knowledge of source tasks quality, our method avoids being misled by low-quality tasks and achieves competitive performance compared to exploiting the best reward candidate. Notably, as suggested by the additional results in Appx. I, 
+
+πk 
+
+> OL
+
+improves over time and Pr∗ (π∗ 
+
+> rw
+
+≻ πk
+
+> OL
+
+) for any 
+
+w ∈ [W ] continuously decreases. In iteration 3, our em-pirical TPO automatically switches back to online learning and avoids being restricted by the sub-optimality of source reward models. In the end, it results in higher win rates than purely exploiting the best source reward model T5-Large over 3 iterations. 
+
+## 7. Conclusion 
+
+This paper studies reward transfer in the context of online RLHF. We contribute TPO , a provable and efficient transfer learning algorithm that leverages the structure induced by the KL regularizer. Based on that, we further develop a UCB-based empirical alternative and evaluate its effective-ness through LLM experiments. Several promising direc-tions remain for future exploration. Firstly, an interesting avenue is to develop transfer learning strategies beyond RLHF setting, for example, the Nash Learning from Human Feedback setting. Secondly, while we focus on policy-level transfer, a finer-grained prompt-wise knowledge transfer may be possible, which allows transfer from different poli-cies in different states. Thirdly, due to resource limitations, we leave the examination of our methods in fine-tuning much larger-scale language models to the future work. 9Can RLHF be More Efficient with Imperfect Reward Models? A Policy Coverage Perspective 
+
+## Acknowledgement 
+
+The work is supported by ETH research grant and Swiss National Science Foundation (SNSF) Project Funding No. 200021-207343 and SNSF Starting Grant. 
+
+## Impact Statement 
+
+This paper presents work whose goal is to advance the field of Machine Learning. There are many potential societal consequences of our work, none which we feel must be specifically highlighted here. 
+
+## Reproducibility Statement 
+
+The code of all the experiments and the running in-structions can be found in https://github.com/ jiaweihhuang/RLHF_RewardTransfer .
+
+## References 
+
+Achiam, J., Adler, S., Agarwal, S., Ahmad, L., Akkaya, I., Aleman, F. L., Almeida, D., Altenschmidt, J., Altman, S., Anadkat, S., et al. Gpt-4 technical report. arXiv preprint arXiv:2303.08774 , 2023. Amortila, P., Foster, D. J., and Krishnamurthy, A. Scal-able online exploration via coverability. arXiv preprint arXiv:2403.06571 , 2024. Auer, P., Cesa-Bianchi, N., Freund, Y., and Schapire, R. E. The nonstochastic multiarmed bandit problem. SIAM journal on computing , 32(1):48–77, 2002. Azar, M. G., Guo, Z. D., Piot, B., Munos, R., Rowland, M., Valko, M., and Calandriello, D. A general theoretical paradigm to understand learning from human preferences. In International Conference on Artificial Intelligence and Statistics , pp. 4447–4455. PMLR, 2024. Bai, Y., Jones, A., Ndousse, K., Askell, A., Chen, A., Das-Sarma, N., Drain, D., Fort, S., Ganguli, D., Henighan, T., et al. Training a helpful and harmless assistant with rein-forcement learning from human feedback. arXiv preprint arXiv:2204.05862 , 2022. Bradley, R. A. and Terry, M. E. Rank analysis of incom-plete block designs: I. the method of paired comparisons. 
+
+Biometrika , 39(3/4):324–345, 1952. Cen, S., Mei, J., Goshvadi, K., Dai, H., Yang, T., Yang, S., Schuurmans, D., Chi, Y., and Dai, B. Value-incentivized preference optimization: A unified approach to online and offline rlhf. arXiv preprint arXiv:2405.19320 , 2024. Chang, J. D., Zhan, W., Oertell, O., Brantley, K., Misra, D., Lee, J. D., and Sun, W. Dataset reset policy optimization for rlhf. arXiv preprint arXiv:2404.08495 , 2024. Chen, J. and Jiang, N. Information-theoretic considerations in batch reinforcement learning. In International Con-ference on Machine Learning , pp. 1042–1051. PMLR, 2019. Chen, X., Zhong, H., Yang, Z., Wang, Z., and Wang, L. Human-in-the-loop: Provably efficient preference-based reinforcement learning with general function approxima-tion. In International Conference on Machine Learning ,pp. 3773–3793. PMLR, 2022. Christiano, P. F., Leike, J., Brown, T., Martic, M., Legg, S., and Amodei, D. Deep reinforcement learning from human preferences. Advances in neural information pro-cessing systems , 30, 2017. Dani, V., Hayes, T. P., and Kakade, S. M. Stochastic linear optimization under bandit feedback. In COLT , volume 2, pp. 3, 2008. Dong, H., Xiong, W., Pang, B., Wang, H., Zhao, H., Zhou, Y., Jiang, N., Sahoo, D., Xiong, C., and Zhang, T. Rlhf workflow: From reward modeling to online rlhf, 2024. 
+
+URL https://arxiv. org/abs/2405.07863 , 2024. Du, S., Kakade, S., Lee, J., Lovett, S., Mahajan, G., Sun, W., and Wang, R. Bilinear classes: A structural framework for provable generalization in rl. In International Conference on Machine Learning , pp. 2826–2836. PMLR, 2021. Du, Y., Winnicki, A., Dalal, G., Mannor, S., and Srikant, R. Exploration-driven policy optimization in rlhf: Theoret-ical insights on efficient data utilization. arXiv preprint arXiv:2402.10342 , 2024. Dubey, A., Jauhri, A., Pandey, A., Kadian, A., Al-Dahle, A., Letman, A., Mathur, A., Schelten, A., Yang, A., Fan, A., et al. The llama 3 herd of models. arXiv preprint arXiv:2407.21783 , 2024. Foster, D. J., Kakade, S. M., Qian, J., and Rakhlin, A. The statistical complexity of interactive decision mak-ing. arXiv preprint arXiv:2112.13487 , 2021. Gao, L., Schulman, J., and Hilton, J. Scaling laws for reward model overoptimization. In International Conference on Machine Learning , pp. 10835–10866. PMLR, 2023. Gao, Z., Chang, J. D., Zhan, W., Oertell, O., Swamy, G., Brantley, K., Joachims, T., Bagnell, J. A., Lee, J. D., and Sun, W. Rebel: Reinforcement learning via regressing relative rewards. arXiv preprint arXiv:2404.16767 , 2024. Geist, M., Scherrer, B., and Pietquin, O. A theory of regu-larized markov decision processes. In International Con-ference on Machine Learning , pp. 2160–2169. PMLR, 2019. 10 Can RLHF be More Efficient with Imperfect Reward Models? A Policy Coverage Perspective 
+
+Gibbs, A. L. and Su, F. E. On choosing and bounding probability metrics. International statistical review , 70 (3):419–435, 2002. Golowich, N. and Moitra, A. Can q-learning be improved with advice? In Conference on Learning Theory , pp. 4548–4619. PMLR, 2022. Guo, S., Zhang, B., Liu, T., Liu, T., Khalman, M., Llinares, F., Rame, A., Mesnard, T., Zhao, Y., Piot, B., et al. Direct language model alignment from online ai feedback. arXiv preprint arXiv:2402.04792 , 2024. Hong, J., Lee, N., Mart ´ınez-Casta ˜no, R., Rodr ´ıguez, C., and Thorne, J. Cross-lingual transfer of reward models in multilingual alignment. arXiv preprint arXiv:2410.18027 ,2024. Huang, A., Zhan, W., Xie, T., Lee, J. D., Sun, W., Krishna-murthy, A., and Foster, D. J. Correcting the mythos of kl-regularization: Direct alignment without overparame-terization via chi-squared preference optimization. arXiv e-prints , pp. arXiv–2407, 2024. Huang, J. and He, N. Robust knowledge transfer in tiered reinforcement learning. Advances in Neural Information Processing Systems , 36:52073–52085, 2023. Huang, J., Zhao, L., Qin, T., Chen, W., Jiang, N., and Liu, T.-Y. Tiered reinforcement learning: Pessimism in the face of uncertainty and constant regret. Advances in Neural Information Processing Systems , 35:679–690, 2022. Jaques, N., Gu, S., Bahdanau, D., Hern ´andez-Lobato, J. M., Turner, R. E., and Eck, D. Sequence tutor: Conserva-tive fine-tuning of sequence generation models with kl-control. In International Conference on Machine Learn-ing , pp. 1645–1654. PMLR, 2017. Jaques, N., Ghandeharioun, A., Shen, J. H., Ferguson, C., Lapedriza, A., Jones, N., Gu, S., and Picard, R. Way off-policy batch deep reinforcement learning of implicit human preferences in dialog. arXiv preprint arXiv:1907.00456 , 2019. Ji, J., Qiu, T., Chen, B., Zhang, B., Lou, H., Wang, K., Duan, Y., He, Z., Zhou, J., Zhang, Z., et al. Ai alignment: A comprehensive survey. arXiv preprint arXiv:2310.19852 ,2023. Jiang, N. and Huang, J. Minimax value interval for off-policy evaluation and policy optimization. Advances in Neural Information Processing Systems , 33:2747–2758, 2020. Jiang, N., Krishnamurthy, A., Agarwal, A., Langford, J., and Schapire, R. E. Contextual decision processes with low bellman rank are pac-learnable. In International Con-ference on Machine Learning , pp. 1704–1713. PMLR, 2017. Jin, C., Liu, Q., and Miryoosefi, S. Bellman eluder di-mension: New rich classes of rl problems, and sample-efficient algorithms. Advances in neural information processing systems , 34:13406–13418, 2021a. Jin, Y., Yang, Z., and Wang, Z. Is pessimism provably efficient for offline rl? In International Conference on Machine Learning , pp. 5084–5096. PMLR, 2021b. Lattimore, T. and Szepesv ´ari, C. Bandit algorithms . Cam-bridge University Press, 2020. Lee, H., Phatale, S., Mansoor, H., Lu, K. R., Mesnard, T., Ferret, J., Bishop, C., Hall, E., Carbune, V., and Rastogi, A. Rlaif: Scaling reinforcement learning from human feedback with ai feedback. 2023. Lin, C.-Y. Rouge: A package for automatic evaluation of summaries. In Text summarization branches out , pp. 74–81, 2004. Liu, Z., Lu, M., Zhang, S., Liu, B., Guo, H., Yang, Y., Blanchet, J., and Wang, Z. Provably mitigating overopti-mization in rlhf: Your sft loss is implicitly an adversarial regularizer. arXiv preprint arXiv:2405.16436 , 2024. Mann, T. A. and Choe, Y. Directed exploration in reinforce-ment learning with transferred knowledge. In European Workshop on Reinforcement Learning , pp. 59–76. PMLR, 2013. Munos, R., Valko, M., Calandriello, D., Azar, M. G., Row-land, M., Guo, Z. D., Tang, Y., Geist, M., Mesnard, T., Michi, A., et al. Nash learning from human feedback. 
+
+arXiv preprint arXiv:2312.00886 , 2023. Narayan, S., Cohen, S. B., and Lapata, M. Don’t give me the details, just the summary! topic-aware convolu-tional neural networks for extreme summarization. ArXiv ,abs/1808.08745, 2018. Nguyen, D., Prasad, A., Stengel-Eskin, E., and Bansal, M. Laser: Learning to adaptively select reward models with multi-armed bandits. arXiv preprint arXiv:2410.01735 ,2024. Novoseller, E., Wei, Y., Sui, Y., Yue, Y., and Burdick, J. Dueling posterior sampling for preference-based rein-forcement learning. In Conference on Uncertainty in Artificial Intelligence , pp. 1029–1038. PMLR, 2020. Ouyang, L., Wu, J., Jiang, X., Almeida, D., Wainwright, C., Mishkin, P., Zhang, C., Agarwal, S., Slama, K., Ray, A., et al. Training language models to follow instructions 11 Can RLHF be More Efficient with Imperfect Reward Models? A Policy Coverage Perspective 
+
+with human feedback. Advances in neural information processing systems , 35:27730–27744, 2022. Pacchiano, A., Saha, A., and Lee, J. Dueling rl: reinforce-ment learning with trajectory preferences. arXiv preprint arXiv:2111.04850 , 2021. Pang, R. Y., Yuan, W., Cho, K., He, H., Sukhbaatar, S., and Weston, J. Iterative reasoning preference optimization. 
+
+arXiv preprint arXiv:2404.19733 , 2024. Rafailov, R., Sharma, A., Mitchell, E., Manning, C. D., Er-mon, S., and Finn, C. Direct preference optimization: Your language model is secretly a reward model. Ad-vances in Neural Information Processing Systems , 36, 2024. Raffel, C., Shazeer, N., Roberts, A., Lee, K., Narang, S., Matena, M., Zhou, Y., Li, W., and Liu, P. J. Exploring the limits of transfer learning with a unified text-to-text transformer. Journal of machine learning research , 21 (140):1–67, 2020. Rosset, C., Cheng, C.-A., Mitra, A., Santacroce, M., Awadal-lah, A., and Xie, T. Direct nash optimization: Teaching language models to self-improve with general preferences. 
+
+arXiv preprint arXiv:2404.03715 , 2024. Russo, D. and Van Roy, B. Eluder dimension and the sample complexity of optimistic exploration. Advances in Neural Information Processing Systems , 26, 2013. Sason, I. and Verd ´u, S. f -divergence inequalities. IEEE Transactions on Information Theory , 62(11):5973–6006, 2016. Shi, R., Zhou, R., and Du, S. S. The crucial role of samplers in online direct preference optimization. arXiv preprint arXiv:2409.19605 , 2024. Swamy, G., Dann, C., Kidambi, R., Wu, Z. S., and Agarwal, A. A minimaximalist approach to reinforcement learning from human feedback. arXiv preprint arXiv:2401.04056 ,2024. Taylor, M. E. and Stone, P. Transfer learning for reinforce-ment learning domains: A survey. Journal of Machine Learning Research , 10(7), 2009. Team, G., Georgiev, P., Lei, V. I., Burnell, R., Bai, L., Gulati, A., Tanzer, G., Vincent, D., Pan, Z., Wang, S., et al. Gemini 1.5: Unlocking multimodal understand-ing across millions of tokens of context. arXiv preprint arXiv:2403.05530 , 2024. Tiapkin, D., Belomestny, D., Calandriello, D., Moulines, E., Munos, R., Naumov, A., Perrault, P., Tang, Y., Valko, M., and Menard, P. Fast rates for maximum entropy exploration. In International Conference on Machine Learning , pp. 34161–34221. PMLR, 2023. Uehara, M., Huang, J., and Jiang, N. Minimax weight and q-function learning for off-policy evaluation. In Interna-tional Conference on Machine Learning , pp. 9659–9668. PMLR, 2020. V ¨olske, M., Potthast, M., Syed, S., and Stein, B. TL;DR: Mining Reddit to learn automatic summarization. In 
+
+Proceedings of the Workshop on New Frontiers in Sum-marization , pp. 59–63, Copenhagen, Denmark, Septem-ber 2017. Association for Computational Linguistics. doi: 10.18653/v1/W17-4508. URL https://www. aclweb.org/anthology/W17-4508 .Wang, Y., Liu, Q., and Jin, C. Is rlhf more difficult than standard rl? arXiv preprint arXiv:2306.14111 , 2023. Wu, Z., Balashankar, A., Kim, Y., Eisenstein, J., and Beirami, A. Reuse your rewards: Reward model trans-fer for zero-shot cross-lingual alignment. arXiv preprint arXiv:2404.12318 , 2024. Xie, T., Cheng, C.-A., Jiang, N., Mineiro, P., and Agarwal, A. Bellman-consistent pessimism for offline reinforce-ment learning. Advances in neural information process-ing systems , 34:6683–6694, 2021. Xie, T., Foster, D. J., Bai, Y., Jiang, N., and Kakade, S. M. The role of coverage in online reinforcement learning. 
+
+arXiv preprint arXiv:2210.04157 , 2022. Xie, T., Foster, D. J., Krishnamurthy, A., Rosset, C., Awadal-lah, A., and Rakhlin, A. Exploratory preference optimiza-tion: Harnessing implicit q*-approximation for sample-efficient rlhf. arXiv preprint arXiv:2405.21046 , 2024. Xiong, W., Dong, H., Ye, C., Wang, Z., Zhong, H., Ji, H., Jiang, N., and Zhang, T. Iterative preference learning from human feedback: Bridging theory and practice for rlhf under kl-constraint. In Forty-first International Con-ference on Machine Learning , 2024. Xu, J., Lee, A., Sukhbaatar, S., and Weston, J. Some things are more cringe than others: Preference opti-mization with the pairwise cringe loss. arXiv preprint arXiv:2312.16682 , 2023. Xu, Y., Wang, R., Yang, L., Singh, A., and Dubrawski, A. Preference-based reinforcement learning with finite-time guarantees. Advances in Neural Information Processing Systems , 33:18784–18794, 2020. Yang, M., Nachum, O., Dai, B., Li, L., and Schuurmans, D. Off-policy evaluation via the regularized lagrangian. 
+
+Advances in Neural Information Processing Systems , 33: 6551–6561, 2020. 12 Can RLHF be More Efficient with Imperfect Reward Models? A Policy Coverage Perspective 
+
+Ye, C., Xiong, W., Zhang, Y., Jiang, N., and Zhang, T. A the-oretical analysis of nash learning from human feedback under general kl-regularized preference. arXiv preprint arXiv:2402.07314 , 2024. Yuan, W., Pang, R. Y., Cho, K., Sukhbaatar, S., Xu, J., and Weston, J. Self-rewarding language models. arXiv preprint arXiv:2401.10020 , 2024. Yue, Y., Broder, J., Kleinberg, R., and Joachims, T. The k-armed dueling bandits problem. Journal of Computer and System Sciences , 78(5):1538–1556, 2012. Zhan, W., Huang, B., Huang, A., Jiang, N., and Lee, J. Of-fline reinforcement learning with realizability and single-policy concentrability. In Conference on Learning Theory ,pp. 2730–2775. PMLR, 2022. Zhan, W., Uehara, M., Kallus, N., Lee, J. D., and Sun, W. Provable offline preference-based reinforcement learning. 
+
+arXiv preprint arXiv:2305.14816 , 2023. Zhang, S., Yu, D., Sharma, H., Zhong, H., Liu, Z., Yang, Z., Wang, S., Hassan, H., and Wang, Z. Self-exploring language models: Active preference elicitation for online alignment. arXiv preprint arXiv:2405.19332 , 2024. Zhang, T., Kishore, V., Wu, F., Weinberger, K. Q., and Artzi, Y. Bertscore: Evaluating text generation with bert. arXiv preprint arXiv:1904.09675 , 2019. Zhao, H., Ye, C., Gu, Q., and Zhang, T. Sharp analysis for kl-regularized contextual bandits and rlhf. arXiv preprint arXiv:2411.04625 , 2024. Zhu, Z., Lin, K., Jain, A. K., and Zhou, J. Transfer learning in deep reinforcement learning: A survey. IEEE Trans-actions on Pattern Analysis and Machine Intelligence ,2023. Ziebart, B. D. Modeling purposeful adaptive behavior with the principle of maximum causal entropy . Carnegie Mel-lon University, 2010. Ziebart, B. D., Maas, A. L., Bagnell, J. A., Dey, A. K., et al. Maximum entropy inverse reinforcement learning. In 
+
+Aaai , volume 8, pp. 1433–1438. Chicago, IL, USA, 2008. 13 Can RLHF be More Efficient with Imperfect Reward Models? A Policy Coverage Perspective 
+
+## Outline of the Appendix 
+
+• Appx. A: Frequently Used Notation. • Appx. B: Missing Details in the Main Text. • Appx. C: Offline Learning Results in Previous Literature. • Appx. D: Verification for Online Learning Oracle Example in Sec. 4. • Appx. E: Proofs for Results in Section 3. • Appx. F: Proofs for the Main Algorithm and Results in Sec. 4. • Appx. G: Connection between Win Rate and Policy Coverage Coefficient. • Appx. H: Useful Lemmas. • Appx. I: Missing Experiment Details. 14 Can RLHF be More Efficient with Imperfect Reward Models? A Policy Coverage Perspective 
+
+## A. Frequently Used Notation 
+
+Notation Description 
+
+S, A State space and action space 
+
+ρ Prompt distribution (initial state distribution) 
+
+r Reward model 
+
+r∗ Ground-truth reward model (reflecting human preferences) 
+
+Pr (y|s, a, a ′) Preference under r
+
+Pr (π ≻ eπ) Win rate of π over eπ under r
+
+{rw}w∈[W ] Imperfect source reward model 
+
+π LLM policy 
+
+πt 
+
+> mix
+
+Uniform mixture policy 1
+
+> t
+
+P 
+
+> i≤t
+
+πi of a policy sequence π1, ..., π t.Sometimes, given a dataset D = {(xi, π i)}i≤|D| , with a bit abuse of notation, we use πD 
+
+> mix
+
+to refer the mixture policy 1
+
+> |D|
+
+P 
+
+> i≤|D|
+
+πi.
+
+Cov eπ|π Coverage coefficient 
+
+Π The policy class 
+
+RΠ The reward function class converted from Π, see Appx. B.1 conv (Π) Convex hull of Π
+
+β Regularization coefficient in RLHF objective 
+
+Jβ (·) Regularized policy value (Eq. (1)) 
+
+∆( w) Value gap for π∗ 
+
+> rw
+
+, i.e. Jβ (π∗ 
+
+> r∗
+
+) − Jβ (π∗ 
+
+> rw
+
+)∆min Minimal value gap min w∈[W ] ∆( w)
+
+a ∧ b min {a, b }
+
+[n] {1, 2, ..., n }
+
+O(·), Ω( ·), Θ( ·), eO(·), eΩ( ·), eΘ( ·) Standard Big-O notations, f(·) omits the log terms. For completeness, we provide the definition of convex hull here. 
+
+Definition A.1 (Convex Hull) . Given a policy class Π with finite cardinality (i.e. |Π| < +∞), we denote conv (Π) as its convex hull, such that, ∀n ∈ [N∗], ∀λ1, ..., λ n ≥ 0 with Pni=1 λi = 1 , and any π1, ..., π n ∈ Π, we have: 
+
+> n
+
+X
+
+> i=1
+
+λiπi ∈ conv (Π) .
+
+Remark A.2 . Note that in the contextual bandit setting, the state action density induced by a policy and the policy distribution collapse with each other. Therefore, given a policy sequence π1, ..., π t, the uniform mixture policy πt
+
+> mix
+
+(·|· ) = 1
+
+> t
+
+P 
+
+> i≤t
+
+πt(·|· )
+
+is directly a valid policy as a mapping from S to ∆( A), which induces the state-action density πt
+
+> mix
+
+(·|· ).Besides, we will use OL and OFF as abbreviations of “online learning” and “offline learning”, respectively. 
+
+## B. Missing Details in the Main Text 
+
+B.1. Extended Preliminary More Elaborations on the Necessity of Regularization The RLHF objective Eq. (1) typically involves a regularization term β̸ = 0 . This regularization is critical in practice for several reasons. Firstly, it prevents overfitting to human preferences, which can possibly be noisy and biased (Gao et al., 2023; Ouyang et al., 2022). Moreover, pure reward maximization prefers near-deterministic policies, potentially causing mode collapse. In contrast, regularization encourages the fine-tuned model to retain diversity from the reference policy (Jaques et al., 2017; 2019). Thirdly, reference policies are pretrained on a significantly larger corpus than the post-training data, enabling them to encode more general-purpose knowledge. Regularization helps mitigate catastrophic forgetting, ensuring the model retains this broad knowledge base. 15 Can RLHF be More Efficient with Imperfect Reward Models? A Policy Coverage Perspective 
+
+Formal Definition for RΠ Given a policy class Π satisfying Assump. A, we use RΠ to denote the reward function class converted from Π, such that (1) ∀r ∈ R Π, r(·, ·) ∈ [0 , R ]; (2) ∃r ∈ R Π, π ∗ 
+
+> r
+
+= π∗ 
+
+> r∗
+
+. A possible construction satisfying this is given by 
+
+RΠ := {r|π |r|π (s, a ) := Clip [0 ,R ][β log π(a|s)
+
+πref (a|s) − min  
+
+> a′∈A
+
+β log π(a′|s)
+
+πref (a′|s) ], π ∈ Π}. (11) The rationale behind such a construction lies in that r|π∗ 
+
+> r∗
+
+provably differs from r∗ by at most of an action-independent constant under Assump. A. We prove this in the following. For any s ∈ S , we denote as := arg min a′∈A log π∗  
+
+> r∗(a′|s)
+> πref (a′|s)
+
+. According to Eq. (2) and the fact that r∗ ∈ [0 , R ], for any 
+
+s ∈ S and a, a ′ ∈ A , we have: 
+
+0 ≤ β log π∗ 
+
+> r∗
+
+(a|s)
+
+πref (a|s) − min  
+
+> a′∈A
+
+β log π∗ 
+
+> r∗
+
+(a′|s)
+
+πref (a′|s) = r∗(s, a ) − r∗(s, a s) ≤ R, 
+
+where the first inequality is because as takes the minimal over A. Therefore, r|π∗ 
+
+> r∗
+
+(s, a ) ∈ [0 , R ] and r|π∗ 
+
+> r∗
+
+(s, a )−r∗(s, a ) = 
+
+r∗(s, a s), which is action-independent. In another word, r|π∗ 
+
+> r∗
+
+induces the same optimal policy π∗ 
+
+> r∗
+
+.Under the objective in Eq. (1) , the realizability assumption in (Liu et al., 2024) can be relaxed and the reward model class 
+
+RΠ can be used in their RPO objective. Because any per-state action-independent shift on the reward space does not change the induced policy in Eq. (2). As a result, throughout this paper, we will not distinguish between r∗ and r|π∗ 
+
+> r∗
+
+.
+
+Remarks on Assumption A-(II) Lemma B.1. If r∗(s, a ) ∈ [0 , R ] for all (s, a ) ∈ S × A , we have: 
+
+max  
+
+> s∈S ,a ∈A
+
+| log π∗ 
+
+> r∗
+
+(a|s)
+
+πref (a|s) | ≤ Rmax 
+
+β .
+
+Proof. By definition, for any s,
+
+∀a ∈ A , π∗ 
+
+> r∗
+
+(a|s) = πref (a|s)e r∗(s,a ) 
+
+> β
+
+/Z (s),
+
+where Z(s) := P 
+
+> a∈A
+
+πref (a|s)e r∗(s,a ) 
+
+> β
+
+. Because r∗(s, a ) ∈ [0 , R ], obviously, 1 ≤ Z(s) ≤ e Rβ . Therefore, 
+
+∀a ∈ A , | log π∗ 
+
+> r∗
+
+(a|s)
+
+πref (a|s) | = | r∗(s, a )
+
+β − log Z(s)| ≤ max { Rβ − log Z(s), log Z(s)} ≤ Rβ .
+
+# □
+
+B.2. Other Related Works Other Related RLHF Literature Various approaches have been developed for reward-model-free online exploration. For example, DPO (Rafailov et al., 2024) implicitly optimizes the same objective as RLHF without explicit reward modeling. DPO is further extended to different settings; see e.g., online DPO (Guo et al., 2024), iterative DPO (Dong et al., 2024; Pang et al., 2024; Xu et al., 2023), etc. Another direction is to go beyond Bradley-Terry reward model assumption. A particularly promising set of techniques formulates RLHF as a two-player zero-sum game (Yue et al., 2012), aiming to select policies preferred by the rater to others (Munos et al., 2023; Rosset et al., 2024; Swamy et al., 2024; Ye et al., 2024). Investigating knowledge transfer within this framework is an exciting direction for future work. 
+
+RL Theory in Pure-Reward Maximization Setting In the classical pure-reward maximization RL setting, sample efficiency is a central topic, with extensive research dedicated to strategic exploration and fundamental complexity measures for online learning (Du et al., 2021; Foster et al., 2021; Jiang et al., 2017; Jin et al., 2021a; Russo & Van Roy, 2013). Besides the literature already mentioned in Sec. 2.3, there is a rich literature (Jiang & Huang, 2020; Jin et al., 2021b; Uehara et al., 2020; Xie et al., 2021) investigating the role of policy coverage (or density ratio) in offline learning. 16 Can RLHF be More Efficient with Imperfect Reward Models? A Policy Coverage Perspective 
+
+Regularized RL Sample complexity in regularized RL has also been studied in previous works (Geist et al., 2019; Tiapkin et al., 2023; Ziebart, 2010; Ziebart et al., 2008). Nonetheless, most of them focus on tabular settings and do not consider the transfer learning. 
+
+## C. Offline Learning Results in Previous Literature 
+
+In this section, we recall and adapt some results from (Liu et al., 2024), which are useful for proofs in other places. 
+
+RPO Optimization Objective For completeness, we provide the optimization objective of RPO . Given a policy class eΠ
+
+and a reward function class R, the RPO objective solves a mini-max optimization problem defined as follows: RPO (eΠ, R, D, η ) = arg max 
+
+> π∈eΠ
+
+min  
+
+> r∈R
+
+LD (r) + ηEs∼ρ,a ∼π, ea∼πref [r(s, a ) − r(s, ea)] − βKL (π∥πref ), (12) where we choose πref as the base policy in (Liu et al., 2024). In Alg. 2, we set eΠ = conv (Π) and R = RΠ.
+
+Condition C.1 (Sequential Data Generation) . We say a dataset D := {(si, a i, eai, y i, π i)}i≤|D| is generated sequentially, if it is generated following: 
+
+∀i ≤ |D| , πi ∼ Alg (·|{ (sj , a j , eaj , y j , π j )}j<i ),si ∼ ρ, a i ∼ πi(·| si), eai ∼ πref (·| si), y i ∼ Pr∗ (·| si, a i, eai),
+
+where Alg denotes an algorithm computing the next policy only with the interaction history. 
+
+Lemma C.2. [Adapted from Thm. 5.3 in (Liu et al., 2024)] Under Assump. A, given any δ ∈ (0 , 1) , by running RPO (Eq. (12) ) with conv (Π) , RΠ, δ and a dataset D := {(si, a i, eai, y i, π i)}i≤|D| satisfying Cond. C.1, by choosing η =(1 + eR)2
+
+q
+
+24 |D| log |Π| 
+
+> δ
+
+, we have: 
+
+∀π ∈ conv (Π) , Jβ (π) − Jβ (πDstl ) ≤ COFF e2R · Cov π|πD
+
+> mix
+
+s
+
+1
+
+|D| log |Π|
+
+δ ,
+
+where we use πD 
+
+> mix
+
+:= 1
+
+> |D|
+
+P 
+
+> i≤|D|
+
+πi as a short note of the uniform mixture policy. Proof. The main difference comparing with (Liu et al., 2024) is that we consider sequentially generated dataset while they study dataset generated by a fixed dataset distribution. In the following, we show how to extend their results to our setting. Firstly, we check the assumptions. Note that we consider feed RPO (Liu et al., 2024) by the reward function class RΠ
+
+converted from a policy class Π satisfying Assump. A, through Eq. (11) . Therefore, the optimal reward is also realizabile in 
+
+RΠ, and the basic assumptions required by RPO (Liu et al., 2024) are satisfied. Next, we adapt the proofs in (Liu et al., 2024). Note that we can directly start with their Eq. (D.4), because their bounds in Eq. (D.2) and Eq. (D.3) only involve optimality of the choice of πDstl and realizability. We move the KL-regularization terms to the LHS and merge to Jβ (π) and Jβ (πDstl ), and we choose πref as the base policy in RPO . The adapted results to our notations would be: 
+
+∀π ∈ conv (Π) , J β (π) − Jβ (πDstl )
+
+≤ max 
+
+> r∈R Π
+
+Es∼ρ,a ∼π(·| s),ea∼πref (·| s)[( r∗(s, a ) − r∗(s, ea)) − (r(s, a ) − r(s, ea))] + η−1(LD (r∗) − L D (r)) .
+
+Recall LD is the (unnormalized) negative log-likelihood (NLL) loss, defined in Eq. (5) . Since the dataset D is generated sequentially (Cond. C.1), we can apply the concentration results in Lem. H.2, which is a variant of Lemma D.1 in (Liu et al., 2024) for sequentially generated data: w.p. 1 − δ, ∀π ∈ conv (Π) , J β (π) − Jβ (πDstl )
+
+≤Es∼ρ,a ∼π(·| s),ea∼πref (·| s)[( r∗(s, a ) − r∗(s, ea)) − (r←π (s, a ) − r←π (s, ea))] 
+
+17 Can RLHF be More Efficient with Imperfect Reward Models? A Policy Coverage Perspective 
+
++ η−1(LD (r∗) − L D (r←π )) 
+
+≤Es∼ρ,a ∼π(·| s),ea∼πref (·| s)[( r∗(s, a ) − r∗(s, ea)) − (r←π (s, a ) − r←π (s, ea))] 
+
+− 1
+
+η|D| 
+
+X
+
+> i≤|D|
+
+Es∼ρ,a ∼πi(·| s),ea∼πref (·| s)[H2(Pr←π (·| s, a, ea)∥Pr∗ (·| s, a, ea))] + 2
+
+η|D| log |Π|
+
+δ
+
+=Es∼ρ,a ∼π(·| s),ea∼πref (·| s)[( r∗(s, a ) − r∗(s, ea)) − (r←π (s, a ) − r←π (s, ea))] 
+
+− 1
+
+η Es∼ρ,a ∼πD
+
+> mix (·| s),ea∼πref (·| s)
+
+[H2(Pr←π (·| s, a, ea)∥Pr∗ (·| s, a, ea))] + 2
+
+η|D| log |Π|
+
+δ ,
+
+where we denote r←π := arg max r∈R Π Es∼ρ,a ∼π(·| s),ea∼πref (·| s)[( r∗(s, a ) − r∗(s, ea)) − (r(s, a ) − r(s, ea))] .The rest of the proofs in (Liu et al., 2024) can be adapted here, and by choosing η = (1 + eR)−2
+
+q 24  
+
+> |D|
+
+log |Π| 
+
+> δ
+
+, we can inherit the following guarantee: w.p. 1 − δ, ∀π ∈ conv (Π) , J β (π) − Jβ (πDstl ) ≤√64 · (1 + eR)2(CπD 
+
+> mix
+
+(RΠ; π; πref )2 + 1) 
+
+s
+
+1
+
+|D| log |Π|
+
+δ .
+
+Here CπD 
+
+> mix
+
+(RΠ; π; πref ) is the coverage coefficient (adapted from Assump. 5.2 (Liu et al., 2024)) with πD
+
+> mix
+
+, which can be upper bounded by: 
+
+CπD 
+
+> mix
+
+(RΠ; π; πref ) ≤ max 
+
+> r∈R Π
+
+Es∼ρ,a ∼π(·| s),ea∼πref (·| s)[|(r∗(s, a ) − r∗(s, ea)) − (r(s, a ) − r(s, ea)) |]
+
+q
+
+Es∼ρ,a ∼πD
+
+> mix (·| s),ea∼πref (·| s)
+
+[|(r∗(s, a ) − r∗(s, ea)) − (r(s, a ) − r(s, ea)) |2]
+
+≤
+
+s
+
+Es∼ρ,a ∼π(·| s)[ π(a|s)
+
+πD
+
+> mix
+
+(a|s) ]
+
+(AM-GM inequality; Holds for any r and therefore including the one achieves the maximum) 
+
+=
+
+p
+
+Cov π|πD 
+
+> mix
+
+.
+
+Therefore, we finish the proof. We simplify the upper bound by using Cov π|πD 
+
+> mix
+
+≥ 1 and eR ≥ 1. □
+
+## D. Details for Online Learning Oracle Example in Sec. 4 
+
+Definition D.1 (L∞ Coverability; (Xie et al., 2022; 2024)) . The L∞ coverability is defined by: 
+
+Cov ∞(Π) := inf  
+
+> μ∈∆( S)×∆( A)
+
+sup 
+
+> π∈Π
+
+sup 
+
+> s∈S ,a ∈A
+
+π(a|s)
+
+μ(a|s)
+
+Definition D.2 (No-Regret Online Algorithm) . Given any δ ∈ (0 , 1) , iteration number eT , and a policy class Π satisfying Assump. A, the online learning algorithm Alg OL iteratively computes policy to collect samples and conducts no-regret learning. W.p. 1 − δ, it produces a sequence of online policies π1, ..., π eT , such that, ∀t ∈ [ eT ],
+
+X
+
+> i≤t
+
+Jβ (π∗ 
+
+> r∗
+
+) − Jβ (πi) ≤ COL Re 2R
+
+s
+
+C(Π) t log c0 |Π| eTδ ,
+
+where COL > 0 and c0 ≥ 1 are absolute constants, and C(Π) denotes some complexity measure for Π.
+
+Proposition D.3. [Example for Online Oracle in Def. D.2] The XPO algorithm in (Xie et al., 2024) can fulfill the requirements in Def. D.2. Proof. We start by generalizing Eq.(35) in the proof of Theorem 3.1 in (Xie et al., 2024) to all t ∈ [ eT ]. Note that we consider bandit setting so R in (Xie et al., 2024) collapse with R. Suppose at the end of iteration t, XPO generated a sequence of policies π1, ..., π t, we have: 
+
+1
+
+t
+
+> t
+
+X
+
+> i=1
+
+Jβ (π∗ 
+
+> r∗
+
+) − Jβ (πi)
+
+18 Can RLHF be More Efficient with Imperfect Reward Models? A Policy Coverage Perspective 
+
+≤ 6Rt + SEC RLHF (Π , t, β, π ref )2ηt + η
+
+2 R2 + 1
+
+t Eti=2 Es∼ρ,a ∼πref (·| s)[β log πt(a|s) − β log π∗(a|s)] + η
+
+2t
+
+> t
+
+X
+
+> i=2
+
+(i − 1) Es∼ρ,a ∼πi−1 
+
+> mix (·| s),ea∼ref (·| s)
+
+h 
+
+β log πi(a|s)
+
+πref (a′|s) − r∗(s, a ) − β log πi(ea|s)
+
+πref (ea|s) + r∗(s, ea)
+
+2i
+
+,
+
+where we choose eπ(t) in (Xie et al., 2024) to be πref and denote πi−1 
+
+> mix
+
+= 1
+
+> i−1
+
+Pi−1 
+
+> j=1
+
+πj .Note that Lemma C.5 in (Xie et al., 2024) holds w.p. 1 − δ for all t ∈ [ eT ]. Following their proofs till Eq.(43) in (Xie et al., 2024), we can show that for any t ∈ [ eT ]1
+
+t
+
+> t
+
+X
+
+> i=1
+
+Jβ (π∗ 
+
+> r∗
+
+) − Jβ (πi) ≤ O(Re 2R
+
+r SEC RLHF (Π , t, β, π ref )
+
+t log |Π|Tδ ),
+
+Based on the arguments in (Xie et al., 2024), SEC RLHF (Π , t, β, π ref ) can be controlled by c0 · Cov Π 
+
+> ∞
+
+log c1 (|Π|t) for some absolute constant c0, c 1 > 0. Here Cov Π 
+
+> ∞
+
+is the L∞ coverability coefficient (Def. D.1) and plays the role. Therefore, we finish the verification. □
+
+## E. Proofs for Results in Section 3 
+
+E.1. Proof for Lemma 3.1 
+
+We first introduce some useful results from (Sason & Verd ´u, 2016). Given two probability distribution P, Q ∈ ∆( A), we use D+∞(P ∥Q) to denote the Renyi divergence of order α = + ∞. We follow the definition of χ2-divergence in (Sason & Verd´ u, 2016) as follows: 
+
+χ2(P ∥Q) = Es∼P [ P (x)
+
+Q(x) ] − 1.
+
+Lemma E.1 (Theorem 7 in (Sason & Verd ´u, 2016)) . Given P, Q ∈ ∆( A), such that P̸ = Q and P (a), Q (a) > 0 for all 
+
+a ∈ A , we have: KL (P ∥Q) ≤ κ1(eD+∞(P ∥Q)) · KL (Q∥P ),
+
+where κ1 : (0 , 1) ∪ (1 , +∞) → (0 , +∞), κ 1(t) = t log t+(1 −t)(t−1) −log t .
+
+Lemma E.2 (Eq. 182; Theorem 9 in (Sason & Verd´ u, 2016) for α = 2 ). Under the same condition as Lem. E.1, 
+
+χ2(P ∥Q) ≤ KL (P ∥Q)
+
+κ2(eD+∞(P ∥Q)) ,
+
+where κ2(t) := t log t+(1 −t)(t−1) 2 .
+
+Lemma E.3. For any policy π,
+
+Jβ (π∗ 
+
+> r∗
+
+) − Jβ (π) = βEs∼ρ[KL (π(·| s)∥π∗ 
+
+> r∗
+
+(·| s))] .
+
+Proof. A shorter proof can be done by directly assigning ν = π in Lemma 3.1 of (Xie et al., 2024), and here we provide another one without detouring through it. 
+
+Jβ (π∗ 
+
+> r∗
+
+) − Jβ (π)=Es∼ρ,a ∼π∗ 
+
+> r∗
+
+[r∗(s, a )] − Es∼ρ,a ∼π [r∗(s, a )] − βEs∼ρ,a ∼π∗ 
+
+> r∗
+
+[log π∗ 
+
+> r∗
+
+(a|s)
+
+πref (a|s) ] + βEs∼ρ,a ∼π [log π(a|s)
+
+πref (a|s) ]=
+
+    
+
+βEs∼ρ,a ∼π∗ 
+
+> r∗
+
+[log π∗ 
+
+> r∗
+
+(a|s)
+
+πref (a|s) ] − βEs∼ρ,a ∼π [log π∗ 
+
+> r∗
+
+(a|s)
+
+πref (a|s) ] −
+
+   
+
+βEs∼ρ,a ∼π∗ 
+
+> r∗
+
+[log π∗ 
+
+> r∗
+
+(a|s)
+
+πref (a|s) ] + βEs∼ρ,a ∼π [log π(a|s)
+
+πref (a|s) ]
+
+19 Can RLHF be More Efficient with Imperfect Reward Models? A Policy Coverage Perspective 
+
+=βEs∼ρ,a ∼π [log π(a|s)
+
+π∗ 
+
+> r∗
+
+(a|s) ]=βEs∼ρ[KL (π(·| s)∥π∗ 
+
+> r∗
+
+(·| s))] .
+
+where the second equality holds because for any s, a r∗(s, a ) = β log π∗ 
+
+> r∗
+
+(a|s)
+
+πref (a|s) + Z(s)
+
+for some Z(s) independent w.r.t. a. □
+
+Lemma 3.1. Under Assump. A and assume rw ∈ [0 , R ] for all w ∈ [W ], then, for any policy π ∈ conv (Π) ∪ { π∗ 
+
+> rw
+
+}Ww=1 ,
+
+Cov π∗  
+
+> r∗|π
+
+≤ 1 + κ(e 2Rβ ) · Jβ (π∗ 
+
+> r∗
+
+) − Jβ (π)
+
+β , (3) 
+
+where κ(x) := (x−1) 2  
+
+> x−1−log x
+
+= O(x).
+
+We prove a stronger result in Lem. E.4 below, where we consider the policy class including all the policy having bounded ratio with πref .
+
+Π≤ Rβ
+
+:= {π : S → ∆( A)| max  
+
+> s,a
+
+| log π(a|s)
+
+πref (a|s) | ≤ Rβ }.
+
+Lem. 3.1 then holds directly as a corollary by combining with Lem. H.1, Lem. B.1 and the fact that rw ∈ [0 , R ] for all 
+
+w ∈ [W ].
+
+Lemma E.4. For any policy π ∈ Π≤ Rβ
+
+,
+
+Cov π∗  
+
+> r∗|π
+
+≤ 1 + κ(e 2Rβ ) · Jβ (π∗ 
+
+> r∗
+
+) − Jβ (π)
+
+β , (13) 
+
+where κ(x) := (x−1) 2  
+
+> x−1−log x
+
+= O(x).Proof. Given any π ∈ Π≤ Rβ
+
+, we consider a fixed s > 0, and apply Lem. E.1 and Lem. E.2 with P = π∗ 
+
+> r∗
+
+(·| s) and 
+
+Q = π(·| s). Since those two lemmas holds when P̸ = Q, we first check the case when π∗ 
+
+> r∗
+
+(·| s)̸ = π(·| s):
+
+Ea∼π∗ 
+
+> r∗(a|s)
+
+[ π∗ 
+
+> r∗
+
+(a|s)
+
+π(a|s) ] − 1 = χ2(π∗ 
+
+> r∗
+
+(·| s)∥π(·| s)) ≤ 1
+
+κ2(ζ) KL (π∗ 
+
+> r∗
+
+(·| s)∥π(·| s)) 
+
+≤ 1
+
+κ2(ζ) · κ1(ζ) · KL (π(·| s)∥π∗ 
+
+> r∗
+
+(·| s)) = (ζ − 1) 2
+
+ζ − 1 − log ζ · KL (π(·| s)∥π∗ 
+
+> r∗
+
+(·| s)) .
+
+where we use ζ := eD+∞(π∗  
+
+> r∗(·| s)∥π(·| s))
+
+> 1 as a short note. We define κ(x) = (x−1) 2  
+
+> x−1−log x
+
+. Note that, 
+
+κ′(x) = 2( x − 1) 
+
+x − 1 − log x − (x − 1) 2(1 − x−1)(x − 1 − log x)2
+
+= x − 1
+
+x − 1 − log x
+
+2( x − 1) − 2 log x − (x − 1)(1 − x−1)
+
+x − 1 − log x
+
+= x − 1
+
+x − 1 − log xx − x−1 − 2 log xx − 1 − log x .
+
+20 Can RLHF be More Efficient with Imperfect Reward Models? A Policy Coverage Perspective 
+
+Now, we consider g(x) := x − x−1 − 2 log x for x ∈ (1 , +∞). Note that, g(1) = 0 and 
+
+g′(x) = 1 + 1
+
+x2 − 2
+
+x ≥ 0.
+
+Therefore, κ′(x) ≥ 0, which implies κ(x) is increasing for all x > 1.Under Assump. A, 
+
+D+∞(π∗ 
+
+> r∗
+
+(·| s)∥π(·| s)) = log exp(max 
+
+> a
+
+π∗ 
+
+> r∗
+
+(a|s)
+
+π(a|s) ) ≤ 2Rβ ,
+
+which implies ζ ≤ e 2Rβ . Therefore, 
+
+Ea∼π∗ 
+
+> r∗(a|s)
+
+[ π∗ 
+
+> r∗
+
+(a|s)
+
+π(a|s) ] − 1 ≤κ(e 2Rβ ) · KL (π(·| s)∥π∗ 
+
+> r∗
+
+(·| s)) .
+
+Note that the above inequality also holds when π(·| s) = π∗ 
+
+> r∗
+
+(·| s). Therefore, combining with Lem. E.3, we have: 
+
+Cov π∗  
+
+> r∗|π
+
+=Es∼ρ,a ∼π∗ 
+
+> r∗(a|s)
+
+[ π∗ 
+
+> r∗
+
+(a|s)
+
+π(a|s) ] ≤ 1 + κ(e 2Rβ ) · Es∼ρ[KL (π(·| s)∥π∗ 
+
+> r∗
+
+(·| s))] =1 + κ(e 2Rβ ) · Jβ (π∗ 
+
+> r∗
+
+) − Jβ (π)
+
+β .
+
+# □
+
+E.2. Another Bound for Policy Coverage Coefficient 
+
+In the following, we provide another bound for the coverage coefficient between the optimal policies induced by different reward models. Although we do not use this lemma in the proofs for other results in this paper, it indicates a different upper bound, and possibly, it is tighter than the one in Lem. 3.1 in some cases. 
+
+Lemma E.5. Under Assump. A, given any bounded reward model r, and the associated optimal policy π∗ 
+
+> r
+
+(defined by Eq. (1) ), the coverage coefficient between π∗ 
+
+> r
+
+and π∗ 
+
+> r∗
+
+can be controlled by: 
+
+Cov π∗  
+
+> r∗|π∗
+> r
+
+≤ min  
+
+> b∈R
+
+Es∼ρ[E2 
+
+> a∼π∗
+> r∗
+
+[exp( |r∗(s, a ) − r(s, a ) − b|
+
+β )]] .
+
+Proof. By definition, the state-wise coverage coefficient 
+
+Cov π∗  
+
+> r∗|π∗
+> r
+
+(s) := Ea∼π∗ 
+
+> r∗(·| s)
+
+[ π∗ 
+
+> r∗
+
+(a|s)
+
+π∗ 
+
+> r
+
+(a|s) ]=Ea∼π∗ 
+
+> r∗(·| s)
+
+[exp( r∗(s, a ) − r(s, a )
+
+β )] · Zr (s)
+
+Zr∗ (s)
+
+Here we denote Zr (s) = P 
+
+> a
+
+πref (a|s) exp( 1 
+
+> β
+
+r(s, a )) and similar for Zr∗ (s). Therefore, 
+
+Zr (s)
+
+Zr∗ (s) = X
+
+> a
+
+πref (a|s) exp( 1 
+
+> β
+
+r(s, a )) 
+
+Zr∗ (s) = X
+
+> a
+
+π∗ 
+
+> r∗
+
+(s) · exp( 1
+
+β (r(s, a ) − r∗(s, a ))) = Ea∼π∗ 
+
+> r∗
+
+[exp( r(s, a ) − r∗(s, a )
+
+β )] .
+
+We remark that one important fact we leverage in the second equality is that π∗ 
+
+> r∗
+
+(a|s) > 0 for all a ∈ A . Considering introducing an arbitrary b ∈ R , we should have: 
+
+Cov π∗  
+
+> r∗|π∗
+> r
+
+=Ea∼π∗ 
+
+> r∗(·| s)
+
+[exp( r∗(s, a ) − r(s, a ) + bβ )] · Ea∼π∗ 
+
+> r∗(·| s)
+
+[exp( r(s, a ) − er(s, a ) − bβ )] 
+
+≤E2 
+
+> a∼π∗
+> r∗(·| s)
+
+[exp( |r∗(s, a ) − r(s, a ) + b|
+
+β )] 
+
+Given that b is arbirtary, we can pick the best one: 
+
+Cov π∗  
+
+> r∗|π∗
+> r
+
+≤ min  
+
+> b∈R
+
+E2 
+
+> a∼π∗
+> r∗
+
+[exp( |r∗(s, a ) − r(s, a ) − b|
+
+β )] .
+
+# □
+
+21 Can RLHF be More Efficient with Imperfect Reward Models? A Policy Coverage Perspective 
+
+E.3. Proof for Theorem 3.2 Theorem 3.2. Under Assump. A, w.p. 1 − δ, given an online dataset D generated 6 by a policy series {πt}Tt=1 ∈ conv (Π) ,running RPO with conv (Π) and RΠ on D yields a distilled policy πDstl , such that, 
+
+Jβ (π∗ 
+
+> r∗
+
+) − Jβ (πDstl ) ≤ (4) 
+
+eO
+
+
+
+e2R
+
+1 + κ(e 2Rβ )
+
+> T
+
+X
+
+> t=1
+
+Jβ (π∗ 
+
+> r∗
+
+) − Jβ (πt)
+
+βT 
+
+r 1
+
+T
+
+
+
+.
+
+We refer to Lem. C.2 for the detailed hyperparameter setups. 
+
+Proof. By Lem. C.2, w.p. 1 − δ,
+
+Jβ (π∗ 
+
+> r∗
+
+) − Jβ (πDstl ) ≤ COFF e2R · Cov π∗ 
+
+> r∗|πT
+> mix
+
+r 1
+
+T log |Π|
+
+δ ,
+
+where πT 
+
+> mix
+
+:= 1
+
+> T
+
+P  
+
+> t∈[T]
+
+πt is the uniform mixture policy, and the coverage coefficient can be upper bounded by: 
+
+Cov π∗  
+
+> r∗|πT
+> mix
+
+≤1 + κ(e 2Rβ ) · Jβ (π∗ 
+
+> r∗
+
+) − Jβ (πT
+
+> mix
+
+)
+
+β (Lem. 3.1) 
+
+≤1 + κ(e 2Rβ ) ·
+
+> T
+
+X
+
+> t=1
+
+Jβ (π∗ 
+
+> r∗
+
+) − Jβ (πt
+
+> mix
+
+)
+
+βT 
+
+Here in the last step, we use the fact that KL divergence is convex, and therefore, KL (πT
+
+> mix
+
+∥πref ) ≤ 1
+
+> T
+
+PTt=1 KL (πt∥πref ),which implies Jβ (πT
+
+> mix
+
+) ≥ 1
+
+> T
+
+PTt=1 Jβ (πt).
+
+# □
+
+Implication for Online RLHF If we consider the policy sequence generated by a no-regret online learning algorithm, we have the following corollary. 
+
+Corollary E.6. Under Assump. A, suppose π1, ..., π T is generated by a no-regret online learning algorithm with PTt=1 Jβ (π∗ 
+
+> r∗
+
+) − Jβ (πt) = eO(C(Π) √T ) for some structural complexity measure C(Π) , as long as T =
+
+eΩ( β−2C(Π) 2κ2(e 2Rβ )) , running RPO yields an offline policy s.t. Jβ (π∗ 
+
+> r∗
+
+) − Jβ (πDstl ) = eO(e2RT − 12 ).
+
+The proof is straightforward by noting that PTt=1     
+
+> Jβ(π∗
+> r∗)−Jβ(πt)
+> βT
+
+= O(C(Π) √T /T ), which decays to 0 as T increases. Coro. E.6 is remarkable as it implies an eO(ε−2) sample complexity bound to learn an ε-optimal policy for online RLHF (for 
+
+ε smaller than a threshold), which does not depend on the number of states and actions or other complexity measures. In contrast, in previous online RLHF literature (Cen et al., 2024; Xie et al., 2024; Xiong et al., 2024; Zhang et al., 2024), for the uniform mixture policy πT 
+
+> mix
+
+:= 1
+
+> T
+
+PTt=1 πt, the regret-to-PAC conversion implies a value gap Jβ (π∗ 
+
+> r∗
+
+) − Jβ (πT
+
+> mix
+
+) = 
+
+eO(
+
+q C(Π)  
+
+> T
+
+), which has an additional factor C(Π) regarding the complexity of the function class. This suggests a strict improvement. Moreover, this marks a fundamental difference from the pure reward maximization setting, where lower bounds depending on those factors has been established (Auer et al., 2002; Dani et al., 2008). 
+
+Other Previous Works Reporting Faster Convergence Rate Several recent works also report faster convergence rate than the information-theoretic lower bounds for online pure reward maximization RL, by exploiting the structure induced by KL regularization. (Shi et al., 2024) investigates the tabular softmax parametrization setting and establishes quadratic convergence results. In contrast, our result is more general, applying to arbitrary policy class. The work of (Zhao et al., 2024) is more related to ours. They consider general reward function classes and derive an 
+
+O(ε−1Poly (D)) sample complexity bound, where D is a coefficient related to the coverage of the distribution ρ × πref .
+
+> 6
+
+See Cond. C.1 for the definition of data generation process. 
+
+22 Can RLHF be More Efficient with Imperfect Reward Models? A Policy Coverage Perspective 
+
+While their dependence on ε is better than ours, their definition of D is not always satisfactory. For example, in the worst case one would have D = Ω( 1min s∈S ρ(s) ). This indicates that their bound scales with the number of states, once noticing that   
+
+> 1min s∈S ρ(s)
+
+is no smaller than |S| . In contrast, the largest coverage-related coefficient in our result is O(κ2(e 2Rβ )) = O(e 4Rβ ),which remains small and is free of |S| . Therefore, our Coro. E.6 can outperform the bound in (Zhao et al., 2024) in many scenarios. More importantly, the primary focus of our work is on reward transfer, which is orthogonal to these studies. 
+
+## F. Proofs for the Main Algorithm and Results in Sec. 4 
+
+F.1. Additional Algorithm Details Missing Details for TPO (Alg. 1) For any given (k, n ) ∈ [K] × [N ], we use Dk,n := 
+
+∪i<k or i=k,j<n {si,j , a i,j , eai,j , y i,j , π i,j } to denote all the collected data up to step (k, n ); Dk,n  
+
+> OL
+
+:= 
+
+∪i<k,j ≤αN or i=k,j ≤n∧αN {si,j , a i,j , eai,j , y i,j , π i,j } denotes the data collected by Alg OL up to step (k, n ).
+
+F.2. Some Useful Lemmas Lemma F.1 (MLE Reward Estimation Error) . In each call of Alg. 2 with a policy class Π satisfying Assump. A and a dataset 
+
+D generated by a sequence of policies π1, ..., π |D| , then, for any policy π, given any δ ∈ (0 , 1) , with probability at least 
+
+1 − δ, for all w ∈ [W ], we have: 
+
+
+
+Eρ,π [r∗] − Eρ,π ref [r∗]
+
+
+
+−
+
+
+
+Eρ,π [brMLE ] − Eρ,π ref [brMLE ]
+
+
+
+≤ 16 e2R
+
+s
+
+Cov π|πD
+
+> mix
+
+|D| · log |Π|
+
+δ ,
+
+where we use πD 
+
+> mix
+
+:= 1
+
+> |D|
+
+P 
+
+> i≤|D|
+
+πi as a short note. Proof. For any policy π ∈ Π, by applying Lem. H.3 with πD 
+
+> mix
+
+and r ← brMLE , we have: 
+
+
+
+Eρ,π [r∗] − Eρ,π ref [r∗]
+
+
+
+−
+
+
+
+Eρ,π [brMLE ] − Eρ,π ref [brMLE ]
+
+
+
+≤Es∼ρ,a ∼π(·| s),ea∼πref (·| s)[|
+
+
+
+r∗(s, a ) − r∗(s, ea)
+
+
+
+−
+
+brMLE (s, a ) − brMLE (s, ea)
+
+
+
+|]
+
+≤8√2e2R
+
+vuutCov π|πD 
+
+> mix
+
+· 1
+
+|D| · X
+
+> i≤|D|
+
+Es∼ρ,a ∼πi(·| s),ea∼πref (·| s)[H2(PbrMLE (·| s, a, ea)∥Pr∗ (·| s, a, ea))] .
+
+By applying Lem. H.2, and the fact that brMLE , r ∗ ∈ R Π, for any δ ∈ (0 , 1) , w.p. 1 − δ, we have: 
+
+1
+
+|D| 
+
+X
+
+> i≤|D|
+
+Es∼ρ,a ∼πi(·| s),ea∼πref (·| s)[H2(PbrMLE (·| s, a, ea)∥Pr∗ (·| s, a, ea))] 
+
+≤LD (brMLE ) − LD (r∗) + 2
+
+|D| log |Π|
+
+δ
+
+≤ 2
+
+|D| log |Π|
+
+δ . (Assump. A and brMLE minimizes the negative log-likelihood) Therefore, we finish the proof. □
+
+Lemma 4.2 (Value Est Error for {π∗ 
+
+> rw
+
+}w∈[W ]). Under Assump. A and Def. D.2, w.p. 1 − δ, in each call of Alg. 2: 
+
+∀w ∈ [W ], Jβ (π∗ 
+
+> rw
+
+) − Jβ (πref ) ≤ bV (π∗ 
+
+> rw
+
+; D)
+
+≤Jβ (π∗ 
+
+> rw
+
+) − Jβ (πref ) + eO( e2R
+
+pN (w; D) ).
+
+23 Can RLHF be More Efficient with Imperfect Reward Models? A Policy Coverage Perspective 
+
+Proof. Note that Cov π∗  
+
+> rw|πD
+> mix
+> |D|
+
+≤ 1  
+
+> N(w;D)
+
+, where we recall that N (w; D) := P 
+
+> i≤|D|
+
+I[πi = π∗ 
+
+> rw
+
+] denotes the number of occurrences of π∗ 
+
+> rw
+
+in the dataset. By Lem. F.1, w.p. 1 − δ′, for all w ∈ [W ], and any (k, n ) ∈ [K] × [N ] occurs in the call of Alg. 1 such that n > αN :
+
+
+
+Eρ,π ∗ 
+
+> rw
+
+[r∗] − Eρ,π ref [r∗]
+
+
+
+−
+
+
+
+Eρ,π ∗ 
+
+> rw
+
+[brMLE ] − Eρ,π ref [brMLE ]
+
+
+
+≤16 e2R
+
+s
+
+1
+
+N (w; Dk,n ) log |Π|Wδ′ .
+
+Recall 
+
+bV (π∗ 
+
+> rw
+
+; D) := Eρ,π ∗ 
+
+> rw
+
+[brMLE ] − Eρ,π ref [brMLE ] − βKL (π∗ 
+
+> rw
+
+∥πref ) + 16 e2R
+
+s
+
+1
+
+N (w; Dk,n ) log |Π|W T δ .
+
+By taking the union bound for all T iterations (choosing δ′ = δ/T ), we finish the proof. □
+
+Lemma F.2 (Estimation Error for Self-Transfer Policy) . For any k > 1 and αN < n ≤ N , in each call of Alg. 2 in the iteration (k, n ) of Alg. 1 with a dataset D := {(si, a i, eai, y i, π i)}i≤|D| satisfying Cond. C.1, then, given any δ ∈ (0 , 1) , w.p. 
+
+1 − δ:
+
+bV (πDstl ; D) ≤Jβ (πDstl ) − Jβ (πref )
+
+bV (πDstl ; D) ≥Jβ (π∗ 
+
+> r∗
+
+) − Jβ (πref ) − c′ · Re 2R ·
+
+
+
+Cov π∗  
+
+> r∗|πD
+> mix
+
+∧
+
+pC(Π) 
+
+α
+
+
+
+·
+
+s
+
+1
+
+|D| log c0 |Π|Tδ ,
+
+where we use πD 
+
+> mix
+
+:= 1
+
+> |D|
+
+P 
+
+> i≤|D|
+
+π|D| as a short note, and c′ is some absolute constant. Proof. Recall that 
+
+bV (πDstl ; D) := Eρ,π Dstl [brDstl ] − Eρ,π ref [brDstl ] − βKL (πDstl ∥πref )+ 1
+
+η LD (brDstl ) − 1
+
+η LD (brMLE ) − bonus ,
+
+Here we use bonus := 2 c · e2R
+
+q 1 
+
+> |D|
+
+log |Π|Tδ as a short note of the bonus term. By definition, 
+
+bV (πDstl ; D)
+
+≤Eρ,π Dstl [r∗] − Eρ,π ref [r∗] − βKL (πDstl ∥πref ) + 1
+
+η LD (r∗) − 1
+
+η LD (brMLE ) − bonus 
+
+(Pessimistic estimation of brDstl in Eq. (12)) 
+
+≤Jβ (πDstl ) − Jβ (πref ) + 2
+
+η|D| log |Π|
+
+δ − bonus (Lem. H.2) 
+
+≤Jβ (πDstl ) − Jβ (πref ) + 2 c · e2R
+
+s
+
+1
+
+|D| log |Π|Tδ − bonus . (14) The last step is because of our choice of η = (1 + eR)−2
+
+q 24  
+
+> |D|
+
+log |Π|Tδ .For the lower bound, note that for any policy π ∈ conv (Π) , we have: 
+
+Jβ (π) − Jβ (πref ) − bV (πDstl ; D)=
+
+
+
+Eρ,π [r∗] − Eρ,π ref [r∗] − βKL (π∥πref )
+
+
+
+−
+
+
+
+Eρ,π Dstl [brDstl ] − Eρ,π ref [brDstl ] − βKL (πDstl ∥πref ) + 1
+
+η LD (brDstl )
+
+
+
++ 1
+
+η LD (brMLE ) + bonus 
+
+≤
+
+
+
+Eρ,π [r∗] − Eρ,π ref [r∗] − βKL (π∥πref )
+
+
+
+− min 
+
+> r∈R Π
+
+
+
+Eρ,π [r] − Eρ,π ref [r] − βKL (π∥πref ) + 1
+
+η LD (r)
+
+
+
+(Optimality of πDstl in RPO;) 24 Can RLHF be More Efficient with Imperfect Reward Models? A Policy Coverage Perspective 
+
++ 1
+
+η LD (r∗) + bonus (brMLE minimizes LD )
+
+≤Es∼ρ,a ∼π, ea∼πref [|r∗(s, a ) − r∗(s, ea) − rπ;D (s, a ) + rπ;D (s, ea)|] + 1
+
+η LD (r∗) − 1
+
+η LD (rπ;D ) + bonus 
+
+(We use rπ;D to denote the reward achieves the above minimum) 
+
+≤ 2
+
+η|D| log |Π|
+
+δ + 8 √2e2R
+
+vuut Cov π|πD
+
+> mix
+
+|D| · X
+
+> i≤|D|
+
+Es∼ρ,a ∼πi(·| s),ea∼πref (·| s)[H2(Prπ;D (·| s, a, ea)∥Pr∗ (·| s, a, ea))] 
+
+− 1
+
+η
+
+X
+
+> i≤|D|
+
+Es∼ρ,a ∼πi,ea∼πref [H2(Prπ;D (·| s, a, ea)∥Pr∗ (·| s, a, ea))] + bonus (Lem. H.2 and Lem. H.3) 
+
+≤ 2
+
+η|D| log |Π|
+
+δ + 64 ηe 4R Cov π|πD
+
+> mix
+
+|D| + bonus (ax − bx 2 ≤ a2 
+
+> 4b
+
+)
+
+≤4c2 · e2R · Cov π|πD 
+
+> mix
+
+·
+
+s
+
+1
+
+|D| log |Π|Tδ + bonus . (15) where the last step is because of our choice of η = c · (1 + eR)−2
+
+q 24  
+
+> |D|
+
+log |Π|Tδ .Next, we evaluate some choice of π. We first consider π = π∗ 
+
+> r∗
+
+∈ conv (Π) , the above result implies, 
+
+Jβ (π∗ 
+
+> r∗
+
+) − Jβ (πref ) − bV (πDstl ; D) ≤ 4c2 · e2R · Cov π∗  
+
+> r∗|πD
+> mix
+
+·
+
+s
+
+1
+
+|D| log |Π|Tδ + bonus . (16) Secondly, we consider the mixture policy π = πk−1 
+
+> mix
+
+:= 1
+
+> α(k−1) N
+
+Pk−1 
+
+> i=1
+
+πi,j ∈ conv (Π) . Because of the convexity of KL divergence, J(π) is concave in π, by Jensen’s inequality, we have: 
+
+Jβ (π∗ 
+
+> r∗
+
+) − Jβ (πk−1 
+
+> mix
+
+) = Jβ (π∗ 
+
+> r∗
+
+) − Es∼ρ,a ∼πk−1 
+
+> mix (·| s)
+
+[r∗(s, a )] + βKL (πk−1 
+
+> mix
+
+∥πref )
+
+≤Jβ (π∗ 
+
+> r∗
+
+) − 1
+
+α(k − 1) N
+
+> k−1
+
+X
+
+> i=1
+
+X
+
+> 1≤j≤αN
+
+
+
+Es∼ρ,a ∼πi
+
+> OL (·| s)
+
+[r∗(s, a )] − βKL (πi,j ∥πref )
+
+
+
+≤COL Re 2R
+
+s
+
+C(Π) 
+
+α(k − 1) N log c0 |Π|Tδ ≤ COL Re 2R
+
+r 2C(Π) 
+
+αkN log c0 |Π|Tδ . (Cond. D.2) Note that |D| πD 
+
+> mix
+
+≥ α(k − 1) N π k−1 
+
+> mix
+
+, which implies Cov πk−1  
+
+> mix |πD
+> mix
+
+≤ |D|  
+
+> α(k−1) N
+
+≤ kN α(k−1) N ≤ 2 
+
+> α
+
+. Therefore, by Eq. (15), 
+
+Jβ (πk−1 
+
+> mix
+
+) − Jβ (πref ) − bV (πDstl ; D) ≤ 4c2 · e2R · 2
+
+α ·
+
+s
+
+1
+
+|D| log |Π|Tδ .
+
+Combining the above two inequalities together, we have: 
+
+Jβ (π∗ 
+
+> r∗
+
+) − Jβ (πref ) − bV (πDstl ; D)
+
+≤Jβ (π∗ 
+
+> r∗
+
+) − Jβ (πk−1 
+
+> mix
+
+) + Jβ (πk−1 
+
+> mix
+
+) − Jβ (πref ) − bV (πDstl ; D)
+
+≤COL Re 2R
+
+r 2C(Π) 
+
+αkN log c0 |Π|Tδ + 4 c2 · e2R · 2
+
+α ·
+
+s
+
+1
+
+|D| log |Π|Tδ + bonus 
+
+≤c3R · e2R
+
+s
+
+C(Π) 
+
+α2|D| log c0 |Π|Tδ + bonus . (17) Therefore, under our choice of bonus = 2 c ·
+
+q 1 
+
+> |D|
+
+log |Π|Tδ , Eq. (14), Eq. (16) and Eq. (17) imply, 
+
+bV (πDstl ; D) ≤Jβ (πDstl ) − Jβ (πref )
+
+25 Can RLHF be More Efficient with Imperfect Reward Models? A Policy Coverage Perspective 
+
+bV (πDstl ; D) ≥Jβ (π∗ 
+
+> r∗
+
+) − Jβ (πref ) − c′Re 2R ·
+
+
+
+Cov π∗  
+
+> r∗|πD
+> mix
+
+∧
+
+pC(Π) 
+
+α
+
+
+
+·
+
+s
+
+1
+
+|D| log c0 |Π|Tδ .
+
+# □
+
+Lemma 4.3 (Value Est Error for πDstl ). Under Assump. A and Def. D.2, w.p. 1 − δ, in each call of Alg. 2: 
+
+Jβ (π∗ 
+
+> r∗
+
+) − Jβ (πref ) − eO
+
+ Re 2R
+
+p|D| · (Cov π∗  
+
+> r∗|πD
+> mix
+
+∧
+
+pC(Π) 
+
+α )
+
+
+
+≤ bV (πDstl ; D) ≤ Jβ (πDstl ) − Jβ (πref ). (6) 
+
+Proof. By applying Lem. F.2 with appropriate constants, and taking the union bound over all iterations, we can finish the proof. □
+
+F.3. Proof for Thm. 4.4 Theorem 4.4 (Total Regret) . Suppose Alg OL is a no-regret instance satisfying Def. D.2, whose regret grows as 
+
+eO(Re 2R
+
+q
+
+C(Π) eT ) for any intermediate step eT and some policy class complexity measure C(Π) . Then, w.p. 1 − 2δ,for any T /K ≤ t ≤ T , running TPO yields a regret bound: 
+
+X 
+
+> τ≤t
+
+Jβ (π∗ 
+
+> r∗
+
+)−Jβ (πk(τ ),n (τ )) = Reg (t) 
+
+> OL
+
++ Reg (t)
+
+> Trf
+
+Reg (t) 
+
+> OL
+
+:= eO(Re 2RpαC(Π) t), (7) 
+
+Reg (t) 
+
+> Trf
+
+:= eO
+
+ X  
+
+> τ≤t:αN <n (τ)≤N
+
+∆min ∧ ιk(τ ),n (τ ) (8) 
+
++ e2Rp(1 − α)W t ∧ X
+
+> w:∆( w)>0
+
+e4R
+
+∆( w)
+
+
+
+.
+
+Here we denote k(τ ) := ⌈ τN ⌉ and n(τ ) := τ mod N to be the block index and inner iteration index for step τ ; ιk(τ ),n (τ ) := 
+
+eO(Re 2R
+
+
+
+Cov π∗  
+
+> r∗|πτ
+> mix
+
+∧√C(Π) 
+
+> α
+
+q 1 
+
+> τ
+
+), where πτ 
+
+> mix
+
+:= 1
+
+> τ
+
+P 
+
+> i≤τ
+
+πk(i),n (i) is the mixture policy up to τ ; ∆( w) and ∆min 
+
+denote value gaps as defined in Sec. 2.2. 
+
+Throught the proof, we follow the convention that 1/0 = + ∞.
+
+Proof. Since we divide the total budget T to K batches with batch size N , we will use two indices eK ∈ [K] and eN ∈ [N ]
+
+to represent the current iteration number, i.e. the eN -th iteration in the eK-th batch. We will divide the indices of previous iterations to two parts, depending on whether we conduct normal online learning (the first αN samples in each batch) or do transfer learning (the rest (1 − α)N samples in each batch): 
+
+IOL   
+
+> eK, eN
+
+:= {(k, n )|k < eK, n ≤ αN, or k = eK, n ≤ eN ∧ αN },
+
+ITrf   
+
+> eK, eN
+
+:= {(k, n )|k < eK, αN < n ≤ N, or k = eK, αN < n ≤ eN },
+
+I eK, eN := IOL   
+
+> eK, eN
+
+∪ I Trf   
+
+> eK, eN
+
+= {(k, n )|k < eK, n ≤ N, or k = eK, n ≤ eN }.
+
+For the policies generated by online algorithm, under the condition in Def. D.2, w.p. 1 − δ, for any eK ∈ [K], eN ∈ [N ] we have: 
+
+X 
+
+> (k,n )∈I OL
+> fK, fN
+
+Jβ (π∗ 
+
+> r∗
+
+) − Jβ (πk,n ) ≤ COL Re 2R
+
+r
+
+C(Π) |I OL   
+
+> eK, eN
+
+| log c0 |Π|Tδ . (18) Next, we focus on the performance of transfer policies. We first introduce a few notation for convenience. 26 Can RLHF be More Efficient with Imperfect Reward Models? A Policy Coverage Perspective 
+
+Additional Notations We use πk,n  
+
+> Dstl
+
+to denote the offline policy computed by Alg. 2 called by Alg. 1 at iteration (k, n )
+
+for some αN < n ≤ N . We denote Ek,n  
+
+> Dstl
+
+:= {πk,n  
+
+> Dstl
+
+= πk,n } to be the event that Alg. 2 returns πk,n  
+
+> Dstl
+
+as the policy, and use 
+
+Ek,n w := {π∗ 
+
+> rw
+
+= πk,n } to denote the event that Alg. 2 pick and return π∗ 
+
+> rw
+
+. Besides, we use ¬E k,n  
+
+> Dstl
+
+:= S  
+
+> w∈[W]
+
+Ek,n w as a short note for the event that Alg. 2 does not return the offline policy πk,n  
+
+> Dstl
+
+. Recall the definition ∆( w) := Jβ (π∗ 
+
+> r∗
+
+) − Jβ (π∗ 
+
+> rw
+
+),and ∆min = min w∈[W ] ∆( w). We will use w∗ to denote the index of the task achieves ∆min (or any of the tasks if multiple maximizers exist). Given the dataset Dk,n we use πk,n  
+
+> mix
+
+:= 1
+
+> |D k,n |
+
+P 
+
+> i,j ∈D k,n
+
+πi,j to be the uniform mixture policy from 
+
+Dk,n .Then, we decompose the accumulative value gap depending on whether Ek,n  
+
+> Dstl
+
+is true or not. We use I[E] as the indicator function, which takes value 1 if E happens and otherwise 0. For any eK ∈ [K], eN ∈ [N ], we have: 
+
+X 
+
+> (k,n )∈I Trf
+> fK, fN
+
+Jβ (π∗ 
+
+> r∗
+
+) − Jβ (πk,n )= X 
+
+> (k,n )∈I Trf
+> fK, fN
+
+I[Ek,n  
+
+> Dstl
+
+]( Jβ (π∗ 
+
+> r∗
+
+) − Jβ (πk,n )) + X 
+
+> (k,n )∈I Trf
+> fK, fN
+
+I[¬E k,n  
+
+> Dstl
+
+]( Jβ (π∗ 
+
+> r∗
+
+) − Jβ (πk,n )) . (19) 
+
+Part-(1) Upper Bound the First Part in Eq. (19) We first bound the accumulative error when I[Ek,n  
+
+> Dstl
+
+] = 1 . On the good events in Lem. 4.2 and Lem. 4.3 (which holds w.p. 1 − δ), I[Ek,n  
+
+> Dstl
+
+] = 1 implies 
+
+bV (πDstl ; Dk,n ) ≥ max  
+
+> w∈[W]
+
+bV (π∗ 
+
+> rw
+
+; Dk,n ) ≥ max   
+
+> w∈[W]
+
+Jβ (π∗ 
+
+> rw
+
+) − Jβ (πref ) = Jβ (π∗ 
+
+> r∗
+
+) − Jβ (πref ) − ∆min ,
+
+and as implied by Lem. 4.3 
+
+Jβ (π∗ 
+
+> r∗
+
+) − Jβ (πDstl ) ≤∆min ,Jβ (π∗ 
+
+> r∗
+
+) − Jβ (πDstl ) ≤c2Re 2R ·
+
+
+
+Cov π∗  
+
+> r∗|πk,n
+> mix
+
+∧
+
+pC(Π) 
+
+α
+
+
+
+·
+
+s
+
+1
+
+|D k,n | log c0 |Π|Tδ .
+
+Combining all the results above, we conclude that 
+
+Jβ (π∗ 
+
+> r∗
+
+) − Jβ (πDstl ) ≤∆min ∧ c2Re 2R ·
+
+
+
+Cov π∗  
+
+> r∗|πk,n
+> mix
+
+∧
+
+pC(Π) 
+
+α
+
+
+
+·
+
+s
+
+1
+
+|D k,n | log c0 |Π|Tδ
+
+=∆ min ∧ ιk,n .
+
+Here for simplicity, we use 
+
+ιk,n := c2Re 2R ·
+
+
+
+Cov π∗  
+
+> r∗|πk,n
+> mix
+
+∧
+
+pC(Π) 
+
+α
+
+
+
+·
+
+s
+
+1
+
+|D k,n | log c0 |Π|Tδ
+
+as a short note, indexed by k, n . Therefore, 
+
+X 
+
+> (k,n )∈I Trf
+> fK, fN
+
+I[Ek,n  
+
+> Dstl
+
+]( Jβ (π∗ 
+
+> r∗
+
+) − Jβ (πk,n )) = X 
+
+> (k,n )∈I Trf
+> fK, fN
+
+I[Ek,n  
+
+> Dstl
+
+](∆ min ∧ ιk,n ). (20) 
+
+Part-(2) Upper Bound the Second Part in Eq. (19) Next, we bound the accumulative error when I[¬E k,n  
+
+> Dstl
+
+] = 1 . Note that, 
+
+X 
+
+> (k,n )∈I Trf
+> fK, fN
+
+I[¬E k,n  
+
+> Dstl
+
+]( Jβ (π∗ 
+
+> r∗
+
+) − Jβ (πk,n )) = X 
+
+> (k,n )∈I Trf
+> fK, fN
+
+X 
+
+> w∈[W]∆( w)>0
+
+I[En,k w ]∆( w)
+
+27 Can RLHF be More Efficient with Imperfect Reward Models? A Policy Coverage Perspective 
+
+Here we only focus on those source tasks with ∆( w) > 0, since transferring from π∗ 
+
+> rw
+
+with ∆( w) = 0 does not incur regret. We separate source tasks into two sets W≤2∆ min := {w ∈ [W ]|∆( w) ≤ 2∆ min } and W>2∆ min := {w ∈ [W ]|∆( w) >
+
+2∆ min }. For w ∈ W >2∆ min , on the same good events in Lem. 4.2 and Lem. 4.3, I[En,k w ] = 1 implies 
+
+∆min =Jβ (π∗ 
+
+> r∗
+
+) − Jβ (πref ) − Jβ (π∗ 
+
+> rw∗
+
+) + Jβ (πref )
+
+≥Jβ (π∗ 
+
+> r∗
+
+) − Jβ (πref ) − bV k,n (π∗ 
+
+> rw∗
+
+; Dk,n −1)
+
+≥Jβ (π∗ 
+
+> r∗
+
+) − Jβ (πref ) − bV k,n (π∗ 
+
+> rw
+
+; Dk,n −1)
+
+≥Jβ (π∗ 
+
+> r∗
+
+) − Jβ (πref ) − Jβ (π∗ 
+
+> rw
+
+) + Jβ (πref ) − 32 · e2R
+
+s
+
+1
+
+N (w; Dk,n ) log |Π|W T δ
+
+=∆( w) − 32 · e2R
+
+s
+
+1
+
+N (w; Dk,n ) log |Π|W T δ .
+
+In the following, we use c1 = 32 as a short note, then the above implies 
+
+N (w; Dk,n ) ≤ c21e4R
+
+(∆( w) − ∆min )2 log |Π|W T δ ≤ 4c21e4R
+
+∆( w)2 log |Π|W T δ
+
+and therefore, 
+
+∀w ∈ W >2∆ min , X 
+
+> (k,n )∈I Trf
+> fK, fN
+
+I[En,k w ]∆( w) ≤ 16 c21e4R
+
+∆( w) log |Π|W T δ ,
+
+For w ∈ W ≤2∆ min , we introduce a new event En,k  
+
+> 2ι< ∆min
+
+:= {2ιk,n ≤ ∆min }. Note that, when I[En,k  
+
+> 2ι< ∆min
+
+] = 0 , i.e. 
+
+2ι ≥ ∆min , we automatically have: 
+
+∀w ∈ W ≤2∆ min , I[En,k w ]∆( w) ≤ 2I[En,k w ]∆ min ≤ 4I[En,k w ] · (∆ min ∧ ιn,k ). (21) On the other hand, on the good events of Lem. 4.2 and Lem. 4.3, when I[En,k w ∩ E n,k  
+
+> 2ι< ∆min
+
+] = 1 , we must have: 
+
+Jβ (π∗ 
+
+> r∗
+
+) − Jβ (πref ) − ιk,n ≤ bV k,n (πk,n  
+
+> Dstl
+
+; Dk,n −1) (Lem. 4.2 and Lem. 4.3) 
+
+≤ bV k,n (π∗ 
+
+> rw
+
+; Dk,n −1) (w is chosen) 
+
+≤Jβ (π∗ 
+
+> rw
+
+) − Jβ (πref ) + 32 · e2R
+
+s
+
+1
+
+N (w; Dk,n ) log |Π|W T δ ,
+
+which implies, 
+
+N (w; Dk,n ) ≤ c21e4R
+
+(∆ min − ιk,n )2 log |Π|W T δ ≤ 4c21e4R
+
+∆2min 
+
+log |Π|W T δ .
+
+Therefore, 
+
+∀w ∈ W ≤2∆ min , X 
+
+> (k,n )∈I Trf
+> fK, fN
+
+I[En,k w ∩ E n,k  
+
+> 2ι< ∆min
+
+]∆( w) ≤ 8c21e4R
+
+∆( w) log |Π|W T δ .
+
+Combining with Eq. (21), we have: 
+
+∀w ∈ W ≤2∆ min , X 
+
+> (k,n )∈I Trf
+> fK, fN
+
+I[En,k w ]∆( w) ≤ 4 X 
+
+> (k,n )∈I Trf
+> fK, fN
+
+I[En,k w ] · (∆ min ∧ ιn,k ) + 8c21e4R
+
+∆( w) log |Π|W T δ .
+
+By merging the analysis for w ∈ W ≤2∆ min and w ∈ W >2∆ min , we have: 
+
+∀w ∈ [W ], X 
+
+> (k,n )∈I Trf
+> fK, fN
+
+I[En,k w ]∆( w) ≤ 16 c21e4R
+
+∆( w) log |Π|W T δ + 4 X 
+
+> (k,n )∈I Trf
+> fK, fN
+
+I[En,k w ]∆ min ∧ ιn,k , (22) 28 Can RLHF be More Efficient with Imperfect Reward Models? A Policy Coverage Perspective 
+
+Note that for those ∆( w) ≤ 4c1e2max ·
+
+r 1
+
+P 
+
+> (k,n )∈I Trf
+> fK, fN
+
+I[En,k w ] log |Π|W T δ , we automatically have 
+
+X
+
+(k,n )∈I Trf  
+
+> fK, fN
+
+I[En,k w ]∆( w) ≤4c1e2max ·
+
+vuut 1
+
+P
+
+(k,n )∈I Trf  
+
+> fK, fN
+
+I[En,k w ] log |Π|W T δ
+
+X
+
+(k,n )∈I Trf  
+
+> fK, fN
+
+I[En,k w ]=4 c1e2max ·
+
+vuutX
+
+(k,n )∈I Trf  
+
+> fK, fN
+
+I[En,k w ] log |Π|W T δ .
+
+On the other hand, when ∆( w) > 4c1e2max ·
+
+r 1
+
+P 
+
+> (k,n )∈I Trf
+> fK, fN
+
+I[En,k w ] log |Π|W T δ , the bound in Eq. (22) is tighter, since 
+
+16 c21e4R
+
+∆( w) log |Π|W T δ ≤ 4c1e2max 
+
+vuutX
+
+(k,n )∈I Trf  
+
+> fK, fN
+
+I[En,k w ] log |Π|W T δ .
+
+Combining the above discussions, 
+
+X
+
+(k,n )∈I Trf  
+
+> fK, fN
+
+I[¬E k,n 
+
+Dstl ]( Jβ (π∗
+
+r∗ ) − Jβ (πk,n )) = X
+
+(k,n )∈I Trf  
+
+> fK, fN
+
+X
+
+w∈[W ]∆( w)>0
+
+I[En,k w ]∆( w)
+
+≤ X
+
+w∈[W ]∆( w)>0
+
+min { 16 c21e4R
+
+∆( w) log |Π|W T δ , 4c1e2max 
+
+vuutX
+
+(k,n )∈I Trf  
+
+> fK, fN
+
+I[En,k w ] log |Π|W T δ }
+
++ 4 X
+
+(k,n )∈I Trf  
+
+> fK, fN
+
+I[En,k w ]∆ min ∧ ιn,k 
+
+≤ min { X
+
+w∈[W ]∆( w)>0
+
+16 c21e4R
+
+∆( w) log |Π|W T δ , X
+
+w∈[W ]∆( w)>0
+
+4c1e2max 
+
+vuutX
+
+(k,n )∈I Trf  
+
+> fK, fN
+
+I[En,k w ] log |Π|W T δ }
+
+(min {a, b } + min {x, y } ≤ min {a + x, b + y})
+
++ 4 X
+
+(k,n )∈I Trf  
+
+> fK, fN
+
+I[En,k w ]∆ min ∧ ιn,k 
+
+≤ min { X
+
+w∈[W ]∆( w)>0
+
+16 c21e4R
+
+∆( w) log |Π|W T δ , 4c1e2max 
+
+r
+
+W |I Trf 
+
+eK, eN | log |Π|W T δ }
+
+(Cauchy-Schwarz inequality and P w∈[W ]∆( w)>0
+
+I[En,k w ] ≤ |I Trf 
+
+eK, eN |)
+
++ 4 X
+
+(k,n )∈I Trf  
+
+> fK, fN
+
+I[En,k w ]∆ min ∧ ιn,k . (23) 
+
+Merge Everything Together Combining Eq. (20) and Eq. (23), we have: 
+
+X
+
+(k,n )∈I Trf  
+
+> fK, fN
+
+Jβ (π∗
+
+r∗ ) − Jβ (πk,n )= X
+
+(k,n )∈I Trf  
+
+> fK, fN
+
+I[Ek,n 
+
+Dstl ]( Jβ (π∗
+
+r∗ ) − Jβ (πk,n )) + X
+
+(k,n )∈I Trf  
+
+> fK, fN
+
+I[¬E k,n 
+
+Dstl ]( Jβ (π∗
+
+r∗ ) − Jβ (πk,n )) 
+
+≤ min { X
+
+w∈[W ]∆( w)>0
+
+16 c21e4R
+
+∆( w) log |Π|W T δ , 4c1e2max 
+
+r
+
+W |I Trf 
+
+eK, eN | log |Π|W T δ }
+
+29 Can RLHF be More Efficient with Imperfect Reward Models? A Policy Coverage Perspective 
+
++ 4 X 
+
+> (k,n )∈I Trf
+> fK, fN
+
+∆min ∧ ιn,k .
+
+Combining the value gap for the online parts, we have: 
+
+X 
+
+> (k,n )∈I fK, fN
+
+Jβ (π∗ 
+
+> r∗
+
+) − Jβ (πk,n )
+
+≤COL Re 2R
+
+r
+
+C(Π) |I OL   
+
+> eK, eN
+
+| log c0 |Π|αT δ + 4 X 
+
+> (k,n )∈I Trf
+> fK, fN
+
+∆min ∧ ιn,k 
+
++ min { X 
+
+> w∈[W]∆( w)>0
+
+16 c21e4R
+
+∆( w) log |Π|W T δ , 4c1e2max 
+
+r
+
+W |I Trf   
+
+> eK, eN
+
+| log |Π|W T δ }.
+
+Note that for eK > 1, denote t eK, eN := ( eK − 1) N + eN , we have: 
+
+|I OL   
+
+> eK, eN
+
+| ≤ α eKN ≤ 2αt eK, eN , |I Trf   
+
+> eK, eN
+
+| ≤ (1 − α) eKN ≤ 2(1 − α)t eK, eN .
+
+Therefore, 
+
+X 
+
+> (k,n )∈I fK, fN
+
+Jβ (π∗ 
+
+> r∗
+
+) − Jβ (πk,n )= eO
+
+ X 
+
+> (k,n )∈I Trf
+> fK, fN
+
+∆min ∧ ιn,k + Re 2Rq
+
+αC(Π) t eK, eN + e2max 
+
+q
+
+(1 − α)W t eK, eN ∧ X 
+
+> w∈[W]∆( w)>0
+
+e4R
+
+∆( w)
+
+
+
+,
+
+where in the last step, we omit the constant and logarithmic terms. By replacing t eK, eN ← t, P 
+
+> (k,n )∈I fK, fN
+
+← P 
+
+> τ≤t
+
+,
+
+k ← k(τ ) := ⌈ τN ⌉ and n ← n(τ ) := τ %N , we finish the proof. 
+
+# □
+
+Remark F.3 . Under the choices of Alg OL ← XPO (Xie et al., 2024) and α = e− Rβ , according to Eq. (9) , TPO achieves 
+
+eO(W √T ) regret if T < W 2
+
+> ∆2min
+
+. On the other hand, by Lem. 3.1, 
+
+Cov π∗  
+
+> r∗|πt
+> mix
+
+= 1 + eO(κ(e 2Rβ ) · Reg (t) 
+
+> OL
+
++ Reg (t)
+
+> Trf
+
+βt ) = 1 + eO(κ(e 2Rβ ) · 1
+
+αβ 
+
+r C(Π) 
+
+t ).
+
+Therefore, consider T0 = eΘ( κ2(e 2Rβ C(Π)  
+
+> α2β2
+
+), where eΘ( ·) hides at most poly-log of T . At least when T > T 0, Eq. (10) implies Reg (t) 
+
+> Trf
+
+= 1 + O(1) < C for some constant C. Since α = e− Rβ , we also have Reg (T ) 
+
+> OL
+
+= eO(√T ) for any T > 0. As a result, the total regret of TPO grows as eO(√T ) as long as T > T 0.
+
+## G. Connection between Win Rate and Policy Coverage Coefficient 
+
+Lemma G.1. Given two probability vector u, v ∈ ∆( A) and a reward function r : A → R, consider a preference model based on r, satisfying, 
+
+Pr (y = 1 |a, a ′) ≥ 12 ,
+
+for any a, a ′ ∈ A satisfying r(a) ≥ r(a′). Then, 
+
+X
+
+> a
+
+pu(a)v(a) ≤ min 
+
+> γ> 0
+
+r
+
+(γ + 2 Pr (v ≻ u)) log 1 + γγ ,
+
+where Pr (u ≻ v) := Ea∼u,a ′∼v [Pr (y = 1 |a, a ′)] .
+
+30 Can RLHF be More Efficient with Imperfect Reward Models? A Policy Coverage Perspective 
+
+Proof. We first of all sort the action space A to Asorted := {a1, a 2, ..., a |A| } according to reward function r, such that, for any 1 ≤ i < j ≤ |A| , r(ai) ≤ r(aj ). Besides, we use F u(·) to denote the cumulative distribution function regarding u:
+
+∀1 ≤ i ≤ |A| , F u(ai) := 
+
+> i
+
+X
+
+> j=1
+
+u(ai),
+
+and F v is defined similarly. Then we have: 
+
+X
+
+> a∈A
+
+pu(a)v(a) = 
+
+> |A|
+
+X
+
+> i=1
+
+pu(ai)v(ai) = 
+
+> |A|
+
+X
+
+> i=1
+
+s
+
+u(ai)
+
+γ + F u(ai) · p(γ + F u(ai)) v(a) (Introducting a parameter γ > 0)
+
+≤
+
+vuut |A| 
+
+X
+
+> i=1
+
+u(ai)
+
+γ + F u(ai) ·
+
+vuut |A| 
+
+X
+
+> i=1
+
+(γ + F u(ai)) v(ai) (Cauchy–Schwarz inequality) 
+
+≤
+
+vuut |A| 
+
+X
+
+> i=1
+
+u(ai)
+
+γ + F u(ai) · pγ + 2 Pr (v ≻ u),
+
+where in the last step, we use the fact that γ P|A|  
+
+> i=1
+
+v(ai) = γ and 
+
+Pr (v ≻ u) = Ea∼v,a ′∼u[Pr (y = 1 |a, a ′)] ≥
+
+> |A|
+
+X
+
+> i=1
+
+v(ai)
+
+> i
+
+X
+
+> j=1
+
+u(aj )Pr (y = 1 |ai, a j ) ≥ 12
+
+> |A|
+
+X
+
+> i=1
+
+v(ai)F u(ai).
+
+For the first part, we can upper bound by the following: 
+
+> |A|
+
+X
+
+> i=1
+
+u(ai)
+
+γ + F u(ai) =
+
+> |A|
+
+X
+
+> i=1
+
+u(ai)
+
+γ + Pij=1 u(aj ) =
+
+> A
+
+X
+
+> i=1
+
+1 − γ + Pi−1 
+
+> j=1
+
+u(aj )
+
+γ + Pij=1 u(aj )
+
+≤
+
+> A
+
+X
+
+> i=1
+
+log γ + Pij=1 u(aj )
+
+γ + Pi−1 
+
+> j=1
+
+u(aj ) (1 − x ≤ log 1 
+
+> x
+
+)
+
+≤ log 1 + γγ
+
+Therefore, P
+
+> a∈A
+
+pu(a)v(a) ≤
+
+q
+
+(γ + 2 Pr (v ≻ u)) log 1+ γγ . Since γ is arbitrary, we can take the minimum over γ > 0,and finish the proof. □
+
+Lemma G.2. For any policy π, eπ,
+
+1 − TV (π(·| s)∥eπ(·| s)) ≤ min 
+
+> γ> 0
+
+r
+
+(γ + 2 Pr∗ (π(·| s) ≻ eπ(·| s))) log 1 + γγ ,
+
+1 − Es∼ρ[TV (π(·| s)∥eπ(·| s))] ≤ min 
+
+> γ> 0
+
+r
+
+(γ + 2 Pr∗ (π ≻ eπ)) log 1 + γγ .
+
+Proof. 
+
+1 − TV (π(·| s)∥eπ(·| s)) ≤1 − H2(π(·| s)∥eπ(·| s)) = X
+
+> a∈A
+
+pπ(a|s)eπ(a|s)
+
+≤ min 
+
+> γ> 0
+
+r
+
+γ + 2 Pr∗ (π(·| s) ≻ eπ(·| s)) 
+
+
+
+log 1 + γγ .
+
+where in the last step we apply Lem. G.1 with π(·| s) as v(·), eπ(·| s) as u(·), r∗(s, ·) as the reward function. Then, we finish the proof for the first inequality. 31 Can RLHF be More Efficient with Imperfect Reward Models? A Policy Coverage Perspective 
+
+For the second inequality, by taking the expectation over s ∼ ρ and the concavity of √· function, we have: 
+
+1 − Es∼ρ[TV (π(·| s)∥eπ(·| s))] ≤ min 
+
+> γ> 0
+
+r
+
+γ + 2 Pr∗ (π ≻ eπ)
+
+
+
+log 1 + γγ .
+
+By choosing γ = Pr∗ (π ≻ eπ) (note that this choice ensures γ > 0 since eπ(·|· ) > 0), we finish the proof. □
+
+Lemma G.3. [The Complete Version of Lem. 5.1] Given any policy π, under the assumption that Pr∗ (y = 1 |s, a, a ′) ≥ 12
+
+for any a, a ′ ∈ A satisfying r∗(s, a ) ≥ r∗(s, a ′), we have: 
+
+Cov π∗  
+
+> r∗|π
+
+≥ max 
+
+> γ> 0,¯π
+
+r
+
+γ + 2 Pr∗ (¯ π ≻ π) log 1 + γγ +
+
+s
+
+Jβ (π∗ 
+
+> r∗
+
+) − Jβ (¯ π)2β
+
+−1
+
+(24) 
+
+Cov π∗  
+
+> r∗|π
+
+≥ max 
+
+> γ> 0,¯π
+
+r
+
+γ + 2 Pr∗ (π ≻ ¯π) log 1 + γγ +
+
+s
+
+Jβ (π∗ 
+
+> r∗
+
+) − Jβ (¯ π)2β
+
+−1
+
+. (25) 
+
+where ¯π is an arbitrary intermediate policy, Pr∗ (π ≻ eπ) := Es∼ρ,a ∼π,a ′∼eπ [Pr∗ (y = 1 |s, a, a ′)] and Pr∗ (eπ ≻ π) = 1 − Pr∗ (π ≻ eπ) = Es∼ρ,a ∼eπ,a ′∼π [Pr∗ (y = 1 |s, a, a ′)] .Proof. We have: 
+
+Ea∼π∗ 
+
+> r∗(·| s)
+
+[ π∗ 
+
+> r∗
+
+(a|s)
+
+π(a|s) ] − 1 = χ2(π∗ 
+
+> r∗
+
+(·| s)∥π(·| s)) 
+
+≥ exp( KL (π∗ 
+
+> r∗
+
+(·| s)∥π(·| s))) − 1 (Theorem 5 in (Gibbs & Su, 2002)) 
+
+≥ 12 · 11 − TV (π∗ 
+
+> r∗
+
+(·| s)∥π(·| s)) − 1. (Bretagnolle–Huber inequality) Now, we introduce an arbitrary intermediate policy eπ,
+
+TV (π∗ 
+
+> r∗
+
+(·| s)∥π(·| s)) ≥TV (¯ π(·| s)∥π(·| s)) − TV (¯ π(·| s)∥π∗ 
+
+> r∗
+
+(·| s)) (Reverse triangle inequality) 
+
+≥TV (¯ π(·| s)∥π(·| s)) −
+
+r 12 KL (¯ π(·| s)∥π∗ 
+
+> r∗
+
+(·| s)) . (Pinsker’s inequality) Applying Lem. G.2 with (π, eπ) ← (π, π ), we have: 
+
+Ea∼π∗ 
+
+> r∗(·| s)
+
+[ π∗ 
+
+> r∗
+
+(a|s)
+
+π(a|s) ] ≥ 11 − TV (¯ π(·| s)∥π(·| s)) + 
+
+q 12 KL (¯ π(·| s)∥π∗ 
+
+> r∗
+
+(·| s)) 
+
+≥ 1
+
+q
+
+(γ + 2 Pr∗ (¯ π(·| s) ≻ π(·| s))) log 1+ γγ +
+
+q 12 KL (¯ π(·| s)∥π∗ 
+
+> r∗
+
+(·| s)) 
+
+.
+
+By taking the expectation over s ∼ ρ, and leveraging the convexity of 1/x and the concavity of √· functions, we have: 
+
+Es∼ρ,a ∼π∗ 
+
+> r∗(·| s)
+
+[ π∗ 
+
+> r∗
+
+(a|s)
+
+π(a|s) ] ≥ 1
+
+Es∼ρ[
+
+q
+
+(γ + 2 Pr∗ (¯ π(·| s) ≻ π(·| s))) log 1+ γγ ] + Es∼ρ[
+
+q 12 KL (¯ π(·| s)∥π∗ 
+
+> r∗
+
+(·| s))] 
+
+≥ 1
+
+q
+
+(γ + 2 Pr∗ (¯ π ≻ π)) log 1+ γγ +
+
+q Jβ (π∗  
+
+> r∗)−Jβ(π)2β
+
+.
+
+Note that the above results hold for any γ > 0 and any ¯π, we finish the proof by taking the maximum over them. The second inequality in Lem. G.3 can be proved similarly by applying Lem. G.2 with (π, eπ) ← (π, ¯π). All the discussion are the same. □
+
+Remark G.4 . We provide some remarks about Lem. G.3. 32 Can RLHF be More Efficient with Imperfect Reward Models? A Policy Coverage Perspective 
+
+• Lem. 5.1 is a direct corollary of Eq. (25). • Notably, Eq. (24) has a different implication compared with Eq. (25) that we follow in the algorithm design in Sec. 5. More concretely, Eq. (24) suggests we should also disregard those source policies that strongly dominate ¯π when ¯π is close to π∗ 
+
+> r∗
+
+. This makes sense because those source policies may achieve high rewards or win rates by incurring a high KL divergence with πref , and therefore, they may not provide good coverage for π∗ 
+
+> r∗
+
+.• However, in Alg. 3, we intentionally do not filter out but instead prioritize source policies with exceptionally high win rates. Because they likely provide good coverage for high-reward regions and can be advantageous for practical LLM training. Nonetheless, for completeness, we bring this theory-practice gap into attention. 
+
+## H. Useful Lemmas 
+
+Lemma H.1 (Convex Hull Fulfills Assump. A) . Given Π satisfying Assump. A, conv (Π) also satisfies Assump. A. Proof. The realizability condition is obviously. We verify Assump. A. Note that for any π ∈ conv (Π) , there exists 
+
+λ1, ..., λ n ≥ 0 and π1, ..., π n ∈ Π, s.t. Pni=1 λi = 1 and π = Pni=1 λiπi, which implies, 
+
+∀s, a π(a|s)
+
+πref (a|s) =
+
+> n
+
+X
+
+> i=1
+
+λi πi(a|s)
+
+πref (a|s) ≥ exp( − Rβ ), π(a|s)
+
+πref (a|s) =
+
+> n
+
+X
+
+> i=1
+
+λi πi(a|s)
+
+πref (a|s) ≤ exp( Rβ ).
+
+Therefore, conv (Π) fulfills Assump. A-(II), which finishes the proof. □
+
+Lemma H.2 (MLE Guarantees; Adapated from Lemma C.6 in (Xie et al., 2024)) . Consider a policy class Π satisfying Assump. A, and recall the reward class RΠ converted by Eq. (11) . Given a dataset D := {(si, a i, eai, y i, π i)}i≤|D| satisfying Cond. C.1 and any δ ∈ (0 , 1) , w.p. 1 − δ,
+
+∀r ∈ R Π, 1
+
+|D| 
+
+X
+
+> i≤|D|
+
+Es∼ρ,a ∼πi(·| s),ea∼πref (·| s)[H2(Pr (·| s, a, ea)∥Pr∗ (·| s, a, ea))] ≤ LD (r) − LD (r∗) + 2
+
+|D| log |Π|
+
+δ .
+
+Proof. The proof is almost identical to Lemma C.6 in (Xie et al., 2024), except we replace Pπ in their paper by Pr . So we omit it here. Besides, note that our NLL loss is normalized, while (Xie et al., 2024) consider unnormalized version. This results in the additional 1 
+
+> |D|
+
+factor here. □
+
+Lemma H.3 (From reward error to Hellinger Distance) . Given any policy π, any reward function r with bounded value range [−R, R ], and another arbitrary eπ with positive support on S × A , we have: 
+
+Es∼ρ,a ∼π(·| s),ea∼πref (·| s)[|
+
+
+
+r∗(s, a ) − r∗(s, ea)
+
+
+
+−
+
+
+
+r(s, a ) − r(s, ea)
+
+
+
+|]
+
+≤8√2e2R
+
+q
+
+Cov π|eπ · Es∼ρ,a ∼eπ(·| s),ea∼πref (·| s)[H2(Pr (·| s, a, ea)∥Pr∗ (·| s, a, ea))] .
+
+Proof. For any reward function r, we have: 
+
+
+
+Eρ,π [r∗] − Eρ,π ref [r∗]
+
+
+
+−
+
+
+
+Eρ,π [r] − Eρ,π ref [r]
+
+
+
+≤Es∼ρ,a ∼π(·| s),ea∼πref (·| s)[|
+
+
+
+r∗(s, a ) − r∗(s, ea)
+
+
+
+−
+
+
+
+r(s, a ) − r(s, ea)
+
+
+
+|]
+
+≤4e2REs∼ρ,a ∼π(·| s),ea∼πref (·| s)[|σ
+
+
+
+r∗(s, a ) − r∗(s, ea)
+
+
+
+− σ
+
+
+
+r(s, a ) − r(s, ea)
+
+
+
+|] (Lem. H.4 with C = 2 R)
+
+=4 e2R X
+
+> s,a, ea
+
+pρ(s)πref (ea|s) π(a|s)
+
+peπ(a|s)
+
+· pρ(s)πref (ea|s)peπ(a|s) σ
+
+
+
+r∗(s, a ) − r∗(s, ea)
+
+
+
+− σ
+
+
+
+r(s, a ) − r(s, ea)
+
+
+
+≤4e2R
+
+vuut X
+
+> s,a, ea
+
+ρ(s)πref (ea|s) π2(a|s)
+
+eπ(a|s)
+
+33 Can RLHF be More Efficient with Imperfect Reward Models? A Policy Coverage Perspective 
+
+r
+
+Es∼ρ,a ∼eπ(·| s),ea∼πref (·| s)[ σ
+
+
+
+r∗(s, a ) − r∗(s, ea)
+
+
+
+− σ
+
+
+
+r(s, a ) − r(s, ea)
+
+ 2
+
+]
+
+(Cauchy–Schwarz inequality) 
+
+=4 e2Rp
+
+Cov π|eπ ·
+
+r
+
+Es∼ρ,a ∼eπ(·| s),ea∼πref (·| s)[ σ
+
+
+
+r∗(s, a ) − r∗(s, ea)
+
+
+
+− σ
+
+
+
+r(s, a ) − r(s, ea)
+
+ 2
+
+]. (26) Note that, 
+
+Es∼ρ,a ∼eπ(·| s),ea∼πref (·| s)[ σ
+
+
+
+r∗(s, a ) − r∗(s, ea)
+
+
+
+− σ
+
+
+
+r(s, a ) − r(s, ea)
+
+ 2
+
+]
+
+≤8Es∼ρ,a ∼eπ(·| s),ea∼πref (·| s)[|pσ(r∗(s, a ) − r∗(s, ea)) − pσ(r(s, a ) − r(s, ea)) |2] ((x − y)2 ≤ 4( x + y)( √x − √y)2)
+
+≤8Es∼ρ,a ∼eπ(·| s),ea∼πref (·| s)[H2(Pr (·| s, a, ea)∥Pr∗ (·| s, a, ea))] . (27) By plugging into Eq. (26), we finish the proof. □
+
+Lemma H.4 (Sigmoid Function) . Given x, y ∈ [−C, C ] for some C > 0,
+
+|x − y| ≤ 4 exp( C)|σ(x) − σ(y)|.
+
+Proof. Without loss of generality, we assume x ≥ y. Because σ(·) is a monotonically increasing function and it is continuous, we know there exists z ∈ [y, x ] s.t. 
+
+σ(x) − σ(y)
+
+x − y = σ′(z) = σ(z)(1 − σ(z)) = σ(z)σ(−z).
+
+Because x, y ∈ [−C, C ], we have σ(−C) ≤ σ(z) ≤ σ(C). Note that the axis of symmetry of function f (a) = a(1 − a) is 
+
+1/2 and 12 − σ(C) = σ(−C) − 12 . Therefore, 
+
+|x − y| = 1
+
+σ′(z) |σ(x) − σ(y)| ≤ (1 + exp( C))(1 + exp( −C)) · | σ(x) − σ(y)|≤2(1 + exp( C)) |σ(x) − σ(y)| ≤ 4 exp( C)|σ(x) − σ(y)|
+
+# □
+
+## I. Experiment Details and Additional Results 
+
+I.1. Details in Experiment Setup Setup of r∗ Due to the high cost of collecting real human feedback, we use preferences generated by Llama3-8B (Dubey et al., 2024) to simulate the ground-truth human annotations. More concretely, we adopt 
+
+sfairXC/FsfairX-LLaMA3-RM-v0.1 (Dong et al., 2024) as the true reward model r∗, which is distilled from 
+
+meta-llama/Meta-Llama-3-8B-Instruct . This reward model can be queried with prompt-response pairs and returns reward scores for each of them. 
+
+Best-of-N as an Approximation of π∗ 
+
+> rw
+
+We recall that we consider 4 source tasks for transfer learning, including, (a) ROUGE-Lsum score (Lin, 2004), (b) BERTScore (Zhang et al., 2019), (c) T5-base (250M) πbase , (d) T5-large (770M) πlarge .To reduce computational complexity, instead of explicitly training the optimal policies {π∗ 
+
+> rw
+
+}w∈[W ] associated with each source reward model, we use Best-of-N (BoN) approach, a.k.a. rejection sampling, to approximate the responses generated by π∗ 
+
+> rw
+
+. Specifically, we generate N7 responses by the online learning policy πk 
+
+> OL
+
+in Alg. 3, rank them according to the reward model, and select the top-ranked ones. Furthermore, even for source LLM policies (3) and (4), we find that transferring from BoN-selected responses generated by 
+
+πk 
+
+> OL
+
+actually outperforms directly using the responses generated by T5-base/large. We hypothesize that it is because the responses by T5-base/large usually have quite low probability of being generated by the online learning policy, leading to a 
+
+> 7
+
+To distinguish with N used to denote the block size in Alg. 3, we use N to denote the size of BoN. 
+
+34 Can RLHF be More Efficient with Imperfect Reward Models? A Policy Coverage Perspective 
+
+distribution shift that complicates learning. In contrast, BoN-selected responses maintain non-trivial probability of being sampled, without significant distributional mismatch. Next, we elaborate the BoN process with more details. In our experiment, we choose N = 32 . For source reward models (1) and (2), we generate N responses, and we compute the ROUGE-Lsum/BERTScore between the generated response and the human-provided summary in XSum dataset as the reward value. For source policies (3) and (4), motivated by the closed-form solution in Eq. (2) , given any prompt s and response a, we infer the log-probability of T5-base/large predicting 
+
+a given s as the reward score, i.e. log πbase (a|s) or log πlarge (a|s). In another word, we interpret T5-base/large as the optimal policies fine-tuned from uniform distribution to align with some reward models, which we treated as source rewards for transfer learning. 
+
+Training Details Our training setup is based on and adapted from (Xie et al., 2024; Xiong et al., 2024). We run for 3 iterations ( K = 3 ), and in each iteration, we sample a training dataset of size 10k (i.e., the block size N =10k). For each prompt, we collect 8 responses as follows. Firstly, we generate N + 4 responses by the online learning policy πk
+
+> OL
+
+. The initial 
+
+N responses are used for Best-of-N (BoN) selection, where we choose a source reward model via the UCB strategy in Alg. 3, and then pick the top 4 from N responses with the highest source rewards. These 4 responses are merged with the remaining 4 responses and we get a total of 8 responses. After that, we query r∗ to label the reward for those responses, and record the ones with the highest and lowest rewards to serve as positive and negative samples for DPO training. In contrast to the procedure presented in Alg. 3, we utilize 8 responses for each prompt. Therefore, the win rates are computed in a relatively different way. Specially, we set yk,n = 1 if the response achieving the highest reward comes from the 4 responses selected by the BoN step, and yk,n = 0 otherwise. The updates of the win rates estimation and the computation of UCB bonus terms align with Alg. 3, except that we set dWR πk
+
+> OL
+
+= 0 .55 instead of 0.5. This adjustment establishes a higher threshold for enabling transfer learning, requiring source tasks to outperform the baseline policy πk 
+
+> OL
+
+by a larger margin before being considered. We believe it enhances overall performance. Regarding other hyperparameters during the training, the learning rate is 5e-5 with a cosine annealing schedule. Training is conducted on 4 H-100 GPUs with total batch size 64. We set the constant parts in the UCB bonus c
+
+q
+
+log 1 
+
+> δ
+
+= 1 .0 in practice, considering the value range of win rates is [0, 1]. 
+
+Evaluation Details During the evaluation phase, we randomly sample 10k prompts from XSum test dataset without repetition. For each prompt, we generate one response for each of the policies being compared, and query their reward values from r∗ (i.e., the sfairXC/FsfairX-LLaMA3-RM-v0.1 reward model). The win rate is then estimated as the frequency of that one policy generates a response with higher rewards than the other across the 10k prompts. 
+
+I.2. Additional Experiment Results Results under Other Choices for Alg PO in Alg. 3 In the following, we report the results with two alternative instaniations of Alg PO : by optimizing the XPO loss (Xie et al., 2024) or the IPO loss (Azar et al., 2024). All the training setups are the same as the experiments where Alg PO is DPO, except that we choose a smaller learning rate 1e-5 for Alg PO is IPO. 
+
+Remark I.1 . Different from DPO and IPO, XPO is an online algorithm itself and in their original design, the pairs of online data are generated by an online exploration policy and another fixed base policy, respectively. However, empirically, Xie et al. (2024) follow the iterative-DPO and utilize the same online learning policy to generate pairs of online data. This exactly aligns with the no transfer baseline we compete with—instantiating Alg PO with XPO in Alg. 3 and setting W = 0 ,which we refer as iterative-XPO in this paper. 
+
+Investigation on Source Task Selection Fig. 2 provides further investigations on the source task selection process. For each iteration k = 1 , 2, 3, we count the number of times that πk,n is occupied by different transfer policies {π∗ 
+
+> rw
+
+}w∈[W ]
+
+or the online learning policy πk 
+
+> OL
+
+(i.e. without transfer), and provide the results on the top sub-figure in Fig. 2. Besides, in the bottom sub-figure, we report the win rates Pr∗ (π ≻ πk
+
+> OL
+
+) for all π ∈ { π∗ 
+
+> rw
+
+}w∈[W ] ∪ { πk
+
+> OL
+
+}. As illustrated, the UCB sub-routine efficiently explores and identify the source task with the highest win rates against the learning policy πk
+
+> OL
+
+.Notably, as the improvement of πk 
+
+> OL
+
+over the three iterations, we can observe the transition from transfer learning by leveraging high-quality source tasks to standard online learning. In other words, our method can automatically switch back to online learning and avoid being restricted by source reward models. 35 Can RLHF be More Efficient with Imperfect Reward Models? A Policy Coverage Perspective 
+
+Without Transfer Purely Exploit ROUGE-Lsum Purely Exploit T5-Large Iter 1 52 .3 ± 1.0 50 .4 ± 1.6 49 .9 ± 0.4
+
+Iter 2 55 .2 ± 1.4 52 .3 ± 0.3 50 .1 ± 0.3
+
+Iter 3 55 .3 ± 1.1 51 .8 ± 0.5 50 .3 ± 0.5
+
+(a) IPO as Alg PO in Alg. 3 
+
+Without Transfer Purely Exploit ROUGE-Lsum Purely Exploit T5-Large Iter 1 52 .3 ± 1.1 53 .4 ± 0.8 50 .2 ± 0.3
+
+Iter 2 51 .6 ± 1.3 54 .7 ± 1.6 49 .1 ± 1.3
+
+Iter 3 52 .2 ± 1.6 53 .8 ± 2.9 49 .2 ± 1.1
+
+(b) XPO as Alg PO in Alg. 3 
+
+Table 2. Similar to Table 1, we report the win rates (%) of the policies trained by empirical TPO (Alg. 3) competed with 3 baselines, presented across 3 columns. Baseline (I): without transfer, i.e., iterative-IPO or iterative-XPO. Baseline (II): purely utilizing ROUGE-LSum (the lowest-quality source task) in transfer learning. Baseline (III): purely utilizing T5-Large (the highest-quality source task) in transfer learning. Results are averaged with 3 random seeds and 95% confidence levels are reported. R B TB TL NT                      
+
+> 0
+> 5k
+> 10k Iter1
+> RBTB TL NT
+> Iter2
+> RBTB TL NT
+> Iter3
+> Allocation of Transfer Policies RBTB TL NT
+> 0.3
+> 0.4
+> 0.5
+> 0.6
+> 0.7
+> Iter1
+> RBTB TL NT
+> Iter2
+> RBTB TL NT
+> Iter3
+> Win Rates
+
+Figure 2. Deeper investigation on the source reward models selection process. We report the allocation of transfer budgets on each source tasks averaged over 3 trials (top figure) and the win rates Pr∗ (· ≻ πk
+
+> OL
+
+) (bottom figure) for iterations k = 1 , 2, 3. Due to space limit, we use abbreviation rather than the full name of source tasks. R, B , TB , TL and NT stand for ROUGE-Lsum, BERTScore, T5-Base, T5-Large and No Transfer, respectively. 
+
+36

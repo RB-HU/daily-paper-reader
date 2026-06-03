@@ -1,0 +1,3381 @@
+Title: Active Fine-Tuning of Multi-Task Policies
+
+URL Source: https://openreview.net/pdf?id=hlyBdwHBeC
+
+Number of Pages: 33
+
+Markdown Content:
+# Active Fine-Tuning of Multi-Task Policies 
+
+Marco Bagatella 1 2 Jonas H ¨ ubotter 1 Georg Martius 2 3 Andreas Krause 1
+
+## Abstract 
+
+Pre-trained generalist policies are rapidly gaining relevance in robot learning due to their promise of fast adaptation to novel, in-domain tasks. This adaptation often relies on collecting new demonstrations for a specific task of interest and applying imitation learning algorithms, such as behavioral cloning. However, as soon as several tasks need to be learned, we must decide which tasks should be demonstrated and how often? 
+
+We study this multi-task problem and explore an interactive framework in which the agent adap-tively selects the tasks to be demonstrated. We propose AMF (Active Multi-task Fine-tuning), an algorithm to maximize multi-task policy per-formance under a limited demonstration budget by collecting demonstrations yielding the largest information gain on the expert policy. We derive performance guarantees for AMF under regular-ity assumptions and demonstrate its empirical ef-fectiveness to efficiently fine-tune neural policies in complex and high-dimensional environments. 
+
+## 1. Introduction 
+
+The availability of large pre-trained models has trans-formed entire areas of machine learning, from computer vision (Krizhevsky et al., 2012; He et al., 2016; Dosovitskiy et al., 2021; Radford et al., 2021), to natural language processing (Radford et al., 2019; Brown et al., 2020) and generative modeling in general (Ho et al., 2020; Esser et al., 2024). This paradigm has started to extend to robotics and control (Collaboration, 2023; Ma et al., 2024), in particular for systems for which demonstrations are readily available (Octo Model Team et al., 2024), or can be easily collected (Zhao et al., 2023). Even when demonstrations are not easily obtained, scaling laws in reinforcement learn-                
+
+> 1Department of Computer Science, ETH Z ¨urich, Z ¨urich, Switzerland 2Max Planck Institute for Intelligent Systems, T¨ubingen, Germany 3University of T ¨ubingen, T ¨ubingen, Germany. Correspondence to: Marco Bagatella <mbagatella@ethz.ch >.
+> Proceedings of the 42 nd International Conference on Machine Learning , Vancouver, Canada. PMLR 267, 2025. Copyright 2025 by the author(s). ?!
+
+Figure 1: Interactive loop between agent and expert. We consider a scenario where we receive a pre-trained policy, and are able to obtain expert demonstrations of tasks. We study how to select tasks (in blue) to obtain the best-performing policy after as few demonstrations as possible. ing (Ceron et al., 2024b;a; Nauman et al., 2024) suggest the possibility of leveraging large pre-trained policies. These “generalist” policies have decent performance on many tasks, and can be fine-tuned on particular set of tasks while lever-aging their previously learned representations and skills. We investigate whether representations of pre-trained policies can be used to significantly bootstrap learning progress. As a motivating example, consider a household robot that is delivered with a pre-trained “generalist” policy, and deployed in different conditions than those observed in its training data. While the robot may achieve some tasks in a zero-shot fashion (e.g. simple pick-and-place), other tasks might necessitate further fine-tuning (e.g. cooking an omelette). The robot should be able to interactively request demonstrations to compensate for its shortcomings. We seek to answer which demonstrations should be requested from the user to achieve the best performance, as quickly as possible. If the agent only needs to perform well in a single task, the fine-tuning process conventionally relies on behavioral cloning (Chen et al., 2021; Reed et al., 2022; Bousmalis et al., 2024) of expert demonstrations. As collecting demon-strations is in general costly, the number of demonstrations required, and thus the expert’s effort, should be minimized. However, as each demonstration should solve the same task, the allocation of the expert’s effort is straightforward. The multi-task case presents the more nuanced problem of select-ing which tasks to demonstrate, and when. This motivates the main focus of this work: provided a pre-trained pol-icy, how can we maximize multi-task performance with a minimal number of additional demonstrations? 
+
+To address this problem, we propose AMF ( Active Multi-
+
+1Active Multi-task Policy Fine-tuning 
+
+task Fine-tuning ), which selects maximally informative demonstrations. AMF parallels recent work on active super-vised fine-tuning of neural networks (H ¨ubotter et al., 2024). To this end, AMF relies on estimates of the demonstrations’ information gain on the expert policy. We prove that in suffi-ciently regular Markov decision processes, AMF converges to the expert policy. We then focus on practical scenarios where policies are represented as neural networks. We show that, despite additional challenges, AMF can effectively guide active task selection in such settings, leading to better policies after fewer demonstrations. Our contributions are: • We propose AMF, an algorithm for multi-task policy fine-tuning that maximizes the information gain of demonstrations about the expert policy. • We prove statistical guarantees for AMF, which ex-tend the results of H¨ ubotter et al. (2024) to dynamical systems. • We empirically scale AMF to high-dimensional tasks involving pre-trained neural policies. • We additionally propose a practical approach to alle-viate catastrophic forgetting in pre-trained neural poli-cies, which benefits arbitrary data selection strategies. 
+
+## 2. Related Work 
+
+Learning-based control and active data selection are both well-established research directions. This section discusses some topical works in either direction, and clarifies the novelty and placement of this work with respect to them. 
+
+Behavioral Cloning Numerous imitation learning ap-proaches have been developed with the goal of distilling knowledge from high-quality demonstrations to a control policy (Osa et al., 2018). Within this family of techniques, behavioral cloning (BC, Bain & Sammut, 1995; Ross & Bag-nell, 2010) aims to maximize policy performance by mini-mizing the distance of its actions to demonstrated actions, simply through supervised learning. While BC may suffer from accumulating errors (Ross et al., 2011), its empirical effectiveness has seen increasing support when high-quality demonstrations are readily available (Kumar et al., 2022). Next to recent empirical successes (Chi et al., 2023), formal analysis has also advanced (Spencer et al., 2021; Block et al., 2024a; Belkhale et al., 2024; Foster et al., 2024), and estab-lished provable performance guarantees for BC policies (Xu et al., 2020; Maran et al., 2023; Block et al., 2024b). 
+
+Multi-task and Generalist Policies Traditionally, behav-ioral cloning has mostly been deployed in a single-task setting. Multi-task learning in sequential decision-making has largely been investigated in the context of reinforcement learning (Teh et al., 2017; Sodhani et al., 2021; Yu et al., 2021; Sun et al., 2022; Cho et al., 2022; Hendawy et al., 2023). Moreover, the recent rise of multi-task generative models (Brown et al., 2020) has been mirrored by explo-ration of multi-task, or generalist policies, often trained via imitation learning (Reed et al., 2022; Bousmalis et al., 2024; Collaboration, 2023). These recent works mostly build upon algorithms developed for the single-task case, and simply integrate task-conditioning as part of the state. While sev-eral works hand-select parts of large, open-source robotics datasets for pre-training (Octo Model Team et al., 2024), active data selection for multi-task fine-tuning has not been addressed. Prior work on meta-learning has studied how one can explicitly meta-learn the ability to adapt to task demonstrations (Finn et al., 2017). We find this capability to emerge even from models that are not explicitly trained in this way, and focus on which demonstrations to obtain. 
+
+Data Selection The idea of directing a sampling process to gather information has been central to machine learning research and studied extensively in experimental de-sign (Chaloner & Verdinelli, 1995), active learning (Settles, 2009) and reinforcement learning (Mehta et al., 2022). Most work on active data selection summarizes data without focusing on a particular task (e.g., Sener & Savarese, 2017; Ash et al., 2020; Holzm ¨uller et al., 2023; Lightman et al., 2023), which has been predominantly applied to pre-training. Recently, adapting models after pre-training and during deployment has gained interest. Several works, mostly in computer vision, focus on unsupervised fine-tuning on a test instance (Jain & Learned-Miller, 2011; Krause et al., 2018; Sun et al., 2020; Wang et al., 2021b; Chen et al., 2022). We focus instead on supervised fine-tuning of learning-based controllers in dynamical systems . Our approach extends work on task-directed data selection (Kothawade et al., 2020; Wang et al., 2021a; Kothawade et al., 2022; Bickford Smith et al., 2023), which has recently been applied to the supervised fine-tuning of large-scale neural networks in vision (H ¨ubotter et al., 2024) and language (Rotman & Reichart, 2022; Xia et al., 2024; H¨ ubotter et al., 2025). 
+
+## 3. Background 
+
+3.1. Multi-Task Reinforcement Learning 
+
+The multi-task setting can be modeled by casting the en-vironment as a contextual Markov decision process (MDP) 
+
+M = ( S, A, C, P, R, γ, μ 0) where S ∈ RNS and A ∈
+
+RNA are possibly continuous state and action spaces. C is a (potentially infinite) set of tasks, with each task represented by an NC -dimensional vector c ∈ RNC . P : S ×A → ∆( S)
+
+models the transition probabilities ( ∆( S) represents the set of probability distributions over S), R : S × C → R
+
+is a scalar reward function, γ ∈ (0 , 1) is a discount factor and μ0 ∈ ∆( S) is the initial state distribution. In this setting, a policy is simply a state-and-task-conditional 2Active Multi-task Policy Fine-tuning 
+
+action distribution π : S × C → ∆( A)1. Any given policy induces a task-conditional distribution over trajectories: 
+
+τπ
+
+ s0, a 0, s 1, a 1, . . .  | c
+
+
+
+=
+
+μ0(s0)
+
+> ∞
+
+Y
+
+> t=0
+
+π(at | st, c ) · P (st+1 | st, a t).
+
+The discounted returns for a specific task c ∈ C or a task distribution μc ∈ ∆( C) are, respectively, 
+
+Jπ 
+
+> c
+
+= E  
+
+> (s0,... )∼τπ(c)
+> ∞
+
+X
+
+> t=0
+
+γtR(st, c ) and Jπ 
+
+> μc
+
+= E
+
+> c∼μc
+
+Jπc .
+
+Reinforcement learning algorithms traditionally aim directly at maximizing Jπ 
+
+> μc
+
+, which is notoriously chal-lenging. In the scope of this work, we instead consider an imitation learning setting, in which expert demon-strations from an optimal policy π⋆ are provided. In particular, we focus on behavioral cloning algorithms, which reduce control to a supervised learning problem. Given a set of N task-conditioned, H-length trajectories 
+
+ˆτ1: N = ( si
+
+> 0
+
+, a i
+
+> 0
+
+, . . . , s iH−1, a iH−1)Ni=1 with task labels c1: N ,behavioral cloning proposes a proxy objective for the policy 
+
+π: an empirical estimate of the log-likelihood under the data distribution: Jπ 
+
+> proxy
+
+= 1
+
+> N
+
+PNi=1 
+
+PH−1 
+
+> t=0
+
+log π(ait | sit, c i).
+
+If trajectories τ1: N are obtained from the optimal policy, cover the support of the desired task distribution μc, and the searched policy class is sufficiently rich, the maximizer of 
+
+Jπ 
+
+> proxy
+
+will also maximize Jπ 
+
+> μc
+
+as N and H increase. How-ever, in general, there is a clear mismatch between Jπ
+
+> proxy
+
+and Jπ 
+
+> μc
+
+(Xu et al., 2020; Maran et al., 2023). Nonetheless, the optimization of Jπ 
+
+> proxy
+
+is a relatively straightforward su-pervised learning problem, while the full RL problem raises several convergence issues, particularly in the offline setting (Levine et al., 2020). Thus, we use Jπ 
+
+> μc
+
+only for evaluation, and carry out optimization through the proxy objective. 
+
+3.2. Active Policy Fine-Tuning 
+
+In this work, we consider an active fine-tuning scheme for multi-task policies. The goal is to fine-tune a pre-trained pol-icy to perform well on a desired task distribution μc using as few expert demonstrations as possible. The agent is allowed 
+
+N sequential queries for demonstrations according to the fine-tuning budget. The n-th query should consist of a task 
+
+cn ∈ C . Once the agent selects a task, feedback is received from the optimal policy π⋆ : S × C → A (i.e., an optimal demonstrator). At each round the agent receives an H-step demonstration conditioned on the chosen task cn. This can be seen as a single measurement from a stochastic process over trajectories τ : C → ∆(( S × A )H ). Each observed trajectory up to round n is stored in a dataset (c1: n, ˆτ1: n),      
+
+> 1We use πand πto denote stochastic and deterministic policies, respectively, and π(s, c )for realizations.
+
+which can be used to fine-tune the policy, and condition the agent’s query at step n + 1 . The process is repeated for 
+
+N rounds, with the goal of producing a fine-tuned policy that maximizes the expected returns for the desired task distribution μc. We note that the fine-tuning process does not assume access to the pre-training data distribution. This setting is both realistic, as large pre-training datasets are rarely publicly available, and challenging, as it prohibits any naive data rebalancing strategy. 
+
+Modeling assumptions We take a Bayesian perspective on active multi-task fine-tuning, by assuming a Bayesian model 
+
+π over policies. We assume that demonstrations follow a noisy expert: ˜π(s, c ) = π⋆(s, c ) + ϵ(s, c ) where ϵ(s, c ) is independent noise. We remark, however, that AMF can also be understood from a non-Bayesian perspective as selecting tasks that most quickly minimize the size of frequentist confidence sets around the optimal policy. 
+
+## 4. Method 
+
+The active multi-task fine-tuning problem outlined so far re-quires active data selection for sample-efficient learning. We thus build on top of principled active learning approaches for non-sequential domains (H ¨ubotter et al., 2024), and propose AMF, which selects queries that maximize the expected information gain about the expert policy over its occupancy: 
+
+cn = arg max 
+
+> c′∈C
+
+E
+
+> H−1
+
+X
+
+> t=0
+
+I(π(st, c ); τ (c′) | c1: n−1, τ 1: n−1),
+
+with c ∼ μc, (s0, . . . ) ∼ τ (c), τ 1: n−1 ∼ τ (c1: n−1). (1) We show in Section 4.1 that, under certain regularity assumptions, the policy learned by AMF converges to the expert policy and matches its performance. These results constitute a first-of-its-kind performance guarantee for active multi-task fine-tuning. The main novelties of this guarantee are the extension of prior work to sequential do-mains where the visited trajectory (s0, a 0, s 1, . . . ) ∼ τ (cn)
+
+is unknown when selecting the task cn for a demonstration, and the connection to imitator performance. In Section 4.2, we discuss the design choices that make AMF amenable to optimization in practical settings. 
+
+4.1. Performance Guarantees 
+
+We begin by presenting the performance guarantees for AMF. Our proof builds upon rates for uncertainty reduction, then ties these to probabilistic convergence guarantees to 
+
+π⋆, finally resulting in performance guarantees within the MDP. We summarize the main result here, and include a formal proof in Appendix A. 
+
+Informal Assumption 4.1. We make these assumptions: 1. The expert policy π⋆ is deterministic, Lipschitz-3Active Multi-task Policy Fine-tuning 
+
+smooth, lies in the reproducing kernel Hilbert space 
+
+Hk(S × C ) of the kernel k with norm ∥π⋆∥k < ∞ and induces a Lipschitz-smooth Q-function. 2. The noise ϵ(s, c ) affecting demonstrations is condition-ally ρ-sub-Gaussian and bounded. 3. The dynamics of the contextual MDP M are Lipschitz-smooth with bounded support, the initial state dis-tribution μ0 has bounded support, and the reward is Lipschitz-smooth. Under these assumptions, we prove the following perfor-mance guarantee for active multi-task behavioral cloning. 
+
+Informal Theorem 4.2 (Performance guarantees for active multi-task BC) . Let all regularity assumptions hold. If each demonstrated task of length H is selected according to the criterion in Equation 1, then with probability 1 − δ the performance difference between the expert policy π⋆ and the imitator policy πn after n demonstrations can be upper bounded: 
+
+Jπ⋆ 
+
+> μc
+
+− Jπn 
+
+> μc
+
+≤ O(γ(Hn ))/√n, 
+
+where πn is the mean of π at round n and γ(Hn ) is the maximum information gain about the expert policy from 
+
+Hn samples, and is sublinear for a large class of problems. The O(·) notation suppresses all multiplicative terms that do not depend on n.
+
+Intuitively, this theorem proves that the imitator will eventually achieve the demonstrator’s performance in smooth, regular MDPs with sublinear γ(Hn ) (for a formal definition, we refer to Lemma A.6 in the Appendix). We can also prove a more general result under weaker assumptions: as long as the policy is regular, the imitator will reach the 
+
+noisy expert performance in arbitrary, non-smooth MDPs, albeit only in expectation. A full derivation of this further result can be found in Appendix B. 
+
+4.2. Practical Algorithms 
+
+Theorem 4.2 guarantees that, under regularity assumptions, the adaptive demonstration sampling scheme leads to con-vergence of the imitator’s performance to the optimal one. However, this criterion involves state occupancies and a con-ditional entropy term, which are hard to access or estimate in practice. Thus, here we derive a practical objective to be deployed in general settings. We first rephrase the objective from Equation 1 in its entropy form: 
+
+cn = arg min 
+
+> c′∈C
+
+E
+
+> H−1
+
+X
+
+> t=0
+
+H(π(st, c ) | c′, τ ′, c 1: n−1, τ 1: n−1),
+
+with c ∼ μc, (s0, . . . ) ∼ τ (c), τ ′ ∼ τ (c′),τ1: n−1 ∼ τ (c1: n−1). (2) where we use the definition of mutual information 
+
+I(·| τ (c′)) = H(·) − H (·| τ (c′)) , drop the first entropy term as it does not depend on c′, and rewrite the second entropy term as an expectation over τ (c′). As long as the task space 
+
+C is finite and its cardinality is tractable, the arg min opera-tor can be evaluated exhaustively, and the expectation over the task distribution μc can be computed exactly. When this is not the case, the arg min can be optimized through discretization, or with sampling-based optimizers. The ex-pectation over μc is also not particularly problematic, as it can be computed in closed form (if C is discrete) or esti-mated empirically through sampling, as μc is assumed to be known. However, two issues need to be resolved: (i) computing the expectation over the noisy expert’s trajectory distribution τ , and (ii) estimating the conditional entropy term H(· | · ).
+
+Occupancy estimation Computing the expectation over a policy’s occupancy over states or trajectories is in general intractable in continuous state spaces. Fortunately, a coarse empirical estimate can be obtained as soon as few expert demonstrations become available. The expectation 
+
+Eτ1: n−1∼τ (c1: n−1)(·) can be estimated through a single sample, which is always available in the form of the trajec-tories ˆτ1: n−1 collected so far, as they have effectively been sampled from τ (c1: n−1). However, the remaining two ex-pectations (i.e., Eτ ′∼τ (c′)(·) and E(s0,... )∼τ (c)(·)) involve the distribution over trajectories for an arbitrary task, which might not have been demonstrated yet. We observe that, at round n, the tasks demonstrated so far induce the empirical distribution ˆμc(·) = 1
+
+> n−1
+
+Pn−1 
+
+> i=1
+
+δci (·), while the trajecto-ries collected similarly induce ˆτ (·) = 1
+
+> n−1
+
+Pn−1 
+
+> i=1
+
+δˆτi (·),where δ indicates the Dirac delta distribution. We can show that expectations over the trajectory distribution for an arbitrary task c ∈ C can be estimated through importance sampling (i.e., by sampling trajectories from ˆτ (·) instead of τ (·| c)): Eτ ∼τ (·| c) f (τ ) = Eτ ∼ˆτ (·) τ (τ |c)   
+
+> ˆτ(τ)
+
+f (τ ). The importance weights can then be estimated as 
+
+τ (τ |c)
+
+ˆτ (τ ) ≈ τ (τ |c)
+
+R 
+
+> c′∈C
+
+ˆμc(c′)τ (τ |c′) = τ (τ |c)
+
+> 1
+> n−1
+
+Pn−1 
+
+> i=1
+
+τ (τ |ci)= (n − 1) μ0(s0) QH−1 
+
+> t=0
+
+˜π(at|st, c )P (st+1 |st, a t)
+
+Pn−1 
+
+> i=1
+
+μ0(s0) QH−1 
+
+> t=0
+
+˜π(at|st, c i)P (st+1 |st, a t)= (n − 1) QH−1 
+
+> t=0
+
+˜π(at|st, c )
+
+Pn−1
+
+> i=1
+
+QH−1 
+
+> t=0
+
+˜π(at|st, c i) := w(τ, c ) (3) where τ = ( s0, a 0, . . . ) and ˜π can be approximated with the current estimate of π. Intuitively, the likelihood ratio of a trajectory under two different tasks only depends on the like-lihood of actions under the policy, and thus does not require knowledge of the MDP. As the estimate may be inaccurate for small numbers of samples, in practice the algorithm can invest the first few rounds to query a single demonstration for each of the tasks (in case they are countable and few) or to sample the task space uniformly. On the other hand, the 4Active Multi-task Policy Fine-tuning 
+
+high-variance of the estimate can be controlled by practical solutions such as clipping. We present the resulting empir-ical estimate for Equation 2 in full in Appendix C, and a qualitative analysis of importance weights in Appendix K. 
+
+Entropy estimation The estimation of conditional en-tropy terms such as H(· | · ) has been widely researched in the literature. When the policy is represented through a Gaussian process GP (μ, k ) (Williams & Rasmussen, 2006) with known mean function μ and kernel k,2 the entropy can be directly quantified by the predicted variance. Let us denote a state-task tuple as x = ( s, c ), and let X be the sample vector obtained from concatenating states and tasks from previous trajectories (e.g., c1: n−1, τ 1: n−1, c ′, τ ′). The 
+
+unconditional entropy can be measured in closed form as 
+
+H(π(x)) = 12 log(2 πk (x, x )) + 12 , and the conditional en-tropy can be obtained by simply replacing the kernel k with 
+
+ˆkX (x, x ) = k(x, x ) − k(x, X )[ k(X, X ) + σ2 
+
+> ϵ
+
+I]−1k(X, x ),
+
+where σ2 
+
+> ϵ
+
+is the variance of the observation noise ϵ(s, c ), as-suming it is distributed according to a zero-mean Gaussian. 
+
+Algorithm 1 AMF 
+
+Input: initial policy π0, budget N , desired task distr. μc
+
+Output: fine-tuned policy πN
+
+Initialize dataset D0 = ∅
+
+for n ∈ [0 , . . . , N − 1] do 
+
+Compute cn as the solution to Eq. 2 Collect new demonstration τn for task cn
+
+if n + 1 % B = 0 then 
+
+Dn+1 = Dn+1 −B ∪ { cn−B+1: n, τ n−B+1: n}
+
+Update πn+1 from πn+1 −B with Dn+1 
+
+end if end for 
+
+Thus, when the policy can be modeled as a GP, the only approximation needed concerns occupancy estimation. We refer to this first, practical instantiation as AMF-GP, and present a general algorithmic framework in Algorithm 1. Application of the method to policies parameterized by neu-ral networks will adopt the same scheme. It will also require additional care on two distinct topics: kernel approximtions and mitigation of catastrophic forgetting. 
+
+Kernel approximations When the policy is parameter-ized through a neural network, estimation of the conditional entropy is far less straightforward. First, we cannot as-sume the availability of ad-hoc techniques for uncertainty estimation (e.g., Dropout (Srivastava et al., 2014; Gal & Ghahramani, 2016) or ensembles (Lakshminarayanan et al., 2017)), as they might not be featured in pre-trained models. 
+
+> 2For simplicity, we consider a single-output GP, but general-ize to multi-dimensional policies with multi-output GPs in both experiments and formal proofs.
+
+Even if the pre-trained model was perturbed and ensembled for fine-tuning, the ensemble disagreement would not cap-ture the pre-training data distribution. Second, access to pre-training data is in general unrealistic, or hard to manage due to size and ownership of large robotic datasets. Nevertheless, we can leverage the approximation of neural networks as a linear functions over an embedding space 
+
+π(s, c ; θ) = β⊤ϕθ (s, c ), where both weights β and em-beddings ϕθ (·) exist in a p-dimensional latent space (Lee et al., 2019; Khan et al., 2019). This technique does not violate any of the practical constraints listed above, and allows us to adapt the machinery introduced in GP set-tings. While several embedding strategies exist (Jacot et al., 2018; Devlin et al., 2019; Holzm ¨uller et al., 2023), we adopt loss gradient embeddings (Ash et al., 2020). Assuming the prior β ∼ N (0 , I ), the policy π(s, c ; θ) can be mod-eled by a Gaussian Process with kernel kθ (( s, c ), (s′, c ′)) = 
+
+⟨ϕθ (s, c ), ϕ θ (s′, c ′)⟩. When coupled with this approxima-tion, the conditional entropy objective in Equation 2 can be reformulated: 
+
+cn = arg min 
+
+> c′∈C
+
+E      
+
+> c∼μc,(s0,... )∼τ(c)
+> τ1: n−1∼τ(c1: n−1)
+> τ′∼τ(c′)
+> H−1
+
+X
+
+> t=0
+
+K(st, c, X ), (4) where K(st,c,X ) := kθ (xt,X )[ kθ (X,X )+ σ2 
+
+> ϵ
+
+I]−1kθ (X,x t),
+
+xt = ( st, c ), and X is the vector of states and tasks in 
+
+(c′, τ ′, c 1: n−1, τ 1: n−1). As the collected dataset grows, the conditioning on previous trajectories τ1: n−1 can instead be addressed by fine-tuning the network’s parameters θ (e.g., through conventional gradient descent), resulting in updates in the embedding function ϕθ .
+
+Dealing with forgetting Catastrophic forgetting is an in-herent challenge to neural function approximation under shifts to the training distribution, as optimization over new data is non-local, and may undo learning progress (Mc-Closkey & Cohen, 1989; French, 1999). This issue is critical in our setting, as actively guiding the fine-tuning distribution will necessarily accentuate the distribution shift from pre-training. Common strategies for its mitigation often involve rehearsal (Atkinson et al., 2021; Verwimp et al., 2021) or regularization (Kirkpatrick et al., 2017). Unfortunately, the former is not possible in this setting due to lack of access to pre-training data, and the latter was not found to be em-pirically effective (see Appendix H). Scale and a diverse pre-training dataset can also mitigate forgetting (Ramasesh et al., 2022), but neither can be controlled during fine-tuning. We thus propose a practical algorithmic solution to alleviate catastrophic forgetting when fine-tuning multi-task policies. Intuitively, we would like the policy to retain the skills it mastered during pre-training, while focusing on novel tasks during fine-tuning. Inspired by previous works in behavioral 5Active Multi-task Policy Fine-tuning    
+
+> No mismatch (12/12 tasks demonstrated) AMF-GP Uniform Mismatch (6/12 tasks demonstrated)
+
+Figure 2: Experiments in GP settings for a 2D integrator (see Figure 3). AMF-GP selects tasks that minimize the policy’s posterior entropy and improves the agent’s returns faster than uniform task sampling. In the middle, the improvement in final return over the baseline is greater when the pre-training distribution does not perfectly match the evaluation distribution μC
+
+and only demonstrates fewer tasks. We report return and entropy curves for non-mismatched and mismatched pre-training (left and right, respectively). We plot means and 90% simple bootstrap confidence intervals over 10 random seeds ; dots and crosses mark corresponding measurements. priors (Bagatella et al., 2022) and offline RL (Kumar et al., 2020), we propose retain a copy of the pre-trained policy, which we refer to as prior (πp). For a given state 
+
+s ∈ S and task c ∈ C , we can then linearly combine actions sampled from the fine-tuned policy π with those sampled from the prior: a = α(c)ˆ a + (1 − α(c))¯ a, where 
+
+ˆa ∼ π(·| s, c ), ¯a ∼ πp(·| s, c ). Crucially, α(c) ∈ [0 , 1] is a task-dependent weight trained through gradient descend on an proxy behavior cloning loss, with an additional conservative penalty that encourages closeness to 0. As a result, actions will drift towards the fine-tuned policy’s output as soon as it robustly outperforms pre-training performance on a given task. Tasks which are not improved during fine-tuning will rely instead on samples from the prior, and will not be forgotten. We refer to this technique as Adaptive Prior, and present a detailed description and a comparison to continual learning techniques in Appendix H. By combining the approximations required by AMF-GP with the described solutions for estimating entropy and pre-venting catastrophic forgetting, we obtain a method for ac-tive multi-task fine-tuning of policies parameterized via neural networks, which we refer to as AMF-NN. 
+
+## 5. Experiments 
+
+The experiment section is designed to evaluate active multi-task fine-tuning and provide an empirical answer to several questions. We thus reserve a section to each of them. Addi-tional evaluations are reported in Appendix D, E and F. 
+
+5.1. When is AMF beneficial? 
+
+When none of the assumptions listed in Section 4.1 is vio-lated, AMF is guaranteed to converge to the optimal policy. We furthermore investigate whether AMF also results in faster empirically faster convergence with respect to naive approaches to data collection. To do so, we compare AMF to uniform i.i.d. sampling from the set of tasks C. First, we consider a classic 2D integrator as a benchmark environ-ment (see Figure 3). The agent is a pointmass initialized in the origin, and can directly control its 2D velocity, which is integrated over the past trajectory to return the current state. We can define a continuous task space, in which each task consists of reaching a point on a circle centered on the ori-gin, and the agent is rewarded with the negative Euclidean distance to it. The evaluation distribution μc assigns equal probability to 12 points in different directions. The initial state distribution is deterministic, dynamics are both deter-ministic and smooth, while the expert policy is smooth and corrupted with i.i.d. Gaussian noise. We model the policy as a Gaussian Process with a RBF kernel, and we condition it on a pre-training dataset of 12 noisy demonstrations. We then collect 40 additional demonstrations by running both AMF-GP and uniform sampling. 
+
+Figure 3: 2D integrator. Starting from the origin, each task involves reaching a given point on a circle, as shown by differently colored trajectories. As a sanity check, we first con-sider a perfectly uniform pre-training regime, in which each evaluation task is demonstrated exactly once. The pre-training task distribution μD ∈ ∆( C)
+
+thus perfectly matches the eval-uation task distribution μC (Fig-ure 2, left). As it actively minimizes the policy’s entropy, AMF-GP increases the policy’s returns slightly faster when compared to uniform sampling of demonstrations. We then ex-tend this evaluation to more re-6Active Multi-task Policy Fine-tuning 
+
+State-based         
+
+> 010 20
+> Rounds
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> Multi-task success rate
+> Kitchen, mismatch
+> 010 20
+> Rounds
+> 0.60
+> 0.65
+> 0.70
+> 0.75
+> 0.80
+> 0.85
+> Multi-task success rate
+> Kitchen, no mismatch
+> 010 20
+> Rounds
+> 0.2
+> 0.3
+> 0.4
+> 0.5
+> 0.6
+> 0.7
+> 0.8
+> Multi-task success rate
+> Metaworld, mismatch
+> 010 20
+> Rounds
+> 0.3
+> 0.4
+> 0.5
+> 0.6
+> Multi-task success rate
+> Metaworld, no mismatch
+
+Visual         
+
+> 0510
+> Rounds
+> 0.1
+> 0.2
+> 0.3
+> 0.4
+> 0.5
+> Multi-task success rate
+> Kitchen, mismatch
+> 0510
+> Rounds
+> 0.20
+> 0.25
+> 0.30
+> 0.35
+> 0.40
+> 0.45
+> 0.50
+> Multi-task success rate
+> Kitchen, no mismatch
+> 0510
+> Rounds
+> 0.3
+> 0.4
+> 0.5
+> 0.6
+> 0.7
+> Multi-task success rate
+> Metaworld, mismatch
+> 0510
+> Rounds
+> 0.3
+> 0.4
+> 0.5
+> 0.6
+> Multi-task success rate
+> Metaworld, no mismatch
+
+AMF-NN Uniform, with adaptive prior Uniform Figure 4: AMF with neural policies in Frankakitchen (top) and Metaworld (bottom). Experiments are repeated for state and RGB inputs (left and right). We evaluate both mismatched and non-mismatched settings. AMF-NN is overall desirable, and highly beneficial for mismatched pre-training distributions. We report means and 90% simple bootstrap confidence intervals over 10 seeds. alistic pre-training distributions, characterised by a mis-match with respect to the evaluation distribution: μC̸ = μD
+
+(Figure 2, middle), and compare the final performance of the two methods as the pre-training budget is allocated to a decreasing number of tasks. As the pre-training distribution diverges from μC (e.g., when only 6/12 tasks are demon-strated in Figure 2, right), we observe that the performance gap between uniform task sampling and AMF-GP grows larger. This is to be expected, as in this case the informa-tion gain from the next demonstration heavily depends on the queried task, and taking the arg max of the criterion in Equation 1 is significantly better than choosing a random task. Intuitively, in this case, uniform sampling of tasks fails to reliably provide demonstrations for tasks that were observed less often during pre-training. 
+
+5.2. Can AMF scale to high-dimensional tasks? 
+
+In realistic settings, the assumptions enabling a formal anal-ysis of AMF are soon violated. As the complexity of the environments of interest increases, most modern behavior cloning applications rely on neural networks for policy pa-rameterization (Reed et al., 2022; Chi et al., 2023). Moti-vated by this pattern, we now study a second version of our method, AMF-NN, and evaluate its ability to scale to com-plex, high-dimensional tasks. We consider two common benchmarks for multi-task learning, both with a finite set of tasks. • In Metaworld (Yu et al., 2020) we create a scene with a robotic arm, a cup and a faucet, defining 4 tasks: moving the cup to two distinct positions, opening and closing the faucet. • In FrankaKitchen (Fu et al., 2020), we consider 5 tasks, namely turning a knob on or off, opening a pivoting or a sliding cabinet, or opening the microwave door. In both environments, we evaluate AMF-NN when learning from state measurements, as well as from raw pixels. In the first case, the policy is simply parameterized through a MLP, while in the second the MLP receives the embedding of a pre-trained visual encoder (Nair et al., 2022). The policy is pre-trained on ≈ 15 total demonstrations, which we allocate either uniformly across all tasks, or only on half of them, reproducing the non-mismatched and mismatched regimes from the previous experiments. Afterwards, when learning from state measurements, we apply AMF-NN for 20 iterations, collecting one demonstrations at each iteration. To compensate for the increased complexity, in visual settings we instead provide 2 demonstrations per each task selected and only evaluate 10 iterations. Figure 4 reports average multi-task success rates at each iter-7Active Multi-task Policy Fine-tuning     
+
+> 010 20
+> Rounds
+> 0.3
+> 0.4
+> 0.5
+> 0.6
+> 0.7
+> 0.8
+> 0.9
+> Multi-task success rate
+> Kitchen, mismatch
+> 010 20
+> Rounds
+> 0.60
+> 0.65
+> 0.70
+> 0.75
+> 0.80
+> 0.85
+> Multi-task success rate
+> Kitchen, no mismatch
+
+Last-layer gradient Last-layer Dropout 
+
+Figure 5: AMF performance with alternative uncertainty estimation schemes.   
+
+> 05
+> Rounds
+> 0.3
+> 0.4
+> 0.5
+> 0.6
+> 0.7
+> Multi-task success rate
+> Robomimic, mismatch
+> 05
+> Rounds
+> 0.3
+> 0.4
+> 0.5
+> 0.6
+> 0.7
+> Multi-task success rate
+> Robomimic, no mismatch
+
+AMF-NN Uniform, with adaptive prior Uniform 
+
+Figure 6: Evaluation on Robomimic. AMF-NN is widely applicable (e.g., to diffusion policies). ation compared to a random uniform task selection scheme. For the baseline, we additionally report performance with an adaptive prior, highlighting how this solution prevents per-formance degradation due to catastrophic forgetting of pre-training demonstrations. As reported in the previous section, AMF is beneficial under distribution mismatch, in which the pre-training dataset does not exactly cover the evalua-tion distribution μC . As a sanity check, we also observe that, when pre-training demonstrates all tasks equally and a uniform task allocation would be very effective, AMF’s performance matches this naive baseline. These trends are consistent across both environments, and both modalities. For a qualitative analysis of the strategy induced by AMF, we refer to Appendix I and J. 
+
+5.3. How do uncertainty estimates for AMF compare? 
+
+As entropy estimation is at the core of AMF-NN, we addi-tionally compare the adopted GP approximation with loss-gradient embeddings to other approaches from the liter-ature. In particular, we also consider an alternative GP approximation using last-layer embeddings (Holzm ¨uller et al., 2023), as well as test-time Dropout (Loquercio et al., 2020). The latter simply selects the task maximizing prior 
+
+entropy, that is arg max c∈C E PH−1 
+
+> t=0
+
+H(π(st, c ) | τ1: n−1),with τ1: n−1 ∼ τ (c1: n−1) and (s0, . . . ) ∼ τ (c). Both of these schemes are in practice desirable, as they do not re-quire access to action labels. However, we observe that these two schemes are less effective in driving task selec-tion. Hence, as shown in Figure 5 (and in Appendix G), multi-task performance is in general lower, suggesting that the entropy estimation technique is important for AMF-NN. 
+
+5.4. Can AMF be applied to off-the-shelf models? 
+
+As AMF-NN has minimal requirements (essentially, access to a differentiable pre-trained prior is sufficient), it should be widely applicable. In this section we investigate further scaling our evaluation to more complex tasks, multi-modal demonstrators and modern policy classes. We consider the Robomimic benchmark, which involves four long-horizon, precise manipulation tasks (up to ≈700 steps). While exper-iments in previous sections rely on demonstrations collected by scripted policies or RL agents, expert trajectories are in this case provided by humans; due to the increased scale, we sample 20 demonstrations for the task selected at each iteration. Finally, we fine-tune a larger generative model, namely a diffusion policy (Chi et al., 2023), which remains compatible with AMF-NN. Despite the change in data source and architectures, the results we observe in Figure 6 are consistent with those reported in previous settings: active fine-tuning and an adaptive prior are overall helpful, especially when the pre-training distribution does not match the evaluation distribu-tion μC .
+
+## 6. Discussion 
+
+As generalist robotic policies gain prominence, a new set of challenges and opportunities emerge. This work responds to this trend by investigating an active multi-task fine-tuning scheme, which adaptively selects the task to be demonstrated for sample-efficient multi-task behavioral cloning. This approach is developed from first principles, extending a formally-motivated, information-based criterion to trajectories over dynamic systems. The resulting method is both formally supported by novel performance guarantees and widely applicable. Moreover, a practical instantiation enables sample-efficient multi-task fine-tuning across GP and neural network policy classes. Naturally, active multi-task fine-tuning has several limita-tions. When coupled with neural networks, the algorithm relies on uncertainty estimation techniques, which remain an open problem. While the approximation we leverage is informative in our experiments, AMF could benefit if large pre-trained policies would allow other off-the-shelf uncertainty quantification techniques (e.g., through model ensembling during pre-training). Second, we found the per-formance of AMF to depend naturally on the pre-training 8Active Multi-task Policy Fine-tuning 
+
+data distribution. While AMF induces efficient learning for mismatched pre-training distributions, it naturally brings more modest gains when the pre-trained policy is equally capable for all tasks, and uniform task sampling is sufficient. On top of addressing the current limitations, this work sug-gests multiple interesting directions. An extensive empirical evaluation of active fine-tuning with large-scale generalist policies is clearly desirable, but remains infeasible at the moment due to the scarce availability of open-source cali-brated benchmarks. Another future research direction would involve direct estimation of the RL objective, thus removing the dependence on non-equivalent BC proxy objectives. 
+
+## Acknowledgments 
+
+We thank Nico G¨ urtler, Ji Shi, Andreas Ren´ e Geist and Us-man Namjad for the valuable discussions. Marco Bagatella is supported by the Max Planck ETH Center for Learn-ing Systems. Georg Martius is a member of the Machine Learning Cluster of Excellence, EXC number 2064/1 – Project number 390727645. We acknowledge the support from the German Federal Ministry of Education and Re-search (BMBF) through the T ¨ubingen AI Center (FKZ: 01IS18039B), from the European Research Council (ERC) under the European Union’s Horizon 2020 research and Innovation Program Grant agreement no. 815943, and from the Swiss National Science Foundation under NCCR Au-tomation, grant agreement 51NF40 180545. 
+
+## Impact Statement 
+
+This paper formally introduces a framework for active data selection in MDPs, and investigates its applicability in di-verse settings. Although this direction as a whole might eventually have an effect on labor and automation, we do not foresee a direct impact of our work in terms of societal consequences. 
+
+## References 
+
+Abbasi-Yadkori, Y. Online learning for linearly parametrized control problems . PhD thesis, University of Alberta, 2013. Ash, J. T., Zhang, C., Krishnamurthy, A., Langford, J., and Agarwal, A. Deep batch active learning by diverse, uncertain gradient lower bounds. In ICLR , 2020. Atkinson, C., McCane, B., Szymanski, L., and Robins, A. Pseudo-rehearsal: Achieving deep reinforcement learning without catastrophic forgetting. Neurocomputing , 428, 2021. Ba, J. L. Layer normalization. NIPS 2016 Deep Learning Symposium , 2016. Bagatella, M., Christen, S. J., and Hilliges, O. Sfp: State-free priors for exploration in off-policy reinforcement learning. In TMLR , 2022. Bain, M. and Sammut, C. A framework for behavioural cloning. In Machine Intelligence , volume 15, 1995. Belkhale, S., Cui, Y., and Sadigh, D. Data quality in imita-tion learning. In NeurIPS , volume 36, 2024. Bickford Smith, F., Kirsch, A., Farquhar, S., Gal, Y., Foster, A., and Rainforth, T. Prediction-oriented bayesian active learning. In AISTATS , 2023. Block, A., Foster, D. J., Krishnamurthy, A., Simchowitz, M., and Zhang, C. Butterfly effects of sgd noise: Error amplification in behavior cloning and autoregression. In 
+
+ICLR , 2024a. Block, A., Jadbabaie, A., Pfrommer, D., Simchowitz, M., and Tedrake, R. Provable guarantees for generative behav-ior cloning: Bridging low-level stability and high-level behavior. In NeurIPS , volume 36, 2024b. Bogunovic, I., Scarlett, J., Krause, A., and Cevher, V. Trun-cated variance reduction: A unified approach to bayesian optimization and level-set estimation. NeurIPS , 29, 2016. Bousmalis, K., Vezzani, G., Rao, D., Devin, C. M., Lee, A. X., Villalonga, M. B., Davchev, T., Zhou, Y., Gupta, A., Raju, A., Laurens, A., Fantacci, C., Dalibard, V., Zambelli, M., Martins, M. F., Pevceviciute, R., Blokz-ijl, M., Denil, M., Batchelor, N., Lampe, T., Parisotto, E., Zolna, K., Reed, S., Colmenarejo, S. G., Scholz, J., Abdolmaleki, A., Groth, O., Regli, J.-B., Sushkov, O., Roth ¨orl, T., Chen, J. E., Aytar, Y., Barker, D., Ortiz, J., Riedmiller, M., Springenberg, J. T., Hadsell, R., Nori, F., and Heess, N. Robocat: A self-improving generalist agent for robotic manipulation. TMLR , 2024. Brown, T., Mann, B., Ryder, N., Subbiah, M., Kaplan, J. D., Dhariwal, P., Neelakantan, A., Shyam, P., Sastry, G., Askell, A., et al. Language models are few-shot learners. In NeurIPS , volume 33, 2020. Ceron, J. S. O., Courville, A., and Castro, P. S. In value-based deep reinforcement learning, a pruned network is a good network. In ICML , 2024a. Ceron, J. S. O., Sokar, G., Willi, T., Lyle, C., Farebrother, J., Foerster, J. N., Dziugaite, G. K., Precup, D., and Castro, P. S. Mixtures of experts unlock parameter scaling for deep RL. In ICML , 2024b. Chaloner, K. and Verdinelli, I. Bayesian experimental de-sign: A review. Statistical science , 1995. 9Active Multi-task Policy Fine-tuning 
+
+Chaudhry, A., Rohrbach, M., Elhoseiny, M., Ajanthan, T., Dokania, P. K., Torr, P. H., and Ranzato, M. On tiny episodic memories in continual learning. arXiv preprint arXiv:1902.10486 , 2019. Chen, D., Wang, D., Darrell, T., and Ebrahimi, S. Con-trastive test-time adaptation. In CVPR , 2022. Chen, L., Lu, K., Rajeswaran, A., Lee, K., Grover, A., Laskin, M., Abbeel, P., Srinivas, A., and Mordatch, I. De-cision transformer: Reinforcement learning via sequence modeling. In NeurIPS , volume 34, 2021. Chi, C., Feng, S., Du, Y., Xu, Z., Cousineau, E., Burchfiel, B., and Song, S. Diffusion policy: Visuomotor policy learning via action diffusion. In RSS , 2023. Cho, M., Jung, W., and Sung, Y. Multi-task reinforcement learning with task representation method. In ICLR Work-shop on Generalizable Policy Learning in Physical World ,2022. Collaboration, O. X.-E. Open x-embodiment: Robotic learn-ing datasets and RT-x models. In Towards Generalist Robots: Learning Paradigms for Scalable Skill Acquisi-tion @ CoRL2023 , 2023. Devlin, J., Chang, M.-W., Lee, K., and Toutanova, K. Bert: Pre-training of deep bidirectional transformers for lan-guage understanding. In NAACL , 2019. Dosovitskiy, A., Beyer, L., Kolesnikov, A., Weissenborn, D., Zhai, X., Unterthiner, T., Dehghani, M., Minderer, M., Heigold, G., Gelly, S., Uszkoreit, J., and Houlsby, N. An image is worth 16x16 words: Transformers for image recognition at scale. In ICLR , 2021. Esser, P., Kulal, S., Blattmann, A., Entezari, R., M ¨uller, J., Saini, H., Levi, Y., Lorenz, D., Sauer, A., Boesel, F., Podell, D., Dockhorn, T., English, Z., and Rombach, R. Scaling rectified flow transformers for high-resolution image synthesis. In ICML , 2024. Finn, C., Abbeel, P., and Levine, S. Model-agnostic meta-learning for fast adaptation of deep networks. In ICML ,2017. Foster, D. J., Block, A., and Misra, D. Is behavior cloning all you need? understanding horizon in imitation learning. 
+
+arXiv preprint arXiv:2407.15007 , 2024. French, R. M. Catastrophic forgetting in connectionist net-works. Trends in cognitive sciences , 3, 1999. Fu, J., Kumar, A., Nachum, O., Tucker, G., and Levine, S. D4rl: Datasets for deep data-driven reinforcement learning. arXiv preprint arXiv:2004.07219 , 2020. Gal, Y. and Ghahramani, Z. Dropout as a bayesian approxi-mation: Representing model uncertainty in deep learning. In ICML , 2016. He, K., Zhang, X., Ren, S., and Sun, J. Deep residual learning for image recognition. In CVPR , 2016. Hendawy, A., Peters, J., and D’Eramo, C. Multi-task rein-forcement learning with mixture of orthogonal experts. In ICLR , 2023. Ho, J., Jain, A., and Abbeel, P. Denoising diffusion proba-bilistic models. In NeurIPS , volume 33, 2020. Holzm ¨uller, D., Zaverkin, V., K ¨astner, J., and Steinwart, I. A framework and benchmark for deep batch active learning for regression. JMLR , 24, 2023. H ¨ubotter, J., Sukhija, B., Treven, L., As, Y., and Krause, A. Transductive active learning: Theory and applications. In 
+
+NeurIPS , 2024. H ¨ubotter, J., Bongni, S., Hakimi, I., and Krause, A. Effi-ciently learning at test-time: Active fine-tuning of llms. In ICLR , 2025. HuggingFace. all-minilm-l6-v2. https:// huggingface.co/sentence-transformers/ all-MiniLM-L6-v2 , 2026. Jacot, A., Gabriel, F., and Hongler, C. Neural tangent kernel: Convergence and generalization in neural networks. In 
+
+NeurIPS , volume 31, 2018. Jain, V. and Learned-Miller, E. Online domain adaptation of a pre-trained cascade of classifiers. In CVPR , 2011. Kakade, S. and Langford, J. Approximately optimal approx-imate reinforcement learning. In ICML , 2002. Khan, M. E. E., Immer, A., Abedi, E., and Korzepa, M. Approximate inference turns deep networks into gaussian processes. In NeurIPS , volume 32, 2019. Kirkpatrick, J., Pascanu, R., Rabinowitz, N., Veness, J., Des-jardins, G., Rusu, A. A., Milan, K., Quan, J., Ramalho, T., Grabska-Barwinska, A., et al. Overcoming catastrophic forgetting in neural networks. Proceedings of the national academy of sciences , 114, 2017. Kothawade, S., Beck, N., Killamsetty, K., and Iyer, R. Simi-lar: Submodular information measures based active learn-ing in realistic scenarios. In NeurIPS , 2020. Kothawade, S., Kaushal, V., Ramakrishnan, G., Bilmes, J., and Iyer, R. Prism: A rich class of parameterized submodular information measures for guided data subset selection. In AAAI , 2022. 10 Active Multi-task Policy Fine-tuning 
+
+Krause, B., Kahembwe, E., Murray, I., and Renals, S. Dy-namic evaluation of neural sequence models. In ICML ,2018. Krizhevsky, A., Sutskever, I., and Hinton, G. E. Imagenet classification with deep convolutional neural networks. In NeurIPS , volume 25, 2012. Kumar, A., Zhou, A., Tucker, G., and Levine, S. Conser-vative q-learning for offline reinforcement learning. In 
+
+NeurIPS , 2020. Kumar, A., Hong, J., Singh, A., and Levine, S. Should i run offline reinforcement learning or behavioral cloning? In 
+
+ICLR , 2022. Kumar, V., Shah, R., Zhou, G., Moens, V., Caggiano, V., Gupta, A., and Rajeswaran, A. Robohive: A unified framework for robot learning. NeurIPS , 36, 2024. Lakshminarayanan, B., Pritzel, A., and Blundell, C. Simple and scalable predictive uncertainty estimation using deep ensembles. In NeurIPS , volume 30, 2017. Lee, J., Xiao, L., Schoenholz, S., Bahri, Y., Novak, R., Sohl-Dickstein, J., and Pennington, J. Wide neural networks of any depth evolve as linear models under gradient descent. In NeurIPS , volume 32, 2019. Levine, S., Kumar, A., Tucker, G., and Fu, J. Offline rein-forcement learning: Tutorial, review, and perspectives on open problems. arXiv preprint arXiv:2005.01643 , 2020. Li, X., Hsu, K., Gu, J., Pertsch, K., Mees, O., Walke, H. R., Fu, C., Lunawat, I., Sieh, I., Kirmani, S., Levine, S., Wu, J., Finn, C., Su, H., Vuong, Q., and Xiao, T. Evaluat-ing real-world robot manipulation policies in simulation. 
+
+arXiv preprint arXiv:2405.05941 , 2024. Lightman, H., Kosaraju, V., Burda, Y., Edwards, H., Baker, B., Lee, T., Leike, J., Schulman, J., Sutskever, I., and Cobbe, K. Let’s verify step by step. arXiv preprint arXiv:2305.20050 , 2023. Loquercio, A., Segu, M., and Scaramuzza, D. A general framework for uncertainty estimation in deep learning. 
+
+IEEE Robotics and Automation Letters , 5, 2020. Loshchilov, I. and Hutter, F. Decoupled weight decay regu-larization. In ICLR , 2019. Lyle, C., Zheng, Z., Nikishin, E., Pires, B. A., Pascanu, R., and Dabney, W. Understanding plasticity in neural networks. In ICML , 2023. Ma, Y., Song, Z., Zhuang, Y., Hao, J., and King, I. A survey on vision-language-action models for embodied ai. arXiv preprint arXiv:2405.14093 , 2024. Mandlekar, A., Xu, D., Wong, J., Nasiriany, S., Wang, C., Kulkarni, R., Fei-Fei, L., Savarese, S., Zhu, Y., and Mart ´ın-Mart ´ın, R. What matters in learning from offline human demonstrations for robot manipulation. In CORL ,2021. Maran, D., Metelli, A. M., and Restelli, M. Tight perfor-mance guarantees of imitator policies with continuous actions. In AAAI , volume 37, 2023. McCloskey, M. and Cohen, N. J. Catastrophic interference in connectionist networks: The sequential learning prob-lem. Psychology of learning and motivation , 24, 1989. Mehta, V., Paria, B., Schneider, J., Ermon, S., and Neiswanger, W. An experimental design perspective on model-based reinforcement learning. In ICLR , 2022. Nair, S., Rajeswaran, A., Kumar, V., Finn, C., and Gupta, A. R3m: A universal visual representation for robot manipulation. In CORL , 2022. Nauman, M., Ostaszewski, M., Jankowski, K., Miło ´s, P., and Cygan, M. Bigger, regularized, optimistic: scaling for compute and sample-efficient continuous control. arXiv preprint arXiv:2405.16158 , 2024. Octo Model Team, Ghosh, D., Walke, H., Pertsch, K., Black, K., Mees, O., Dasari, S., Hejna, J., Xu, C., Luo, J., Kreiman, T., Tan, Y., Chen, L. Y., Sanketi, P., Vuong, Q., Xiao, T., Sadigh, D., Finn, C., and Levine, S. Octo: An open-source generalist robot policy. In RSS , 2024. Osa, T., Pajarinen, J., Neumann, G., Bagnell, J. A., Abbeel, P., Peters, J., et al. An algorithmic perspective on imita-tion learning. Foundations and Trends® in Robotics , 7, 2018. Rachelson, E. and Lagoudakis, M. G. On the locality of action domination in sequential decision making. Inter-national Symposium on Artificial Intelligence and Mathe-matics , 2010. Radford, A., Wu, J., Child, R., Luan, D., Amodei, D., Sutskever, I., et al. Language models are unsupervised multitask learners. OpenAI blog , 2019. Radford, A., Kim, J. W., Hallacy, C., Ramesh, A., Goh, G., Agarwal, S., Sastry, G., Askell, A., Mishkin, P., Clark, J., et al. Learning transferable visual models from natural language supervision. In ICML , 2021. Ramasesh, V. V., Lewkowycz, A., and Dyer, E. Effect of scale on catastrophic forgetting in neural networks. ICLR ,2022. Reed, S., Zolna, K., Parisotto, E., Colmenarejo, S. G., Novikov, A., Barth-maron, G., Gim ´enez, M., Sulsky, 11 Active Multi-task Policy Fine-tuning 
+
+Y., Kay, J., Springenberg, J. T., Eccles, T., Bruce, J., Razavi, A., Edwards, A., Heess, N., Chen, Y., Hadsell, R., Vinyals, O., Bordbar, M., and de Freitas, N. A generalist agent. TMLR , 2022. Riemer, M., Cases, I., Ajemian, R., Liu, M., Rish, I., Tu, Y., , and Tesauro, G. Learning to learn without forgetting by maximizing transfer and minimizing interference. In 
+
+ICLR , 2019. Ross, S. and Bagnell, D. Efficient reductions for imitation learning. In AISTATS , 2010. Ross, S., Gordon, G., and Bagnell, D. A reduction of imitation learning and structured prediction to no-regret online learning. In AISTATS , 2011. Rotman, G. and Reichart, R. Multi-task active learning for pre-trained transformer-based models. ACL , 2022. Sener, O. and Savarese, S. Active learning for convolutional neural networks: A core-set approach. In ICLR , 2017. Settles, B. Active learning literature survey. Technical report, University of Wisconsin-Madison Department of Computer Sciences, 2009. Sodhani, S., Zhang, A., and Pineau, J. Multi-task rein-forcement learning with context-based representations. In ICML , 2021. Spencer, J., Choudhury, S., Venkatraman, A., Ziebart, B., and Bagnell, J. A. Feedback in imitation learning: The three regimes of covariate shift. arXiv preprint arXiv:2102.02872 , 2021. Srivastava, N., Hinton, G., Krizhevsky, A., Sutskever, I., and Salakhutdinov, R. Dropout: a simple way to prevent neural networks from overfitting. JMLR , 15, 2014. Sun, L., Zhang, H., Xu, W., and Tomizuka, M. Paco: Parameter-compositional multi-task reinforcement learn-ing. In NeurIPS , volume 35, 2022. Sun, Y., Wang, X., Liu, Z., Miller, J., Efros, A., and Hardt, M. Test-time training with self-supervision for general-ization under distribution shifts. In ICML , 2020. Teh, Y., Bapst, V., Czarnecki, W. M., Quan, J., Kirkpatrick, J., Hadsell, R., Heess, N., and Pascanu, R. Distral: Robust multitask reinforcement learning. In NeurIPS , volume 30, 2017. Verwimp, E., De Lange, M., and Tuytelaars, T. Rehearsal revealed: The limits and merits of revisiting samples in continual learning. In ICCV , 2021. Wang, C., Sun, S., and Grosse, R. Beyond marginal uncer-tainty: How accurately can bayesian regression models estimate posterior predictive correlations? In AISTATS ,2021a. Wang, D., Shelhamer, E., Liu, S., Olshausen, B., and Darrell, T. Tent: Fully test-time adaptation by entropy minimiza-tion. In ICLR , 2021b. Wang, L., Zhang, X., Su, H., and Zhu, J. A comprehen-sive survey of continual learning: theory, method and application. IEEE Transactions on Pattern Analysis and Machine Intelligence , 2024. Williams, C. K. and Rasmussen, C. E. Gaussian processes for machine learning . MIT press Cambridge, MA, 2006. Xia, M., Malladi, S., Gururangan, S., Arora, S., and Chen, D. Less: Selecting influential data for targeted instruction tuning. In ICML , 2024. Xu, T., Li, Z., and Yu, Y. Error bounds of imitating policies and environments. In NeurIPS , volume 33, 2020. Yu, T., Quillen, D., He, Z., Julian, R., Hausman, K., Finn, C., and Levine, S. Meta-world: A benchmark and evaluation for multi-task and meta reinforcement learning. In CORL ,2020. Yu, T., Kumar, A., Chebotar, Y., Hausman, K., Levine, S., and Finn, C. Conservative data sharing for multi-task offline reinforcement learning. In NeurIPS , volume 34, 2021. Zhao, T. Z., Kumar, V., Levine, S., and Finn, C. Learning fine-grained bimanual manipulation with low-cost hard-ware. In ICML Workshop on New Frontiers in Learning, Control, and Dynamical Systems , 2023. 12 Active Multi-task Policy Fine-tuning 
+
+## A. Performance guarantees under regularity assumptions 
+
+This sections retrieves guarantees on the performance of the imitator policy as a function of the number of provided demonstrations n. At first, this analysis focuses on policies over a single-dimensional action space. An extension to multi-dimensional outputs is introduced later on. The general sketch of the proof can be informally described as follows: • we first introduce the regularity assumptions required for the guarantees; • we then show that, in Lipschitz, bounded MDPs, the effect of stochasticity on information gain at each round can be controlled; • we show how the variance over the imitator’s policy shrinks according to the maximum information gain at each round, which in turn depends on the maximum information gain over a set of queries to the expert; • starting from the previous result, we leverage a well-known theorem (Abbasi-Yadkori, 2013) to retrieve a probabilistic, anytime guarantee on the error of the imitator; • we quantify the relationship between the imtator’s error and its performance, thus retrieving our main theoretical result. 
+
+A.1. Assumptions 
+
+It is clear that bounding imitation performance would be hopeless without any regularity assumption, as slight errors in the imitator’s policy could result in arbitrary differences in return. We thus introduce the following: 
+
+Assumption A.1. (Regular, noisy policy) We assume that the optimal policy π⋆ ∼ GP (μ, k ) with known mean function 
+
+μ and kernel k. Furthermore the noise ϵ(s, c ) is mutually independent and zero-mean Gaussian, with known variance 
+
+ρ2(s, c ) > 0 for all (s, c ) ∈ S × C .In order to motivate further assumptions, let us recall the criterion from Equation 1: 
+
+cn = arg max 
+
+> c′∈C
+
+E    
+
+> τ1: n−1∼τ(c1: n−1)
+> c∼μc,(s0,... )∼τ(c)
+> H−1
+
+X
+
+> t=0
+
+I(π(st, c ); τ (c′) | c1: n−1, τ 1: n−1). (5) Through this section, we will use a slightly more precise formulation: 
+
+cn = arg max 
+
+> c′∈C
+
+E      
+
+> τ1: n−1∼τ(c1: n−1),τ ∼τ(c′)
+> c∼μc,(s0,... )∼τ(c)
+> H−1
+
+X
+
+> t=0
+
+I(π(st, c ); ˜π(τ, c ′) | c1: n−1, τ 1: n−1), (6) in which we clarify that the mutual information is only computed with respect to the actions of the noisy expert, and overload the notation with ˜π(τ, c ′) = ( ˜π(si, c ′)) H−10 for τ = ( si, a i)H−10 . The criterion selects the task cn with the greatest expected mutual information between the policy and the trajectory associated with the task. We note that, the objective produces a fully deterministic sequence of tasks, as all stochasticity is resolved in the expectation. Nevertheless, the actual sequence of states at which the demonstrator is queried remains stochastic. For this reason, we require the following two sets of assumptions to ensure that information gained along empirical trajectories is not arbitrarily smaller than the expected one. 
+
+Assumption A.2. (Lipschitz, bounded MDP and policy) Given the contextual MDP M = ( S, A, C, P, R, γ, μ 0) and the noisy expert ˜π we assume that, for every {(s, c, a ), (s′, c ′, a ′)} ⊆ S × C × A :• the support of the initial state distribution μ0 is bounded by an ϵμ0 -ball 
+
+max  
+
+> sl,s h∈supp (μ0)
+
+∥sh − sl∥2 ≤ ϵμ0 ,
+
+• the transition kernel P is LP -smooth 
+
+W(P (·| s, a ), P (·| s′, a ′)) ≤ LP · d(( s, a ), (s′, a ′)) ,
+
+13 Active Multi-task Policy Fine-tuning 
+
+where d(( s, a ), (s′, a ′)) = ∥s − s∥2 + ∥a − a′∥2, and W(·, ·) is the Wasserstein 1-distance with respect to d(·, ·);furthermore, the support of P (·| s, a ) is bounded by an ϵP -ball 
+
+max   
+
+> sl,s h∈supp (P(·| s,a ))
+
+∥sh − sl∥2 ≤ ϵP ,
+
+• the reward function R is LR-smooth 
+
+|R(s, c, a ) − R(s′, c ′, a ′)| < L R · d(( s, c, a ), (s′, c ′, a ′)) ,
+
+where d(( s, c, a ), (s′, c ′, a ′)) = ∥s − s∥2 + ∥c − c′∥2 + ∥a − a′∥2,• the noisy expert ˜π is Lπ -smooth 
+
+W(˜π(·| s, c, a ), P (·| s′, c ′, a ′)) ≤ Lπ · d(( s, c, a ), (s′, c ′, a ′)) ,
+
+where d(( s, c, a ), (s′, c ′, a ′)) = ∥s − s∥2 + ∥c − c′∥2 + ∥a − a′∥2 and W(·, ·) is the 1-Wasserstein distance with respect to d(·, ·); furthermore, the support of ˜π(·| s, a ) is bounded by an ϵπ -ball 
+
+max  
+
+> al,a h∈supp (˜π(·| s,c ))
+
+∥ah − al∥2 ≤ ϵP ,
+
+• finally, the Q-function for the expert π⋆ is LQ-smooth 
+
+|Qπ⋆
+
+(s, c, a ) − Qπ⋆
+
+(s′, c ′, a ′)| ≤ LQ · d(( s, c, a ), (s′, c ′, a ′)) .
+
+We note that smoothness of the noisy expert is guaranteed by construction if the expert π⋆ is Lπ -smooth. 
+
+Assumption A.3. (Smooth MI) For every pair of sequences of trajectories {τ1: n−1, τ ′
+
+> 1: n−1
+
+} ⊆ (S × A )H(n−1) , (s, c ) ∈S × C , c1: n−1 ∈ C n−1, ˜τ ∈ (S × A )H and cn ∈ C , we assume that the mutual information at step n is LI -smooth with respect to the mean square deviation of collected trajectories: 
+
+|I (π(s, c ); ˜π(˜ τ , c n)|c1: n−1, τ 1: n−1) − I (π(s, c ); ˜π(˜ τ , c n)|c1: n−1, τ ′
+
+> 1: n−1
+
+)| ≤ LI · d(τ1: n−1, τ ′
+
+> 1: n−1
+
+),
+
+where d(( s0,1, a 0,1, . . . s H,n −1, a H,n −1), (s′
+
+> 0,1
+
+, a ′
+
+> 0,1
+
+, . . . s ′
+
+> H,n −1
+
+, a ′
+
+> H,n −1
+
+) = 1
+
+> n−1
+
+Pn−1
+
+> m=1
+
+(PH−1 
+
+> t=0
+
+∥st,m − s′
+
+> t,m
+
+∥22 + ∥at,m −
+
+a′
+
+> t,m
+
+∥22) 12 is the mean square deviation over the concatenation of trajectories. 
+
+A.2. Proof 
+
+We first prove that, under Assumptions A.2 and A.3, the effect of stochasticity on the mutual information at step n is bounded. 
+
+Lemma A.4. Let Assumptions A.2 and A.3 hold. Fix a sequence of tasks c1: n−1 and consider two arbitrary sequences of trajectories τ1: n−1 and τ ′ 
+
+> 1: n−1
+
+sampled from τ (c1: n−1). Fix one state-task pair (s, c ) ∈ S × C , one task cn ∈ C and one trajectory ˜τ ∼ τ (cn). Let ϵn = 8 H 32 (1 + max( LP , L π )) H max( ϵ0, ϵ π , ϵ P ). The difference in mutual information when conditioning on the two sequences of trajectories can be bounded: 
+
+|I (π(s, c ); ˜π(˜ τ , c n)|τi:n−1) − I (π(s, c ); ˜π(˜ τ , c n)|τ ′
+
+> i:n−1
+
+)| ≤ ϵn.
+
+Proof. Under Assumption A.3 it is sufficient to show that stochasticity in the MDP does not cause the demonstrator’s trajectories to deviate excessively. This is a direct consequence of smoothness and boundedness, which we assume in Assumption A.2, and can be shown by induction. Let us fix a task cn ∈ C and consider two trajectories τ, τ ′ ∼ τ (cn). For the two initial states (s0, s ′
+
+> 0
+
+), boundedness of the initial state distribution μ0 implies that ∥s0 − s′
+
+> 0
+
+∥2 ≤ ϵμ0 . Now, assuming 14 Active Multi-task Policy Fine-tuning 
+
+that the distance between two states (st, s ′
+
+> t
+
+) is bounded as ∥st − s′
+
+> t
+
+∥2 ≤ ϵt, we have that 
+
+ϵt+1 := ∥st+1 − s′
+
+> t+1
+
+∥2 (7) 
+
+> (i)
+
+≤ W (P (·| st, a t), P (·| s′
+
+> t
+
+, a ′
+
+> t
+
+)) + 2 ϵP (8) 
+
+≤ LP · (∥st − s′
+
+> t
+
+∥2 + ∥at − a′
+
+> t
+
+∥2) + 2 ϵP (9) 
+
+= LP · (ϵt + ∥at − a′
+
+> t
+
+∥2) + 2 ϵP (10) 
+
+> (ii )
+
+≤ LP · (ϵt + W(˜π(·| st, c t), ˜π(·| s′
+
+> t
+
+, c ′
+
+> t
+
+)) + 2 ϵπ ) + 2 ϵP (11) 
+
+≤ Lπ · (ϵt + Lπ · ∥ st − s′
+
+> t
+
+∥2 + 2 ϵπ ) + 2 ϵP (12) 
+
+= LP · (ϵt + Lπ · ϵt + 2 ϵπ ) + 2 ϵP (13) 
+
+= LP · (( Lπ + 1) · ϵt + 2 ϵπ ) + 2 ϵP (14) 
+
+= LP (1 + Lπ )ϵt + 2( LP ϵπ + ϵP ) (15) 
+
+:= Aϵ t + B, (16) where Lemma N.2 was used in (i) and (ii); Assumption A.2 and the fact that ct = c′ 
+
+> t
+
+were used through the rest of the derivation. The recurrence relation can be easily unrolled as 
+
+ϵt ≤ Atϵ0 +
+
+> t−1
+
+X
+
+> i=0
+
+AiB (17) 
+
+≤ Atϵ0 + max( At−1, 1) Bt (18) 
+
+≤ max( A, 1) t(ϵ0 + Bt ) (19) 
+
+= max( LP (1 + Lπ ), 1) t(ϵ0 + 2 t(LP ϵπ + ϵP )) (20) 
+
+≤ (1 + LP )t(1 + Lπ )t(ϵ0 + 2 t((1 + LP )ϵπ + ϵP )) (21) 
+
+≤ (1 + LP )t(1 + Lπ )t(2 t(1 + LP ) max( ϵ0, ϵ π , ϵ P )) (22) 
+
+= 2 t(1 + LP )t+1 (1 + Lπ )t max( ϵ0, ϵ π , ϵ P ), (23) thus bounding the L2 distances between states at each step of the trajectory ϵt = ∥st − s′
+
+> t
+
+∥2. We note that the distance between actions can also be easily bound by Lemma N.2: ∥at − a′
+
+> t
+
+∥2 ≤ Lπ ϵt + 2 ϵπ . This can in turn be related to distances over trajectories. Let us fix c1: n−1 ∈ C and consider τ1: n−1, τ ′ 
+
+> 1: n−1
+
+∼ τ (c1: n−1). We have that 
+
+d(τ1: n−1, τ ′
+
+> 1: n−1
+
+) = 1
+
+n − 1
+
+> n−1
+
+X
+
+> m=1
+
+(
+
+> H−1
+
+X
+
+> t=0
+
+∥st,m − s′
+
+> t,m
+
+∥22 + ∥at,m − a′
+
+> t,m
+
+∥22) 12 (24) 
+
+≤ (
+
+> H−1
+
+X
+
+> t=0
+
+ϵ2 
+
+> t
+
++ ( Lπ ϵt + 2 ϵπ )2) 12 (25) 
+
+≤ (
+
+> H−1
+
+X
+
+> t=0
+
+ϵ2 
+
+> t
+
++ ( Lπ ϵt + ϵt)2) 12 (26) 
+
+= ( 
+
+> H−1
+
+X
+
+> t=0
+
+ϵ2 
+
+> t
+
++ (1 + Lπ )2ϵ2 
+
+> t
+
+) 12 (27) 
+
+≤ (
+
+> H−1
+
+X
+
+> t=0
+
+2(1 + Lπ )2ϵ2 
+
+> t
+
+) 12 (28) 
+
+= (2(1 + Lπ )2
+
+> H−1
+
+X
+
+> t=0
+
+ϵ2 
+
+> t
+
+) 12 (29) 
+
+= √2(1 + Lπ )( 
+
+> H−1
+
+X
+
+> t=0
+
+ϵ2 
+
+> t
+
+) 12 (30) 15 Active Multi-task Policy Fine-tuning 
+
+≤ √2(1 + Lπ )( Hϵ 2
+
+> H−1
+
+) 12 (31) 
+
+= √2H(1 + Lπ )ϵH−1 (32) 
+
+≤ √2H(1 + Lπ ) · 2( H − 1)(1 + LP )H (1 + Lπ )H−1 max( ϵ0, ϵ π , ϵ P ) (33) 
+
+≤ 4H 32 (1 + LP )H (1 + Lπ )H max( ϵ0, ϵ π , ϵ P ) (34) 
+
+≤ 8H 32 (1 + max( LP , L π )) H max( ϵ0, ϵ π , ϵ P ). (35) Having obtained an upper bound on the distance between sequences of trajectories, the result follows naturally from smoothness of mutual information according to Assumption A.3. We can now focus on the main result. We start by introducing an important measure, quantifying the maximum information gain at each round: 
+
+Γn := max  
+
+> c′∈C
+
+ψn(c′) = max  
+
+> c′∈C
+
+E      
+
+> τ1: n−1∼τ(c1: n−1)
+> τ′∼τ(c′)
+> c∼μc,(s0,... )∼τ(c)
+> H−1
+
+X
+
+> t=0
+
+I(π(st, c ); ˜π(τ ′, c ′) | c1: n−1, τ 1: n−1) (36) We note that the criterion in Equation 6 takes the arg max of the same quantity Γn maximizes over. As common in the literature (Bogunovic et al., 2016; Kothawade et al., 2020; H ¨ubotter et al., 2024), we make a standard assumption on diminishing informativeness. 
+
+Assumption A.5. For each n, i ∈ N with i ≤ n, the maximum information gain at round n is not greater than the maximum information gain at round i:
+
+Γn ≤ Γi.
+
+This can be leveraged to show that the expected mutual information is sublinear in the number of rounds n. From this point, we overload the notation and allow policies (e.g., π) to map vector to random vectors, that is π(( x0, . . . , x n−1)) = (π(x0), . . . , π(xn−1)) for (x0, . . . , x n−1) ∈ (S × C )n.
+
+Lemma A.6. Under Assumptions A.1 and A.5, if (c0, . . . , c n) follows the criterion in Equation 6, then Γn ≤ Hn γ(Hn ),where γ(Hn ) = max X⊆S×C |X|≤ Hn 
+
+I(π(S × C ); ˜π(X)) .Proof. 
+
+Γn = 1
+
+n
+
+> n−1
+
+X
+
+> i=0
+
+Γn (37) 
+
+> (i)
+
+≤ 1
+
+n
+
+> n−1
+
+X
+
+> i=0
+
+Γi (38) 
+
+= 1
+
+n
+
+> n−1
+
+X
+
+> i=0
+
+max  
+
+> c′∈C
+
+E      
+
+> τ1: n−1∼τ(c1: n−1)
+> τ′∼τ(c′)
+> c∼μc,(s0,... )∼τ(c)
+> H−1
+
+X
+
+> t=0
+
+I(π(s0, c ); ˜π(τ ′, c ′) | c1: n−1, τ 1: n−1) (39) 
+
+> (ii )
+
+= 1
+
+n
+
+> n−1
+
+X
+
+> i=0
+
+E      
+
+> τ1: n−1∼τ(c1: n−1)
+> τ′∼τ(cn)
+> c∼μc,(s0,... )∼τ(c)
+> H−1
+
+X
+
+> t=0
+
+I(π(s0, c ); ˜π(τ ′, c n) | c1: n−1, τ 1: n−1) (40) 
+
+= 1
+
+n Ec∼μc  
+
+> (s0,... )∼τ(c)
+> H−1
+
+X
+
+> t=0
+
+E  
+
+> τn∼τ(cn)
+> τ1: n−1∼τ(c1: n−1)
+> n−1
+
+X
+
+> i=0
+
+I(π(s0, c ); ˜π(τn, c n) | c1: n−1, τ 1: n−1) (41) 16 Active Multi-task Policy Fine-tuning 
+
+> (iii )
+
+= 1
+
+n Ec∼μc  
+
+> (s0,... )∼τ(c)
+> H−1
+
+X
+
+> t=0
+
+E  
+
+> τn∼τ(cn)
+> τ1: n−1∼τ(c1: n−1)
+
+I(π(s0, c ); ˜π(τ1: n, c 1: n)) (42) 
+
+≤ 1
+
+n Ec∼μc  
+
+> (s0,... )∼τ(c)
+> H−1
+
+X
+
+> t=0
+
+max 
+
+> X⊆S×C |X|=Hn
+
+I(π(s0, c ); ˜π(X)) (43) 
+
+≤ 1
+
+n Ec∼μc  
+
+> (s0,... )∼τ(c)
+> H−1
+
+X
+
+> t=0
+
+max 
+
+> X⊆S×C |X|=Hn
+
+I(π(S × C ); ˜π(X)) (44) 
+
+= Hn max 
+
+> X⊆S×C |X|=Hn
+
+I(π(S × C ); ˜π(X)) (45) 
+
+= Hn γ(Hn ) (46) where (i) follows from Assumption A.5, (ii) follows from Equation 6, (iii) is due to the chain rule of mutual information. We note that γn = max X⊆S×C , |X|≤ n I(π(S × C ); ˜π(X)) is sublinear for a large class of GPs. In this cases, a looser upper bound would be H2 γn 
+
+> n
+
+.This bound on expected round-wise mutual information can then be leveraged to describe how the total variance shrinks over rounds. 
+
+Lemma A.7. (Uniform convergence of marginal variance, following H ¨ubotter et al. (2024)) Under Assumption A.1, A.2 and A.3, for any n ≥ 0 and (s, c ) ∈ S × C ,
+
+σ2
+
+> n
+
+(s, c ) ≤ (1 + ϵn) 2¯ σ2Γn
+
+τ 2
+
+> min
+
+,
+
+where ¯σ2 = max (s,c )∈S×C σ20 (s, c ) + ρ2(s, c ) and τmin = min s,c ∈S×C Eτ ∼τ (c) 1s∈τ .Proof. 
+
+σ2
+
+> n
+
+(s, c ) = Var[ π(s, c ) | c1: n, τ 1: n] (47) 
+
+=  Var[ π(s, c ) | c1: n, τ 1: n] + ρ2(s, c ) − ρ2(s, c ) (48) 
+
+= Var[ ˜π(s, c ) | c1: n, τ 1: n] − Var[ ˜π(s, c ) | π(s, c ), c 1: n, τ 1: n] (49) 
+
+> (i)
+
+≤ ¯σ2 log 
+
+ Var[ ˜π(s, c ) | c1: n, τ 1: n]Var[ ˜π(s, c ) | π(s, c ), c 1: n, τ 1: n]
+
+
+
+(50) 
+
+= 2¯ σ2I(π(s, c ); ˜π(s, c ) | c1: n, τ 1: n) (51) 
+
+= 2¯ σ2 1
+
+Eτ ∼τ (c) 1s∈τ
+
+E  
+
+> τ∼τ(c)
+
+1s∈τ I(π(s, c ); ˜π(s, c ) | c1: n, τ 1: n) (52) 
+
+> (ii )
+
+≤ 2¯ σ2
+
+τmin 
+
+E  
+
+> τ∼τ(c)
+
+1s∈τ I(π(s, c ); ˜π(s, c ) | c1: n, τ 1: n) (53) 
+
+≤ 2¯ σ2
+
+τmin 
+
+E  
+
+> τ∼τ(c)
+
+1s∈τ I(π(s, c ); ˜π(τ, c ) | c1: n, τ 1: n) (54) 
+
+≤ 2¯ σ2
+
+τmin 
+
+E  
+
+> τ∼τ(c)
+
+I(π(s, c ); ˜π(τ, c ) | c1: n, τ 1: n) (55) 
+
+≤ 2¯ σ2
+
+τmin 
+
+1
+
+E c∼μc  
+
+> (s0,... )∼τ(c)
+
+1s∈(s0,... )
+
+Ec∼μc  
+
+> (s0,... )∼τ(c)
+
+1s∈(s0,... ) E  
+
+> τ∼τ(c)
+
+I(π(s, c ); ˜π(τ, c ) | c1: n, τ 1: n) (56) 
+
+≤ 2¯ σ2
+
+τ 2
+
+> min
+
+Ec∼μc  
+
+> (s0,... )∼τ(c)
+
+1s∈(s0,... ) E  
+
+> τ∼τ(c)
+
+I(π(s, c ); ˜π(τ, c ) | c1: n, τ 1: n) (57) 17 Active Multi-task Policy Fine-tuning 
+
+= 2¯ σ2
+
+τ 2
+
+> min
+
+Ec∼μc    
+
+> τ∼τ(c)(s0,... )∼τ(c)
+
+1s∈(s0,... )I(π(s, c ); ˜π(τ, c ) | c1: n, τ 1: n) (58) 
+
+≤ 2¯ σ2
+
+τ 2
+
+> min
+
+Ec∼μc    
+
+> τ∼τ(c)(s0,... )∼τ(c)
+
+1s∈(s0,... )
+
+> H−1
+
+X
+
+> t=0
+
+I(π(st, c ); ˜π(τ, c ) | c1: n, τ 1: n) (59) 
+
+≤ 2¯ σ2
+
+τ 2
+
+> min
+
+Ec∼μc    
+
+> τ∼τ(c)(s0,... )∼τ(c)
+> H−1
+
+X
+
+> t=0
+
+I(π(st, c ); ˜π(τ, c ) | c1: n, τ 1: n) (60) 
+
+> (iii )
+
+≤ (1 + ϵn) 2¯ σ2
+
+τ 2
+
+> min
+
+Ec∼μc    
+
+> τ∼τ(c)(s0,... )∼τ(c)
+> H−1
+
+X
+
+> t=0
+
+E 
+
+> τ1: n−1∼τ(c1: n−1)
+
+I(π(st, c ); ˜π(τ, c ) | c1: n, τ 1: n) (61) 
+
+= (1 + ϵn) 2¯ σ2
+
+τ 2
+
+> min
+
+E      
+
+> τ1: n−1∼τ(c1: n−1)
+> τ∼τ(c)
+> c∼μc,(s0,... )∼τ(c)
+> H−1
+
+X
+
+> t=0
+
+I(π(st, c ); ˜π(τ, c ) | c1: n, τ 1: n) (62) 
+
+≤ (1 + ϵn) 2¯ σ2
+
+τ 2
+
+> min
+
+max  
+
+> c′∈C
+
+E      
+
+> τ1: n−1∼τ(c1: n−1)
+> τ′∼τ(c′)
+> c∼μc,(s0,... )∼τ(c)
+> H−1
+
+X
+
+> t=0
+
+I(π(st, c ); ˜π(τ ′, c ′) | c1: n, τ 1: n) (63) 
+
+= (1 + ϵn) 2¯ σ2Γn
+
+τ 2
+
+> min
+
+. (64) where (i) follows from Lemma N.1 and monotonicity of variance, (ii) holds as the state s is within the support of τ (·| c), and (iii) follows from Lemma A.4 as the difference between the expected mutual information and the mutual information for a realized trajectory is less than the difference in mutual information for two arbitrary realized trajectories. This result can then be translated to the agnostic setting, for a regular policy π⋆, which we still model through the stochastic process π. Without loss of generality we will assume that the prior variance is bounded by Var[ π(s, c )] ≤ 1.
+
+Lemma A.8. (Well-calibrated confidence intervals, following Abbasi-Yadkori (2013)) Pick δ ∈ (0 , 1) . Assume that π⋆
+
+lies in the RKHS Hk(C) of the kernel k with norm || π⋆|| k < ∞, the noise ϵn is conditionally ρ-sub-Gaussian, and γn is sublinear in n. Let βn(δ) = ∥π⋆∥k + ρp2( γ(Hn ) + 1 + log(1 /δ )) . Then, for any n > 1 and (s, c ) ∈ S × C , GP (μn, k )
+
+is an all-time well-calibrated model of π⋆. Thus, jointly with probability at least 1 − δ,
+
+|π⋆(s, c ) − μn(s, c )| ≤ βn(δ)σn.
+
+We note that βn(δ) depends on γ(Hn ) as Hn samples from the demonstrator’s policy are collected up to round n. Combining Lemmas A.7 and A.8 we easily get for all (s, c ) ∈ S × C and n ≥ 0 with probability 1 − δ:
+
+|π⋆(s, c ) − μn(s, c )| Lemma A. 8
+
+≤ βn(δ)σn 
+
+> Lemma A. 7
+
+≤ βn(δ)
+
+
+
+(1 + ϵn) 2¯ σ2Γn
+
+τ 2
+
+> min
+
+ 12
+
+(65) While the analysis has so far dealt with a scalar π⋆, a simple union bound can guarantee that 
+
+∥π⋆(s, c ) − μn(s, c )∥1 ≤ β′
+
+> n
+
+(δ)∥¯σ∥1
+
+
+
+(1 + ϵn) 2Γ n
+
+τ 2
+
+> min
+
+ 12
+
+(66) with probability at least 1 − δ for an action space of dimension |A| , where now β′
+
+> n
+
+(δ) = ∥π⋆∥k +
+
+ρp2( γ(Hn ) + 1 + log( |A| /δ )) . From now on, we will refer to μn as πn. We are thus able to globally bound the L1
+
+distance of the imitator policy with respect to the expert policy with high probability under active fine-tuning. 18 Active Multi-task Policy Fine-tuning 
+
+It is clear that, even if this distance is small, the performance of an imitator which does not exactly match the expert (πn(s, c )̸ = π⋆(s, c ) for some (s, c ) ∈ S × C ) can be arbitrarily low for arbitrary MDPs. It is however possible to show that, as long as the Q-function of the expert is smooth, the performance gap to the expert can be controlled. We note that, in case γL P (1 + Lπ⋆ ) < 1, then the Q-function Qπ⋆
+
+is guaranteed to be LQ-Lipschitz continuous with LQ ≤ LR  
+
+> 1−γL P(1+ Lπ⋆)
+
+(Rachelson & Lagoudakis, 2010). If smoothness holds, it is easy to connect the divergences in action space to performance gaps (Maran et al., 2023). 
+
+Lemma A.9. Let π and π′ denote two deterministic policies. If the state-action value function Qπ′
+
+is LQπ′ -Lipschitz continuous, then: 
+
+|Jπ − Jπ′
+
+| ≤ LQπ′
+
+1 − γ Es∼dπ [∥π′(s, c ) − π(s, c )∥1].
+
+Proof. Given a function f : A → R, we denote the Lipschitz semi-norm ∥f (·)∥L = sup a,a ′∈A |(f (a)−f (a′)|∥a−a′∥2 . We have: 
+
+Jπ − Jπ′ (i)
+
+= 11 − γ Es∼dπ
+
+"
+
+Ea∼π(·| s,c )[Aπ′
+
+(s, c, a )] 
+
+#
+
+(67) 
+
+= 11 − γ Es∼dπ
+
+"
+
+Ea∼π(·| s)[Qπ′
+
+(s, c, a )] − V π′
+
+(s, c )
+
+#
+
+(68) 
+
+= 11 − γ Es∼dπ
+
+" Z
+
+> a∈A
+
+π(a | s)Qπ′
+
+(s, c, a ) − V π′
+
+(s, c )
+
+#
+
+(69) 
+
+= 11 − γ Es∼dπ
+
+" Z
+
+> a∈A
+
+Qπ′
+
+(s, c, a )[ π(a | s, c ) − π′(a | s, c )] 
+
+#
+
+(70) 
+
+≤ 11 − γ Es∼dπ
+
+" Z
+
+> a∈A
+
+sup 
+
+> s,c ∈S×C
+
+Qπ (s, c, a )[ π(a | s, c ) − π′(a | s, c )] 
+
+#
+
+(71) 
+
+> (ii )
+
+≤ 11 − γ Es∼dπ
+
+"
+
+∥ sup 
+
+> s,c ∈S×C
+
+Qπ′
+
+(s, c, ·)∥LW(π(· | s, c ), π ′(· | s, c )) 
+
+#
+
+(72) 
+
+> (iii )
+
+≤ LQπ′
+
+1 − γ Es∼dπ [W(π(· | s, c ), π ′(· | s, c ))] (73) 
+
+> (iv )
+
+= LQπ′
+
+1 − γ Es,c ∼dπ [∥π(· | s, c ) − π′(· | s, c )∥1] (74) where (i) follows from the performance difference lemma (Kakade & Langford, 2002), (ii) follows from the definition of L1 Wasserstein distance, (iii) holds as LQπ ≥ ∥ sup s,c ∈S×C Qπ (s, c, ·)∥L and (iv) follows from both policies being deterministic. The proof is completed by taking the absolute value on both sides. So far, we have shown rates of convergence for the imitator, and connected its error to performance. Our main formal result can be shown by coordinating the lemmas so far presented. 
+
+Theorem A.10. (Performance guarantees for active multi-task BC) Let Assumptions A.2, A.3 and A.5 hold. Pick δ ∈ (0 , 1) .Assume that π⋆ lies in the RKHS Hk(C) of the kernel k with norm || π⋆|| k < ∞, the noise ϵn is conditionally ρ-sub-Gaussian, and γn is sublinear in n. If each demonstrated task is selected according to the criterion in Equation 1, then with probability at least 1 − δ the performance difference between the expert policy π⋆ and the imitator policy πn after n demonstrations can be upper bounded: 
+
+Jπ⋆
+
+− Jπn ≤√2LQπ⋆ ∥¯σ∥1
+
+τmin (1 − γ)
+
+
+
+(1 + ϵn)β′2 
+
+> n
+
+(δ)Γ n
+
+ 12
+
+= O(γ(Hn ))/√n, 
+
+where ϵn = 8 H 32 (1 + max( Lπ , L P )) H max( ϵ0, ϵ π , ϵ P ). Furthermore, if γn = O(log n) (e.g., for linear kernels), then 
+
+Jπ⋆
+
+− Jπ n→∞ 
+
+→ 0.
+
+19 Active Multi-task Policy Fine-tuning 
+
+Proof. 
+
+Jπ⋆
+
+− Jπ (i)
+
+= |Jπ − Jπ⋆
+
+| (75)  
+
+> Lemma A. 9
+
+≤ LQπ⋆
+
+1 − γ Es∼dπ⋆ [∥πn(s, c ) − π⋆(s, c )∥1] (76)  
+
+> Lemma A. 7,A. 8
+
+≤ LQπ⋆
+
+1 − γ · β′
+
+> n
+
+(δ)∥¯σ∥1
+
+
+
+(1 + ϵn) 2Γ n
+
+τ 2
+
+> min
+
+ 12
+
+(77) 
+
+=
+
+√2LQπ⋆ ∥¯σ∥1
+
+τmin (1 − γ)
+
+
+
+(1 + ϵn)β′2 
+
+> n
+
+(δ)Γ n
+
+ 12
+
+(78) where (i) is due to the fact that Jπ⋆
+
+≥ Jπ for any policy π, and the expectation fades due to uniform convergence. The only terms with a dependency on n are β′
+
+> n
+
+(δ) = O(γ 12
+
+> (Hn )
+
+) and Γn = O(γ(Hn ))/n , which can be combined in the asymptotic notation in the Theorem. If γn = O(log n), then Jπ⋆
+
+− Jπ = O(log n)/√n n→∞ 
+
+→ 0. For a summary of magnitudes of γn
+
+for common kernels, we refer to Table 3 in H¨ ubotter et al. (2024). 
+
+## B. Guarantees in non-Lipschitz MDPs 
+
+The main result reported in Theorem A.10 provides anytime guarantees on the agent’s performance, assuming smoothness in the MDP. However, it is possible to replace this assumption with a weaker one, at the cost of only retaining guarantees in expectation. This weaker version of the theorem can be retrieved by simply assuming smoothness on the noise , rather than on the MDP, and leveraging results recently presented by Maran et al. (2023). 
+
+Assumption B.1. The noise distribution ϵ is Lℓ-TV-Lipschitz continuous. This assumption is satisfied by a large class of Gaussian and sub-Gaussian distributions (Maran et al., 2023). We can build upon Assumption A.5 and Lemma A.6, and start by providing a weaker version of Lemma A.7. 
+
+Lemma B.2. (Uniform convergence of marginal variance in expectation) Under Assumption A.1, for any n ≥ 0 and 
+
+(s, c ) ∈ S × C ,
+
+E 
+
+> τ1: n−1∼τ(c1: n−1)
+
+σ2
+
+> n
+
+(s, c ) ≤ 2¯ σ2Γn
+
+τ 2
+
+> min
+
+,
+
+where ˜σ2 = max (s,c )∈S×C σ20 (s, c ) + ρ2(s, c ) and τmin = min s,c ∈S×C Eτ ∼τ (c) 1s∈τ .Proof. We resume from Inequality 60 in the proof of Lemma A.7: 
+
+σ2
+
+> n
+
+(s, c ) ≤ 2¯ σ2
+
+τ 2
+
+> min
+
+Ec∼μc    
+
+> τ∼τ(c)(s0,... )∼τ(c)
+> H−1
+
+X
+
+> t=0
+
+I(π(st, c ); ˜π(τ, c ) | c1: n, τ 1: n) (79) Therefore, 
+
+E 
+
+> τ1: n−1∼τ(c1: n−1)
+
+σ2
+
+> n
+
+(s, c ) ≤ E      
+
+> τ1: n−1∼τ(c1: n−1)
+> τ∼τ(c)
+> c∼μc,(s0,... )∼τ(c)
+
+2¯ σ2
+
+τ 2
+
+> min
+> H−1
+
+X
+
+> t=0
+
+I(π(st, c ); ˜π(τ, c ) | c1: n, τ 1: n) (80) 
+
+≤ max  
+
+> c′∈C
+
+E      
+
+> τ1: n−1∼τ(c1: n−1)
+> τ′∼τ(c′)
+> c∼μc,(s0,... )∼τ(c)
+
+2¯ σ2
+
+τ 2
+
+> min
+> H−1
+
+X
+
+> t=0
+
+I(π(st, c ); ˜π(τ ′, c ′) | c1: n, τ 1: n) (81) 
+
+= 2¯ σ2Γn
+
+τ 2
+
+> min
+
+. (82) 20 Active Multi-task Policy Fine-tuning 
+
+Having bounded variance at each round, this time in expectation, we can invoke Lemma A.8 to bound the expected distance to the optimal policy with high probability: 
+
+E 
+
+> τ1: n−1∼τ(c1: n−1)
+
+∥π⋆(s, c ) − μn(s, c )∥1 ≤ β′
+
+> n
+
+(δ)∥¯σ∥1
+
+ 2Γ n
+
+τ 2
+
+> min
+
+ 12
+
+(83) Instead of leveraging bounds for the imitator’s performance in Lipschitz-smooth settings, we can instead use the fact that the expert’s actions are corrupted by smooth noise. In this setting, it is instead possible to control the suboptimality of the imitator with respect to the noisy expert. We report the following Theorem from Maran et al. (2023), and refer to the original work for the proof. 
+
+Lemma B.3. Let π⋆, ˜π and π denote the expert, noisy expert and imitator policy, respectively. If Assumption B.1 holds, then: 
+
+J ˜π − Jπ ≤ 2LℓQmax 
+
+1 − γ Es∼μ˜π [W(π⋆(· | s), π (· | s))] ,
+
+where Qmax = max (s,c,a )∈S×C×A |Q(s, a )|π and W represents the Wasserstein 1-distance. 
+
+As the expert π⋆ and the imitator πn are both deterministic, this implies that 
+
+J ˜π − Jπn ≤ 2LℓQmax 
+
+1 − γ Es∼μ˜π ∥(π⋆(· | s), π (· | s)) ∥1. (84) By invoking this Lemma, we can thus conclude that, with probability at least 1 − δ
+
+E 
+
+> τ1: n−1∼τ(c1: n−1)
+
+J ˜π − Jπn ≤ 2 32 LℓQmax ∥¯σ∥1
+
+τmin (1 − γ) β′
+
+> n
+
+(δ)Γ 12 
+
+> n
+
+= O(γ(Hn )n− 12 ). (85) Therefore, if γn = O(log n), then Eτ1: n−1∼τ (c1: n−1) J ˜π − Jπ = O( log n√n ) n→∞ 
+
+→ 0. While these performance guarantees only hold in expectation, they arise from minimal assumptions, mostly regarding the policy class and the perturbation noise, and can thus be applied to arbitrary MDPs. 
+
+## C. Practical Objective 
+
+Following up on the approximations reported in Section 4.2, we present the empirical estimate of the objective that is used through experiments. In particular, we show how the expectations in Equation 2 may be approximated with finite samples. The original criterion is expressed as 
+
+cn = arg min 
+
+> c′∈C
+
+ϕn(c′) = arg min 
+
+> c′∈C
+
+E      
+
+> τ1: n−1∼τ(c1: n−1), τ ′∼τ(c′)
+> c∼μc,(s0,... )∼τ(c)
+> H−1
+
+X
+
+> t=0
+
+H(π(st, c ) | c′, τ ′, c 1: n−1, τ 1: n−1). (86) An empirical estimate can be derived as follows: 21 Active Multi-task Policy Fine-tuning 
+
+ϕn(c′) = E      
+
+> τ1: n−1∼τ(c1: n−1), τ ′∼τ(c′)
+> c∼μc,(s0,... )∼τ(c)
+> H−1
+
+X
+
+> t=0
+
+H(π(st, c ) | c′, τ ′, c 1: n−1, τ 1: n−1) (87) 
+
+> (i)
+
+≈ E     
+
+> τ′∼τ(c′)
+> c∼μc,(s0,... )∼τ(c)
+> H−1
+
+X
+
+> t=0
+
+H(π(st, c ) | c′, τ ′, c 1: n−1, ˆτ1: n−1) (88) 
+
+> (ii )
+
+≈ 1
+
+| ˆC| 
+
+X 
+
+> c∈ˆC
+
+E    
+
+> τ′∼τ(c′)(s0,... )∼τ(c)
+> H−1
+
+X
+
+> t=0
+
+H(π(st, c ) | c′, τ ′, c 1: n−1, τ 1: n−1) (89) 
+
+= 1
+
+| ˆC| 
+
+X 
+
+> c∈ˆC
+
+E  
+
+> τ′∼ˆτ
+> (s0,... )∼ˆτ
+
+τ (τ ′|c′)
+
+ˆτ (τ ′)
+
+τ (( s0, . . . )|c)
+
+ˆτ (( s0, . . . )) 
+
+> H−1
+
+X
+
+> t=0
+
+H(π(st, c ) | c′, τ ′, c 1: n−1, τ 1: n−1) (90) 
+
+= 1
+
+| ˆC| 
+
+X 
+
+> c∈ˆC
+
+E  
+
+> τ′∼ˆτ
+> (s0,... )∼ˆτ
+
+w(τ ′, c ′)w(( s0, . . . ), c )
+
+> H−1
+
+X
+
+> t=0
+
+H(π(st, c ) | c′, τ ′, c 1: n−1, τ 1: n−1) (91) 
+
+> (iii )
+
+≈ 1
+
+| ˆC| (n − 1) 2
+
+X 
+
+> c∈ˆC
+
+X  
+
+> τ′∈ˆτ1: n−1
+> (s0,... )∈ˆτ1: n−1
+
+w(τ ′, c ′)w(( s0, . . . ), c )
+
+> H−1
+
+X
+
+> t=0
+
+H(π(st, c ) | c′, τ ′, c 1: n−1, τ 1: n−1), (92) where (i) uses a single sample to estimate the expectation over past trajectories, (ii) uses a sample-based approximation to the target task distribution μc, and (iii) uses the importance sampling trick introduced in Section 4.2, with w(τ, c ) =     
+
+> (n−1) QH−1
+> t=0 ˜π(at|st,c )
+> Pn−1
+> i=0
+> QH−1
+> t=0 ˜π(at|st,c i)
+
+. This final approximate objective does not involve expectations, and can be efficiently computed. The complexity of evaluating the criterion for a single task c′ scales linearly with the number of samples in ˆC and quadratically with the number of rounds n. However, the dependency on the number of rounds can be removed by evaluating the second sum over a fixed number of trajectories sampled among τ1: n−1, ensuring that the complexity does not depend on the round. 
+
+## D. Additional results for AMF-GP 
+
+Figure 2 only reports full return curves for two representative pre-training settings, namely those involving 6/12 and 12 /12 
+
+demonstrated tasks. We here report full results for each task allocation, spanning from 1/12 to 12 /12 demonstrated tasks. For each setting, we report both average multi-task return and average policy entropy curves. 
+
+## E. Additional results for AMF-NN 
+
+Results in Figure 4 are computed over two representative pre-training distributions: one allocating pre-training demon-strations uniformly over all tasks, the other one only demonstrating the first two tasks. We report these results again, and compare them with those for several other pre-training distributions in which tasks have been shuffled. Results are reported for FrankaKitchen in Figure 8 and for Metaworld in Figure 9, and are consistent with patterns observed in Figure 4. 22 Active Multi-task Policy Fine-tuning 0 25 
+
+> −20
+> −18
+> −16
+> −14
+> −12
+> −10
+> −8
+
+Average return  
+
+> 025 0.60.70.80.91.0
+
+Average π entropy Rounds 
+
+1/12 tasks 0 25 
+
+> −18
+> −16
+> −14
+> −12
+> −10
+> −8
+
+Average return  
+
+> 025 0.60.70.80.91.0
+
+Average π entropy Rounds 2/12 tasks 0 25 
+
+> −18
+> −16
+> −14
+> −12
+> −10
+> −8
+
+Average return  
+
+> 025 0.60.70.80.91.0
+
+Average π entropy Rounds 3/12 tasks 0 25 
+
+> −16
+> −14
+> −12
+> −10
+> −8
+
+Average return  
+
+> 025 0.55 0.60 0.65 0.70 0.75 0.80
+
+Average π entropy Rounds 
+
+4/12 tasks 0 25 
+
+> −16
+> −14
+> −12
+> −10
+> −8
+
+Average return  
+
+> 025 0.60 0.65 0.70 0.75 0.80
+
+Average π entropy Rounds 5/12 tasks 0 25 
+
+> −14
+> −12
+> −10
+> −8
+
+Average return  
+
+> 025 0.60 0.65 0.70 0.75 0.80
+
+Average π entropy Rounds 6/12 tasks 0 25 
+
+> −14
+> −13
+> −12
+> −11
+> −10
+> −9
+> −8
+
+Average return  
+
+> 025 0.60 0.65 0.70 0.75 0.80
+
+Average π entropy Rounds 
+
+7/12 tasks 0 25 
+
+> −13
+> −12
+> −11
+> −10
+> −9
+> −8
+
+Average return  
+
+> 025 0.55 0.60 0.65 0.70 0.75 0.80
+
+Average π entropy Rounds 8/12 tasks 0 25 
+
+> −12
+> −11
+> −10
+> −9
+> −8
+
+Average return  
+
+> 025 0.60 0.65 0.70 0.75 0.80 0.85
+
+Average π entropy Rounds 9/12 tasks 0 25 
+
+> −12
+> −11
+> −10
+> −9
+> −8
+
+Average return  
+
+> 025 0.60 0.65 0.70 0.75 0.80 0.85
+
+Average π entropy Rounds 
+
+10/12 tasks 0 25 
+
+> −10 .0
+> −9.5
+> −9.0
+> −8.5
+> −8.0
+> −7.5
+
+Average return  
+
+> 025 0.585 0.590 0.595 0.600 0.605 0.610
+
+Average π entropy Rounds 11/12 tasks 0 25 
+
+> −9.00
+> −8.75
+> −8.50
+> −8.25
+> −8.00
+> −7.75
+> −7.50
+
+Average return  
+
+> 025 0.585 0.590 0.595 0.600 0.605 0.610
+
+Average π entropy Rounds 12/12 tasks AMF-GP Uniform 
+
+Figure 7: Additional results in GP settings for a 2D integrator (see Figure 3). AMF-GP results in improved sample efficiency across all pre-training regimes, and is particularly effective for skewed pre-training distributions (e.g., when pre-training demonstrations have been allocated to 1/12 or 6/12 tasks). 23 Active Multi-task Policy Fine-tuning   
+
+> 010 20
+> Rounds
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> Multi-task success rate
+> Kitchen, mismatch
+
+[8 , 8, 0, 0, 0]   
+
+> 010 20
+> Rounds
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> Multi-task success rate
+> Kitchen, mismatch
+
+[0 , 8, 8, 0, 0]   
+
+> 010 20
+> Rounds
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> Multi-task success rate
+> Kitchen, mismatch
+
+[0 , 0, 8, 8, 0]   
+
+> 010 20
+> Rounds
+> 0.3
+> 0.4
+> 0.5
+> 0.6
+> 0.7
+> 0.8
+> 0.9
+> Multi-task success rate
+> Kitchen, mismatch
+
+[0 , 0, 0, 8, 8]   
+
+> 010 20
+> Rounds
+> 0.60
+> 0.65
+> 0.70
+> 0.75
+> 0.80
+> 0.85
+> Multi-task success rate
+> Kitchen, no mismatch
+
+[3 , 3, 3, 3, 3] 
+
+AMF-NN Uniform, with adaptive prior Uniform Figure 8: Additional results for AMF-NN in FrankaKitchen with state inputs. We evaluate several allocations of the pre-training demonstrations, as labeled below each plot (e.g., the label [8 , 8, 0, 0, 0] indicates that 8 demonstrations were provided for each of the first two tasks each, and none for the remaining tasks).   
+
+> 010 20
+> Rounds
+> 0.2
+> 0.3
+> 0.4
+> 0.5
+> 0.6
+> 0.7
+> 0.8
+> Multi-task success rate
+> Metaworld, mismatch
+
+[8 , 8, 0, 0]   
+
+> 010 20
+> Rounds
+> 0.3
+> 0.4
+> 0.5
+> 0.6
+> 0.7
+> 0.8
+> Multi-task success rate
+> Metaworld, mismatch
+
+[0 , 8, 8, 0]   
+
+> 010 20
+> Rounds
+> 0.4
+> 0.5
+> 0.6
+> 0.7
+> Multi-task success rate
+> Metaworld, mismatch
+
+[0 , 0, 8, 8]   
+
+> 010 20
+> Rounds
+> 0.3
+> 0.4
+> 0.5
+> 0.6
+> Multi-task success rate
+> Metaworld, no mismatch
+
+[2 , 2, 2, 2] 
+
+AMF-NN ( σ = 1 e−3) Uniform, with adaptive prior Uniform Figure 9: Additional results for AMF-NN in Metaworld with state inputs. We evaluate several allocations of the pre-training demonstrations, as labeled below each plot (e.g., the label [8 , 8, 0, 0] indicates that 8 demonstrations were provided for each of the first two tasks each, and none for the remaining tasks). 
+
+## F. AMF with generalist policies 
+
+AMF-NN Uniform, with adaptive prior Uniform   
+
+> 024
+
+Rounds 
+
+> 40
+> 50
+> 60
+> 70
+> Multi-task success rate
+
+WidowX 
+
+Figure 10: Evaluation on life-like WidowX tasks. AMF-NN can be applied to large-scale settings. This section investigates scaling our evaluation to recently published open-source generalist policies. For this pur-pose, we choose Octo (Octo Model Team et al., 2024). This model relies on a transformer backbone for integrat-ing multimodal information (in the form of state sensors, camera images and text or RGB task descriptions), and uses a diffusion-based policy head for action prediction (Chi et al., 2023). For computational reasons, we will focus on fine-tuning the action head alone. Octo is pre-trained on a large-scale real-world robotic dataset (Col-laboration, 2023), and is thus designed for inference on physical hardware. Nonetheless, a recently proposed eval-uation suite enables simulated evaluations that statistically 24 Active Multi-task Policy Fine-tuning 
+
+correlate with real-world results (Li et al., 2024). We thus collect rollouts from a pre-trained Octo agent on the WidowX tasks, and filter them to only include successes, akin to self-distillation schemes (Bousmalis et al., 2024). On availability of such self-supervised demonstrations, we then apply AMF-NN for 5 iterations, providing 2 demonstrations in each round. The results are reported in Figure 10. As all evaluation tasks are largely demonstrated in the pre-training dataset (Collaboration, 2023), and the evaluation is significantly noisier with respect to other benchmarks, we find that the performance of AMF-NN falls within confidence intervals of uniform task collection, confirming the trend we observed for uniform pre-training distributions in Figure 4. Nonetheless, we observe that it constitutes an effective method for data selection, and can be applied as a drop-in replacement for fine-tuning of off-the-shelf models. 3
+
+## G. Uncertainty ablation     
+
+> 010 20
+> Rounds
+> 0.3
+> 0.4
+> 0.5
+> 0.6
+> Multi-task success rate
+> Metaworld, no mismatch
+> 010 20
+> Rounds
+> 0.4
+> 0.5
+> 0.6
+> 0.7
+> 0.8
+> Multi-task success rate
+> Metaworld, mismatch
+
+Last-layer gradient Last-layer Dropout Figure 11: Additional results for AMF-NN in Meta-world with state inputs and different uncertainty quan-tification techniques. Section 5.3 evaluates alternative uncertainty quantification schemes in FrankaKitchen for two representative pre-training distributions. This Section extends these results to include re-sults for Metaworld (see Figure 11). Results are consistent with those so far reported, suggesting that loss gradient embeddings are an important component for the empirical performance of AMF-NN. 
+
+## H. Mitigating forgetting 
+
+The ability of neural networks to adapt to shifts in training dis-tribution while retaining information is an important object of interest in lifelong and continual learning (Wang et al., 2024). In general, learned models display a trade-off between their ability to integrate novel information, and their memory of previously observed training samples. Arguably, common neural network architectures can easily fit new data (save for loss of plasticity (Lyle et al., 2023)), but are known to forget previous information, often catastrophically. This problem is of utmost relevance in our setting, in which the pre-trained network is not just leveraged as a useful initialization, but may already capable of solving some tasks. Hence, the fine-tuning procedure should be careful not to disrupt this ability. Several methods aimed at mitigating forgetting can be traced back to rehearsal (Riemer et al., 2019; Chaudhry et al., 2019) and regularization (Kirkpatrick et al., 2017) strategies. While rehearsal approaches are often effective, they also require access to pre-training data, which is unrealistic in our setting. Hence we consider two common regularization technique, 
+
+> 3
+
+This evaluation also reports an interesting trend, that is a vast reduction in catastrophic forgetting, to the point that an adaptive prior is almost not necessary. This anecdotal evidence can be seen as an instance of a general trend of mitigated catastrophic forgetting in large models (Ramasesh et al., 2022).         
+
+> 010 20
+> Rounds
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> Multi-task success rate Kitchen, mismatch
+> 010 20
+> Rounds
+> 0.60
+> 0.65
+> 0.70
+> 0.75
+> 0.80
+> 0.85
+> Multi-task success rate Kitchen, no mismatch
+> 010 20
+> Rounds
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> Multi-task success rate Metaworld, mismatch
+> 010 20
+> Rounds
+> 0.3
+> 0.4
+> 0.5
+> 0.6
+> Multi-task success rate Metaworld, no mismatch
+
+Adaptive Prior EWC L2 regularization Baseline Figure 12: Performance of AMF-NN with several techniques to mitigate forgetting. Darker shades represent stronger regularization coefficients. L2, EWC regularization are not effective in this setting. 25 Active Multi-task Policy Fine-tuning      
+
+> 020
+> 0.0
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> 1.0
+> Single-task success rate
+> Sliding door
+> 0.0
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> α
+> 020
+> 0.0
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> 1.0
+> Single-task success rate
+> Microwave
+> 0.0
+> 0.1
+> 0.2
+> 0.3
+> 0.4
+> α
+> 020
+> 0.0
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> 1.0
+> Single-task success rate
+> Left door
+> 0.0
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> 1.0
+> α
+> 020
+> 0.0
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> 1.0
+> Single-task success rate
+> Knob off
+> 0.0
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> 1.0
+> α
+> 020
+> 0.0
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> 1.0
+> Single-task success rate
+> Knob on
+> 0.0
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> 1.0
+> α
+
+Figure 13: Success rates (blue) and mixing coefficients α(c) (grey) over training in Kitchen with skewed pre-training. α
+
+grows quickly for novel tasks, and more conservatively for those that were demonstrated during pre-training. namely L2-regularization to the pre-trained weights, and EWC (Kirkpatrick et al., 2017). The latter can be seen as a more nuanced version of the former, which adaptively scales the regularization strength according to the curvature of the loss landscape. Unfortunately, we find these methods to be insufficient in our setting, as reported in Figure 12. When coupled with large regularization weights, the asymptotical performance of L2-regularization and EWC is significantly limited. When regularization weights are too low, they recover the performance of a naive baseline. Intermediate values were found to interpolate between the two behaviors, without addressing the forgetting issue. As a result, the policy quickly loses information on its pre-training tasks, thus rendering adaptive data selection strategies ineffective. This motivates our adoption of a novel technique to alleviate forgetting, which we refer to as Adaptive Prior. Inspired by previous works in behavioral priors (Bagatella et al., 2022) and offline RL (Kumar et al., 2020), we linearly combine the policy’s output with that of a prior (in practice, a frozen copy πp of the pre-trained policy). When an action needs to be sampled, we instead output a linear combination of actions sampled from the fine-tuned policy π and the prior πp: for a given state-task pair (s, c ) ∈ S × C , the action selected is a = α(c)ˆ a + (1 − α(c))¯ a, where ˆa ∼ π(·| s, c ) and ¯a ∼ πp(·| s, c ).The weight α(c) ∈ [0 , 1] is task-dependent and learnable: ideally, it would be high when the fine-tuned policy is more suitable for the task, and low when the prior is instead preferable. In practice, it may be a per-task learnable parameter for finite task spaces, or the output of a parametrized function (e.g., a neural network) in continuous task spaces. While this formulation departs from existing ones (Bagatella et al., 2022), in which the action is instead sampled from a mixture 
+
+of policy and prior, it enables a simple update rule for α, which remains applicable when the policy class does not allow straightforward likelihood evaluation (e.g., Diffusion policies). Under the assumption that both π and πp are isotropic Gaussians, the BC loss computed with respect to the linear combinations of actions simplifies to a simple mean squared error: 
+
+Lα 
+
+> BC
+
+= 1
+
+N
+
+> N
+
+X
+
+> i=1
+> H−1
+
+X
+
+> t=0
+
+∥ait − (α(ci)ˆ a + (1 − α(ci))¯ a)∥2, (93) where ˆa ∼ π(·| sit, c i), ¯a ∼ πp(·| sit, c i) and ˆτ1: N = ( si
+
+> 0
+
+, a i
+
+> 0
+
+, . . . , s iH−1, a iH−1)Ni=1 is the dataset of N task-conditioned, 
+
+H-length trajectories with task labels c1: N . As this loss function is differentiable with respect to α(c), the weight can be easily trained through gradient descent. Intuitively, this gradient pushes weights up for tasks in which the fine-tuned policy is more accurate than the pre-trained one. As π is fine-tuned on the dataset used for estimating Lα
+
+> BC
+
+, its performance can be easily overestimated. Thus, we propose to introduce a conservative penalty term, which encourages the weight to be updated only if the fine-tuned policy π significantly outperforms the prior πp: Lα = Lα 
+
+> BC
+
++ β 1
+
+> N
+
+PNi=1 α(ci). We remark that, in our empirical evaluation, the Gaussian assumption is often violated; nevertheless, we found this update rule to be empirically effective across models and tasks. To illustrate, we visualize trajectories of mixing weights α(c) during fine-tuning in Figure 13. We consider a mismatched setting, in which the pre-training distribution largely demonstrates the first two tasks in Kitchen, and does not cover the remaining tree. During early training, AMF-NN mostly samples demonstrations for the last three tasks. Thus, π quickly improves, and the respective mixing coefficients converge to 1. On the other hand, πp
+
+outperforms π on the first two tasks for the majority of training, α remains low and evaluation performance does not drop as actions are largely sampled from πp.26 Active Multi-task Policy Fine-tuning   
+
+> 010 20
+
+Rounds 
+
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> Multi-task success rate
+
+Kitchen, mismatch     
+
+> 010 20
+> Rounds
+> 0.60
+> 0.65
+> 0.70
+> 0.75
+> 0.80
+> 0.85
+> Multi-task success rate
+> Kitchen, no mismatch
+> 010 20
+
+Rounds 
+
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> Multi-task success rate
+
+Metaworld, mismatch   
+
+> 010 20
+> Rounds
+> 0.3
+> 0.4
+> 0.5
+> 0.6
+> Multi-task success rate
+> Metaworld, no mismatch
+
+AMF-NN Rebalancing Uniform, with adaptive prior Uniform Figure 14: Extended results from Figure 4, including a privileged “rebalancing” baseline. 
+
+## I. Does AMF rebalance demonstration counts? 
+
+In discrete task spaces, counting the number of demonstrations for each task is possible. In this case, a naive data selection strategy would simply request demonstrations for tasks that have been demonstrated the least in the past. If all tasks require a similar amount of demonstrations, this would empirically perform very well. In our setting, however, data selection algorithms do not have knowledge of pre-training data. For this reason, a count could only be kept with respect to the fine-tuning demonstrations: actively balancing this count would lead to a near-uniform task selection, and recover the performance of uniform sampling in expectation. Nevertheless, we implement this “rebalancing” criterion as a privileged baseline, which assumes access to the pre-training task distribution. We evaluate it in the standard settings for AMF-NN from Figure 4. In Figure 14, we observe that AMF-NN is able to match the performance of this privileged baseline, despite having no knowledge of the pretraining distribution. 
+
+This implies that AMF can infer information on the pre-training phase through estimation of the policy’s uncertainty, and is capable of automatically recovering a “rebalancing” strategy. Moreover, AMF-NN considers the reduction in entropy across several tasks: hence, it can in contrast focus on tasks that are harder to learn or that could, in principle, lead to learning progress on other tasks. Further empirical evidence for these behaviors is shown in Appendix J. 
+
+## J. Single-task performance 
+
+This Section presents a detailed look at the data selection strategies induced by AMF-NN. For this purpose, we consider the main experiments in Kitchen and Metaworld outlined in Figure 4, and plot single-task success rates, as well as the amount of demonstrations collected over time. For reference, asymptotic single-task success rates on Metaworld and Kitchen converge between 70% and 100%, depending on the task. In the case of skewed pre-training (Fig. 15 and 17), we observe that AMF samples tasks that were not present in the pretraining dataset more often, without having access to any direct information on the pre-training distribution .Moreover, even if multiple tasks have the same frequency in the pre-training distribution, AMF will prefer the ones that induce a larger reduction in posterior uncertainty: for instance, in Metaworld, AMF selects Close Faucet more often than Open Faucet , despite the fact that both were similarly demonstrated during pre-training. We remark that these task selection strategies arise naturally from our information-based criterion in Equation 1, without any direct information on the pre-training distribution, nor any explicit policy evaluation. 27 Active Multi-task Policy Fine-tuning 0 10 20 
+
+> 0.0
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> 1.0
+> Single-task success rate
+
+Cup left 
+
+10 10 20 
+
+> 0.0
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> 1.0
+> Single-task success rate
+
+Cup right 
+
+10 10 20 
+
+> 0.0
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> 1.0
+> Single-task success rate
+
+Open faucet 
+
+10 10 20 
+
+> 0.0
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> 1.0
+> Single-task success rate
+
+Close faucet 
+
+10 10 20 
+
+Rounds 
+
+> 0
+> 2
+> 4
+> 6
+> 8
+> 10
+> # of demonstrations
+
+10 10 20 
+
+Rounds 
+
+> 0
+> 2
+> 4
+> 6
+> 8
+> 10
+> # of demonstrations
+
+10 10 20 
+
+Rounds 
+
+> 0
+> 2
+> 4
+> 6
+> 8
+> 10
+> # of demonstrations
+
+10 10 20 
+
+Rounds 
+
+> 0
+> 2
+> 4
+> 6
+> 8
+> 10
+> # of demonstrations
+
+1
+
+AMF-NN ( σ = 1 e−3) Uniform, with adaptive prior # of pre-training demonstrations Figure 17: Single-task curves for skewed pre-training in Metaworld. Dashed lines represent demonstrations counts, with grey lines displaying the (inaccessible) count of pre-training demonstrations. 0 10 20 
+
+> 0.0
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> 1.0
+> Single-task success rate
+
+Cup left 
+
+10 10 20 
+
+> 0.0
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> 1.0
+> Single-task success rate
+
+Cup right 
+
+10 10 20 
+
+> 0.0
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> 1.0
+> Single-task success rate
+
+Open faucet 
+
+10 10 20 
+
+> 0.0
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> 1.0
+> Single-task success rate
+
+Close faucet 
+
+10 10 20 
+
+Rounds 
+
+> 0
+> 2
+> 4
+> 6
+> 8
+> 10
+> # of demonstrations
+
+10 10 20 
+
+Rounds 
+
+> 0
+> 2
+> 4
+> 6
+> 8
+> 10
+> # of demonstrations
+
+10 10 20 
+
+Rounds 
+
+> 0
+> 2
+> 4
+> 6
+> 8
+> 10
+> # of demonstrations
+
+10 10 20 
+
+Rounds 
+
+> 0
+> 2
+> 4
+> 6
+> 8
+> 10
+> # of demonstrations
+
+1
+
+AMF-NN ( σ = 1 e−3) Uniform, with adaptive prior # of pre-training demonstrations Figure 18: Single-task curves for uniform pre-training in Metaworld. Dashed lines represent demonstrations counts, with grey lines displaying the (inaccessible) count of pre-training demonstrations. 28 Active Multi-task Policy Fine-tuning 0 10 20 
+
+> 0.0
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> 1.0
+> Single-task success rate
+
+Sliding door 
+
+10 10 20 
+
+> 0.0
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> 1.0
+> Single-task success rate
+
+Microwave 
+
+10 10 20 
+
+> 0.0
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> 1.0
+> Single-task success rate
+
+Left door 
+
+10 10 20 
+
+> 0.0
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> 1.0
+> Single-task success rate
+
+Knob off 
+
+10 10 20 
+
+> 0.0
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> 1.0
+> Single-task success rate
+
+Knob on 
+
+10 10 20 
+
+Rounds 
+
+> 0
+> 2
+> 4
+> 6
+> 8
+> 10
+> # of demonstrations
+
+10 10 20 
+
+Rounds 
+
+> 0
+> 2
+> 4
+> 6
+> 8
+> 10
+> # of demonstrations
+
+10 10 20 
+
+Rounds 
+
+> 0
+> 2
+> 4
+> 6
+> 8
+> 10
+> # of demonstrations
+
+10 10 20 
+
+Rounds 
+
+> 0
+> 2
+> 4
+> 6
+> 8
+> 10
+> # of demonstrations
+
+10 10 20 
+
+Rounds 
+
+> 0
+> 2
+> 4
+> 6
+> 8
+> 10
+> # of demonstrations
+
+1
+
+AMF-NN ( σ = 1 e−3) Uniform, with adaptive prior # of pre-training demonstrations Figure 15: Single-task curves for skewed pre-training in Kitchen. Dashed lines represent demonstrations counts, with grey lines displaying the (inaccessible) count of pre-training demonstrations. 0 10 20 
+
+> 0.0
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> 1.0
+> Single-task success rate
+
+Sliding door 
+
+10 10 20 
+
+> 0.0
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> 1.0
+> Single-task success rate
+
+Microwave 
+
+10 10 20 
+
+> 0.0
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> 1.0
+> Single-task success rate
+
+Left door 
+
+10 10 20 
+
+> 0.0
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> 1.0
+> Single-task success rate
+
+Knob off 
+
+10 10 20 
+
+> 0.0
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> 1.0
+> Single-task success rate
+
+Knob on 
+
+10 10 20 
+
+Rounds 
+
+> 0
+> 2
+> 4
+> 6
+> 8
+> 10
+> # of demonstrations
+
+10 10 20 
+
+Rounds 
+
+> 0
+> 2
+> 4
+> 6
+> 8
+> 10
+> # of demonstrations
+
+10 10 20 
+
+Rounds 
+
+> 0
+> 2
+> 4
+> 6
+> 8
+> 10
+> # of demonstrations
+
+10 10 20 
+
+Rounds 
+
+> 0
+> 2
+> 4
+> 6
+> 8
+> 10
+> # of demonstrations
+
+10 10 20 
+
+Rounds 
+
+> 0
+> 2
+> 4
+> 6
+> 8
+> 10
+> # of demonstrations
+
+1
+
+AMF-NN ( σ = 1 e−3) Uniform, with adaptive prior # of pre-training demonstrations Figure 16: Single-task curves for uniform pre-training in Kitchen. Dashed lines represent demonstrations counts, with grey lines displaying the (inaccessible) count of pre-training demonstrations. 29 Active Multi-task Policy Fine-tuning 
+
+## K. Analysis of Importance Weights 
+
+Importance weights (as introduced in Equation 3) allow estimating the expert’s occupancy for arbitrary tasks. Naturally, the quality of importance weights depends on many factors, including the dimensionality of the trajectory space, and the density with which available data covers it. In this section, we report a qualitative evaluation of importance weights for both AMF-GP and AMF-NN (Figures 19 and 20, respectively). In both cases, we find that informative weights can be retrieved eventually, given the proper amount of clipping (as described in Appendix M). While in early rounds of the algorithm, weights can be inaccurate, leading to a poor estimate of the objective, we observe that the quality of importance sampling weights improves within a handful of rounds. Task space 
+
+0.00.20.40.60.81.0
+
+Importance weights @ round 1 Task space 
+
+012345
+
+Importance weights @ round 5 Task space 
+
+02468
+
+Importance weights @ round 9 
+
+Figure 19: Analysis of importance sampling weights for AMF-GP. We consider the skewed pre-training setting from Figure 2, and compute importance weights after 1, 5 and 9 rounds. We sample four tasks c0:3 , represented by vertical dashed lines of different colors. For each task ci, we collect a demonstration τi and sweep over c′ ∈ C on the x-axis; we plot w(τi, c ′)
+
+with solid lines. We observe that importance weights are uninformative in early parts of training, but converge to more accurate values within a few rounds. Sliding door 
+
+> Microwave
+> Left door
+> Knob off
+> Knob on
+
+Kitchen, skewed @ round 1 
+
+> Sliding door
+> Microwave
+> Left door
+> Knob off
+> Knob on
+> 0.0
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> 1.0
+
+1Sliding door 
+
+> Microwave
+> Left door
+> Knob off
+> Knob on
+
+Kitchen, skewed @ round 10 
+
+> Sliding door
+> Microwave
+> Left door
+> Knob off
+> Knob on
+> 0.0
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> 1.0
+
+1Sliding door 
+
+> Microwave
+> Left door
+> Knob off
+> Knob on
+
+Kitchen, skewed @ round 20 
+
+> Sliding door
+> Microwave
+> Left door
+> Knob off
+> Knob on
+> 0.0
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> 1.0
+
+1Cup left 
+
+> Cup right
+> Faucet open
+> Faucet close
+
+Metaworld, skewed @ round 1 
+
+> Cup left
+> Cup right
+> Faucet open
+> Faucet close
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+
+1Cup left 
+
+> Cup right
+> Faucet open
+> Faucet close
+
+Metaworld, skewed @ round 10 
+
+> Cup left
+> Cup right
+> Faucet open
+> Faucet close
+> 0.0
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+
+1Cup left 
+
+> Cup right
+> Faucet open
+> Faucet close
+
+Metaworld, skewed @ round 20 
+
+> Cup left
+> Cup right
+> Faucet open
+> Faucet close
+> 0.0
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+
+1
+
+Figure 20: Analysis of importance sampling weights for AMF-NN. We consider the skewed pre-training setting from Figure 4, and compute importance weights after 1, 10 and 19 rounds. We visualize weights for both Kitchen (top) and Metaworld (bottom). As the task set is discrete, we consider all tasks (ci ∈ C ), and collect one demonstration τi for each. The entry of each colormap at row i and column j represents w(τj , c i). Again, we observe that at the beginning of training importance weights can be inaccurate, particularly for tasks ci that have not been sufficiently demonstrated. However, as more data is collected and the policy specializes to each task, the weights converge. 30 Active Multi-task Policy Fine-tuning 
+
+## L. Criterion vs returns 
+
+> 0.0
+> 0.1
+> 0.2
+> 0.3
+
+Pretraining distribution   
+
+> 0.0
+> 0.5
+> 1.0
+> 1.5 1e-4
+
+Estimated expected posterior entropy 
+
+Task space 
+
+> -13.5
+> -13.0
+> -12.5
+
+Average return after finetuning 
+
+Figure 21: Didactic example on correlation between pre-training distribution over tasks (top), evaluations of the AMF criterion for each task (middle) and return after fine-tuning on a demonstration for a given task (bottom). As a didactic example, we evaluate the criterion optimized by AMF-GP in a particular instance. We adopt the set-tings presented in Section 5.1, and pre-train a GP policy by providing 50 demonstrations in the 2D integrator envi-ronment, uniformly sampled among tasks in the top half of the target circle. We represent the task space along one dimension, and plot the smoothed pre-training dis-tribution on the top of Figure 21. The second row of the Figure displays the evaluation of the criterion in Equation 2 for 100 tasks uniformly sampled across the entire task space. By comparison with the plot above, it is evident that the criterion is significantly lower for tasks that have not yet been demonstrated. These tasks are also those that, if demonstrated, would lead to a greater increase in multi-task performance after fine-tuning, as reported in the bottom row of Figure 21. In this instance, it’s easy to see that the criterion leads to selection of tasks which have not been demonstrated sufficiently, and that will thus lead to greater policy performance. 
+
+## M. Implementation Details 
+
+In order to ease reproducibility, we open-source our code-base on the project’s repo. 4 Furthermore, we describe several implementation details in the following sections. 
+
+M.1. Metrics 
+
+All metrics are reported in the form of their mean and the 90% simple bootstrap confidence intervals over 10 
+
+random seeds. 
+
+M.2. GP settings 
+
+In GP settings (5.1), each expert demonstration involves 5 steps, is corrupted with Gaussian noise and collected by a scripted policy. As the task space is continuous, the criterion is simply optimized via uniform random shooting, with a budget of 100 .Multi-task returns are averaged over 20 episodes per task. 
+
+M.3. Neural network settings 
+
+M.3.1. E NVIRONMENTS 
+
+We evaluate AMF-NN across four environment suites, namely FrankaKitchen, Metaworld, Robomimic and WidowX. For the first two, demonstrations are ≈ 50 steps, while while for the latter two they involve up to 700 steps, and 100 steps respectively. In FrankaKitchen, demonstrations are provided by Kumar et al. (2024), and collected by trained SAC agents. In Metaworld, demostrations are instead collected by the scripted policies provided (Yu et al., 2020). In Robomimic, demonstrations are provided by proeficient human demonstrators (Mandlekar et al., 2021). Finally, in WidowX successful trajectories are collected by Octo-small (Octo Model Team et al., 2024) itself and filtered according to success labels, in an instance of self-supervised distillation. Furthermore, in the case of WidowX, the initial position of the object is not randomized, as we found this to result in very inconsistent performance for the data collection policy. In the first two suites, 
+
+50 attempts for each task are evaluated, while evaluation on Robomimic and WidowX involves 25 attempts. 
+
+> 4github.com/marbaga/amf
+
+31 Active Multi-task Policy Fine-tuning 
+
+M.3.2. B EHAVIOR CLONING 
+
+The MLP policy has with 2 layers and 256 units per layer, with layer normalization (Ba, 2016). The Diffusion policy shares architecture and hyperparameters with the original implementation (Chi et al., 2023). Task conditioning are word embedding extracted by a sentence transformer (all-MiniLM-L6-v2) (HuggingFace, 2026). Policies are pre-trained for 200 epochs with batch size of 256 , learning rate of 10 −4 using the AdamW optimizer(Loshchilov & Hutter, 2019). M.3.3. I MPORTANCE SAMPLING WEIGHTS 
+
+In GP setting, importance weights are computed from the Gaussian policy distribution, and log-probabilities are clipped to the range [−12 , 0] . In NN settings, for deterministic policies, we interpret the policy’s output as the mean of a Gaussian with fixed standard deviation σ = 1 .0, and only clip log-probabilities for numerical stability. In experiments involving pre-trained Octo policies, we evaluated two solutions. One option consisted of fitting a Gaussian distribution through maximum likelihood methods to samples from the diffusion policy, and was found to underperform. We thus treat the Octo policy as strictly deterministic: with continuous action spaces, this simplifies importance sampling weights to w(c, τ ) = 1 in case τ is a demonstration provided exactly for task c, and 0 otherwise. We note that this solution cannot be used to evaluate the criterion on yet unobserved tasks, but remains feasible when tasks are finite and few. M.3.4. AMF Each fine-tuning round involves 3000 gradient steps, each with a batch size of 256 . We warm-start each algorithm by collecting the first |C| demonstrations uniformly, as mentioned in Section 4.2. In the case of loss-gradient embeddings, we found it to be beneficial to use a separate copy of the policy for task selection, which is not trained on these initial trajectories (which thus can be seen as a small “validation” set). M.3.5. A DAPTIVE PRIOR 
+
+We found relatively high learning rates for the mixing weight α to work well: all experiments use a learning rate of 1.0.The conservative coefficient β was tuned for each suite, and is set to 0.01 for all but Kitchen, in which it takes the value of 
+
+0.001 .
+
+M.4. Runtime 
+
+Each experimental run for AMF-NN takes at most 5 hours with GPU acceleration. In this case, data selection itself requires less than 1 second per round, and can be significantly sped up by reducing the sampling budget. AMF-GP experiments can be reproduced within 10 minutes on CPU. 
+
+## N. Useful inequalities 
+
+Lemma N.1. If a, b ∈ (0 , M ] for some M > 0 and b ≥ a then 
+
+b − a ≤ M · log 
+
+ ba
+
+
+
+.
+
+If additionally, a ≥ M ′ for some M ′ > 0 then 
+
+b − a ≥ M ′ · log 
+
+ ba
+
+
+
+.
+
+Proof. Let f (x) def 
+
+= log x. By the mean value theorem, there exists c ∈ (a, b ) such that 
+
+1
+
+c = f ′(c) = f (b) − f (a)
+
+b − a = log b − log ab − a = log   ba
+
+
+
+b − a .
+
+Thus, 
+
+b − a = c · log 
+
+ ba
+
+
+
+< M · log 
+
+ ba
+
+
+
+.
+
+32 Active Multi-task Policy Fine-tuning 
+
+Under the additional condition that a ≥ M ′, we obtain 
+
+b − a = c · log 
+
+ ba
+
+
+
+> M ′ · log 
+
+ ba
+
+
+
+.
+
+Lemma N.2. Let us consider two spaces X ∈ Rn, Y ∈ Rm, and a conditional distribution p : X → ∆( Y ) whose support supp (p(·| x)) is bounded by a ball of radius ϵ for all x ∈ X, that is 
+
+max  
+
+> yl,y h∈supp p(·| x)
+
+∥yh − yl∥2 ≤ ϵ. 
+
+For all (x, x ′) ⊆ X, y ∼ p(·| x) and y′ ∼ p(·| x′) it holds that 
+
+∥y − y′∥2 ≤ W (p(·| x), p (·| x′)) + 2 ϵ, 
+
+where K denotes the Wasserstein 1-distance. Proof. 
+
+∥y − y′∥ ≤ max 
+
+> y∈supp (p(·| x))
+> y′∈supp (p(·| x′))
+
+∥y − y′∥2 (94) 
+
+> (i)
+
+≤ min 
+
+> y∈supp (p(·| x))
+> y′∈supp (p(·| x′))
+
+∥y − y′∥2 + 2 ϵ (95) 
+
+> (ii )
+
+≤ W (p(·| x), p (·| x′)) + 2 ϵ, (96) where (i) follows from the triangle inequality, and (2) is due to the fact that the integral of the distance between two points in 
+
+Y for any coupling is greater than the minimum distance. 33

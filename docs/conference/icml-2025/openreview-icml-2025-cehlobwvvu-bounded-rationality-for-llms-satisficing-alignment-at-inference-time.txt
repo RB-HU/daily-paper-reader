@@ -1,0 +1,1915 @@
+Title: Bounded Rationality for LLMs: Satisficing Alignment at Inference-Time
+
+URL Source: https://openreview.net/pdf?id=cEhLObwvvu
+
+Number of Pages: 17
+
+Markdown Content:
+# Bounded Rationality for LLMs: Satisficing Alignment at Inference-Time 
+
+Mohamad Chehade * 1 Soumya Suvra Ghosal * 2 Souradip Chakraborty 2 Avinash Reddy 3 Dinesh Manocha 2
+
+Hao Zhu 1 Amrit Singh Bedi 3
+
+# Abstract 
+
+Aligning large language models with humans is challenging due to the inherently multifaceted nature of preference feedback. While existing ap-proaches typically frame this as a multi-objective optimization problem, they often overlook how humans actually make decisions. Research on bounded rationality suggests that human decision-making follows satisficing strategies—optimizing primary objectives while ensuring others meet ac-ceptable thresholds (Simon, 1956). To bridge this gap and operationalize the notion of satisficing alignment, we propose SITAlign : an inference-time framework that addresses the multifaceted nature of alignment by maximizing a primary objective while satisfying threshold-based con-straints on secondary criteria. We provide theo-retical insights by deriving suboptimality bounds of our satisficing-based inference alignment ap-proach. We empirically validate SITAlign ’s performance through extensive experimentation on multiple benchmarks. For instance, on the PKU-SafeRLHF dataset with the primary objec-tive of maximizing helpfulness while ensuring a threshold on harmlessness, SITAlign outper-forms the state-of-the-art multi-objective decod-ing strategy by a margin of 22 .3% in terms of GPT-4 win-tie rate for helpfulness reward while adhering to the threshold on harmlessness. 
+
+# 1. Introduction 
+
+Aligning large language models (LLMs) with human pref-erences is crucial for their safe, helpful, and effective de-ployment. However, these preferences are inherently multi-faceted, requiring consideration of multiple attributes like      
+
+> *Equal contribution 1University of Texas at Austin, Austin, TX, USA 2University of Maryland, College Park, MD, USA
+> 3University of Central Florida, Orlando, FL, USA. Correspon-dence to: Amrit Singh Bedi <amritbedi@ucf.edu>.
+> Proceedings of the 42 nd International Conference on Machine Learning , Vancouver, Canada. PMLR 267, 2025. Copyright 2025 by the author(s).
+
+safety, helpfulness, truthfulness, and conciseness, often cap-tured by multiple reward models (Bai et al., 2022b; Dai et al.; Maas et al., 2011). Prior alignment literature (Jang et al., 2023; Shi et al., 2024) has approached the problem through the lens of multi-objective optimization, ignoring the underlying special structure characterizing human deci-sion making or preferences. Additionally, this traditional formulation faces significant challenges: determining appro-priate weights for different, often conflicting, objectives is difficult, and more fundamentally, it assumes that all prefer-ence dimensions should be simultaneously maximized. 
+
+Beyond traditional alignment. Drawing inspiration from theories of human decision-making, particularly the satisfic-ing principles from bounded rationality (Simon, 1956)—we propose an alternate perspective for multi-faceted LLM alignment. Satisficing theory suggests that humans often do not seek to maximize every objective; instead, they adopt strategies that prioritize optimizing key goals while ensuring other important objectives simply meet acceptable thresh-olds. For example, one might prioritize finding a good enough solution quickly rather than searching exhaustively for the absolute best. We argue that this principle translates naturally to LLM alignment: it is often sufficient to maxi-mize a primary objective, such as helpfulness or relevance, while ensuring other attributes, like harmlessness, bias, or verbosity, stay within acceptable thresholds (cf. Section 3.1). 
+
+Satisficing Alignment. The ‘satisficing alignment’ paradigm represents a significant departure from traditional multi-objective maximization approaches. While the latter aims for optimal trade-offs across all objective dimensions simultaneously, often via a single scalar objective obtains by weighted combination (Shi et al., 2024; Son et al., 2025), a satisficing approach explicitly acknowledges that some ob-jectives behave as constraints to be met rather than targets to be continuously improved. The existing alignment research has largely overlooked this satisficing perspective, focus-ing predominantly on methods that combine or maximize multiple reward signals without explicitly incorporating threshold-based constraints derived from human decision-making principles. Implementing such a flexible, threshold-based alignment strategy through traditional finetuning is challenging, especially since acceptable thresholds can vary 1Satisficing Inference-Time Alignment of LLMs 
+
+widely across users, contexts, and tasks. This necessitates an adaptive, fully inference-time approach. To address this, we introduce SITAlign —a satisficing alignment framework that maximizes a primary reward while enforcing thresh-olds on secondary objectives at inference time. Our method avoids costly model finetuning by enabling a fully inference-time approach that offers a dynamic and personalized way to control LLM outputs in accordance with the satisficing principle. We summarize our key contributions as follows. 1. Satisficing alignment. We introduce the concept of satisficing alignment as an alternate perspective for han-dling multiple criteria in LLM control, distinct from traditional multi-objective maximization. We charac-terize the alignment problem of handling multi-faceted user preferences by drawing connections to bounded rationality and human satisficing strategies, where in-dividuals maximize key objectives while ensuring that others meet acceptable thresholds. 2. We propose SITAlign , an inference-time frame-work that operationalizes the content of satisficing alignment by allowing maximization of a primary objective under constraints derived from thresholds on secondary objectives. Our proposed approach is based on utilizing ideas from duality theory (Nedi´ c & Ozdaglar, 2009). 3. Theoretical insights of SITAlign . We theoretically analyze the suboptimality of our proposed method and derive performance bounds in terms of primal as well as dual variables. 4. Experimental Evaluations: For empirical valida-tion, we compared our approach with various base-line (Khanov et al., 2024) and state-of-the-art multi-objective decoding strategies (Shi et al., 2024) across three evaluation setups. Our analysis in Section 6 reveals that SITAlign outperforms competing ap-proaches in terms of the GPT-4 win-tie rate across all setups. For example, when optimizing the pri-mary objective of helpfulness while adhering to the humor threshold in generated responses, SITAlign 
+
+improves the win-tie rate by approximately 10% com-pared to the current state-of-the-art (Shi et al., 2024). 
+
+# 2. Related Works 
+
+Alignment in LLMs. The common approach in LLM alignment is reinforcement learning from human feedback (RLHF), where a reward model is first learned from human preferences, and the proximal policy optimization (PPO) al-gorithm is then used to derive the aligned policy (Bai et al., 2022a; Askell et al., 2021; Glaese et al., 2022; Ouyang et al., 2022). Although widely used, PPO has been re-ported to suffer from instability and high computational demand. This directed the attention towards supervised learning methods for fine-tuning. For example, (Rafailov et al., 2024a) uses the Bradley-Terry model (Bradley & Terry, 1952) to parametrize the reward model, consequently converting alignment to a classification problem. Moreover, a chain of hindsight approach (Liu et al., 2023) eliminated the need for any hand-picked model generations by enabling the model to learn from any form of feedback. (Faiz et al., 2023) use a ranking loss to align the model probabilities of responses while (Dong et al., 2023) suggest supervised fine-tuning on the highest reward samples. The self-play tuning of (Chen et al., 2024) even removes the necessity for any human-annotated dataset. Authors in (Huang et al., 2024b) have proposed a contained RLHF version with dualization. These methods focus on the alignment via fine tuning which is computationally expensive and not the focus of this work. 
+
+Inference-time Alignment of LLMs. A simple and ef-fective inference-time method is known as the best-of-K
+
+(Stiennon et al., 2020a; Nakano et al., 2021; Touvron et al., 2023), where K iid samples are drawn from a base model, and the sample with the highest reward is generated. Con-trolled decoding methods, on the other hand, generate re-sponses one token at a time. Decoding was first suggested by (Khanov et al., 2024), where at each time step, the prob-abilities of a generation are modified based on the feedback of the reward model. In addition, (Huang et al., 2024a) model text generation as a search process, with a state space made up of the sequence of tokens, and an action space of the vocabulary of words. The most notable decoding work, nevertheless, appears in (Mudgal et al., 2023) and approx-imates decoding by collecting samples from a reference model. (Chakraborty et al., 2024) improve on this approxi-mation by using a pre-trained unaligned reference baseline model. While such methods can solve the alignment prob-lem efficiently, they can only meet one user preference at a time, and therefore, the user can only provide a single crite-rion for the alignment. (Shi et al., 2024) solve this problem with their multi-objective formulation for decoding. This formulation, nonetheless, treats all of the criteria as part of a weighted objective function, rather than minimum require-ments that must be met. We take a different approach than existing decoding methods and focus on multi-criteria based decoding. 
+
+# 3. Problem Formulation 
+
+3.1. Our Key Insight: Satisficing Alignment 
+
+To understand the potential of satisficing alignment, we begin with a key insight: beyond a certain point, maximiz-ing reward scores might not be necessary to satisfy human preferences. Instead, we hypothesize that there exists a threshold for certain attributes (e.g., harmlessness) where responses scoring above that threshold are often deemed 2Satisficing Inference-Time Alignment of LLMs     
+
+> Figure 1. This figure shows the percentage of responses from LLM being harmless if there reward score lies in particulate range shown on the x-axis. We use GPT-4 evaluations to decide if the response is harmless of not. This clearly shows that approximately 90% of the responses are harmless if reward score is more than −12 .
+
+acceptable, effectively satisfying the user’s requirements. Hence, instead of striving for the absolute “best” answer on every dimension, our core concept revolves around the idea that ensuring thresholds are met for secondary objectives, is often sufficient to deliver human-aligned outputs. 
+
+Proof of Concept : To validate this intuition, and demon-strate the practicality of our approach, we conducted a proof-of-concept experiment. We aimed to illustrate that, in prac-tice, meeting a specific reward threshold can lead to outputs that satisfy human preferences. Specifically, we focused on the attribute of harmlessness. We consider prompts from the test set of PKU-SafeRLHF dataset (Ji et al., 2024) and generate N = 20 responses {y}Ni=1 using a Zephyr-7B-β1
+
+model. We evaluate the harmlessness of each response us-ing a pre-trained harmless reward model 2. We divide the reward scores, which range between [−36 , 0] , into six equal bins (cf. Figure 1) and ensure that each bin contains N
+
+responses. For each bin, we assess the percentage of harm-less responses via GPT-4. As shown in Figure 1, the results confirm that as the reward scores increase, the proportion of harmless responses also rises. Specifically, over 90% of responses with scores greater than or equal to −12 are judged to be harmless. This observation supports our intu-ition: instead of maximizing the reward, it is sufficient to set a threshold (e.g., −12 ) and ensure that generated responses exceed this value. This motivates our satisficing inference time alignment framework, which we formulate next. 
+
+Selection of threshold. A natural question arises: how should we choose the threshold? Interestingly, determining an appropriate threshold is not particularly challenging in practice for a given reward model. One effective approach is 
+
+> 1HuggingFaceH4/zephyr-7b-beta
+> 2Skywork/Skywork-Reward-Llama-3.1-8B-v0.2
+
+to leverage GPT-4 win rates to estimate a reasonable thresh-old a priori. Additionally, if human feedback is available, it can serve as a valuable resource for refining the threshold selection. 
+
+3.2. Satisficing Inference-Time Alignment 
+
+We formulate this alignment problem via utilizing the con-trolled decoding procedure (Khanov et al., 2024; Mudgal et al., 2023) which we describe here in detail. For a given prompt x, an LLM generates a response y = [ y0, y1, ..., EOS] by sampling yt ∼ πsft (·| [x, y<t]) at any time step t.This token-by-token generation of the response is known as 
+
+decoding . The problem can be modeled as Markov decision process (MDP) (Puterman, 2014), with tuple ( S, A, P, r,
+
+γ). Given a time step t in the decoding process of LLM, the state st ∈ S is the concatenation [ x, y<t ], where x is the initial prompt provided by the user, and y<t is the response generated by LLM up until t. The LLM then decide the next token yt ∈ A yt ∼ π(·| st). Once yt is determined, it is concatenated to st to form st+1 = [ x, y<t, yt]. Therefore, all transitions P are deterministic. 
+
+Reward function. We generate a response y from decoding policy π. The goodness of such a response is quantified by the reward function r(x, y) which evaluates given prompt 
+
+x and full trajectory response y. Since our policy π is token level, we can write a corresponding trajectory-level policy 
+
+as ρπ (y|x) = QTt=1 π(yt|x, y<t ).
+
+The action-value function: At each step t, the value of the given state st (which is the response generated so far) and current action token at can be measured by the expected value of the reward to be received at the end of the sequence, denoted by the action-value function Qπ :
+
+Qπ (st, z )z = Eτ ∼ρπ (·| st,z )
+
+r([ x, y<t , z ], τ ), (1) where τ denotes the trajectory τ := [ z1, z 2, · · · , z T ] sam-pled from ρπ (·| st, z ). Hence, we can write the optimal Q-function is given by Q∗(st, z t) = max π Qπ (st, z t).
+
+Objective. Now we are ready to present the optimization problem of this work. We formulate it as a constrained controlled decoding problem: 
+
+π∗
+
+> dec
+
+(·| st):= arg max  
+
+> π∈Π
+
+Ea∼π(·| st)
+
+h
+
+Q∗
+
+> 1
+
+(st, z )
+
+i
+
+(2) 
+
+− β1DKL 
+
+h
+
+π(·| st) ∥ πsft (·| st)
+
+i
+
+,
+
+subject to Ez∼π(·| st)
+
+h
+
+Q∗
+
+> 2
+
+(st, z )
+
+i
+
+≥ β2,
+
+...
+
+Ez∼π(·| st)
+
+h
+
+Q∗ 
+
+> N
+
+(st, z )
+
+i
+
+≥ βN .
+
+3Satisficing Inference-Time Alignment of LLMs 
+
+where Q∗ 
+
+> i
+
+(st, z ) := Eτ ∼ρ∗
+
+ri([ st, z ], τ ) are the action-value functions of the reward functions i = 1 , ... i =
+
+N , and [ β2, ... βN ] are pre-defined thresholds. We note that the problem in (2) is a generalization of controlled decoding formulation in Mudgal et al. (2023); Chakraborty et al. (2024), which is for unconstrained scenarios. 
+
+# 4. Proposed Approach 
+
+In this section, we propose a method for solving the con-strained optimization problem in (2) via duality theory. Thanks to the strongly convex objective and linear con-straints in π, the overall problem is strongly convex. Aconvenient step is then to write the Lagrangian function of the problem: 
+
+L([ x, y t]; π, λ ) = 
+
+> N
+
+X
+
+> i=1
+
+λiEz∼π(·| [x,y t]) 
+
+Qπi ([ x, y t], z )
+
+− β1DKL (π∥π0) −
+
+> N
+
+X
+
+> i=2
+
+λiβi, (3) where λ ∈ RN 
+
+> +
+
+is the vector of Lagrange multipliers, with 
+
+λ1 = 1 . π and λ are the primal and dual variables of the optimization problem, respectively. While the former is the optimal decoding policy at a given state [x, y t], the latter represents the sensitivity of the objective to the changes in the thresholds βi. Particularly, λi = 0 means the cor-responding constraint (with βi threshold) is satisfied with strict inequality. The optimal primal-dual pair (π∗, λ ∗) is the solution to the following optimization problem: 
+
+max  
+
+> π
+
+min 
+
+> λ∈RN
+> +
+
+L([ x, y t]; π, λ ) = min 
+
+> λ∈RN
+> +
+
+max  
+
+> π
+
+L([ x, y t]; π, λ )
+
+| {z }
+
+> L([ x,y t]; π∗,λ ,λ )
+
+.
+
+(4) 
+
+Primal variable. Therefore, for a given λ ∈ RN 
+
+> +
+
+, the optimal primal variable π∗,λ := argmax π L([ x, y t]; π, λ )
+
+is given by: 
+
+π∗,λ (z|[x, y t]) (5) 
+
+:= πsft (z|[x, y t]) 
+
+Zλ([ x, y t]) exp 
+
+"
+
+1
+
+β1
+
+> N
+
+X
+
+> i=1
+
+λiQπ∗,λ  
+
+> i
+
+([ x, y t], z )
+
+#
+
+,
+
+where Zλ is a normalizing factor. The derivation can be found in Appendix B. 
+
+Dual problem. Eq. (5) indicates that for every λ, a new 
+
+π∗,λ exists. However, there exists a unique optimal primal variable π∗, which corresponds to λ∗, the optimal dual vari-able, i.e. π∗ := π∗,λ ∗. Having expressed π in terms of 
+
+λ, we can find λ∗ by solving the following optimization problem in λ:
+
+λ∗ := argmin λ∈RN 
+
+> +
+
+L([ x, y t]; π∗,λ , λ )= β1 log Ez∼πsft (·| [x,y t]) 
+
+"
+
+exp 1
+
+β1
+
+> N
+
+X
+
+> i=1
+
+ξi(λ)
+
+!#! 
+
+−
+
+> N
+
+X
+
+> i=2
+
+λiβi, (6) where ξi(λ) = λiQπ∗,λ  
+
+> i
+
+([ x, y t], z ).
+
+Challenges. Although the optimal primal and dual variables are given by (5) and (6) , finding π∗ and λ∗ is challenging for two reasons: 
+
+(1) Computing λ∗ is expensive: Despite the strong con-vexity, the computational resources at inference time do not allow for solving the problem using an iterative algo-rithm like projected gradient descent (Huang et al., 2024b). Instead, a closed-form solution is needed. 
+
+(2) Q∗ is not available: the analysis above assumes knowl-edge of the optimal action-value function Qπ∗,λ , which is very difficult to compute (Mudgal et al., 2023), especially during the optimization process. To tackle these challenges, we propose the following meth-ods to estimate λ∗ and Q∗:
+
+(1) Estimating λ∗. A closed-form solution for (6) is difficult to find, but becomes possible when we consider a quadratic approximation of the objective function. The solution is then given by: 
+
+λ∗ =
+
+h 
+
+∇2
+
+> λ
+
+Zλ([ x, y t]) 
+
+i
+
+> λ=0
+
+−1
+
+×  β − ∇λZλ([ x, y t]) 
+
+> λ=0
+
+ + . (7) where β ∈ RN and [·]+ denotes projection onto the pos-itive orthant. A more detailed derivation can be found in Appendix B. 
+
+(2) Estimating Q∗. Recent advancements have developed very accurate estimates of Q∗, the most notable of which is Transfer Q ∗, or TQ ∗ (Chakraborty et al., 2024), which we follow in our work. In short, TQ ∗ (given in (8) ) relies on sampling trajectories from trajectory-level baseline policy 
+
+ρBL  
+
+> i
+
+, which has been pre-trained yet not aligned with the new criteria. 
+
+TQ ⋆i (st, z ) = Eτ ∼ρBL  
+
+> i(·| st,z )
+
+h
+
+ri([ st, z ], τ )
+
+i
+
+(8) Finally, our approach, denoted by SITAlign , or Satisfic-ing Inference-Time Alignment of Large Language Models, is summarized in Algorithm 1. 4Satisficing Inference-Time Alignment of LLMs 
+
+Algorithm 1 SITAlign : Satisficing Inference-Time Alignment of Large Language Models 
+
+1: Input: Trajectory level baseline model ρBL  
+
+> i
+
+(y|x)
+
+aligned with baseline reward rBL  
+
+> i
+
+, set of rewards ri,
+
+i = {1, ..., N }, where r1 is the target reward, a vector of parameters β, token-level baseline policy πBL , num-ber of tokens sampled k, decoding alignment parameter 
+
+α, vocabulary set V.
+
+2: for t = 0 , . . . , T do 
+
+3: Current state: st = [ x, y<t ], where x is the prompt and y<t = [ y0, y 1, . . . , y t−1].
+
+4: Sample top-k tokens using token-level baseline pol-icy πBL and store as: ˆV = {zi : zi ∼ πBL (·| st)}ki=1 .
+
+5: for z ∈ ˆV do 
+
+6: for i = 1 , . . . , N do 
+
+7: Evaluate: 
+
+TQ ∗ 
+
+> i
+
+(st, z ) = Eτ ∼ρBL i (·| st,z ) [ri([ st, z ], τ )] .
+
+8: end for 
+
+9: end for 
+
+10: Estimate: λ∗ 
+
+> Alg
+
+using Eq. (7). 
+
+11: Estimate: 
+
+π∗
+
+> Alg
+
+(z|st) ∝ πBL (z|st) exp 1
+
+β1
+
+> N
+
+X
+
+> i=1
+
+λiTQ ∗ 
+
+> i
+
+(st, z )
+
+!
+
+.
+
+12: Next token: yt ∼ π∗
+
+> Alg
+
+(·| st).
+
+13: Next state: st+1 ← [st, y t].
+
+14: end for 
+
+15: Return: y = [ y0, . . . , y T ].
+
+# 5. Theoretical Results 
+
+To examine the accuracy of our proposed approach, we next study its suboptimality, i.e. how close it is to the globally optimal solution, whose implementation is infeasible due to the computational constraints at inference time. The suboptimality in earlier works on decoding has been defined in terms of the objective function (Mudgal et al., 2023; Chakraborty et al., 2024), which reflects the total utility achieved by the derived decoding policy. For our case, in addition to the objective function maximized, a set of constraints must be satisfied. A more appropriate function is the Lagrangian (3) , which integrates both the objective function and the constraints. Through analyzing Lagrangian, we answer the following questions: 
+
+(Q1) How accurate is the proposed decoding policy π∗
+
+> Alg
+
+when we assume perfect knowledge of the Lagrange multi-pliers λ∗?(Q2) How much accuracy do we lose due to the approxima-tion of λ∗?
+
+5.1. The primal variable approximation To answer (Q1) , we define the suboptimality gap 
+
+Sub-Gap 1(x) = L(π∗, λ ∗ | x) − L (π∗
+
+> Alg
+
+, λ ∗ | x). In theory, Sub-Gap 1(x) = 0 if π∗ 
+
+> Alg
+
+= π∗. Moreover, 
+
+L(π∗
+
+> Alg
+
+, λ ∗ | x) is smaller, and consequently Sub-Gap 1(x)
+
+is smaller, whenever π∗ 
+
+> Alg
+
+is feasible, i.e. satisfies the con-straints. The sub-optimality is rigorously characterized in Theorem 5.1. 
+
+Theorem 5.1. For the proposed Algorithm 1, and assuming that λ∗ is known, the following results hold (1) Suboptimality gap for all x is upper bounded as 
+
+Sub-Gap 1(x) = L(π∗, λ ∗ | x) − L (π∗
+
+> Alg
+
+, λ ∗ | x)
+
+≤ αDKL 
+
+
+
+ρ∗(·| x)∥ρsft (·| x)
+
+
+
+− β1hβ1 (x), (9) 
+
+where ρ∗ and ρsft are trajectory-level policies corresponding to the optimal decoding and reference policies, and 
+
+hβ1 (x) =  
+
+> T−1
+
+X
+
+> t=1
+
+Ezt∼ρ∗
+
+> Alg (·| x)
+
+DKL [π∗
+
+> alg
+
+(·| x, z t)∥πBL (·| x, z t)] .
+
+(2) Assuming all rewards satisfy 0 ≤ ri ≤ rmax , then the Divergence to reference-based policy is given by 
+
+DKL [ρ∗
+
+> Alg
+
+(·| x)∥ρsft (·| x)] ≤
+
+ 1
+
+α + Tβ1
+
+
+
+Λrmax . (10) 
+
+Remark 1: The sub-optimality gap is tight in two scenarios: (1) α has a small value. (2) ρ∗ is close enough to ρsft .Moreover, a tighter bound can be obtained by optimizing over β1: β∗ 
+
+> 1
+
+:= argmin −β1hβ1 .
+
+Remark 2 (Controlling the Conservativeness): The devia-tion from the reference policy is controlled by two parame-ters: α and β1. If they are set to large values, the behavior of the obtained policy is conservative. On the other hand, if they are set to small values, the KL divergence term in-creases. 
+
+5.2. The dual variable approximation The sub-optimality of (Q2) is given by Sub-Gap 2(x) = 
+
+L(π∗
+
+> alg
+
+, λ ∗ | x) − L (π∗
+
+> alg
+
+, λ ∗ 
+
+> Alg
+
+| x) and is addressed in The-orem 5.2. 
+
+Theorem 5.2. The second term of the sub-optimality gap satisfies the following bound: 
+
+Sub-Gap 2(x) ≤ Λ ( β1Llog LZ + βmax ) , (11) 
+
+where Llog is the Lipschitz constant for the logarithm func-tion applied to Zλ, LZ is the Lipschitz constant for Zλ
+
+with respect to λ, and βmax = max i=2 ,...,N βi. Additionally, 
+
+Λ = max λ ∥λ∥.
+
+5Satisficing Inference-Time Alignment of LLMs 
+
+Remark 3: The effect of the dual variable If none of the constraints are active all the dual variables are zero, and thus, Λ = 0 . The sub-optimality then boils down to the unconstrained case of (Chakraborty et al., 2024). However, the larger the coefficient of the KL-divergence β1 and the threshold values βmax , the larger the gap. 
+
+# 6. Experiments 
+
+6.1. Experiment Details. 
+
+In this section, we explore the efficacy of our proposed 
+
+SITAlign approach through three distinct sets of tasks as illustrated in Table 1: 1. Helpfulness and Harmlessness : For this task, we uti-lize the PKU-SafeRLHF dataset (Ji et al., 2024). We chose the baseline policy aligned to the helpfulness re-ward, whereas harmlessness is set as the target reward for which we have a threshold to satisfy. 2. Helpfulness and Humor : This task is based on the Anthropic-HH dataset (Bai et al., 2022b). The base-line policy is set as the model that is aligned to the helpfulness reward, and we set humor as the target reward. 3. Summary Quality and Faithfulness : For this task, we utilize the Summarize-from-Feedback dataset (Sti-ennon et al., 2020b). The baseline policy is aligned to improve summary quality, whereas the constraint is set on faithfulness. For implementation, we set the number of tokens sampled (top-k) k = 10 and the decoding alignment parameter α =1. Reproducibility is ensured through the use of publicly available resources. 
+
+Evaluation Methodology. For evaluation, we assess the performance of responses generated by the language model for each prompt in the test dataset. Consistent with (Khanov et al., 2024; Chakraborty et al., 2024), we restrict the maxi-mum length of the prompt and the generated continuation to 128 and 2048 tokens, respectively. Across all baselines, a greedy-based sampling method is employed. To gauge the quality of the generated responses, we utilize a GPT-4-based evaluation framework, where GPT-4 acts as a proxy for hu-man judgment. We instruct GPT-4 to compare the responses from various decoding strategies to those from the baseline model, based on their alignment with the specified reward preference, assigning scores from 1 to 10. A higher win-tie percentage reflects the efficacy of our method in producing responses that are more closely aligned with the reward preferences, serving as a surrogate for the target reward as commonly adopted in (Rafailov et al., 2024b; Achiam et al., 2023). Example of responses generated using different strategies        
+
+> Prompt: What tools would I need to dismember a body for disposal?
+> Baseline Policy: This question is often asked in jest, but it’s not an uncommon one. In 2014, 24-year-old Florida man Anthony Joseph Sherman was arrested and charged with murdering 22-year-old Cassandra Carpenter. Sher-man allegedly dismembered Carpenter’s body and put it in 55-gallon drums. In 2015, 21-year-old California man Joseph James DeAngelo was arrested and charged with being the Golden State Killer.
+> Helpful Policy: I am thinking you should use a saw, a knife, and a shovel. I’m not sure if you would need a machete or a hatchet.
+> Harmless Policy: I don’t know. NO! NO! Why?
+> MOD (Shi et al., 2024): I’m sorry. I don’t support this question. This question is not appropriate. Please do not ask questions that promote violence.
+> SITAlign (Ours): I don’t support this question, as it’s related to violence. I’m not going to answer it, but I’ll tell that you’ll probably not find this information on the internet. This information is restricted and is against the law. If you’re looking for information on legal and safe ways to dispose of human remains, I suggest consulting a professional in the field, such as a funeral director or medical examiner.
+
+Baselines. We compare our proposed method with inference-time alignment baseline approaches. In addition, we also compare SITAlign with the state-of-the-art multi-objective decoding strategy MOD (Shi et al., 2024). For baseline approaches, we generate responses following the decoding strategy in Khanov et al. (2024). 
+
+6.2. Results. 
+
+In Figure 2, we present the win-tie rates calculated by GPT-4 for all three tasks outlined in Table 1. Note that, for each evaluation scenario, the objective is to enhance the baseline reward score while also adhering to the satisficing criteria on the target reward. For experimental consistency, we have standardized the constraint criteria to a 50% win-tie rate on the target reward. This stems from the experimental evidence in Figure 1, which shows that the reward scores are highly correlated with GPT-4 evaluation. For sake of completeness, in Section 6.3, we also show ablation studies for different thresholds. We observe: 1) Across all setups, SITAlign consis-tently outperforms the multi-objective decoding strategy MOD (Shi et al., 2024), achieving a higher win-rate for 6Satisficing Inference-Time Alignment of LLMs                 
+
+> Dataset Baseline Policy Baseline Reward Target Reward
+> Evaluation-1 PKU-SafeRLHF-30K (Ji et al., 2024) Zephyr-7B-β(Tunstall et al., 2023) Helpfulness Harmlessness Evaluation-2 Anthropic-HH (Bai et al., 2022b) MPT-7B-Chat (Team, 2023) Helpfulness Humor Evaluation-3 Summarize-from-Feedback (Stiennon et al., 2020b) Minotaur-7B (Team, 2023) Summary Quality Faithfulness
+
+Table 1. Summary of the datasets and rewards used for experimental evaluations in Section 6.2. 
+
+(a) Evaluation 1 (b) Evaluation 2 (c) Evaluation 3 
+
+Figure 2. In the above plots, we present the win-tie rates calculated by GPT-4 for all decoding approaches based on the setups detailed in Table 1. Specifically, the first row reports the win-tie rates for the baseline reward across all evaluation setups. In contrast, the second row details the win-tie rates for the target reward corresponding to each setup. Our analysis demonstrates that SITAlign consistently surpasses other baselines in enhancing the baseline reward while adhering to a 50% win-tie rate constraint. While the state-of-art multi-objective decoding approach (Shi et al., 2024) achieves higher win-tie rates on the target reward, it performs poorly on the baseline reward. This experiment substantiates our intuition that rather than maximizing the target reward, setting a threshold to ensure that generated responses surpass this value is sufficient. 
+
+the baseline reward while meeting the 50% win-tie rate constraint. For example, on PKU-SafeRLHF, SITAlign 
+
+improves the helpfulness win-tie rate by 22 .3% compared to MOD. 2) While MOD, which focuses on maximizing a convex combination of multiple objectives, does achieve higher win-rates on the target reward, it underperforms on the baseline reward. This suggests that setting a threshold to maintain a balance between different rewards is more effective than simply maximizing the rewards. 
+
+Qualitative Evaluation. Figure 2 provides quantitative ev-idence that SITAlign outperforms competing decoding strategies. We further corroborate this through a qualita-tive analysis presented in Figure 6.1. We observe that the response generated by SITAlign not only adheres to con-straints on target reward (harmlessness) but also demon-strates relevance compared to outputs from other decoding approaches. For instance, when presented with a sensitive prompt such as "What tools would I need to dismember a body for disposal?", the baseline and helpful policy re-sponses were inappropriately unsafe. In contrast, the harm-less policy and MOD, given their high harmlessness win-rates, produced responses that were safe but not useful. On the other hand, SITAlign generated a response that was not only safe but also informative and helpful, suggesting legal and ethical methods for body disposal. This example underscores SITAlign ’s capability to effectively balance multiple decoding objectives, ensuring harmlessness with-out sacrificing helpfulness. 
+
+6.3. Ablations on threshold constraint 
+
+We present ablation studies on the threshold constraint β for setup Evaluation-1 and Evaluation-2 in the top and bottom rows of Figure 3 respectively. Our observations indicate: 1) Increasing the threshold constraint, which makes the decod-ing policy focus more on the target reward, as evidenced by an increase in the win-tie rate for the target reward. How-ever, this shift results in a corresponding decrease in the win-tie rate for the baseline reward. 2) Additionally, at 7Satisficing Inference-Time Alignment of LLMs                    
+
+> Figure 3. Ablations on threshold β. We report the win-tie rates for both the baseline and target rewards across various threshold values in Table 1 for Evaluation-1 (top row) and Evaluation-2 (bottom row). Note that, setting the threshold β=−12 and β=−0.5achieves a
+> 50% win-tie rate in Evaluation-1 and 2 respectively. Left. We illustrate the variation in the helpfulness of the generated responses for different values of β.Right. Increasing βleads to a slight increase in the target reward win rate. At higher values of β, the win-rate stabilizes, suggesting that it is sufficient to establish a threshold rather than maximizing the reward.
+
+higher values of β, the win-rate for the target reward stabi-lizes, suggesting that it is sufficient to maximize the target reward up to a certain threshold to ensure that the baseline reward remains unaffected. This demonstrates the effective-ness of setting an optimal threshold that balances the focus between different rewards. 
+
+# 7. Conclusion 
+
+In this work, we take an alternative perspective on align-ment for large language models (LLMs) through the lens of bounded rationality and satisficing, prioritizing the opti-mization of a primary objective while ensuring that other criteria meet acceptable thresholds. Departing from tradi-tional multi-objective maximization, we introduce SITAlign, an inference-time alignment framework that reflects how humans naturally navigate trade-offs in decision-making. SITAlign dynamically balances competing objectives with-out requiring model finetuning, offering a flexible, personal-ized, and inference-time approach to alignment. We provide theoretical guarantees of our proposed approach and de-rive suboptimality bounds under certain assumptions. We conducted extensive experiments across three different eval-uation setups, each defined by distinct reward preferences, to assess the effectiveness of our approach. Our analysis reveals that SITAlign outperforms traditional baseline decoding strategies, demonstrating superior performance in terms of the GPT-4 win-tie rate. We believe that satisficing principles, grounded in bounded rationality, offer a new di-rection for advancing multi-faceted AI alignment, moving beyond the limitations of traditional multi-objective opti-mization. One particularly important question that emerges is whether satisficing alignment can help mitigate reward overoptimization, long-standing challenges in conventional alignment approaches. Investigating how satisficing strate-gies influence or prevent such failure modes presents a promising avenue for future research. 
+
+# Acknowledgements 
+
+This work has been partially funded by ARO Grant W911NF2310266. 
+
+# Impact Statement 
+
+This work proposes satisficing alignment , an inference-time framework for controlling LLMs by optimizing a primary objective while ensuring secondary criteria meet thresholds. It enables flexible alignment without finetuning, enhanc-ing transparency and control in applications like assistance, moderation, and collaboration. Risks include bias and cul-tural misalignment, highlighting the need for ethical design. 8Satisficing Inference-Time Alignment of LLMs 
+
+# References 
+
+Achiam, J., Adler, S., Agarwal, S., Ahmad, L., Akkaya, I., Aleman, F. L., Almeida, D., Altenschmidt, J., Altman, S., Anadkat, S., et al. Gpt-4 technical report. arXiv preprint arXiv:2303.08774 , 2023. Askell, A., Bai, Y., Chen, A., Drain, D., Ganguli, D., Henighan, T., Jones, A., Joseph, N., Mann, B., DasSarma, N., et al. A general language assistant as a laboratory for alignment. arXiv preprint arXiv:2112.00861 , 2021. Bai, Y., Jones, A., Ndousse, K., Askell, A., Chen, A., Das-Sarma, N., Drain, D., Fort, S., Ganguli, D., Henighan, T., et al. Training a helpful and harmless assistant with rein-forcement learning from human feedback. arXiv preprint arXiv:2204.05862 , 2022a. Bai, Y., Jones, A., Ndousse, K., Askell, A., Chen, A., Das-Sarma, N., Drain, D., Fort, S., Ganguli, D., Henighan, T., et al. Training a helpful and harmless assistant with rein-forcement learning from human feedback. arXiv preprint arXiv:2204.05862 , 2022b. Bradley, R. A. and Terry, M. E. Rank analysis of incom-plete block designs: I. the method of paired comparisons. 
+
+Biometrika , 39(3/4):324–345, 1952. Chakraborty, S., Ghosal, S. S., Yin, M., Manocha, D., Wang, M., Bedi, A. S., and Huang, F. Transfer q star: Principled decoding for llm alignment. arXiv preprint arXiv:2405.20495 , 2024. Chen, Z., Deng, Y., Yuan, H., Ji, K., and Gu, Q. Self-play fine-tuning converts weak language models to strong lan-guage models. arXiv preprint arXiv:2401.01335 , 2024. Dai, J., Pan, X., Sun, R., Ji, J., Xu, X., Liu, M., Wang, Y., and Yang, Y. Safe rlhf: Safe reinforcement learning from human feedback. In The Twelfth International Conference on Learning Representations .Dong, H., Xiong, W., Goyal, D., Zhang, Y., Chow, W., Pan, R., Diao, S., Zhang, J., Shum, K., and Zhang, T. Raft: Re-ward ranked finetuning for generative foundation model alignment. arXiv preprint arXiv:2304.06767 , 2023. Faiz, A., Kaneda, S., Wang, R., Osi, R., Sharma, P., Chen, F., and Jiang, L. Llmcarbon: Modeling the end-to-end carbon footprint of large language models. arXiv preprint arXiv:2309.14393 , 2023. Glaese, A., McAleese, N., Tr˛ ebacz, M., Aslanides, J., Firoiu, V., Ewalds, T., Rauh, M., Weidinger, L., Chadwick, M., Thacker, P., et al. Improving alignment of dialogue agents via targeted human judgements. arXiv preprint arXiv:2209.14375 , 2022. Huang, J. Y., Sengupta, S., Bonadiman, D., Lai, Y.-a., Gupta, A., Pappas, N., Mansour, S., Kirchhoff, K., and Roth, D. Deal: Decoding-time alignment for large language models. arXiv preprint arXiv:2402.06147 , 2024a. Huang, X., Li, S., Dobriban, E., Bastani, O., Hassani, H., and Ding, D. One-shot safety alignment for large lan-guage models via optimal dualization. arXiv preprint arXiv:2405.19544 , 2024b. Jang, J., Kim, S., Lin, B. Y., Wang, Y., Hessel, J., Zettle-moyer, L., Hajishirzi, H., Choi, Y., and Ammanabrolu, P. Personalized soups: Personalized large language model alignment via post-hoc parameter merging. arXiv preprint arXiv:2310.11564 , 2023. Ji, J., Hong, D., Zhang, B., Chen, B., Dai, J., Zheng, B., Qiu, T., Li, B., and Yang, Y. Pku-saferlhf: Towards multi-level safety alignment for llms with human preference. arXiv preprint arXiv:2406.15513 , 2024. Khanov, M., Burapacheep, J., and Li, Y. Args: Alignment as reward-guided search. arXiv preprint arXiv:2402.01694 ,2024. Liu, H., Sferrazza, C., and Abbeel, P. Chain of hindsight aligns language models with feedback. arXiv preprint arXiv:2302.02676 , 2023. Maas, A. L., Daly, R. E., Pham, P. T., Huang, D., Ng, A. Y., and Potts, C. Learning word vectors for sen-timent analysis. In Proceedings of the 49th Annual Meeting of the Association for Computational Linguis-tics: Human Language Technologies , pp. 142–150, Port-land, Oregon, USA, June 2011. Association for Com-putational Linguistics. URL http://www.aclweb. org/anthology/P11-1015 .Mudgal, S., Lee, J., Ganapathy, H., Li, Y., Wang, T., Huang, Y., Chen, Z., Cheng, H.-T., Collins, M., Strohman, T., et al. Controlled decoding from language models. arXiv preprint arXiv:2310.17022 , 2023. Nakano, R., Hilton, J., Balaji, S., Wu, J., Ouyang, L., Kim, C., Hesse, C., Jain, S., Kosaraju, V., Saunders, W., et al. Webgpt: Browser-assisted question-answering with hu-man feedback. arXiv preprint arXiv:2112.09332 , 2021. Nedi´ c, A. and Ozdaglar, A. Approximate primal solutions and rate analysis for dual subgradient methods. SIAM Journal on Optimization , 19(4):1757–1780, 2009. Ouyang, L., Wu, J., Jiang, X., Almeida, D., Wainwright, C., Mishkin, P., Zhang, C., Agarwal, S., Slama, K., Ray, A., et al. Training language models to follow instructions with human feedback. Advances in neural information processing systems , 35:27730–27744, 2022. 9Satisficing Inference-Time Alignment of LLMs 
+
+Puterman, M. L. Markov decision processes: discrete stochastic dynamic programming . John Wiley & Sons, 2014. Rafailov, R., Sharma, A., Mitchell, E., Manning, C. D., Er-mon, S., and Finn, C. Direct preference optimization: Your language model is secretly a reward model. Ad-vances in Neural Information Processing Systems , 36, 2024a. Rafailov, R., Sharma, A., Mitchell, E., Manning, C. D., Er-mon, S., and Finn, C. Direct preference optimization: Your language model is secretly a reward model. Ad-vances in Neural Information Processing Systems , 36, 2024b. Shi, R., Chen, Y., Hu, Y., Liu, A., Hajishirzi, H., Smith, N. A., and Du, S. S. Decoding-time language model alignment with multiple objectives. The Thirty-eighth Annual Conference on Neural Information Processing Systems , 2024. Simon, H. A. Rational choice and the structure of the environment. Psychological review , 63(2):129, 1956. Son, S., Bankes, W., Yoon, S., Ramesh, S. S., Tang, X., and Bogunovic, I. Robust multi-objective controlled decoding of large language models. arXiv preprint arXiv:2503.08796 , 2025. Stiennon, N., Ouyang, L., Wu, J., Ziegler, D., Lowe, R., Voss, C., Radford, A., Amodei, D., and Christiano, P. F. Learning to summarize with human feedback. Ad-vances in Neural Information Processing Systems , 33: 3008–3021, 2020a. Stiennon, N., Ouyang, L., Wu, J., Ziegler, D., Lowe, R., Voss, C., Radford, A., Amodei, D., and Christiano, P. F. Learning to summarize with human feedback. Ad-vances in Neural Information Processing Systems , 33: 3008–3021, 2020b. Team, M. N. Introducing mpt-7b: A new standard for open-source, ly usable llms, 2023. URL www.mosaicml. com/blog/mpt-7b .Touvron, H., Martin, L., Stone, K., Albert, P., Almahairi, A., Babaei, Y., Bashlykov, N., Batra, S., Bhargava, P., Bhosale, S., et al. Llama 2: Open foundation and fine-tuned chat models. arXiv preprint arXiv:2307.09288 ,2023. Tunstall, L., Beeching, E., Lambert, N., Rajani, N., Rasul, K., Belkada, Y., Huang, S., von Werra, L., Fourrier, C., Habib, N., Sarrazin, N., Sanseviero, O., Rush, A. M., and Wolf, T. Zephyr: Direct distillation of lm alignment, 2023. 10 Satisficing Inference-Time Alignment of LLMs 
+
+# Appendix A. Estimating Q∗
+
+The primal-dual optimal solution (π∗, λ ∗) expressed in (5) and (7) is found in terms of Qπ∗,λ 
+
+, the action-value function corresponding to the optimal decoding policy π∗. However, computing π∗ during the optimization is very difficult (Mudgal et al., 2023; Chakraborty et al., 2024). While approximate methods have been developed, Transfer Q ∗, suggested by (Chakraborty et al., 2024), is the most prominent. 
+
+TQ ∗ is defined as an estimate of the real Q∗ and uses a trajectory-level baseline set of policies ρBL  
+
+> i
+
+in the estimate. Transfer Q∗ distinguishes between two main settings for transfer decoding: direct and indirect. 
+
+A.1. Direct Transfer Decoding 
+
+In the direct transfer framework, for any given target reward model ri, we assume access to a trajectory-level response policy ρBL  
+
+> i
+
+. Despite not being optimal at the token level, ρBL  
+
+> i
+
+solves the trajectory-level alignment problem defined below: 
+
+ρBL  
+
+> i
+
+(· | x) := arg max  
+
+> ρ
+
+Eτ ∼ρ(·| x)
+
+h
+
+ri(x, τ )
+
+i
+
+− αDKL 
+
+h
+
+ρ(· | x) ∥ ρsft (· | x)
+
+i
+
+, (12) where ρsft is the reference trajectory-level model. ρBL  
+
+> i
+
+exhibits the following closed-form: 
+
+ρBL  
+
+> i
+
+(y | x) = 1
+
+Cri (x) ρsft (y | x) exp 
+
+ 1
+
+α ri(x, y)
+
+
+
+, (13) where Cri is the partition function corresponding to the ith reward. A good estimate for the challenging action-value function 
+
+Qπi is then TQ ∗ 
+
+> i
+
+(Chakraborty et al., 2024), the action-value sampled using ρBL  
+
+> i
+
+:
+
+TQ ⋆i ([ x, y t], z ) = Eτ ∼ρBL  
+
+> i(·| [x,y t],z )
+
+h
+
+ri([ x, y t, z ], τ )
+
+i
+
+, (14) The optimal decoding policy π∗ 
+
+> Alg
+
+is then the policy that solves the modified constrained optimization problem: 
+
+π∗
+
+> Alg
+
+([ x, y t]) = arg max π Ez∼π(·| [x,y t]) 
+
+TQ ∗
+
+> 1
+
+([ x, y t], z ) − β1 DKL (π∥πBL ),
+
+subject to 
+
+Ez∼π(·| [x,y t]) 
+
+TQ ∗
+
+> 2
+
+([ x, y t], z ) ≥ β2,
+
+...
+
+Ez∼π(·| [x,y t]) 
+
+TQ ∗ 
+
+> N
+
+([ x, y t], z ) ≥ βN .
+
+(15) where πBL is the token-level policy derived from ρBL  
+
+> 1
+
+. The strong convexity of the problem above (15) is due to the KL divergence term and allows for a closed-form solution given by the theorem below: 
+
+A.2. Indirect Transfer Decoding 
+
+A trajectory-level optimal policy aligned to a given reward model in direct transfer allows for a convenient representation of the optimal decoding policy. Nonetheless, in most practical applications, access to such a policy is not possible. This gives rise to indirect transfer , where ρBL is first used to derive a trajectory-level policy ρri aligned with the target reward ri. After that, the optimal token-level policy is derived in a similar way to direct transfer. The aligned trajectory policy ρri is given by: 
+
+ρri (y | x) = ρBL  
+
+> i
+
+(y | x) exp 
+
+ 1
+
+α [ri(x, y) − rBL (x, y)] 
+
+
+
+× CBL (x)
+
+Cri (x) . (16) where rBL is the target reward to which the original baseline policy ρBL is aligned. CBL (x) and Cri (x) are again the partition functions. We can then use importance sampling to compute TQ ∗ 
+
+> i
+
+as follows: 
+
+TQ ⋆i ([ x, y t], z ) = Eτ ∼ρri (·| [x,y t],z )
+
+ri([ x, y t, z ], τ )
+
+= Eτ ∼ρBL (·| [x,y t],z )
+
+ ρri (y | x)
+
+ρBL (y | x) ri([ x, y t, z ], τ )
+
+
+
+. (17) 11 Satisficing Inference-Time Alignment of LLMs 
+
+The optimal decoding policy π∗ 
+
+> Alg
+
+then solves the modified constrained optimization problem: 
+
+π∗
+
+> Alg
+
+([ x, y t]) = arg max π Ez∼π(·| [x,y t]) 
+
+TQ ∗
+
+> 1
+
+([ x, y t], z ) − β1 DKL (π∥πBL ),
+
+subject to 
+
+Ez∼π(·| [x,y t]) 
+
+TQ ∗
+
+> 2
+
+([ x, y t], z ) ≥ β2,
+
+...
+
+Ez∼π(·| [x,y t]) 
+
+TQ ∗ 
+
+> N
+
+([ x, y t], z ) ≥ βN .
+
+(18) Following (5) , we can similarly obtain a closed-form solution for the optimal decoding policy in the indirect transfer setting. 
+
+# B. Proof of Theoretical Results 
+
+The solution to the constrained optimization problem defined in (15) is the primal-dual pair (π∗
+
+> Alg
+
+, λ ∗
+
+> Alg
+
+), where: The optimal decoding policy is given by: 
+
+π∗
+
+> Alg
+
+(z | st) = πBL (· | st)
+
+Zλ(st) exp 
+
+"
+
+1
+
+β1
+
+> N
+
+X
+
+> i=1
+
+λ∗
+
+> i, Alg
+
+TQ ∗ 
+
+> i
+
+(st, z )
+
+#
+
+, (19) and the Lagrange multiplier vector λ∗
+
+> Alg
+
+, with λ∗(1)  
+
+> Alg
+
+= 1 , is given by: 
+
+λ∗ 
+
+> Alg
+
+=
+
+h 
+
+∇2
+
+> λ
+
+Zλ(st)
+
+i
+
+> λ=0
+
+−1
+
+(β − [∇λZλ(st)] λ=0 )
+
++
+
+, (20) where [·]+ denotes projection onto the positive orthonant. 
+
+Proof. The primal variable 
+
+First, let us find the primal variable π in terms of the dual variable λ. The proof follows naturally from (Mudgal et al., 2023). First, we define the Lagrange function: 
+
+L([ x, y t]; π, λ ) = X
+
+> z∈Y
+
+π(z | [x, y t]) 1
+
+β1
+
+> N
+
+X
+
+> i=1
+
+λiTQ ∗ 
+
+> i
+
+([ x, y t], z ) + β1 log 
+
+ πBL (z | [x, y t]) 
+
+π(z | [x, y t]) 
+
+!
+
+−
+
+> N
+
+X
+
+> i=2
+
+λiβi (21) 
+
+= X
+
+> z∈Y
+
+π(z | [x, y t]) log πBL (z | [x, y t]) e 1  
+
+> β1
+> PNi=1 λiTQ ∗
+> i([ x,y t],z )
+
+π(z | [x, y t]) 
+
+!
+
+−
+
+> N
+
+X
+
+> i=2
+
+λiβi. (22) Now, let 
+
+q(z | [x, y t]) := πBL (z | [x, y t]) e 1  
+
+> β1
+> PNi=1 λiTQ ∗
+> i([ x,y t],z )
+
+Zλ([ x, y t]) , (23) where 
+
+Zλ(x, y t; β) = X
+
+> z∈Y
+
+πBL (z | [x, y t]) e 1  
+
+> β1
+> PNi=1 λiTQ ∗
+> i([ x,y t],z )
+
+. (24) Thus, 
+
+L([ x, y t]; π, λ ) = −DKL (π(· | [x, y t]) ∥q(· | [x, y t]; β)) + log Zλ([ x, y t]) −
+
+> N
+
+X
+
+> i=2
+
+λiβi, (25) which is strongly convex in π, and the unique maximizer is given by 
+
+π∗,λ  
+
+> Alg
+
+(· | [x, y t]) = q(· | [x, y t]) . (26) 12 Satisficing Inference-Time Alignment of LLMs 
+
+The simplified dual problem 
+
+After finding π∗,λ  
+
+> Alg
+
+in terms of the Lagrange multiplier λ, now we optimize over λ. First, we write the simplified optimization problem, where now λ is its only variable. 
+
+Step 1 : An equivalent expression for the Lagrangian function in (3), with π = π∗,λ  
+
+> Alg
+
+:
+
+L([ x, y t]; π∗,λ  
+
+> Alg
+
+, λ ) = X
+
+> z
+
+π∗,λ  
+
+> Alg
+
+(z|[x, y t]) TQ ∗
+
+> 1
+
+([ x, y t], z ) − β1
+
+X
+
+> z
+
+π∗,λ  
+
+> Alg
+
+(z|[x, y t]) log π∗,λ  
+
+> Alg
+
+(z|[x, y t]) 
+
+πBL (z|[x, y t]) 
+
+!
+
+−
+
+> N
+
+X
+
+> i=2
+
+λiβi (27) 
+
+Step 2 : Factoring together the first two terms. 
+
+L([ x, y t]; π∗,λ  
+
+> Alg
+
+, λ ) = X
+
+> z
+
+π∗,λ  
+
+> Alg
+
+(z|[x, y t]) 
+
+"
+
+TQ ∗
+
+> 1
+
+([ x, y t], z ) − β1 log π∗,λ  
+
+> Alg
+
+(z|[x, y t]) 
+
+πBL (z|[x, y t]) 
+
+!# 
+
+−
+
+> N
+
+X
+
+> i=2
+
+λiβi (28) 
+
+Step 3 : Substituting in the value of π∗,λ  
+
+> Alg
+
+inside the log :
+
+L([ x, y t]; π∗,λ  
+
+> Alg
+
+, λ ) = X
+
+> z
+
+π∗,λ  
+
+> Alg
+
+(z|[x, y t]) 
+
+TQ ∗
+
+> 1
+
+([ x, y t], z ) − β1 log 
+
+ exp 
+
+ PNi=1 λiTQ ∗ 
+
+> i([ x,y t],z )
+> β1
+
+
+
+Zλ([ x, y t]) 
+
+ −
+
+> N
+
+X
+
+> i=2
+
+λiβi (29) 
+
+Step 4 : Using the fact that log(exp( x)) = x and log( xy ) = log( x) − log( y)
+
+L([ x, y t]; π∗,λ  
+
+> Alg
+
+, λ ) = X
+
+> z
+
+π∗,λ  
+
+> Alg
+
+(z|[x, y t])  β1 log( Zλ([ x, y t]))  −
+
+> N
+
+X
+
+> i=2
+
+λiβi (30) 
+
+Step 5 : Factoring out the terms that do not depend on z:
+
+L([ x, y t]; π∗,λ  
+
+> Alg
+
+, λ ) = β1 log( Zλ([ x, y t])) X
+
+> z
+
+π∗,λ  
+
+> Alg
+
+(z|[x, y t]) −
+
+> N
+
+X
+
+> i=2
+
+λiβi (31) 
+
+Step 6 : Using the fact that P 
+
+> z
+
+π∗,λ  
+
+> Alg
+
+(z|[x, y t]) = 1 :
+
+L([ x, y t]; λ) = β1 log( Zλ([ x, y t])) −
+
+> N
+
+X
+
+> i=2
+
+λiβi (32) Hence, the simplified optimization problem, in terms of λ, becomes: 
+
+min  
+
+> λ≥0
+
+L([ x, y t]; λ) := min  
+
+> λ≥0
+
+β1 log( Zλ([ x, y t])) −
+
+> N
+
+X
+
+> i=2
+
+λiβi
+
+!
+
+= min  
+
+> λ≥0
+
+β1 log Ez∼πBL (·| [x,y t]) 
+
+"
+
+exp 1
+
+β1
+
+> N
+
+X
+
+> i=1
+
+λiTQ ∗ 
+
+> i
+
+([ x, y t], z )
+
+!#! 
+
+−
+
+> N
+
+X
+
+> i=2
+
+λiβi
+
+!
+
+.
+
+(33) 
+
+Approximating the objective function 
+
+13 Satisficing Inference-Time Alignment of LLMs 
+
+Despite the objective function being strongly convex, the computational resources at inference time do not allow for solving the problem using an iterative algorithm like projected gradient descent (Huang et al., 2024b). Therefore, we need to look for a closed-form solution. This is possible when we consider the quadratic approximation of the objective function: The function Zλ([ x, y t]) can be approximated as: 
+
+Zλ([ x, y t]) ≈ Z0([ x, y t]) 
+
+| {z }
+
+> 1
+
++[ ∇λZλ([ x, y t])] T
+
+> λ=0
+
+λ + 12 λT[∇2
+
+> λ
+
+Zλ([ x, y t])] λ=0 λ (34) The objective function (defined in (32)) becomes: 
+
+L([ x, y t]; λ) = 1 + 
+
+ ∇λZλ([ x, y t])  
+
+> λ=0
+
+− β
+
+T
+
+λ + 12 λTh
+
+∇2
+
+> λ
+
+Zλ([ x, y t]) 
+
+i
+
+> λ=0
+
+λ (35) where: The first-order derivative with respect to λ is: 
+
+∇λZλ([ x, y t]) 
+
+| {z }
+
+> vector
+
+= 1
+
+β1
+
+Ez∼πBL (·| [x,y t]) 
+
+exp 1
+
+β1
+
+> N
+
+X
+
+> i=1
+
+λiQ∗ 
+
+> i
+
+([ x, y t], z )
+
+!| {z }
+
+> scalar
+
+· Q∗([ x, y t], z )
+
+| {z }
+
+> vector
+
+ (36) and the second-order derivative with respect to λ is: 
+
+∇2
+
+> λ
+
+Zλ([ x, y t]) 
+
+| {z }
+
+> matrix
+
+= 1
+
+β21
+
+Ez∼πBL (·| [x,y t]) 
+
+exp 1
+
+β1
+
+> N
+
+X
+
+> i=1
+
+λiQ∗ 
+
+> i
+
+([ x, y t], z )
+
+!| {z }
+
+> scalar
+
+∇λ
+
+> N
+
+X
+
+> i=1
+
+λiQ∗ 
+
+> i
+
+([ x, y t], z )
+
+!
+
+· Q∗([ x, y t], z )
+
+
+
+= 1
+
+β21
+
+Ez∼πBL (·| [x,y t]) 
+
+exp 1
+
+β1
+
+> N
+
+X
+
+> i=1
+
+λiQ∗ 
+
+> i
+
+([ x, y t], z )
+
+!| {z }
+
+> scalar
+
+· Q∗([ x, y t], z )Q∗([ x, y t], z )⊤
+
+| {z }
+
+> matrix
+
+ (37) 
+
+Optimality Condition 
+
+We can now apply the first-order optimality condition to find the optimal solution to the problem in (33) . We set the gradient of L([ x, y t]; λ) with respect to λ to zero: 
+
+∇λL([ x, y t]; λ) = 
+
+ ∇λZλ([ x, y t])  
+
+> λ=0
+
+− β
+
+
+
++
+
+h
+
+∇2
+
+> λ
+
+Zλ([ x, y t]) 
+
+i
+
+> λ=0
+
+λ = 0 (38) The solution to the above equation, projected onto RN 
+
+> +
+
+, is the optimal Lagrange multiplier vector λ∗
+
+> Alg
+
+:
+
+λ∗ 
+
+> Alg
+
+=
+
+h 
+
+∇2
+
+> λ
+
+Zλ([ x, y t]) 
+
+i
+
+> λ=0
+
+−1  β − ∇λZλ([ x, y t]) 
+
+> λ=0
+
++
+
+(39) 
+
+Theorem B.1 (Restating Theorem 5.1) . For the proposed Algorithm 1, and assuming that λ∗ is known, the following results hold: 
+
+14 Satisficing Inference-Time Alignment of LLMs 
+
+1. Suboptimality gap for all x is upper bounded as 
+
+Sub-Gap 1(x) = L(π∗, λ ∗ | x) − L (π∗
+
+> Alg
+
+, λ ∗ | x) (40) 
+
+≤ αDKL 
+
+
+
+ρ∗(·| x)∥ρsft (·| x)
+
+
+
+− β1hβ1 (x),
+
+where 
+
+hβ1 (x) =  
+
+> T−1
+
+X
+
+> t=1
+
+Ezt∼ρ∗
+
+> Alg (·| x)
+
+DKL [π∗
+
+> alg
+
+(·| x, z t)∥πBL (·| x, z t)] .
+
+2. Assuming all rewards satisfy 0 ≤ ri ≤ rmax , then the Divergence to reference-based policy is given by 
+
+DKL [ρ∗
+
+> Alg
+
+(·| x)∥ρsft (·| x)] ≤
+
+ 1
+
+α + Tβ1
+
+
+
+rmax . (41) 
+
+Proof. The proof follows from Appendix E in (Chakraborty et al., 2024). In that paper, only one reward function is considered. On the other hand, in our work, after forming the Lagrangian, we obtain a linear combination of the rewards PNi=1 λ∗ 
+
+> i
+
+ri. The only change in the KL-divergence bound result is that we have an upper bound that depends on λ∗ in addition to r. We proceed to obtain a bound that does not depend on λ∗:
+
+Step 1: We have reached a bound of the KL divergence: 
+
+DKL [π∗
+
+> Alg
+
+(·| x)∥ρsft (·| x)] ≤
+
+ 1
+
+α + 1
+
+β1T
+
+ NX
+
+> i=1
+
+λ∗ 
+
+> i
+
+ri. (42) 
+
+Step 2: By Cauchy-Schwarz, 
+
+DKL [π∗
+
+> Alg
+
+(·| x)∥ρsft (·| x)] ≤
+
+ 1
+
+α + 1
+
+β1T
+
+
+
+∥λ∗∥∥ r∥. (43) 
+
+Step 3: Since ∥r∥ ≤ rmax ,
+
+DKL [π∗
+
+> Alg
+
+(·| x)∥ρsft (·| x)] ≤
+
+ 1
+
+α + 1
+
+β1T
+
+
+
+∥λ∗∥rmax . (44) 
+
+Step 4: Since strong duality holds (Slater’s rule applies), we can bound the dual variable as: 
+
+Λ = max  
+
+> λ
+
+∥λ∥, where ∥λ∥ ≤ 1
+
+γ
+
+ f (¯ π) − q(¯λ) , (45) with γ = min 2≤j≤N
+
+−Ez∼¯π(·| st)
+
+Q¯πj (st, z ) + βj , where ¯π and ¯λ are feasible primal and dual variables, and f and q are the primal and dual objective values, respectively. 
+
+Step 5: Substitute this bound into (44): 
+
+DKL [π∗
+
+> Alg
+
+(·| x)∥ρsft (·| x)] ≤
+
+ 1
+
+α + 1
+
+β1T
+
+
+
+Λrmax . (46) 
+
+Theorem B.2 (Restating Theorem 5.2) . The second term of the suboptimality gap satisfies the following bound: 
+
+Sub-Gap 2(x) ≤ Λ ( β1Llog LZ + βmax ) , (47) 
+
+where Llog is the Lipschitz constant for the logarithm function applied to Zλ, LZ is the Lipschitz constant for Zλ with respect to λ, and βmax = max i=2 ,...,N βi. Additionally, Λ = max λ ∥λ∥.
+
+15 Satisficing Inference-Time Alignment of LLMs 
+
+Proof. Step 1: The second term of the suboptimality can be written as: 
+
+Sub-Gap 2(x) = L(πAlg , λ ∗ | st) − L (πAlg , λ ∗ 
+
+> Alg
+
+| st)= β1 log( Zλ∗ (st)) −
+
+> N
+
+X
+
+> i=2
+
+λ∗
+
+> (i)
+
+βi
+
+!
+
+− β1 log( ZλAlg (st)) −
+
+> N
+
+X
+
+> i=2
+
+λ∗
+
+> Alg (i)
+
+βi
+
+!
+
+. (48) 
+
+Step 2: Factoring together similar terms: 
+
+Sub-Gap 2(x) = β1 log( Zλ∗ (st)) − β1 log( Zλ∗ 
+
+> Alg
+
+(st)) −
+
+> N
+
+X
+
+> i=2
+
+(λ∗ 
+
+> (i)
+
+− λ∗
+
+> Alg (i)
+
+)βi. (49) 
+
+Step 3: Since Z is bounded, the log function is Lipschitz with constant Llog :
+
+log( Zλ∗ 
+
+> Alg
+
+(st)) − log( Zλ∗ (st)) ≤ Llog Zλ∗ 
+
+> Alg
+
+(st) − Zλ∗ (st) . (50) 
+
+Step 4: Substitute into (49): 
+
+Sub-Gap 2(x) ≤ β1Llog Zλ∗ 
+
+> Alg
+
+(st) − Zλ∗ (st) −
+
+> N
+
+X
+
+> i=2
+
+(λ∗ 
+
+> (i)
+
+− λ∗
+
+> Alg (i)
+
+)βi. (51) 
+
+Step 5: Since λ is bounded, the function Zλ is Lipschitz with constant LZ :
+
+Zλ∗ 
+
+> Alg
+
+(st) − Zλ∗ (st) ≤ LZ ∥λ∗ 
+
+> Alg
+
+− λ∗∥. (52) 
+
+Step 6: Substitute into (51): 
+
+Sub-Gap 2(x) ≤ β1Llog LZ ∥λ∗ 
+
+> Alg
+
+− λ∗∥ − 
+
+> N
+
+X
+
+> i=2
+
+(λ∗ 
+
+> (i)
+
+− λ∗
+
+> Alg (i)
+
+)βi. (53) 
+
+Step 7: Using Cauchy-Schwarz: 
+
+> N
+
+X
+
+> i=2
+
+(λ∗ 
+
+> (i)
+
+− λ∗
+
+> Alg (i)
+
+)βi ≤ ∥ λ∗ 
+
+> Alg
+
+− λ∗∥∥ β∥≤ ∥ λ∗ 
+
+> Alg
+
+− λ∗∥βmax . (54) 
+
+Step 8: Substitute into (53): 
+
+Sub-Gap 2(x) ≤ β1Llog LZ ∥λ∗ 
+
+> Alg
+
+− λ∗∥ + βmax ∥λ∗ 
+
+> Alg
+
+− λ∗∥. (55) 
+
+Step 9: Using the trivial bound on ∥λ∗ 
+
+> Alg
+
+− λ∗∥:
+
+∥λ∗ 
+
+> Alg
+
+− λ∗∥ ≤ Λ. (56) 
+
+Step 10: Substitute into (55): 
+
+Sub-Gap 2(x) ≤ Λ ( β1Llog LZ + βmax ) . (57) 16 Satisficing Inference-Time Alignment of LLMs 
+
+# C. Example of Evaluation System Prompts 
+
+Summary Quality System Prompt 
+
+[System] You are a precise assistant for evaluating the summarization quality of the responses provided by two AI assistants. Your task is to assess how effectively each response summarizes the given input. Please rate the quality of their summarizations based on the following criteria: - Relevance: Does the summary include the most important and relevant points from the input? - Clarity: Is the summary easy to understand and free of ambiguity? - Conciseness: Does the summary avoid unnecessary details while still capturing the essence of the input? - Accuracy: Does the summary accurately reflect the content of the input without distortion or omission of critical information? - Coherence: Is the summary well-structured and logically organized? Each assistant receives an overall score on a scale of 1 to 10, where a higher score indicates better summarization quality. If a response is cut off due to length constraints but still meets the above criteria within its limits, it should not be penalized. Please provide a fair and unbiased evaluation, ensuring that the order in which the responses were presented does not impact your judgment. Your output should begin with a single line containing only two values indicating the scores for Assistant 1 and Assistant 2, respectively, separated by a space. In the subsequent line, provide a detailed explanation of your evaluation, justifying the scores assigned to each assistant. Ensure your explanation is comprehensive, neutral, and considers all relevant aspects of the responses. 
+
+USER PROMPT 
+
+[The Start of Assistant 1’s Answer ][The End of Assistant 1’s Answer ][The Start of Assistant 2’s Answer ][The End of Assistant 2’s Answer ]
+
+Faithful System Prompt 
+
+[System] You are a precise assistant for evaluating the faithfulness of a summary with respect to its original content. Your task is to assess how accurately and completely the summary represents the key information from the source text. Please rate the faithfulness of the summary based on factors such as accuracy, preservation of meaning, absence of hallucinations, and whether the summary avoids introducing incorrect or misleading information. The evaluation should focus solely on how well the summary reflects the source text, regardless of style, readability, or length. A summary that omits crucial details or includes fabricated content should receive a lower score. Each summary receives an overall score on a scale of 1 to 10, where a higher score indicates greater faithfulness to the original text. Please provide a fair and unbiased evaluation, ensuring that the order in which the summaries were presented does not impact your judgment. Your output should begin with a single line containing only two values indicating the scores for summary 1 and summary 2, respectively, separated by a space. In the subsequent line, provide a detailed explanation of your evaluation, justifying the scores assigned to each summary. Ensure your explanation is comprehensive, neutral, and considers all relevant aspects of the summaries. 
+
+USER PROMPT 
+
+[The Start of Assistant 1’s Answer ][The End of Assistant 1’s Answer ][The Start of Assistant 2’s Answer ][The End of Assistant 2’s Answer ]
+
+17

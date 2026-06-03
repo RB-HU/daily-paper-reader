@@ -1,0 +1,3766 @@
+Title: Robust Federated Finetuning of LLMs via Alternating Optimization of LoRA
+
+URL Source: https://openreview.net/pdf?id=u4mobiHTJl
+
+Number of Pages: 34
+
+Markdown Content:
+000 001 002 003 004 005 006 007 008 009 010 011 012 013 014 015 016 017 018 019 020 021 022 023 024 025 026 027 028 029 030 031 032 033 034 035 036 037 038 039 040 041 042 043 044 045 046 047 048 049 050 051 052 053 054 
+
+# Robust Federated Finetuning of LLMs via Alternating Optimization of LoRA 
+
+Anonymous Authors 1
+
+## Abstract 
+
+Parameter-Efficient Fine-Tuning (PEFT) methods like Low-Rank Adaptation (LoRA) optimize fed-erated training by reducing computational and communication costs. We propose RoLoRA, a federated framework using alternating optimiza-tion to fine-tune LoRA adapters. Our approach emphasizes the importance of learning up and down projection matrices to enhance expressive-ness and robustness. We use both theoretical anal-ysis and extensive experiments to demonstrate the advantages of RoLoRA over prior approaches that either generate imperfect model updates or limit expressiveness of the model. We present theoretical analysis on a simplified linear model to demonstrate the importance of learning both down-projection and up-projection matrices in LoRA. We provide extensive experimental evalua-tions on a toy neural network on MNIST as well as large language models including RoBERTa-Large, Llama-2-7B on diverse tasks to demonstrate the advantages of RoLoRA over other methods. 
+
+## 1. Introduction 
+
+The remarkable performance of large language models (LLMs) stems from their ability to learn at scale. With their broad adaptability and extensive scope, LLMs depend on vast and diverse datasets to effectively generalize across a wide range of tasks and domains. Federated learning (McMahan et al., 2017) offers a promising solution for leveraging data from multiple sources, which could be par-ticularly advantageous for LLMs. Recently, Parameter-Efficient Fine-Tuning (PEFT) has emerged as an innovative training strategy that updates only a small subset of model parameters, substantially reducing computational and memory demands. A notable method in this category is LoRA (Hu et al., 2021), which utilizes 
+
+> 1Anonymous Institution, Anonymous City, Anonymous Region, Anonymous Country. Correspondence to: Anonymous Author
+> <anon.email@domain.com >.Preliminary work. Under review by the International Conference on Machine Learning (ICML). Do not distribute.
+
+low-rank matrices to approximate weight changes during fine-tuning. These matrices are integrated with pre-trained weights for inference, facilitating reduced data transfer in scenarios such as federated learning, where update size directly impacts communication efficiency. Many works integrate LoRA into federated setting (Zhang et al., 2023b; Babakniya et al., 2023; Kuang et al., 2023; Chen et al., 2024; Sun et al., 2024). FedPETuning (Zhang et al., 2023b) com-pares various PEFT methods in a federated setting. SLoRA (Babakniya et al., 2023) presents a hybrid approach that combines sparse fine-tuning with LoRA to address data heterogeneity in federated settings. Furthermore, FS-LLM (Kuang et al., 2023) presents a framework for fine-tuning LLMs in federated environments. However, these studies typically apply the FedAVG algorithm directly to LoRA modules, resulting in in-exact model updates, as we will discuss later in the paper. To address the issue of in-exact model updates, a few recent works have proposed modifications to the down-projection and up-projection components in LoRA. In FlexLoRA (Bai et al., 2024), the authors propose updating these projections with matrix multiplication followed by truncated SVD. A related method is also considered in (Wang et al., 2024). Another approach, by Sun et al., introduces a federated finetuning framework named FFA-LoRA (Sun et al., 2024), which builds on LoRA by freezing the down-projection ma-trices across all clients and updating only the up-projection matrices. They apply differential privacy (Dwork et al., 2006) to provide privacy guarantees for clients’ data. With a sufficient number of finetuning parameters, FFA-LoRA, using a larger learning rate, can achieve performance compa-rable to FedAVG of LoRA while reducing communication costs by half. However, we observe that with fewer fine-tuning parameters, FFA-LoRA is less robust than FedAVG of LoRA, primarily due to its reduced expressiveness from freezing down-projections. In this work, we explore the necessity of learning down-projection matrices and propose a federated fine-tuning framework with computational and communication advantages. We connect the objective of learning down-projection ma-trices in a federated setting to multitask linear representa-tion learning (MLRL), an approach in which a shared low-rank representation is jointly learned across multiple tasks. While, to the best of our knowledge, the alternating opti-1055 056 057 058 059 060 061 062 063 064 065 066 067 068 069 070 071 072 073 074 075 076 077 078 079 080 081 082 083 084 085 086 087 088 089 090 091 092 093 094 095 096 097 098 099 100 101 102 103 104 105 106 107 108 109  
+
+> Robust Federated Finetuning of LLMs via Alternating Optimization of LoRA
+> Figure 1. RoLoRA framework overview.
+
+mization of down- and up-projection matrices has not been explored within the context of LoRA, prior works on MLRL (Collins et al., 2021; Thekumparampil et al., 2021) have demonstrated the importance of alternately updating low-rank representations and task-specific heads, demonstrating the necessity of learning a shared representation. Inspired by MLRL, we tackle this challenge by employing alternating optimization for LoRA adapters. We theoretically establish that alternating updates to the two components of LoRA, while maintaining a common global model, enable effective optimization of down-projections and ensure convergence to the global minimizer in a tractable setting. 
+
+1.1. Main Contributions 
+
+• RoLoRA framework. We propose RoLoRA, a robust federated fine-tuning framework based on the alter-nating optimization of LoRA as shown in Figure 1. RoLoRA fully leverages the expressiveness of LoRA adapters while keeping the computational and commu-nication advantages. • Theoretical Insights. We show that in a tractable set-ting involving a local linear model, RoLoRA converges exponentially to the global minimizer when clients solve linear regression problems, using rank-1 LoRA adapters. In this case, RoLoRA is reduced to an alter-nating minimization-descent approach, outperforming FFA-LoRA, whose fixed down-projection limits per-formance. This highlights the importance of training the down-projection in LoRA for improved federated learning performance. • Empirical results. Through evaluations on a two-layer neural network with MNIST and on large language models (RoBERTa-Large, Llama-2-7B) across various tasks (GLUE, HumanEval, MMLU, Commonsense rea-soning tasks), we demonstrate that RoLoRA maintains robustness against reductions in fine-tuning parame-ters and increases in client numbers compared to prior approaches. 
+
+1.2. Notations 
+
+We adopts the notation that lower-case letters represent scalar variables, lower-case bold-face letters denote column vectors, and upper-case bold-face letters denote matrices. The d × d identity matrix is represented by Id. Depend-ing on the context, ∥.∥ denotes the l2 norm of a vector or the Frobenius norm of a matrix, ∥.∥op denotes the operator norm of a matrix, |.| denotes the absolute value of a scalar,  
+
+> ⊤
+
+denotes matrix or vector transpose. For a number N ,
+
+[N ] = {1, . . . , N }.
+
+## 2. Related Works 
+
+Parameter Efficient Fine Tuning (PEFT): LoRA and Its Enhancements Parameter efficient finetuning (PEFT) allows for updates to a smaller subset of parameters, sig-nificantly reducing the computational and memory require-ments. One of the most well-known methods is LoRA(Hu et al., 2021). LoRA uses low-rank matrices to approxi-mate changes in weights during fine-tuning, allowing them to be integrated with pre-trained weights before inference. In (Zhang et al., 2023a), the authors propose a memory-efficient fine-tuning method, LoRA-FA, which keeps the projection-down weight fixed and updates the projection-up weight during fine-tuning. In (Zhu et al., 2024), the au-thors highlight the asymmetry between the projection-up and projection-down matrices and focus solely on com-paring the effects of freezing either the projection-up or projection-down matrices. (Hao et al., 2024) introduces the idea of resampling the projection-down matrices, aligning with our observation that freezing projection-down matrices negatively impacts a model’s expressiveness. Furthermore, (Hayou et al., 2024) explore the distinct roles of projection-up and projection-down matrices, enhancing performance by assigning different learning rates to each. 
+
+PEFT in Federated Setting PEFT adjusts only a few lightweight or a small portion of the total parameters for specific tasks, keeping most foundational model parameters unchanged. This feature can help reduce data transfer in federated learning, where communication depends on the size of updates. Zhang et al. (Zhang et al., 2023b) com-pares multiple PEFT methods in federated setting, includ-ing Adapter(Houlsby et al., 2019), LoRA(Hu et al., 2021), Prompt tuning(Liu et al., 2022) and Bit-Fit(Zaken et al., 2022). SLoRA(Babakniya et al., 2023), which combines sparse finetuning and LoRA, is proposed to address the data heterogeneity in federated setting. As discussed before, 2110 111 112 113 114 115 116 117 118 119 120 121 122 123 124 125 126 127 128 129 130 131 132 133 134 135 136 137 138 139 140 141 142 143 144 145 146 147 148 149 150 151 152 153 154 155 156 157 158 159 160 161 162 163 164 
+
+> Robust Federated Finetuning of LLMs via Alternating Optimization of LoRA
+
+(Sun et al., 2024) design a federated finetuning framework FFA-LoRA by freezing projection-down matrices for all the clients and only updating projection-up matrices. FLoRA (Wang et al., 2024) considers clients with heterogeneous-rank LoRA adapters and proposes a federated fine-tuning approach. 
+
+## 3. Preliminaries 
+
+3.1. Low-Rank Adaptation: LoRA 
+
+Low-Rank Adaptation (LoRA) (Hu et al., 2021) fine-tunes large language models efficiently by maintaining the orig-inal model weights fixed and adding small, trainable ma-trices in each layer. These matrices perform low-rank de-compositions of updates, reducing the number of trainable parameters. This approach is based on the finding that updates to model weights during task-specific tuning are usually of low rank, which allows for fewer parameters to be adjusted. For example, for a pre-trained weight ma-trix W0 ∈ Rd×d, the update is a low-rank product AB ,where the down-projection A ∈ Rd×r and the up-projection 
+
+B ∈ Rr×d, with r ≪ d. Only A and B are trainable, allow-ing W = W0 +αAB , with α adjusting the update’s impact. Applying LoRA in a federated setting is a practical choice. By using LoRA adapters, clients can fine-tune foundation models efficiently with limited resources. Since only these specific matrices need to be transmitted to a central server, this approach significantly reduces communication costs. This makes LoRA an advantageous solution for enhancing model performance in collaborative scenario comparing to full parameter finetuning in the federated setting. 
+
+3.2. FedAVG of LoRA Introduces Interference 
+
+Integrating LoRA within a federated setting presents chal-lenges. In such a setup, each of the N clients is provided with the pretrained model weights W0, which remain fixed during finetuning. Clients are required only to send the up-dated matrices Bi and Ai to a central server for aggregation. While most current studies, such as SLoRA (Babakniya et al., 2023) and FedPETuning (Zhang et al., 2023b), com-monly apply FedAVG directly to these matrices as shown in (2) , this approach might not be optimal. The precise update for each client’s model, ∆Wi, should be calculated as the product of the low-rank matrices Ai and Bi. Consequently, aggregation on the individual matrices leads to inaccurate model aggregation.                             
+
+> 1
+> N
+> NX
+> i=1
+> ∆Wi=1
+> N(A1B1+A2B2+... +ANBN)(1) ̸
+> =1
+> N(A1+A2+... +AN) 1
+> N(B1+B2+... +BN)(2)
+
+There are a few options to avoid it. 
+
+Updating B and A by matrix multiplication and truncated-SVD. One approach (Wang et al., 2024; Bai et al., 2024) involves first computing the product of local matrices Bi and Ai to accurately recover ∆Wi. Then, the global B and A of next iteration are obtained by perform-ing truncated SVD on the averaged set of ∆Wi. However, this method introduces computational overhead due to the matrix multiplication and SVD operations. 
+
+Freezing A (B) during finetuning. Another method is to make clients freeze B or A as in Sun et al. (Sun et al., 2024), leading to precise computation of ∆W. However, this method limits the expressiveness of the adapter. With these considerations, we propose a federated finetuning framework, named RoLoRA, based on alternating optimiza-tion of LoRA. 
+
+## 4. RoLoRA Framework 
+
+In this section, we describe the framework design of RoLoRA and discuss its practical advantages. 
+
+Alternating Optimization and Corresponding Aggre-gation Motivated by the observations discussed in Sec-tion 3.2, we propose applying alternating optimization to the local LoRA adapters of each client in a setting with N
+
+clients. Unlike the approach in FFA-LoRA, where A is con-sistently frozen, we suggest an alternating update strategy. There are alternating odd and even communication rounds designated for updating, aggregating A and B, respectively.                                             
+
+> In the odd comm. round: 1
+> N
+> NX
+> i=1
+> ∆W2t+1
+> i
+> =1
+> N(At
+> 1Bt+1 1+At
+> 2Bt+1 2+... +AtNBt+1
+> N)(3)
+> =1
+> NAt(Bt+1 1+Bt+1 2+... +Bt+1
+> N)
+> In the even comm. round: 1
+> N
+> NX
+> i=1
+> ∆W2t+2
+> i
+> =1
+> N(At+1 1Bt+1 1+At+1 2Bt+1 2+... +At+1
+> NBt+1
+> N)(4)
+> =1
+> N(At+1 1+At+1 2+... +At+1
+> N)Bt+1
+
+As in Algorithm 1, all clients freeze At and update Bt in the odd communication round. The central server then aggre-gates these updates to compute Bt+1 = 1
+
+> N
+
+PNi=1 Bt+1  
+
+> i
+
+and distributes Bt+1 back to the clients. In the subsequent com-munication round, clients freeze Bt+1 and update At. The server aggregates these to obtain At+1 = 1
+
+> N
+
+PNi=1 At+1 
+
+> i
+
+and returns At+1 to the clients. It is important to note that in round 2t + 1 , the frozen Ati are identical across all clients, as they are synchronized with At from the central server at the beginning of the round. This strategy ensures that the update and aggregation method introduces no interference, as demonstrated in (3) and (4). 3165 166 167 168 169 170 171 172 173 174 175 176 177 178 179 180 181 182 183 184 185 186 187 188 189 190 191 192 193 194 195 196 197 198 199 200 201 202 203 204 205 206 207 208 209 210 211 212 213 214 215 216 217 218 219 
+
+> Robust Federated Finetuning of LLMs via Alternating Optimization of LoRA
+
+Algorithm 1 RoLoRA iterations  
+
+> 1:
+
+Input: number of iterations T , number of clients N 
+
+> 2:
+
+for t = 1 to T do  
+
+> 3:
+
+for i = 1 to N do  
+
+> 4:
+
+Fix At, Bt+1  
+
+> i
+
+= GD-update (At, Bt) 
+
+> 5:
+
+Transmits Bt+1  
+
+> i
+
+to server  
+
+> 6:
+
+end for  
+
+> 7:
+
+Server aggregates Bt+1 = 1
+
+> N
+
+PNi=1 Bt+1  
+
+> i
+
+, broad-casts Bt+1  
+
+> 8:
+
+for i = 1 to N do  
+
+> 9:
+
+Fix Bt+1 , At+1  
+
+> i
+
+= GD-update (At, Bt+1 ) 
+
+> 10:
+
+Transmits At+1  
+
+> i
+
+to server  
+
+> 11:
+
+end for  
+
+> 12:
+
+Server aggregates At+1 = 1
+
+> N
+
+PNi=1 At+1  
+
+> i
+
+, broad-casts At+1  
+
+> 13:
+
+end for Computation and Communication Cost The parameter-freezing nature of RoLoRA enhances computational and communication efficiency. In each communication round, the number of trainable parameters in the model is effec-tively halved compared to FedAVG of LoRA. The only additional cost for RoLoRA compared to FFA-LoRA is the alternating freezing of the corresponding parameters. We remark this additional cost is negligible because it is applied to the clients’ models and can be executed concurrently during the server’s aggregation. 
+
+## 5. Analysis 
+
+In this section, we provide an intuitive analysis of the ne-cessity of training down-projection of LoRA module in a federated setting. We first theoretically compare RoLoRA and FFA-LoRA on a linear model. Then we empirically verify the effectiveness of the theoretical analysis on a two-layer neural network. 
+
+5.1. Federated LoRA on a Toy Model 
+
+Consider a federated setting with N clients, each with the following local linear model 
+
+fi(Xi) = Xiab ⊤ (5) where Yi ∈ Rm×d, Xi ∈ Rm×d with the sample size m,
+
+a ∈ Rd (a unit vector) and b ∈ Rd are the LoRA weights corresponding to rank r = 1 . In this setting, we model the local data of i-th client such that 
+
+Yi = Xia∗b∗⊤
+
+(6) for some ground truth LoRA weights a∗ ∈ Rd (a unit vector) and b∗ ∈ Rd. We consider the following objective 
+
+min 
+
+> a∈Rd,b∈Rd
+
+1
+
+N
+
+> N
+
+X
+
+> i=1
+
+li(a, b) (7) where the local loss is li(a, b) = 1 
+
+> m
+
+∥Xia∗b∗⊤
+
+−Xiab ⊤∥2.Each Xi is assumed to be a Gaussian random matrix, where each entry is independently and identically distributed ac-cording to a standard Gaussian distribution. We remind the reader that Section 1.2 provides a summary of mathematical notations and also point to Table 3 in Ap-pendix A.1 for a summary of the symbols used throughout the theoretical analysis. 
+
+Results. In this section, we assume homogeneous clients where there is a single target model as in (6) . In the special case with the model as in (5) and the objective in (7) , we modify RoLoRA from Algorithm 1 to Algorithm 2, em-ploying alternating minimization for b (line 5) and gradient descent for a (line 9). Details are described in Algorithm 2. We note that the analysis of the alternating minimization-gradient descent algorithm is inspired by (Collins et al., 2021; Seyedehsara et al., 2022; Vaswani, 2024) for a dif-ferent setting of MLRL. We aim to show that the training 
+
+Algorithm 2 RoLoRA for linear regressor, Alt-min-GD iterations  
+
+> 1:
+
+Input: GD Step size η, number of iterations T , number of clients N 
+
+> 2:
+
+for t = 1 to T do  
+
+> 3:
+
+Let a ← at−1, b ← bt−1. 
+
+> 4:
+
+for i = 1 to N do  
+
+> 5:
+
+set ˜bi ← argmin b li(a, b) 
+
+> 6:
+
+end for  
+
+> 7:
+
+¯b = 1
+
+> N
+
+PNi=1 ˜bi 
+
+> 8:
+
+for i = 1 to N do  
+
+> 9:
+
+Compute ∇ali(a, ¯b) 
+
+> 10:
+
+end for  
+
+> 11:
+
+ˆa+ ← a − ηN
+
+PNi=1 ∇ali(a, ¯b), ˆa ← ˆa+ 
+
+> ∥ˆa+∥
+> 12:
+
+at ← ˆa, bt ← ¯b 
+
+> 13:
+
+end for 
+
+procedure described in Algorithm 2 learns the target model 
+
+(a∗, b∗). First, we make typical assumptions on the ground truth b∗.
+
+Assumption 5.1. There exists Lmax < ∞ (known a priori), s.t. ∥b∗∥ ≤ Lmax .Next, to obtain the convergence results, we define the angle distance between two unit vectors. 
+
+Definition 5.2. (Angle Distance) For two unit vectors 
+
+a, a∗ ∈ Rd, the angle distance between a and a∗ is defined as 
+
+| sin θ(a, a∗)| = ∥(Id − aa ⊤)a∗∥ (8) where Id − aa ⊤ is the projection operator to the direction orthogonal to a.4220 221 222 223 224 225 226 227 228 229 230 231 232 233 234 235 236 237 238 239 240 241 242 243 244 245 246 247 248 249 250 251 252 253 254 255 256 257 258 259 260 261 262 263 264 265 266 267 268 269 270 271 272 273 274 
+
+Robust Federated Finetuning of LLMs via Alternating Optimization of LoRA 
+
+Let δt = ∥(Id − a∗a∗⊤
+
+)at∥ = ∥(Id − atat⊤
+
+)a∗∥ denote the angle distance between a∗ and at of t-th iteration. We initialize a0 such that | sin θ(a∗, a0)| = δ0, where 0 < δ 0 <
+
+1, and b0 is zero. All clients obtain the same initialization for parameters. We show that the algorithm learns the target model by showing the angle distance between a and a∗ is decreasing in each iteration. Now we are ready to state our main results. 
+
+Lemma 5.3. Let δt = ∥(Id − a∗a∗⊤
+
+)at∥ be the angle dis-tance between a∗ and at of t-th iteration. Assume that As-sumption 5.1 holds and δt ≤ δt−1 ≤ · · · ≤ δ0. Let m be the number of samples for each updating step, let auxiliary error thresholds ϵ′ = ϵ2 
+
+> (1 −ϵ0)(1 −ϵ1)
+
+, ˜ϵ = ϵ3 
+
+> 1−ϵ0
+
+for ϵ0, ϵ 1, ϵ 2, ϵ 3 ∈
+
+(0 , 1) , if m = Ω( q) for q = max 
+
+ log( N )[min( ϵ1,ϵ 2)] 2 , d log( 2 
+
+> ϵ0)
+> ϵ22
+
+
+
+,and auxiliary error thresholds are small such that ϵ′, ˜ϵ <  
+
+> 1−(δ0)2
+> 16
+
+, for any t and η ≤ 1
+
+> L2
+> max
+
+, then we have, 
+
+δt+1 ≤ δt
+
+q
+
+1 − η(1 − δ02 )∥b∗∥2 (9) 
+
+with probability at least 1 − 2q−10 .
+
+Theorem 5.4 follows by recursively applying Lemma 5.3 and taking a union bound over all t ∈ [T ].
+
+Theorem 5.4. (Convergence of RoLoRA for linear regres-sor in homogeneous setting) Suppose we are in the set-ting described in Section 5.1 and apply Algorithm 2 for optimization. Given a random initial a0, an initial an-gle distance δ0 ∈ (0 , 1) , we set step size η ≤ 1
+
+> L2
+> max
+
+and the number of iterations T ≥ 2 
+
+> c(1 −(δ0)2)
+
+log( δ0 
+
+> ϵ
+
+), for 
+
+c ∈ (0 , 1) . Under these conditions, if with sufficient number of samples m = Ω( q) and small auxiliary error thresholds 
+
+ϵ′ = ϵ2 
+
+> (1 −ϵ0)(1 −ϵ1)
+
+, ˜ϵ = ϵ3 
+
+> 1−ϵ0
+
+, such that ϵ′, ˜ϵ < 1−(δ0)2 
+
+> 16
+
+,we achieve that with probability at least 1 − 2T q −10 for 
+
+q = max 
+
+ log( N )[min( ϵ1,ϵ 2)] 2 , d log( 2 
+
+> ϵ0)
+> ϵ22
+
+
+
+,
+
+sin θ(aT , a∗) ≤ ϵ
+
+which we refer to as ϵ-accurate recovery. In addition, 
+
+∥aT (bT +1 )⊤ − a∗(b∗)⊤∥ ≤ (1 + ϵ′)ϵ∥a∗b∗⊤
+
+∥.
+
+Theorem 5.4 and Lemma 5.3 show that with a random initial-ization for the unit vector a (δ0 ∈ (0 , 1)) , RoLoRA makes the global model converge to the target model exponentially fast with large q. The requirement for sample complexity is well-supported, as demonstrated in (Collins et al., 2022; Du et al., 2021). While the proof of the above results are relegated to the Appendix, we provide a brief outline of the proof. In Appendices A.3, we first analyze the minimization step for updating bti (Lemma A.9), then establish a bound on the deviation of the gradient from its expectation with re-spect to a (Lemma A.10), and finally derive a bound for 
+
+| sin θ(at+1 , a∗)| based on the gradient descent update rule for a (Lemma 5.3). The proof of Theorem 5.4 is in Sec-tion A.4. 
+
+Intuition on Freezing-A Scheme (FFA-LoRA) can Satu-rate. We begin by applying the FFA-LoRA scheme to a centralized setting, aiming to solve the following optimiza-tion problem: 
+
+min 
+
+> b∈Rd
+
+∥Xa ∗b∗⊤
+
+− Xa 0b⊤∥2 (10) where a∗ ∈ Rd and b∗ ∈ Rd represent the ground truth parameters, and a0 ∈ Rd is the random initializa-tion. The objective can be transformed to Pdp=i(a∗b∗ 
+
+> p
+
+−
+
+a0bp)⊤X⊤X(a∗b∗ 
+
+> p
+
+− a0bp), with bp as the p-th entry of 
+
+b, b∗ 
+
+> p
+
+as the p-th entry of b∗. In FFA-LoRA scheme, a0
+
+remains fixed during training. If a0 is not initialized to be parallel to a∗, the objective can never be reduced to zero. This is because optimizing b only scales the vector a0bp
+
+along the direction of a0, without altering the angular dis-tance between a0 and a∗.Suppose we are in the federated setting described in Sec-tion 5.1, we apply FFA-LoRA, to optimize the objective in (7) . In FFA-LoRA scheme, we fix a of all clients to a random unit vector a0, where the initial angle distance 
+
+δ0 = | sin θ(a∗, a0)|, δ 0 ∈ (0 , 1) . And we only update bi
+
+by minimizing li and aggregate them. 
+
+Proposition 5.5. (FFA-LoRA lower bound) Suppose we are in the setting described in Section 5.1. For any set of ground truth parameters ( a∗, b∗), the initialization a0, initial angle distance δ0 ∈ (0 , 1) , we apply FFA-LoRA scheme to obtain a shared global model ( a0, bF F A ), yielding an expected global loss of 
+
+E[ 1
+
+N m 
+
+> N
+
+X
+
+> i=1
+
+∥Xia∗b∗⊤
+
+− Xia0(bF F A )⊤∥2]= (1 + ˜ c)∥b∗∥2(δ0)2 (11) 
+
+where the expectation is over all the randomness in the Xi,and ˜c = O( 1 
+
+> N m
+
+).
+
+See Appendix A.4.1 for the proof. Proposition 5.5 shows that for any choice of δ0 ∈ (0 , 1) , the global objective reached by FFA-LoRA is shown as in (11) . The global objective of FFA-LoRA is dominated by ∥b∗∥2(δ0)2 which is due to the angular distance between a0 and a∗.By Theorem 5.4, we demonstrate that RoLoRA achieves ϵ-accurate recovery of the global minimizer. Specifically, the expected global loss of RoLoRA can be upper bounded 5275 276 277 278 279 280 281 282 283 284 285 286 287 288 289 290 291 292 293 294 295 296 297 298 299 300 301 302 303 304 305 306 307 308 309 310 311 312 313 314 315 316 317 318 319 320 321 322 323 324 325 326 327 328 329 
+
+> Robust Federated Finetuning of LLMs via Alternating Optimization of LoRA
+
+by (1 + ˜ c)∥b∗∥2ϵ2. Under the same initialization and ground truth parameters for both FFA-LoRA and RoLoRA, RoLoRA’s ability to update a reduces the global loss caused by the angle distance between a and a∗ from ∥b∗∥2(δ0)2
+
+to ∥b∗∥2ϵ2. By increasing the number of iterations, ϵ can be made arbitrarily small. In Appendix A.5, we analyze the convergence of RoLoRA with single rank-1 LoRA structure in a federated setting with heterogeneous clients. By showing the decreasing of the angle distance between the ground truth a∗ and the shared down-projection a, we demonstrate that RoLoRA allows the global model to converge to global minimum while the global loss of FFA-LoRA can be dominated by the term caused by the angle distance between the random initialization a0 and a∗.Through this analysis of the LoRA structure with rank-1, we highlight the necessity of updating the down-projections. 
+
+5.2. Verifying Results On a Two-Layer NN  
+
+> Figure 2. (Left) Comparison of three methods on a toy model with 5 clients. (Right) Comparison of three methods on a toy model with 10 clients.
+
+The previous analysis considers a simple linear model for each client. To assess the validity in a non-linear model, we consider a two-layer neural network model on each client given by 
+
+fi(xi) = ReLU (xiAB )Wout (12) where Wout ∈ Rd×c, A ∈ Rd×r and B ∈ Rr×d are weights. We train the model on MNIST (Deng, 2012) with 60,000 training images. We consider two different ways to distribute training images to clients. The first is to dis-tribute the images to 5 clients and each client gets access to training images of two specific labels, while the second is to distribute the images to 10 clients and each client only has training images of one specific label. There is no overlap in the training samples each client can access. Only weights matrices B and A are tunable, while Wout are fixed. We apply the typical initialization, where A is initialized to a random Gaussian matrix, and B is initialized to zero. We use c = 10 , d = 784 , r = 16 and make each client train 5 epochs locally with batch-size 64 and aggregate clients’ up-date following three methods: FedAVG of LoRA, referred as LoRA; FFA-LoRA (Sun et al., 2024), which freezes A
+
+during training, and RoLoRA, which alternately update B
+
+and A. We experiment with multiple learning rates, display the best performance of each method in Figure 2. As shown in Figure 2, we evaluate the performance of the model in each iteration on the test set with 10,000 images. We observe that the accuracy of FFA-LoRA plateaus around 55% in both settings, which aligns with our theoretical analysis. The decline in LoRA’s performance with an in-creasing number of clients is most likely due to less accurate model aggregation, as demonstrated in (1) and (2) . Notably, RoLoRA demonstrates greater robustness in these settings. 
+
+## 6. Experiments on LLMs 
+
+In this section, we evaluate the performance of RoLoRA in various federated settings. Considering all clients will participate in each round, we will explore the following methods based on FedAVG. • LoRA means LoRA adapter and its finetuning algo-rithm are directly applied to local finetuning of clients in the federated system. Specifically, in iteration t, the server receives Ati and Bti from client i and aggregates by At = Avg (Ati) and Bt = Avg (Bti).• LoRA-FFA (Sun et al., 2024) is a baseline that enable the clients to finetune B and keep A frozen locally. Thus, in iteration t, the server aggregates by Bt =
+
+Avg (Bti).• RoLoRA enables clients to alternate updating A and 
+
+B as described in Section 4. FlexLoRA (Bai et al., 2024) fine-tunes large models in a fed-erated setting by aggregating the matrix products of LoRA components and compressing them using truncated-SVD. However, due to its significant memory and computation overheads it is not directly comparable with other schemes. Nonetheless, we include its performance in Table 6 in Ap-pendix. 
+
+Implementation & Configurations. We implement all the methods based on FederatedScope-LLM (Kuang et al., 2023). We use NVIDIA GeForce RTX 4090 or NVIDIA A40 for all the experiments. To make a fair comparison, for each dataset, we obtain the best performance on test set and report the average over multiple seeds. Specifi-cally, the learning rate is chosen from the set {5e − 4, 1e −
+
+3, 2e − 3, 5e − 3, 1e − 2, 2e − 2, 5e − 2, 1e − 1}. Other hyper-parameters for experiments are specified in Table 4 in Appendix B.1. Please note that in all tasks, we compare the performance of the three methods under the same number of communication rounds .
+
+6.1. Language Understanding Tasks Model and Datasets. We take the pre-trained RoBERTa-Large (355M) (Liu et al., 2019) models from the Hugging-6330 331 332 333 334 335 336 337 338 339 340 341 342 343 344 345 346 347 348 349 350 351 352 353 354 355 356 357 358 359 360 361 362 363 364 365 366 367 368 369 370 371 372 373 374 375 376 377 378 379 380 381 382 383 384 
+
+> Robust Federated Finetuning of LLMs via Alternating Optimization of LoRA
+
+Face Transformers library, and evaluate the performance of three federated finetuning methods on 5 datasets (SST-2, QNLI, MNLI, QQP, RTE) from the GLUE (Wang et al., 2019). GLUE benchmark is a comprehensive set of tasks for evaluating the performance of language models on a variety of natural language understanding tasks. Due to the limitation of the unpublished test set in GLUE, we follow the previous studies (Zhang et al., 2023b) and use the origi-nal validation set as the new test set and split a part of the training set as the validation set.  
+
+> Figure 3. Accuracies over rounds with RoBERTa-Large models on SST-2, QNLI, MNLI, and QQP. The total number of clients is 50. We use rank 4.
+
+Effect of Number of Clients In this section, we study the effect of the number of clients. The configurations are pre-sented in Table 5 in Appendix. In Table 1, we increased the number of clients from 3 to 20, and then to 50, ensuring that there is no overlap in the training samples each client can access. Consequently, each client receives a smaller fraction of the total dataset. We observe that as the number of clients increases, while maintaining the same number of fine-tuning samples, the performance of the LoRA method significantly deteriorates for most datasets. In contrast, RoLoRA main-tains its accuracy levels. The performance of FFA-LoRA also declines, attributed to the limited expressiveness of the random initialization of A for clients’ heterogeneous data. Notably, RoLoRA achieves this accuracy while in-curring only half the communication costs associated with LoRA. Figure 3 illustrates the dynamics during finetuning for three methods, highlighting that the convergence speed of RoLoRA is substantially better than that of the other two methods. 
+
+Effect of Number of Finetuning Parameters In Figure 4, we compare three methods across five GLUE datasets. We apply LoRA module to every weight matrix of the selected layers, given different budgets of LoRA parameters. For each dataset, we experiment with three budgets ( P1, P2, P3)ranging from low to high. The corresponding layer sets that are attached with LoRA adapters, P1, P2, P3, are detailed in Table 7 in Appendix B.1. The figures indicates that with sufficient number of finetuning parameters, FFA-LoRA can achieve comparable best accuracy as LoRA and RoLoRA, aligning with the results in (Sun et al., 2024); as the num-ber of LoRA parameters is reduced, the performance of the three methods deteriorates to varying degrees. How-ever, RoLoRA, which achieves performance comparable to LoRA, demonstrates greater robustness compared to FFA-LoRA, especially under conditions of limited fine-tuning parameters. It is important to note that with the same fine-tuning parameters, the communication cost of RoLoRA and FFA-LoRA is always half of that of LoRA due to their pa-rameter freezing nature. This implies that RoLoRA not only sustains its performance but also enhances communication efficiency. Additional results of varifying ranks are provided in Figure 6, 7, and 8 in Appendix B.2.2. 
+
+Align Communication Cost for Three Methods In Fig-ure 5, we conduct a comparison of three methods under the constraint of identical communication costs under the assumption that the number of clients is small. To align the communication costs across these methods, two approaches are considered. The first approach involves doubling the rank of FFA-LoRA and RoLoRA, with results presented in Appendix B.2.2. The second approach requires doubling the number of layers equipped with LoRA modules. In Figure 5, the latter strategy is employed. Specifically, for both FFA-LoRA and RoLoRA, we adjust the communi-cation costs by doubling the number of layers equipped with LoRA modules, thereby standardizing the size of the transmitted messages. The configurations are presented in Table 8 in Appendix. Figure 5 demonstrates that when oper-ating within a constrained communication cost budget, the performance of RoLoRA surpasses that of the other two methods for most of the tasks. 
+
+6.2. Commonsense Reasoning Tasks Model, Datasets. We evaluate RoLoRA against FFA-LoRA and LoRA on Llama-2-7B(Touvron et al., 2023) for commonsense reasoning tasks. The commonsense reason-ing tasks include 8 sub-tasks, each provided with predefined training and testing datasets. Following the setting in (Hu et al., 2021), we merge the training datasets from all 8 sub-tasks to create a unified training dataset, which is then evenly distributed among the clients. Evaluations are conducted individually on the testing dataset for each sub-task. 
+
+Results In Table 2, we compare the results of three meth-ods with Llama-2-7B models on 8 commonsense reasoning tasks. The configurations are presented in Appendix B.2.4. The performance is reported as the mean accuracy with standard deviations across 3 trials. RoLoRA consistently 7385 386 387 388 389 390 391 392 393 394 395 396 397 398 399 400 401 402 403 404 405 406 407 408 409 410 411 412 413 414 415 416 417 418 419 420 421 422 423 424 425 426 427 428 429 430 431 432 433 434 435 436 437 438 439 
+
+Robust Federated Finetuning of LLMs via Alternating Optimization of LoRA 
+
+rank Clients num Method SST-2 QNLI MNLI QQP RTE Avg. LoRA 95.62 ±0.17 91.59 ±0.21 86.20 ±0.05 86.13 ±0.10 81.46 ±1.22 88.20 4 3 FFA-LoRA 95.18 ±0.09 91.35 ±0.32 84.58 ±0.21 85.50 ±0.25 81.10 ±0.33 87.48 RoLoRA 95.49 ±0.16 91.64 ±0.30 85.70 ±0.04 86.14 ±0.06 82.43 ±0.84 88.28 
+
+LoRA 94.3 ±0.27 86.67 ±2.02 78.55 ±7.31 83.1 ±0.04 51.87 ±3.24 78.90 4 20 FFA-LoRA 93.88 ±0.06 89.11 ±0.19 80.99 ±1.74 83.92 ±0.2 57.16 ±1.46 80.01 RoLoRA 94.88 ±0.18 90.35 ±0.37 85.28 ±1.04 85.83 ±0.1 78.82 ±1.7 87.03 
+
+LoRA 93.00 ±0.35 78.13 ±5.13 52.64 ±15.07 77.60 ±1.47 52.23 ±1.1 70.72 4 50 FFA-LoRA 93.23 ±0.12 85.05 ±0.34 69.97 ±5.57 78.44 ±0.41 55.72 ±1.99 76.48 RoLoRA 94.80 ±0.17 90.00 ±0.63 82.98 ±3.36 85.71 ±0.18 75.57 ±2.88 85.81 
+
+LoRA 93.00 ±0.23 79.87 ±1.52 56.96 ±2.02 77.45 ±1.97 53.79 ±6.57 64.03 8 50 FFA-LoRA 92.74 ±0.13 83.69 ±0.75 64.51 ±1.92 79.71 ±2.04 53.07 ±1.3 72.46 RoLoRA 94.53 ±0.17 90.1 ±0.45 85.17 ±0.41 85.25 ±0.13 76.3 ±4.9 86.27 
+
+Table 1. Results with RoBERTa-Large models with varying client numbers (3, 20, 50), maintaining a constant sample count during fine-tuning. 
+
+Figure 4. Results with RoBERTa-Large models on GLUE under different fine-tuning parameter budgets, involving three clients with rank 4. 
+
+Figure 5. RoBERTa-Large accuracies on QQP, MNLI, QNLI, and RTE with specific uplink communication budget. It involves 3 clients using rank 4. Error bars reflect standard deviations. 
+
+achieves the highest accuracy across all tasks, demonstrating significant improvements over both LoRA and FFA-LoRA. We also highlights that FFA-LoRA exhibits large perfor-mance variances across trials, such as a standard deviation of 9.55 for PIQA and 8.44 for SIQA, respectively. This significant variability is likely due to the initialization qual-ity of parameter A, as different initializations could lead to varying optimization trajectories and final performance outcomes as discussed in Section 5. Additional results on this task are presented in Table 10 in Appendix B.2.4. 
+
+BoolQ PIQA SIQA HellaSwag LoRA 61.42 ±0.29 33.19 ±9.8 31.88 ±3.95 21.23 ±2.82 
+
+FFA-LoRA 53.43 ±4.3 35.49 ±9.55 10.63 ±8.44 11.81 ±4.53 
+
+RoLoRA 61.83 ±0.22 61.26 ±3.3 39.76 ±0.41 27.49 ±2.34 
+
+WinoGrande ARC-e ARC-c OBQA LoRA 31.36 ±5.02 27.36 ±0.89 32.03 ±1.14 26.07 ±2.32 
+
+FFA-LoRA 1.61 ±2.14 6.88 ±0.42 7.93 ±0.89 15.0 ±5.41 
+
+RoLoRA 47.67 ±0.75 33.19 ±1.29 40.13 ±1.73 31.67 ±1.4 
+
+Table 2. Results with Llama-2-7B models on commonsense rea-soning tasks. This involves 50 clients using rank 8. 
+
+More results. We include more experimental results on Llama-2-7B on HumanEval and MMLU tasks in Ap-pendix B.2.5. 
+
+## 7. Conclusion 
+
+In this work, we introduce RoLoRA, a federated framework that leverages alternating optimization to finetune LoRA adapters. Our approach highlights the role of learning down-projection matrices to enhance both expressiveness and ro-bustness. Through theoretical analysis on a simplified linear model, and comprehensive experiments on a toy neural net-work and large language models like RoBERTa-Large and Llama-2-7B, we show that RoLoRA outperforms existing methods that limit model updates or expressiveness. 8440 441 442 443 444 445 446 447 448 449 450 451 452 453 454 455 456 457 458 459 460 461 462 463 464 465 466 467 468 469 470 471 472 473 474 475 476 477 478 479 480 481 482 483 484 485 486 487 488 489 490 491 492 493 494 
+
+> Robust Federated Finetuning of LLMs via Alternating Optimization of LoRA
+
+## Impact Statement 
+
+This paper presents work whose goal is to advance the field of Machine Learning. There are many potential societal consequences of our work, none of which we feel must be specifically highlighted here. 
+
+## References 
+
+Babakniya, S., Elkordy, A., Ezzeldin, Y., Liu, Q., Song, K.-B., EL-Khamy, M., and Avestimehr, S. SLoRA: Fed-erated parameter efficient fine-tuning of language mod-els. In International Workshop on Federated Learning in the Age of Foundation Models in Conjunction with NeurIPS 2023 , 2023. URL https://openreview. net/forum?id=06quMTmtRV .Bai, J., Chen, D., Qian, B., Yao, L., and Li, Y. Fed-erated fine-tuning of large language models under het-erogeneous tasks and client resources, 2024. URL 
+
+https://arxiv.org/abs/2402.11505 .Chaudhary, S. Code alpaca: An instruction-following llama model for code generation. https://github.com/ sahil280114/codealpaca , 2023. Chen, M., Tworek, J., Jun, H., Yuan, Q., de Oliveira Pinto, H. P., Kaplan, J., Edwards, H., Burda, Y., Joseph, N., Brockman, G., Ray, A., Puri, R., Krueger, G., Petrov, M., Khlaaf, H., Sastry, G., Mishkin, P., Chan, B., Gray, S., Ryder, N., Pavlov, M., Power, A., Kaiser, L., Bavar-ian, M., Winter, C., Tillet, P., Such, F. P., Cummings, D., Plappert, M., Chantzis, F., Barnes, E., Herbert-Voss, A., Guss, W. H., Nichol, A., Paino, A., Tezak, N., Tang, J., Babuschkin, I., Balaji, S., Jain, S., Saunders, W., Hesse, C., Carr, A. N., Leike, J., Achiam, J., Misra, V., Morikawa, E., Radford, A., Knight, M., Brundage, M., Murati, M., Mayer, K., Welinder, P., McGrew, B., Amodei, D., McCandlish, S., Sutskever, I., and Zaremba, W. Evaluating large language models trained on code. 2021. Chen, S., Ju, Y., Dalal, H., Zhu, Z., and Khisti, A. J. Ro-bust federated finetuning of foundation models via al-ternating minimization of loRA. In Workshop on Effi-cient Systems for Foundation Models II @ ICML2024 ,2024. URL https://openreview.net/forum? id=xT0acYbgOF .Collins, L., Hassani, H., Mokhtari, A., and Shakkottai, S. Exploiting shared representations for personalized fed-erated learning. In Meila, M. and Zhang, T. (eds.), Pro-ceedings of the 38th International Conference on Ma-chine Learning , volume 139 of Proceedings of Machine Learning Research , pp. 2089–2099. PMLR, 18–24 Jul 2021. URL https://proceedings.mlr.press/ v139/collins21a.html .Collins, L., Hassani, H., Mokhtari, A., and Shakkottai, S. Fedavg with fine tuning: Local updates lead to represen-tation learning, 2022. URL https://arxiv.org/ abs/2205.13692 .Deng, L. The mnist database of handwritten digit images for machine learning research. IEEE Signal Processing Magazine , 29(6):141–142, 2012. Du, S. S., Hu, W., Kakade, S. M., Lee, J. D., and Lei, Q. Few-shot learning via learning the representation, prov-ably. In International Conference on Learning Represen-tations , 2021. URL https://openreview.net/ forum?id=pW2Q2xLwIMD .Dwork, C., McSherry, F., Nissim, K., and Smith, A. Cal-ibrating noise to sensitivity in private data analysis. In 
+
+Theory of Cryptography: Third Theory of Cryptography Conference, TCC 2006, New York, NY, USA, March 4-7, 2006. Proceedings 3 , pp. 265–284. Springer, 2006. Hao, Y., Cao, Y., and Mou, L. Flora: Low-rank adapters are secretly gradient compressors, 2024. URL https: //arxiv.org/abs/2402.03293 .Hayou, S., Ghosh, N., and Yu, B. Lora+: Efficient low rank adaptation of large models, 2024. Hendrycks, D., Burns, C., Basart, S., Zou, A., Mazeika, M., Song, D., and Steinhardt, J. Measuring massive multitask language understanding, 2021. URL https: //arxiv.org/abs/2009.03300 .Houlsby, N., Giurgiu, A., Jastrzebski, S., Morrone, B., de Laroussilhe, Q., Gesmundo, A., Attariyan, M., and Gelly, S. Parameter-efficient transfer learning for nlp, 2019. Hu, E. J., Shen, Y., Wallis, P., Allen-Zhu, Z., Li, Y., Wang, S., Wang, L., and Chen, W. Lora: Low-rank adaptation of large language models, 2021. Kuang, W., Qian, B., Li, Z., Chen, D., Gao, D., Pan, X., Xie, Y., Li, Y., Ding, B., and Zhou, J. Federatedscope-llm: A comprehensive package for fine-tuning large language models in federated learning, 2023. Liu, X., Ji, K., Fu, Y., Tam, W. L., Du, Z., Yang, Z., and Tang, J. P-tuning v2: Prompt tuning can be comparable to fine-tuning universally across scales and tasks, 2022. Liu, Y., Ott, M., Goyal, N., Du, J., Joshi, M., Chen, D., Levy, O., Lewis, M., Zettlemoyer, L., and Stoyanov, V. Roberta: A robustly optimized bert pretraining approach, 2019. McMahan, B., Moore, E., Ramage, D., Hampson, S., and y Arcas, B. A. Communication-efficient learning of deep 9495 496 497 498 499 500 501 502 503 504 505 506 507 508 509 510 511 512 513 514 515 516 517 518 519 520 521 522 523 524 525 526 527 528 529 530 531 532 533 534 535 536 537 538 539 540 541 542 543 544 545 546 547 548 549 
+
+> Robust Federated Finetuning of LLMs via Alternating Optimization of LoRA
+
+networks from decentralized data. In Artificial intelli-gence and statistics , pp. 1273–1282. PMLR, 2017. Seyedehsara, Nayer, and Vaswani, N. Fast and sample-efficient federated low rank matrix recovery from column-wise linear and quadratic projections, 2022. URL 
+
+https://arxiv.org/abs/2102.10217 .Sun, Y., Li, Z., Li, Y., and Ding, B. Improving loRA in privacy-preserving federated learning. In The Twelfth International Conference on Learning Representations ,2024. URL https://openreview.net/forum? id=NLPzL6HWNl .Taori, R., Gulrajani, I., Zhang, T., Dubois, Y., Li, X., Guestrin, C., Liang, P., and Hashimoto, T. B. Stanford alpaca: An instruction-following llama model. https://github.com/tatsu-lab/ stanford_alpaca , 2023. Thekumparampil, K. K., Jain, P., Netrapalli, P., and Oh, S. Sample efficient linear meta-learning by alternating min-imization, 2021. URL https://arxiv.org/abs/ 2105.08306 .Touvron, H., Martin, L., Stone, K., Albert, P., Almahairi, A., Babaei, Y., Bashlykov, N., Batra, S., Bhargava, P., Bhosale, S., Bikel, D., Blecher, L., Ferrer, C. C., Chen, M., Cucurull, G., Esiobu, D., Fernandes, J., Fu, J., Fu, W., Fuller, B., Gao, C., Goswami, V., Goyal, N., Hartshorn, A., Hosseini, S., Hou, R., Inan, H., Kardas, M., Kerkez, V., Khabsa, M., Kloumann, I., Korenev, A., Koura, P. S., Lachaux, M.-A., Lavril, T., Lee, J., Liskovich, D., Lu, Y., Mao, Y., Martinet, X., Mihaylov, T., Mishra, P., Moly-bog, I., Nie, Y., Poulton, A., Reizenstein, J., Rungta, R., Saladi, K., Schelten, A., Silva, R., Smith, E. M., Subra-manian, R., Tan, X. E., Tang, B., Taylor, R., Williams, A., Kuan, J. X., Xu, P., Yan, Z., Zarov, I., Zhang, Y., Fan, A., Kambadur, M., Narang, S., Rodriguez, A., Sto-jnic, R., Edunov, S., and Scialom, T. Llama 2: Open foundation and fine-tuned chat models, 2023. URL 
+
+https://arxiv.org/abs/2307.09288 .Vaswani, N. Efficient federated low rank matrix recovery via alternating gd and minimization: A simple proof. IEEE Transactions on Information Theory , 70(7):5162–5167, July 2024. ISSN 1557-9654. doi: 10.1109/tit.2024. 3365795. URL http://dx.doi.org/10.1109/ TIT.2024.3365795 .Vershynin, R. High-dimensional probability: An introduc-tion with applications in data science , volume 47. Cam-bridge university press, 2018. Wang, A., Singh, A., Michael, J., Hill, F., Levy, O., and Bowman, S. R. Glue: A multi-task benchmark and analy-sis platform for natural language understanding, 2019. Wang, Z., Shen, Z., He, Y., Sun, G., Wang, H., Lyu, L., and Li, A. Flora: Federated fine-tuning large language models with heterogeneous low-rank adaptations, 2024. URL https://arxiv.org/abs/2409.05976 .Zaken, E. B., Ravfogel, S., and Goldberg, Y. Bitfit: Sim-ple parameter-efficient fine-tuning for transformer-based masked language-models, 2022. Zhang, L., Zhang, L., Shi, S., Chu, X., and Li, B. Lora-fa: Memory-efficient low-rank adaptation for large language models fine-tuning, 2023a. Zhang, Z., Yang, Y., Dai, Y., Wang, Q., Yu, Y., Qu, L., and Xu, Z. FedPETuning: When federated learning meets the parameter-efficient tuning methods of pre-trained language models. In Rogers, A., Boyd-Graber, J., and Okazaki, N. (eds.), Findings of the Association for Computational Linguistics: ACL 2023 , pp. 9963–9977, Toronto, Canada, July 2023b. Association for Computa-tional Linguistics. doi: 10.18653/v1/2023.findings-acl. 632. URL https://aclanthology.org/2023. findings-acl.632 .Zhu, J., Greenewald, K., Nadjahi, K., de Oc ´ariz Borde, H. S., Gabrielsson, R. B., Choshen, L., Ghassemi, M., Yurochkin, M., and Solomon, J. Asymmetry in low-rank adapters of foundation models, 2024. URL https: //arxiv.org/abs/2402.16842 .10 550 551 552 553 554 555 556 557 558 559 560 561 562 563 564 565 566 567 568 569 570 571 572 573 574 575 576 577 578 579 580 581 582 583 584 585 586 587 588 589 590 591 592 593 594 595 596 597 598 599 600 601 602 603 604 
+
+> Robust Federated Finetuning of LLMs via Alternating Optimization of LoRA
+
+## A. Theoretical Analysis 
+
+A.1. Notation 
+
+Table 3 provides a summary of the symbols used throughout this theoretical analysis. Notation Description 
+
+a∗, b∗ 
+
+> i
+
+Ground truth parameters of client i
+
+¯b∗ Average of b∗
+
+> i
+
+at, bt Global model parameters of t-th iteration 
+
+δt The angle distance between a∗ and at, | sin θ(a∗, at)|
+
+η Step size 
+
+Id d × d identity matrix 
+
+∥·∥ l2 norm of a vector 
+
+∥ · ∥ op Operator norm ( l2 norm) of a matrix 
+
+| · | Absolute value of a scalar 
+
+∥ · ∥ ψ2 Sub-Gaussian norm of a sub-Gaussian random variable 
+
+∥ · ∥ ψ1 Sub-exponential norm of a sub-exponential random variable 
+
+N Total number of clients 
+
+ˆa+ Updated a by gradient descent 
+
+ˆa Normalized ˆa+
+
+¯b Average of bi 
+
+> Table 3. Notations
+
+A.2. Auxiliary Definition A.1 (Sub-Gaussian Norm) . The sub-Gaussian norm of a random variable ξ, denoted as ∥ξ∥ψ2 , is defined as: 
+
+∥ξ∥ψ2 = inf {t > 0 : E[exp( ξ2/t 2)] ≤ 2}.
+
+A random variable is said to be sub-Gaussian if its sub-Gaussian norm is finite. Gaussian random variables are sub-Gaussian. The sub-Gaussian norm of a standard Gaussian random variable ξ ∼ N (0 , 1) is ∥ξ∥ψ2 = p8/3.
+
+Definition A.2 (Sub-Exponential Norm) . The sub-exponential norm of a random variable ξ, denoted as ∥ξ∥ψ1 , is defined as: 
+
+∥ξ∥ψ1 = inf {t > 0 : E[exp( |ξ|/t )] ≤ 2}.
+
+A random variable is said to be sub-exponential if its sub-exponential norm is finite. 
+
+Lemma A.3 (The product of sub-Gaussians is sub-exponential) . Let ξ and υ be sub-Gaussian random variables. Then ξυ is sub-exponential. Moreover, 
+
+∥ξυ ∥ψ1 ≤ ∥ ξ∥ψ2 · ∥ υ∥ψ2
+
+Lemma A.4 (Sum of independent sub-Gaussians) . Let X1, · · · , X N be independent mean-zero sub-Gaussian random variables. Then PNi=1 Xi is also sub-Gaussian with 
+
+> N
+
+X
+
+> i=1
+
+Xi
+
+> 2
+> ψ2
+
+≤ C
+
+> N
+
+X
+
+> i=1
+
+∥Xi∥2 
+
+> ψ2
+
+,
+
+where C is some absolute constant. Proof. See proof of Lemma 2.6.1 of (Vershynin, 2018). 
+
+Corollary A.5. For random vector x ∈ Rd with entries being independent standard Gaussian random variables, the inner product a⊤x is sub-Gaussian for any fixed a ∈ Rd, and 
+
+a⊤x ψ2 ≤ C′∥a∥
+
+11 605 606 607 608 609 610 611 612 613 614 615 616 617 618 619 620 621 622 623 624 625 626 627 628 629 630 631 632 633 634 635 636 637 638 639 640 641 642 643 644 645 646 647 648 649 650 651 652 653 654 655 656 657 658 659 
+
+Robust Federated Finetuning of LLMs via Alternating Optimization of LoRA 
+
+where C′ is some absolute constant. Proof. Note that a⊤x = Pdi=1 aiξi, where ξi ∼ N (0 , 1) is the i-th entry of the random vector x. Choose C to be the absolute constant specified in Lemma A.4 for standard Gaussian random variables, and set C′ = p8C/ 3. We have 
+
+a⊤x 2 
+
+> ψ2
+
+≤ C
+
+> N
+
+X
+
+> i=1
+
+∥aiξi∥2
+
+> ψ2
+> (a)
+
+= C
+
+> N
+
+X
+
+> i=1
+
+a2 
+
+> i
+
+∥ξi∥2
+
+> ψ2
+> (b)
+
+= 83 · C∥a∥2 ⇒ a⊤x ψ2 ≤
+
+r 8C
+
+3 ∥a∥ = C′∥a∥.
+
+Step (a) makes use of the homogeneity of the sub-Gaussian norm, and step (b) uses the fact that ∥ξ∥ψ2 = p8/3 for 
+
+ξ ∼ N (0 , 1) .
+
+Definition A.6 (ϵ-net) . Consider a subset A ⊆ Rd in the d-dimensional Euclidean space. Let ϵ > 0. A subset N ⊆ A is called an ϵ-net of A if every point of A is within a distance ϵ of some point in N , i.e., 
+
+∀ x ∈ A , ∃ x′ ∈ N , ∥x − x′∥ ≤ ϵ. 
+
+Lemma A.7 (Computing the operator norm on a net) . Let a ∈ Rd and ϵ ∈ [0 , 1) . Then, for any ϵ-net N of the sphere Sd−1,we have 
+
+∥a∥ ≤ 11 − ϵ sup 
+
+> x∈N
+
+⟨a, x⟩
+
+Proof. See proof of Lemma 4.4.1 of (Vershynin, 2018). 
+
+Theorem A.8 (Bernstein’s inequality) . Let X1, . . . , X N be independent mean-zero sub-exponential random variables. Then, for every t ≥ 0, we have 
+
+P
+
+> N
+
+X
+
+> i=1
+
+Xi ≥ t
+
+!
+
+≤ 2 exp −c min t2
+
+PNi=1 ∥Xi∥2
+
+> ψ1
+
+, t
+
+max i ∥Xi∥ψ1
+
+!! 
+
+,
+
+where c > 0 is an absolute constant. Proof. See proof of Theorem 2.8.1 of (Vershynin, 2018). 
+
+A.3. Vector-vector case with homogeneous clients 
+
+Theorem 5.4 follows by recursively applying Lemma 5.3 for T iterations. In Lemma A.9 and Lemma A.10, we start by obtaining the important bounds that will be reused. Using Lemma A.9 and Lemma A.10, based on the update rule of a, we analyze the convergence behavior of a in Lemma 5.3. 
+
+Lemma A.9. Let a = at. Let δt = ∥(Id − a∗a∗⊤
+
+)a∥ = ∥(Id − aa ⊤)a∗∥ denote the angle distance between a∗ and a. Let 
+
+g⊤ = a⊤a∗b∗⊤
+
+, ¯b = 1
+
+> N
+
+PNi=1 bi, If m = Ω( q), and q = max( log( N )[min( ϵ1,ϵ 2)] 2 , d log( 2 
+
+> ϵ0)
+> ϵ22
+
+), then with probability 1 − q−10 ,
+
+∥¯b − g∥ ≤ ϵ′δt∥b∗∥ (13) 
+
+where ϵ′ = ϵ2 
+
+> (1 −ϵ0)(1 −ϵ1)
+
+, for ϵ0, ϵ 1, ϵ 2 ∈ (0 , 1) .Proof. We drop superscript t for simplicity. Following Algorithm 2, we start by computing the update for ˜bi. With 
+
+g⊤ = a⊤a∗b∗⊤
+
+, we get: 
+
+˜b⊤ 
+
+> i
+
+= a⊤X⊤ 
+
+> i
+
+Xia∗b∗⊤
+
+a⊤X⊤ 
+
+> i
+
+Xia (14) 
+
+= a⊤X⊤ 
+
+> i
+
+Xiaa ⊤a∗b∗⊤
+
++ a⊤X⊤ 
+
+> i
+
+Xi(Id − aa ⊤)a∗b∗⊤
+
+a⊤X⊤ 
+
+> i
+
+Xia (15) 
+
+= g⊤ + a⊤X⊤ 
+
+> i
+
+Xi(Id − aa ⊤)a∗b∗⊤
+
+a⊤X⊤ 
+
+> i
+
+Xia . (16) 12 660 661 662 663 664 665 666 667 668 669 670 671 672 673 674 675 676 677 678 679 680 681 682 683 684 685 686 687 688 689 690 691 692 693 694 695 696 697 698 699 700 701 702 703 704 705 706 707 708 709 710 711 712 713 714 
+
+Robust Federated Finetuning of LLMs via Alternating Optimization of LoRA 
+
+Therefore, 
+
+∥˜bi − g∥ ≤ | a⊤X⊤ 
+
+> i
+
+Xia|−1 · ∥ a⊤X⊤ 
+
+> i
+
+Xi(Id − aa ⊤)a∗b∗⊤
+
+∥ = ∥Xia∥−2 · ∥ a⊤X⊤ 
+
+> i
+
+Xi(Id − aa ⊤)a∗b∗⊤
+
+∥. (17) Note that since each entry of Xi is independent and identically distributed according to a standard Gaussian, and ∥a∥ = 1 ,
+
+Xia is a random standard Gaussian vector. By Theorem 3.1.1 of (Vershynin, 2018), the following is true for any ϵ1 ∈ (0 , 1) 
+
+P ∥Xia∥2 ≤ (1 − ϵ1)m ≤ exp ( − c1ϵ21mK4 ) (18) where K = ∥ξ∥ψ2 ≥ 1 for ξ ∼ N (0 , 1) and c1 is some large absolute constant that makes (18) holds. Next we upper bound ∥a⊤X⊤ 
+
+> i
+
+Xi(Id − aa ⊤)a∗b∗⊤
+
+∥. Note that E[a⊤X⊤ 
+
+> i
+
+Xi(Id − aa ⊤)a∗b∗⊤
+
+] = a⊤E[X⊤ 
+
+> i
+
+Xi]( Id − aa ⊤)a∗b∗⊤
+
+=
+
+ma⊤(Id − aa ⊤)a∗b∗⊤
+
+= 0 . First we need to apply sub-exponential Berstein inequality to bound the deviation from this mean, and then apply epsilon net argument. Let N be any ϵ0-net of the unit sphere Sd−1 in the d-dimensional real Euclidean space, then by Lemma A.7, we have 
+
+∥a⊤X⊤ 
+
+> i
+
+Xi(Id − aa ⊤)a∗b∗⊤
+
+∥ ≤ 11 − ϵ0
+
+max  
+
+> w∈N
+
+a⊤X⊤ 
+
+> i
+
+Xi(Id − aa ⊤)a∗b∗⊤
+
+w (19) 
+
+≤ 11 − ϵ0
+
+max  
+
+> w∈N
+
+|a⊤X⊤ 
+
+> i
+
+Xi(Id − aa ⊤)a∗b∗⊤
+
+w| (20) Meanwhile, denote the j-th row of Xi by x⊤ 
+
+> i,j
+
+, for every w ∈ N , we have 
+
+a⊤X⊤ 
+
+> i
+
+Xi(Id − aa ⊤)a∗b∗⊤
+
+w =
+
+> m
+
+X
+
+> j=1
+
+(a⊤xi,j )( x⊤ 
+
+> i,j
+
+(Id − aa ⊤)a∗b∗⊤
+
+w) (21) On the right hand side of (21) , a⊤xi,j and x⊤ 
+
+> i,j
+
+(Id − aa ⊤)a∗b∗⊤
+
+w are sub-Gaussian random variables. Thus, the summands on the right-hand side of (21) are products of sub-Gaussian random variables, making them sub-exponential. Now by choosing c2 = ( C′)2 for the C′ in Corollary A.5, we have the following chain of inequalities for all i, j :
+
+∥(a⊤xi,j )( x⊤ 
+
+> i,j
+
+(Id − aa ⊤)a∗b∗⊤
+
+w)∥ψ1 ≤ ∥ a⊤xi,j ∥ψ2 · ∥ x⊤ 
+
+> i,j
+
+(Id − aa ⊤)a∗b∗⊤
+
+w∥ψ2 (22) 
+
+≤ c2 · ∥ a∥ · ∥ (Id − aa ⊤)a∗b∗⊤ w∥ (23) 
+
+≤ c2 · ∥ a∥ · ∥ (Id − aa ⊤)a∗b∗⊤ ∥op ∥w∥ (24) 
+
+≤ c2 · ∥ (Id − aa ⊤)a∗b∗⊤ ∥op (25) Equation (22) is due to Lemma A.3, (23) is due to Corollary A.5, (25) is by the fact that ∥a∥ = ∥w∥ = 1 .Furthermore, these summands are mutually independent and have zero mean. By applying sub-exponential Bernstein’s inequality (Theorem A.8) with t = ϵ2m∥(Id − aa ⊤)a∗b∗⊤
+
+∥op , we get 
+
+P
+
+n
+
+a⊤X⊤ 
+
+> i
+
+Xi(Id − aa ⊤)a∗b∗⊤
+
+w ≥ ϵ2m∥(Id − aa ⊤)a∗b∗⊤
+
+∥op 
+
+o
+
+(26) 
+
+= P
+
+
+
+> m
+
+X
+
+> j=1
+
+(a⊤xi,j )( x⊤ 
+
+> i,j
+
+(Id − aa ⊤)a∗b∗⊤
+
+w) ≥ ϵ2m∥(Id − aa ⊤)a∗b∗⊤
+
+∥op 
+
+ (27) 
+
+≤ 2 exp −c min ϵ22m2∥(Id − aa ⊤)a∗b∗⊤
+
+∥2
+
+> op
+
+Pmj=1 ∥(a⊤xi,j )( x⊤ 
+
+> i,j
+
+(Id − aa ⊤)a∗b∗⊤ w)∥2
+
+> ψ1
+
+, ϵ2m∥(Id − aa ⊤)a∗b∗⊤
+
+∥op 
+
+max j ∥(a⊤xi,j )( x⊤ 
+
+> i,j
+
+(Id − aa ⊤)a∗b∗⊤ w)∥ψ1
+
+!! 
+
+(28) 
+
+= 2 exp ( −c3ϵ22m) (29) for any fixed w ∈ N , ϵ2 ∈ (0 , 1) , and some absolute constant c3. (29) follows because 
+
+ϵ22m2∥(Id − aa ⊤)a∗b∗⊤
+
+∥2
+
+> op
+
+Pmj=1 ∥(a⊤xi,j )( x⊤ 
+
+> i,j
+
+(Id − aa ⊤)a∗b∗⊤ w)∥2
+
+> ψ1
+
+≥ ϵ22mc22
+
+(30) 
+
+ϵ2m∥(Id − aa ⊤)a∗b∗⊤
+
+∥op 
+
+max j ∥(a⊤xi,j )( x⊤ 
+
+> i,j
+
+(Id − aa ⊤)a∗b∗⊤ w)∥ψ1
+
+≥ ϵ2mc2
+
+(31) 13 715 716 717 718 719 720 721 722 723 724 725 726 727 728 729 730 731 732 733 734 735 736 737 738 739 740 741 742 743 744 745 746 747 748 749 750 751 752 753 754 755 756 757 758 759 760 761 762 763 764 765 766 767 768 769 
+
+Robust Federated Finetuning of LLMs via Alternating Optimization of LoRA 
+
+And ϵ22mc22
+
+≤ ϵ2mc2 . Now we apply union bound over all elements in N . By Corollary 4.2.13 in (Vershynin, 2018), there exists an ϵ0-net N with |N | ≤ ( 2 
+
+> ϵ0
+
++ 1) d, therefore for this choice of N ,
+
+P
+
+
+
+max  
+
+> w∈N
+
+a⊤X⊤ 
+
+> i
+
+Xi(Id − aa ⊤)a∗b∗⊤
+
+w ≥ ϵ2m∥(Id − aa ⊤)a∗b∗⊤
+
+∥op 
+
+
+
+(32) 
+
+≤ X
+
+> w∈N
+
+P
+
+n
+
+a⊤X⊤ 
+
+> i
+
+Xi(Id − aa ⊤)a∗b∗⊤
+
+w ≥ ϵ2m∥(Id − aa ⊤)a∗b∗⊤
+
+∥op 
+
+o
+
+(33) 
+
+≤
+
+ 2
+
+ϵ0
+
++ 1 
+
+d
+
+· 2 exp ( −c3ϵ22m) (34) 
+
+= 2 exp ( d log(1 + 2 
+
+> ϵ0
+
+) − c3ϵ22m) (35) Combining (17),(18), (20), and (35), we get 
+
+P
+
+n
+
+∥˜bi − g∥ ≤ ϵ′∥(Id − aa ⊤)a∗b∗⊤
+
+∥op 
+
+o
+
+≥ 1 − p0 (36) where ϵ′ = ϵ2 
+
+> (1 −ϵ0)(1 −ϵ1)
+
+and p0 = 2 exp ( d log(1 + 2 
+
+> ϵ0
+
+) − c3ϵ22m) + exp ( − c1ϵ21mK4 ). Using a union bound over i ∈ [N ], we have 
+
+P
+
+( N\
+
+> i=1
+
+∥˜bi − g∥ ≤ ϵ′∥(Id − aa ⊤)a∗b∗⊤
+
+∥op 
+
+)
+
+≥ 1 − N p 0. (37) Next we bound ∥¯b − g∥ where ¯b is the average of {bi}Ni=1 .
+
+∥¯b − g∥ = ∥ 1
+
+N
+
+> N
+
+X
+
+> i=1
+
+(˜bi − g)∥ (38) 
+
+≤ 1
+
+N
+
+> N
+
+X
+
+> i=1
+
+∥˜bi − g∥ (39) 
+
+≤ ϵ′∥(Id − aa ⊤)a∗b∗⊤
+
+∥op (40) 
+
+= ϵ′∥(Id − aa ⊤)a∗∥ · ∥ b∗⊤
+
+∥ (41) 
+
+= ϵ′δt∥b∗∥ (42) with probability 1 − N p 0. (39) follows by Jensen’s inequality. (41) follows since ∥uv ⊤∥op = ∥u∥ · ∥ v∥. (42) follows since 
+
+δt = ∥(Id − aa ⊤)a∗∥.If m = Ω( q), where q = max( log( N )[min( ϵ1,ϵ 2)] 2 , d log( 2 
+
+> ϵ0)
+> ϵ22
+
+), then 1 − N p 0 > 1 − exp( −Cq ) > 1 − q−10 for large absolute constant C. Then with probability at least 1 − q−10 ,
+
+∥¯b − g∥ ≤ ϵ′δt∥b∗∥ (43) 
+
+Lemma A.10. Let a = at. Let δt = ∥(Id − a∗a∗⊤
+
+)a∥ = ∥(Id − aa ⊤)a∗∥ denote the angle distance between a∗ and a.Then for N m = Ω( d log( 2 
+
+> ϵ0)
+> ϵ23
+
+) and q = max( log( N )[min( ϵ1,ϵ 2)] 2 , d log( 2 
+
+> ϵ0)
+> ϵ22
+
+), with probability at least 1 − 2q−10 ,
+
+∥∇ al(a, ¯b) − E[∇al(a, ¯b)] ∥ ≤ 2˜ ϵ(( ϵ′)2 + ϵ′)δt∥b∗∥2 (44) 
+
+where ˜ϵ = ϵ3 
+
+> 1−ϵ0
+
+, and ϵ′ = ϵ2 
+
+> (1 −ϵ0)(1 −ϵ1)
+
+, for ϵ0, ϵ 1, ϵ 2, ϵ 3 ∈ (0 , 1) .
+
+14 770 771 772 773 774 775 776 777 778 779 780 781 782 783 784 785 786 787 788 789 790 791 792 793 794 795 796 797 798 799 800 801 802 803 804 805 806 807 808 809 810 811 812 813 814 815 816 817 818 819 820 821 822 823 824 
+
+Robust Federated Finetuning of LLMs via Alternating Optimization of LoRA 
+
+Proof. Based on the loss function l(a, b) = 1
+
+> N
+
+PNi=1 li(a, b) = 1
+
+> N m
+
+PNi=1 ∥Xia∗b∗⊤
+
+− Xiab ⊤∥2, we bound the expected gradient with respect to a and the deviation from it. The gradient with respect to a and its expectation are computed as: 
+
+∇al(a, ¯b) = 2
+
+N m 
+
+> N
+
+X
+
+> i=1
+
+(X⊤ 
+
+> i
+
+Xia¯b⊤ ¯b − X⊤ 
+
+> i
+
+Yi ¯b) (45) 
+
+= 2
+
+N m 
+
+> N
+
+X
+
+> i=1
+
+(X⊤ 
+
+> i
+
+Xia¯b⊤ ¯b − X⊤ 
+
+> i
+
+Xia∗b∗⊤ ¯b) (46) 
+
+= 2
+
+N m 
+
+> N
+
+X
+
+> i=1
+
+X⊤ 
+
+> i
+
+Xi(a¯b⊤ − a∗b∗⊤
+
+)¯b (47) 
+
+E[∇al(a, ¯b)] = 2
+
+N m 
+
+> N
+
+X
+
+> i=1
+
+m(a¯b⊤ − a∗b∗⊤
+
+)¯b (48) 
+
+= 2( a¯b⊤ − a∗b∗⊤
+
+)¯b (49) Next, we bound ∥∇ al(a, ¯b) − E[∇al(a, ¯b)] ∥. Construct ϵ0-net N over d dimensional unit spheres Sd−1, by Lemma A.7, we have 
+
+∥∇ al(a, ¯b) − E[∇al(a, ¯b)] ∥ ≤ 11 − ϵ0
+
+max  
+
+> w∈N
+
+w⊤∇al(a, ¯b) − w⊤E[∇al(a, ¯b)] (50) 
+
+≤ 11 − ϵ0
+
+2
+
+N m max 
+
+> w∈N
+> N
+
+X
+
+> i=1
+> m
+
+X
+
+> j=1
+
+(x⊤ 
+
+> i,j
+
+w)( xi,j (a¯b⊤ − a∗b∗⊤
+
+)) ¯b − w⊤(a¯b⊤ − a∗b∗⊤
+
+)¯b
+
+(51) where x⊤ 
+
+> i,j
+
+is the j-th row of Xi. Observe that x⊤ 
+
+> i,j
+
+w and xi,j (a¯b⊤ − a∗b∗⊤
+
+)¯b are sub-Gaussian variables. Thus the product of them are sub-exponentials. For the right hand side of (51) , the summands are sub-exponential random variables with sub-exponential norm 
+
+∥(x⊤ 
+
+> i,j
+
+w)( xi,j (a¯b⊤ − a∗b∗⊤
+
+)) ¯b − w⊤(a¯b⊤ − a∗b∗⊤
+
+)¯b∥ψ1 (52) 
+
+≤ ∥ (x⊤ 
+
+> i,j
+
+w)( xi,j (a¯b⊤ − a∗b∗⊤
+
+)) ¯b∥ψ1 + ∥w⊤(a¯b⊤ − a∗b∗⊤
+
+)¯b∥ψ1 (53) 
+
+≤ ∥ (x⊤ 
+
+> i,j
+
+w)( xi,j (a¯b⊤ − a∗b∗⊤
+
+)) ¯b∥ψ1 + |w⊤(a¯b⊤ − a∗b∗⊤
+
+)¯b|
+
+log 2 (54) 
+
+≤ c2 · ∥ w∥ · ∥ a¯b⊤ − a∗b∗⊤
+
+∥op · ∥ ¯b∥ + |w⊤(a¯b⊤ − a∗b∗⊤
+
+)¯b|
+
+log 2 (55) 
+
+≤ c2 · ∥ w∥ · ∥ a¯b⊤ − a∗b∗⊤
+
+∥op · ∥ ¯b∥ + ∥w∥ · ∥ (a¯b⊤ − a∗b∗⊤
+
+)¯b∥
+
+log 2 (56) 
+
+≤ c2 · ∥ w∥ · ∥ a¯b⊤ − a∗b∗⊤
+
+∥op · ∥ ¯b∥ + ∥w∥ · ∥ a¯b⊤ − a∗b∗⊤
+
+∥op · ∥ ¯b∥
+
+log 2 (57) 
+
+= c4 · ∥ a¯b⊤ − a∗b∗⊤
+
+∥op · ∥ ¯b∥ (58) where c4 = c2 + 1log 2 is some absolute constant greater than 1. Equation (54) is due to the fact that for a constant c ∈ R,
+
+∥c∥ψ1 = inf  
+
+> t
+
+exp 
+
+ |c|
+
+t ≤ 2
+
+
+
+= |c|
+
+log 2 .
+
+Equation (55) is derived similarly as (22)-(24). The summands in (51) are mutually independent and have zero mean. Applying sub-exponential Bernstein inequality 15 825 826 827 828 829 830 831 832 833 834 835 836 837 838 839 840 841 842 843 844 845 846 847 848 849 850 851 852 853 854 855 856 857 858 859 860 861 862 863 864 865 866 867 868 869 870 871 872 873 874 875 876 877 878 879 
+
+Robust Federated Finetuning of LLMs via Alternating Optimization of LoRA 
+
+(Theorem A.8) with t = ϵ3N m ∥a¯b⊤ − a∗b∗⊤
+
+∥op · ∥ ¯b∥,
+
+P
+
+
+
+> N
+
+X
+
+> i=1
+> m
+
+X
+
+> j=1
+
+[(( x⊤ 
+
+> i,j
+
+w)( xi,j (a¯b⊤ − a∗b∗⊤
+
+)) − w⊤(a¯b⊤ − a∗b∗⊤
+
+)) ¯b] ≥ ϵ3N m ∥a¯b⊤ − a∗b∗⊤
+
+∥op · ∥ ¯b∥
+
+ (59) 
+
+≤ 2 exp 
+
+
+
+−c min( ϵ23N m c24
+
+, ϵ3N m c4
+
+)
+
+
+
+(60) 
+
+= 2 exp ( −c5ϵ23N m ) (61) for any fixed w ∈ N , ϵ3 ∈ (0 , 1) and some absolute constant c5.Now we apply union bound over all w ∈ N using Corollary 4.2.13 of (Vershynin, 2018). We can conclude that 
+
+P
+
+
+
+max  
+
+> w∈N
+
+w⊤∇al(a, ¯b) − w⊤E[∇al(a, ¯b)] ≥ 2ϵ3∥a¯b⊤ − a∗b∗⊤
+
+∥op · ∥ ¯b∥
+
+
+
+(62) 
+
+≤ X
+
+> w∈N
+
+P
+
+n
+
+w⊤∇al(a, ¯b) − w⊤E[∇al(a, ¯b)] ≥ 2ϵ3∥a¯b⊤ − a∗b∗⊤
+
+∥op · ∥ ¯b∥
+
+o
+
+(63) 
+
+≤ 2 exp ( d log(1 + 2
+
+ϵ0
+
+) − c5ϵ23N m ) (64) Combining (42), (50) , and (62), with probability at least 1 − 2 exp ( d log(1 + 2 
+
+> ϵ0
+
+) − c5ϵ23N m ) − q−10 ,
+
+∥∇ al(a, ¯b) − E[∇al(a, ¯b)] ∥ ≤ 11 − ϵ0
+
+max  
+
+> w∈N
+
+w⊤∇al(a, ¯b) − w⊤E[∇al(a, ¯b)] (65) 
+
+≤ 2ϵ3
+
+1 − ϵ0
+
+∥a¯b⊤ − a∗b∗⊤
+
+∥op · ∥ ¯b∥ (66) 
+
+= 2ϵ3
+
+1 − ϵ0
+
+∥a(¯b − g)⊤ − (Id − aa ⊤)a∗b∗⊤
+
+∥op · ∥ ¯b∥ (67) 
+
+≤ 2ϵ3
+
+1 − ϵ0
+
+(∥a⊤(¯b − g)∥ + ∥(Id − aa ⊤)a∗b∗⊤
+
+∥op )∥¯b∥ (68) 
+
+≤ 2ϵ3
+
+1 − ϵ0
+
+(∥¯b − g∥ + ∥(Id − aa ⊤)a∗∥ · ∥ b∗∥)∥¯b∥ (69) 
+
+= 2ϵ3
+
+1 − ϵ0
+
+(∥¯b − g∥ + δt∥b∗∥)∥¯b − g + g∥ (70) 
+
+≤ 2ϵ3
+
+1 − ϵ0
+
+(∥¯b − g∥ + δt∥b∗∥)( ∥¯b − g∥ + ∥g∥) (71) 
+
+≤ 2ϵ3
+
+1 − ϵ0
+
+(∥¯b − g∥ + δt∥b∗∥)( ∥¯b − g∥ + ∥b∗∥) (72) 
+
+= 2ϵ3
+
+1 − ϵ0
+
+(∥¯b − g∥2 + δt∥¯b − g∥∥ b∗∥ + ∥¯b − g∥∥ b∗∥ + δt∥b∗∥2) (73) 
+
+≤ 2ϵ3
+
+1 − ϵ0
+
+(( ϵ′)2(δt)2 + ϵ′(δt)2 + ϵ′δt + δt)∥b∗∥2 (74) 
+
+≤ 2ϵ3
+
+1 − ϵ0
+
+(ϵ′ + 1) 2δt∥b∗∥2 (75) 
+
+= 2˜ ϵ(ϵ′ + 1) 2δt∥b∗∥2 (76) with ˜ϵ = ϵ3 
+
+> 1−ϵ0
+
+. (66) uses (62) . (68) follows by triangle inequality. (70) follows by δt = ∥(Id − aa ⊤)a∗∥. (72) uses 
+
+∥g∥ = ∥b∗a∗⊤
+
+a∥ ≤ ∥ b∗∥. (75) follows by (δt)2 < δ t since δt ∈ (0 , 1) .16 880 881 882 883 884 885 886 887 888 889 890 891 892 893 894 895 896 897 898 899 900 901 902 903 904 905 906 907 908 909 910 911 912 913 914 915 916 917 918 919 920 921 922 923 924 925 926 927 928 929 930 931 932 933 934 
+
+Robust Federated Finetuning of LLMs via Alternating Optimization of LoRA 
+
+If N m = Ω( d log( 2 
+
+> ϵ0)
+> ϵ23
+
+), then existing large constant C,
+
+1 − 2 exp ( d log(1 + 2
+
+ϵ0
+
+) − c5ϵ23N m ) − q−10 > 1 − exp( −Cd ) − q−10 (77) 
+
+> 1 − d−10 − q−10 (78) 
+
+> 1 − 2q−10 (79) Thus with probability at least 1 − 2q−10 , (76) holds. 
+
+Lemma A.11 (Lemma 5.3) . Let a = at. Let δt = ∥(Id − a∗a∗⊤
+
+)a∥ = ∥(Id − aa ⊤)a∗∥ denote the angle distance between 
+
+a∗ and a. Assume that Assumption 5.1 holds and δt ≤ δt−1 ≤ · · · ≤ δ0. Let m be the number of samples for each updating step, let ϵ′ = ϵ2 
+
+> (1 −ϵ0)(1 −ϵ1)
+
+, ˜ϵ = ϵ3 
+
+> 1−ϵ0
+
+for ϵ0, ϵ 1, ϵ 2, ϵ 3 ∈ (0 , 1) , if 
+
+m = Ω max 
+
+(
+
+log( N )[min( ϵ1, ϵ 2)] 2 , d log( 2 
+
+> ϵ0
+
+)
+
+ϵ22
+
+)! 
+
+and ϵ′, ˜ϵ < 1−(δ0)2 
+
+> 16
+
+, for any t and η ≤ 1
+
+> L2
+> max
+
+, then we have, 
+
+δt+1 ≤ δt
+
+q
+
+1 − η(1 − δ02 )∥b∗∥2 (80) 
+
+with probability at least 1 − 2q−10 for q = max 
+
+ log( N )[min( ϵ1,ϵ 2)] 2 , d log( 2 
+
+> ϵ0)
+> ϵ22
+
+
+
+.Proof. Recall that ˆa+ = a − η∇al(a, ¯b). We substract and add E[∇al(a, ¯b)] , obtain 
+
+ˆa+ = a − ηE[∇al(a, ¯b)] + η(E[∇al(a, ¯b)] − ∇ al(a, ¯b)) (81) Multiply both sides by the projection operator P = Id − a∗(a∗)⊤,
+
+Pˆa+ = Pa − ηPE[∇al(a, ¯b)] + ηP(E[∇al(a, ¯b)] − ∇ al(a, ¯b)) (82) 
+
+= Pa − 2ηP(a¯b⊤ − a∗b∗⊤
+
+)¯b + ηP(E[∇al(a, ¯b)] − ∇ al(a, ¯b)) (83) 
+
+= Pa − 2ηPa ¯b⊤ ¯b + ηP(E[∇al(a, ¯b)] − ∇ al(a, ¯b)) (84) 
+
+= Pa (1 − 2η ¯b⊤ ¯b) + ηP(E[∇al(a, ¯b)] − ∇ al(a, ¯b)) (85) where (83) uses E[∇al(a, ¯b)] = 2( a¯b⊤ − a∗b∗⊤
+
+)¯b, (84) follows by Pa ∗ = 0 . Thus, we get 
+
+∥Pˆa+∥ ≤ ∥ Pa ∥| 1 − 2η ¯b⊤ ¯b| + η∥(E[∇al(a, ¯b)] − ∇ al(a, ¯b)) ∥ (86) Normalizing the left hand side, we obtain 
+
+∥Pˆa+∥∥ˆa+∥ ≤ ∥Pa ∥| 1 − 2η ¯b⊤ ¯b| + η∥(E[∇al(a, ¯b)] − ∇ al(a, ¯b)) ∥∥ˆa+∥ (87) 
+
+⇒ δt+1 ≤ δt|1 − 2η ¯b⊤ ¯b| + η∥E[∇al(a, ¯b)] − ∇ al(a, ¯b)∥∥ˆa+∥ (88) 
+
+= E1 + E2
+
+∥ˆa+∥ (89) where (87) follows by δt+1 = ∥Pˆa+∥∥ˆa+∥ and δt = ∥Pa ∥. We need to upper bound E1 and E2 accordingly. E2 is upper bounded based on Lemma A.10. With probability at least 1 − 2q−10 ,
+
+E2 = η∥E[∇al(a, ¯b)] − ∇ al(a, ¯b)∥ (90) 
+
+≤ 2η˜ϵ(ϵ′ + 1) 2δt∥b∗∥2 (91) 17 935 936 937 938 939 940 941 942 943 944 945 946 947 948 949 950 951 952 953 954 955 956 957 958 959 960 961 962 963 964 965 966 967 968 969 970 971 972 973 974 975 976 977 978 979 980 981 982 983 984 985 986 987 988 989 
+
+Robust Federated Finetuning of LLMs via Alternating Optimization of LoRA 
+
+To upper bound E1, we need to lower bound ∥¯b∥2. We can first lower bound ∥¯b∥ by: 
+
+∥¯b∥ = ∥g − (g − ¯b)∥ (92) 
+
+≥ ∥ g∥ − ∥ g − ¯b∥ (93) 
+
+= p1 − (δt)2∥b∗∥ − ∥ g − ¯b∥ (94) 
+
+≥ p1 − (δt)2∥b∗∥ − ϵ′δt∥b∗∥ (95) with probability at least 1 − q−10 . (94) follows by g⊤ = a⊤a∗b∗⊤
+
+and a⊤a∗ = cos θ(a, a∗), (95) follows by Lemma A.9. Assuming δt ≤ · · · ≤ δ0, we choose ϵ′ < 1−(δ0)) 2 
+
+> 16
+
+to make p1 − (δt)2∥b∗∥ − ϵ′δt∥b∗∥ ≥ 0. Hence ∥¯b∥2 is lower bounded by: 
+
+∥¯b∥2 ≥ (p1 − (δt)2∥b∗∥ − ϵ′δt∥b∗∥)2 (96) 
+
+= (1 − (δt)2)∥b∗∥2 + ( ϵ′)2(δt)2∥b∗∥2 − 2ϵ′δtp1 − (δt)2∥b∗∥2 (97) 
+
+≥ (1 − (δt)2)∥b∗∥2 + ( ϵ′)2(δt)2∥b∗∥2 − ϵ′∥b∗∥2 (98) 
+
+≥ (1 − (δ0)2)∥b∗∥2 − ϵ′∥b∗∥2 (99) with probability at least 1 − q−10 . (98) follows by xy ≤ 12 for x2 + y2 = 1 , (99) follows by assuming δt ≤ δt−1 ≤ · · · ≤ δ0.
+
+E1 is upper bounded below. 
+
+E1 = δt|1 − 2η ¯b⊤ ¯b| (100) 
+
+≤ δt|1 − 2η((1 − (δ0)2) − ϵ′)∥b∗∥2| (101) with probability at least 1 − q−10 . Next we lower bound ∥ˆa+∥.
+
+∥ˆa+∥2 = ∥a − η∇al(a, ¯b)∥2 (102) 
+
+= a⊤a + η2∥∇ al(a, ¯b)∥2 − 2ηa⊤∇al(a, ¯b) (103) 
+
+≥ a⊤a − 2ηa⊤∇al(a, ¯b) (104) 
+
+= 1 − 2ηa⊤∇al(a, ¯b) (105) 
+
+= 1 − 2ηa⊤(∇al(a, ¯b) − E[∇al(a, ¯b)]) − 2ηa⊤E[∇al(a, ¯b)] (106) where (104) follows by η2∥∇ al(a, ¯b)∥2 ≥ 0, and (105) follows by a⊤a = 1 . The first subtrahend 2ηa⊤(∇al(a, ¯b) −
+
+E[∇al(a, ¯b)]) is upper bounded such that 
+
+2ηa⊤(∇al(a, ¯b) − E[∇al(a, ¯b)]) ≤ 2η∥a∥ · ∥ (∇al(a, ¯b) − E[∇al(a, ¯b)]) ∥ (107) 
+
+= 2 η∥(∇al(a, ¯b) − E[∇al(a, ¯b)]) ∥ (108) 
+
+≤ 4η˜ϵ(ϵ′ + 1) 2∥b∗∥2 (109) with probability at least 1 − 2q−10 . (109) uses Lemma A.9. The second subtrahend is upper bounded such that 
+
+2ηa⊤E[∇al(a, ¯b)] = 4 ηa⊤(a¯b⊤ − a∗b∗⊤
+
+)¯b (110) 
+
+= 4 ηa⊤(a¯b⊤ − a∗b∗⊤
+
+)g − 4ηa⊤(a¯b⊤ − a∗b∗⊤
+
+)( g − ¯b) (111) where a⊤(a¯b⊤ − a∗b∗⊤
+
+)g = −a⊤(( Id − aa ⊤)a∗b∗⊤
+
++ a(g − ¯b)⊤)g = ( ¯b − g)⊤g. The second term is simplified via a⊤(a¯b⊤ − a∗b∗⊤
+
+)( g − ¯b) = a⊤(( Id − aa ⊤)a∗b∗⊤
+
++ a(g − ¯b)⊤)( ¯b − g) = −(g − ¯b)2. Both simplifications use 
+
+a⊤(Id − aa ⊤) = 0 and a⊤a = 1 . (111) becomes 
+
+2ηa⊤E[∇al(a, ¯b)] = 4 η(¯b − g)⊤g + 4 η(g − ¯b)2 (112) 
+
+≤ 4η∥g − ¯b∥∥ b∗∥ + 4 η∥g − ¯b∥2 (113) 
+
+≤ 4ηϵ ′δt∥b∗∥2 + 4 η(ϵ′)2(δt)2∥b∗∥2 (114) 
+
+≤ 4η(( ϵ′)2 + ϵ′)∥b∗∥2 (115) 18 990 991 992 993 994 995 996 997 998 999 1000 1001 1002 1003 1004 1005 1006 1007 1008 1009 1010 1011 1012 1013 1014 1015 1016 1017 1018 1019 1020 1021 1022 1023 1024 1025 1026 1027 1028 1029 1030 1031 1032 1033 1034 1035 1036 1037 1038 1039 1040 1041 1042 1043 1044 
+
+Robust Federated Finetuning of LLMs via Alternating Optimization of LoRA 
+
+with probability at least 1 − q−10 . (158) uses Lemma A.9. Combining (109) and (115), we obtain 
+
+∥ˆa+∥2 ≥ 1 − 4η˜ϵ(ϵ′ + 1) 2∥b∗∥2 − 4η(( ϵ′)2 + ϵ′)∥b∗∥2 (116) with probability at least 1 − 2q−10 . Combining (101), (91) and (116), we obtain 
+
+δt+1 ≤ E1 + E2
+
+∥ˆa+∥ ≤ δt(1 − 2η((1 − (δ0)2) − ϵ′)∥b∗∥2 + 2 η˜ϵ(ϵ′ + 1) 2∥b∗∥2)
+
+p1 − 4η˜ϵ(ϵ′ + 1) 2∥b∗∥2 − 4η(( ϵ′)2 + ϵ′)∥b∗∥2 = δtC (117) We can choose ϵ′, ˜ϵ < 1−(δ0)2 
+
+> 16
+
+such that (1 − (δ0)2) > max(4(˜ ϵ(ϵ′ + 1) 2 + ( ϵ′)2 + ϵ′), 2ϵ′ + 2˜ ϵ(ϵ′ + 1) 2) holds. Then we obtain 
+
+C = 1 − 2η((1 − (δ0)2) − ϵ′)∥b∗∥2 + 2 η˜ϵ(ϵ′ + 1) 2∥b∗∥2
+
+p1 − 4η˜ϵ(ϵ′ + 1) 2∥b∗∥2 − 4η(( ϵ′)2 + ϵ′)∥b∗∥2 (118) 
+
+= 1 − 2η(1 − (δ0)2)∥b∗∥2 + 2 ηϵ ′∥b∗∥2 + 2 η˜ϵ(ϵ′ + 1) 2∥b∗∥2
+
+p1 − 4η(˜ ϵ(ϵ′ + 1) 2 + ( ϵ′)2 + ϵ′)∥b∗∥2 (119) 
+
+≤ 1 − 2η(1 − (δ0)2)∥b∗∥2 + η(2 ϵ′ + 2˜ ϵ(ϵ′ + 1) 2)∥b∗∥2
+
+p1 − 4η(˜ ϵ(ϵ′ + 1) 2 + ( ϵ′)2 + ϵ′)∥b∗∥2 (120) 
+
+≤ 1 − η(1 − (δ0)2)∥b∗∥2
+
+p1 − η(1 − (δ0)2)∥b∗∥2 (121) 
+
+= p1 − η(1 − (δ0)2)∥b∗∥2 (122) Assuming η ≤ 1
+
+> L2
+> max
+
+≤ 1 
+
+> ∥b∗∥2
+
+, 1 − η(1 − (δ0)2)∥b∗∥2 is strictly positive. Therefore we obtain, with probability at least 
+
+1 − 2q−10 ,
+
+δt+1 ≤ δtp1 − η(1 − (δ0)2)∥b∗∥2. (123) 
+
+A.4. Proof of Theorem 5.4 
+
+Proof. In Lemma 5.3, we have shown the angle distance between a and a∗ decreasing in t-th iteration such that with probability at least 1 − 2q−10 for q = max {log( N ), d }, δt+1 ≤ δtC for c ∈ (0 , 1) , C = p1 − c(1 − (δ0)2) with proper choice of step size η.
+
+Proving δ1 ≤ δ0C . Now we are to prove that for the first iteration, δ1 ≤ δ0C with certain probability. By Lemma A.9, we get ∥¯b − g∥ ≤ ϵ′δ0∥b∗∥ with probability at least 1 − q−10 .By Lemma A.10, we get ∥∇ al(a, ¯b) − E[∇al(a, ¯b)] ∥ ≤ 2˜ ϵ(( ϵ′)2 + ϵ′)δ0∥b∗∥2 with probability at least 1 − 2q−10 .We drop superscript of the iteration index for simplicity. Recall that ˆa+ = a − η∇al(a, ¯b). We substract and add 
+
+E[∇al(a, ¯b)] , obtain 
+
+ˆa+ = a − ηE[∇al(a, ¯b)] + η(E[∇al(a, ¯b)] − ∇ al(a, ¯b)) (124) Multiply both sides by the projection operator P = Id − a∗(a∗)⊤,
+
+Pˆa+ = Pa − ηPE[∇al(a, ¯b)] + ηP(E[∇al(a, ¯b)] − ∇ al(a, ¯b)) (125) 
+
+= Pa − 2ηP(a¯b⊤ − a∗b∗⊤
+
+)¯b + ηP(E[∇al(a, ¯b)] − ∇ al(a, ¯b)) (126) 
+
+= Pa − 2ηPa ¯b⊤ ¯b + ηP(E[∇al(a, ¯b)] − ∇ al(a, ¯b)) (127) 
+
+= Pa (1 − 2η ¯b⊤ ¯b) + ηP(E[∇al(a, ¯b)] − ∇ al(a, ¯b)) (128) 19 1045 1046 1047 1048 1049 1050 1051 1052 1053 1054 1055 1056 1057 1058 1059 1060 1061 1062 1063 1064 1065 1066 1067 1068 1069 1070 1071 1072 1073 1074 1075 1076 1077 1078 1079 1080 1081 1082 1083 1084 1085 1086 1087 1088 1089 1090 1091 1092 1093 1094 1095 1096 1097 1098 1099 
+
+Robust Federated Finetuning of LLMs via Alternating Optimization of LoRA 
+
+where (126) uses E[∇al(a, ¯b)] = 2( a¯b⊤ − a∗b∗⊤
+
+)¯b, (127) follows by Pa ∗ = 0 . Thus, we get 
+
+∥Pˆa+∥ ≤ ∥ Pa ∥| 1 − 2η ¯b⊤ ¯b| + η∥(E[∇al(a, ¯b)] − ∇ al(a, ¯b)) ∥ (129) Normalizing the left hand side, we obtain 
+
+∥Pˆa+∥∥ˆa+∥ ≤ ∥Pa ∥| 1 − 2η ¯b⊤ ¯b| + η∥(E[∇al(a, ¯b)] − ∇ al(a, ¯b)) ∥∥ˆa+∥ (130) 
+
+⇒ δ1 ≤ δ0|1 − 2η ¯b⊤ ¯b| + η∥E[∇al(a, ¯b)] − ∇ al(a, ¯b)∥∥ˆa+∥ (131) 
+
+= E1 + E2
+
+∥ˆa+∥ (132) where (130) follows by δ1 = ∥Pˆa+∥∥ˆa+∥ and δ0 = ∥Pa ∥. We need to upper bound E1 and E2 accordingly. E2 is upper bounded based on Lemma A.10. With probability at least 1 − 2q−10 ,
+
+E2 = η∥E[∇al(a, ¯b)] − ∇ al(a, ¯b)∥ (133) 
+
+≤ 2η˜ϵ(ϵ′ + 1) 2δ0∥b∗∥2 (134) To upper bound E1, we need to lower bound ∥¯b∥2. We can first lower bound ∥¯b∥ by: 
+
+∥¯b∥ = ∥g − (g − ¯b)∥ (135) 
+
+≥ ∥ g∥ − ∥ g − ¯b∥ (136) 
+
+= p1 − (δ0)2∥b∗∥ − ∥ g − ¯b∥ (137) 
+
+≥ p1 − (δ0)2∥b∗∥ − ϵ′δ0∥b∗∥ (138) with probability at least 1 − q−10 . (137) follows by g⊤ = a⊤a∗b∗⊤
+
+and a⊤a∗ = cos θ(a, a∗), (138) follows by Lemma A.9. Still we choose ϵ′ < 1−(δ0)) 2 
+
+> 16
+
+to make p1 − (δ0)2∥b∗∥ − ϵ′δ0∥b∗∥ ≥ 0. Hence ∥¯b∥2 is lower bounded by: 
+
+∥¯b∥2 ≥ (p1 − (δ0)2∥b∗∥ − ϵ′δ0∥b∗∥)2 (139) 
+
+= (1 − (δ0)2)∥b∗∥2 + ( ϵ′)2(δ0)2∥b∗∥2 − 2ϵ′δ0p1 − (δ0)2∥b∗∥2 (140) 
+
+≥ (1 − (δ0)2)∥b∗∥2 + ( ϵ′)2(δ0)2∥b∗∥2 − ϵ′∥b∗∥2 (141) 
+
+≥ (1 − (δ0)2)∥b∗∥2 − ϵ′∥b∗∥2 (142) with probability at least 1 − q−10 . (141) follows by xy ≤ 12 for x2 + y2 = 1 . E1 is upper bounded below. 
+
+E1 = δ0|1 − 2η ¯b⊤ ¯b| (143) 
+
+≤ δ0|1 − 2η((1 − (δ0)2) − ϵ′)∥b∗∥2| (144) with probability at least 1 − q−10 . Next we lower bound ∥ˆa+∥.
+
+∥ˆa+∥2 = ∥a − η∇al(a, ¯b)∥2 (145) 
+
+= a⊤a + η2∥∇ al(a, ¯b)∥2 − 2ηa⊤∇al(a, ¯b) (146) 
+
+≥ a⊤a − 2ηa⊤∇al(a, ¯b) (147) 
+
+= 1 − 2ηa⊤∇al(a, ¯b) (148) 
+
+= 1 − 2ηa⊤(∇al(a, ¯b) − E[∇al(a, ¯b)]) − 2ηa⊤E[∇al(a, ¯b)] (149) where (147) follows by η2∥∇ al(a, ¯b)∥2 ≥ 0, and (148) follows by a⊤a = 1 . The first subtrahend 2ηa⊤(∇al(a, ¯b) −
+
+E[∇al(a, ¯b)]) is upper bounded such that 
+
+2ηa⊤(∇al(a, ¯b) − E[∇al(a, ¯b)]) ≤ 2η∥a∥ · ∥ (∇al(a, ¯b) − E[∇al(a, ¯b)]) ∥ (150) 
+
+= 2 η∥(∇al(a, ¯b) − E[∇al(a, ¯b)]) ∥ (151) 
+
+≤ 4η˜ϵ(ϵ′ + 1) 2∥b∗∥2 (152) 20 1100 1101 1102 1103 1104 1105 1106 1107 1108 1109 1110 1111 1112 1113 1114 1115 1116 1117 1118 1119 1120 1121 1122 1123 1124 1125 1126 1127 1128 1129 1130 1131 1132 1133 1134 1135 1136 1137 1138 1139 1140 1141 1142 1143 1144 1145 1146 1147 1148 1149 1150 1151 1152 1153 1154 
+
+Robust Federated Finetuning of LLMs via Alternating Optimization of LoRA 
+
+(152) uses Lemma A.9. The second subtrahend is upper bounded such that 
+
+2ηa⊤E[∇al(a, ¯b)] = 4 ηa⊤(a¯b⊤ − a∗b∗⊤
+
+)¯b (153) 
+
+= 4 ηa⊤(a¯b⊤ − a∗b∗⊤
+
+)g − 4ηa⊤(a¯b⊤ − a∗b∗⊤
+
+)( g − ¯b) (154) where a⊤(a¯b⊤ − a∗b∗⊤
+
+)g = −a⊤(( Id − aa ⊤)a∗b∗⊤
+
++ a(g − ¯b)⊤)g = ( ¯b − g)⊤g. The second term is simplified via a⊤(a¯b⊤ − a∗b∗⊤
+
+)( g − ¯b) = a⊤(( Id − aa ⊤)a∗b∗⊤
+
++ a(g − ¯b)⊤)( ¯b − g) = −(g − ¯b)2. Both simplifications use 
+
+a⊤(Id − aa ⊤) = 0 and a⊤a = 1 . (154) becomes 
+
+2ηa⊤E[∇al(a, ¯b)] = 4 η(¯b − g)⊤g + 4 η(g − ¯b)2 (155) 
+
+≤ 4η∥g − ¯b∥∥ b∗∥ + 4 η∥g − ¯b∥2 (156) 
+
+≤ 4ηϵ ′δ0∥b∗∥2 + 4 η(ϵ′)2(δt)2∥b∗∥2 (157) 
+
+≤ 4η(( ϵ′)2 + ϵ′)∥b∗∥2 (158) with probability at least 1 − q−10 . (157) uses Lemma A.9. Combining (152) and (158), we obtain 
+
+∥ˆa+∥2 ≥ 1 − 4η˜ϵ(ϵ′ + 1) 2∥b∗∥2 − 4η(( ϵ′)2 + ϵ′)∥b∗∥2 (159) with probability at least 1 − 2q−10 . Combining (144), (134) and (159), we obtain 
+
+δ1 ≤ E1 + E2
+
+∥ˆa+∥ ≤ δ0(1 − 2η((1 − (δ0)2) − ϵ′)∥b∗∥2 + 2 η˜ϵ(ϵ′ + 1) 2∥b∗∥2)
+
+p1 − 4η˜ϵ(ϵ′ + 1) 2∥b∗∥2 − 4η(( ϵ′)2 + ϵ′)∥b∗∥2 = δ0C (160) Still we can choose ϵ′, ˜ϵ < 1−(δ0)2 
+
+> 16
+
+such that (1 − (δ0)2) > max(4(˜ ϵ(ϵ′ + 1) 2 + ( ϵ′)2 + ϵ′), 2ϵ′ + 2˜ ϵ(ϵ′ + 1) 2) holds. Then we obtain 
+
+C = 1 − 2η((1 − (δ0)2) − ϵ′)∥b∗∥2 + 2 η˜ϵ(ϵ′ + 1) 2∥b∗∥2
+
+p1 − 4η˜ϵ(ϵ′ + 1) 2∥b∗∥2 − 4η(( ϵ′)2 + ϵ′)∥b∗∥2 (161) 
+
+= 1 − 2η(1 − (δ0)2)∥b∗∥2 + 2 ηϵ ′∥b∗∥2 + 2 η˜ϵ(ϵ′ + 1) 2∥b∗∥2
+
+p1 − 4η(˜ ϵ(ϵ′ + 1) 2 + ( ϵ′)2 + ϵ′)∥b∗∥2 (162) 
+
+≤ 1 − 2η(1 − (δ0)2)∥b∗∥2 + η(2 ϵ′ + 2˜ ϵ(ϵ′ + 1) 2)∥b∗∥2
+
+p1 − 4η(˜ ϵ(ϵ′ + 1) 2 + ( ϵ′)2 + ϵ′)∥b∗∥2 (163) 
+
+≤ 1 − η(1 − (δ0)2)∥b∗∥2
+
+p1 − η(1 − (δ0)2)∥b∗∥2 (164) 
+
+= p1 − η(1 − (δ0)2)∥b∗∥2 (165) Assuming η ≤ 1
+
+> L2
+> max
+
+≤ 1 
+
+> ∥b∗∥2
+
+, 1 − η(1 − (δ0)2)∥b∗∥2 is strictly positive. Therefore we obtain, with probability at least 
+
+1 − 2q−10 ,
+
+δ1 ≤ δ0p1 − η(1 − (δ0)2)∥b∗∥2. (166) 
+
+Inductive Hypothesis. Based on inductive hypothesis, by proving δ1 ≤ δ0C, the assumption that δt ≤ δt−1C ≤ · · · ≤ 
+
+δ1Ct−1, and proving δt+1 ≤ δtC, we conclude that δt ≤ δt−1C holds for all t ∈ [T ] iterations. We take a union bound over all t ∈ [T ] such that, 
+
+P
+
+(T −1\
+
+> t=0
+
+δt+1 ≤ δtp1 − c(1 − (δ0)2)
+
+)
+
+≥ 1 − 2T q −10 . (167) 
+
+Solve for T . In order to achieve ϵ-recovery of a∗, we need 
+
+δ0(1 − c(1 − (δ0)2)) T 
+
+> 2
+
+≤ ϵ (168) 
+
+(1 − c(1 − (δ0)2)) T 
+
+> 2
+
+≤ ϵδ0 (169) 
+
+T
+
+2 log (1 − c(1 − (δ0)2)) ≤ log( ϵδ0 ) (170) (171) 21 1155 1156 1157 1158 1159 1160 1161 1162 1163 1164 1165 1166 1167 1168 1169 1170 1171 1172 1173 1174 1175 1176 1177 1178 1179 1180 1181 1182 1183 1184 1185 1186 1187 1188 1189 1190 1191 1192 1193 1194 1195 1196 1197 1198 1199 1200 1201 1202 1203 1204 1205 1206 1207 1208 1209 
+
+Robust Federated Finetuning of LLMs via Alternating Optimization of LoRA 
+
+We proceed such that 
+
+T ≥ 2 log( ϵδ0 )log (1 − c(1 − (δ0)2)) (172) 
+
+> 2 log( ϵδ0 )
+
+−c(1 − (δ0)2) (173) 
+
+= 2
+
+c(1 − (δ0)2) log( δ0
+
+ϵ ) (174) where (173) follows by using log(1 −x) < −x for |x| < 1. Thus, with probability at least 1−2T q −10 , δT = sin θ(aT , a∗) ≤
+
+ϵ.
+
+Convergence to the target model. We now aim to upper bound ∥aT (bT +1 )⊤ − a∗(b∗)⊤∥. Recall that (gT )⊤ =(aT )⊤a∗b∗⊤
+
+and δT = ∥(Id − aT (aT )⊤)a∗∥, we have 
+
+∥aT (bT +1 )⊤ − a∗b∗⊤
+
+∥ = ∥aT (bT +1 )⊤ − aT (gT )⊤ + aT (gT )⊤ − a∗b∗⊤
+
+∥ (175) 
+
+≤ ∥ aT (bT +1 )⊤ − aT (gT )⊤∥ + ∥aT (gT )⊤ − a∗b∗⊤
+
+∥ (176) 
+
+= ∥aT (bT +1 − gT )⊤∥ + ∥(aT (aT )⊤ − Id)a∗b∗⊤
+
+∥ (177) 
+
+= ∥aT ∥∥ bT +1 − gT ∥ + ∥(Id − aT (aT )⊤)a∗∥∥ b∗∥ (178) 
+
+≤ ϵ′δT ∥b∗∥ + δT ∥b∗∥ (179) 
+
+= (1 + ϵ′)ϵ∥b∗∥ (180) 
+
+= (1 + ϵ′)ϵ∥a∗b∗⊤
+
+∥ (181) where (179) is by Lemma A.9 and the fact that ∥aT ∥ = 1 , and (181) is due to the fact that ∥xy ⊤∥ = ∥x∥∥ y∥ and 
+
+∥a∗∥ = 1 .A.4.1. P ROOF OF PROPOSITION 5.5 
+
+Proof. We start by fixing a0 and updating bi to minimize the objective. Let a = a0. We obtain 
+
+b⊤ 
+
+> i
+
+= a⊤X⊤ 
+
+> i
+
+Xia∗b∗⊤
+
+a⊤X⊤ 
+
+> i
+
+Xia (182) 
+
+(bF F A )⊤ = 1
+
+N
+
+> N
+
+X
+
+> i=1
+
+a⊤X⊤ 
+
+> i
+
+Xia∗b∗⊤
+
+a⊤X⊤ 
+
+> i
+
+Xia (183) let ¯b = bF F A . We aim to compute the expected value of 1
+
+> N
+
+PNi=1 1 
+
+> m
+
+∥Xia∗b∗⊤
+
+− Xia¯ b⊤∥2 where the expectation is over all the randomness in the Xi. We define 
+
+si = a⊤X⊤ 
+
+> i
+
+Xia∗
+
+a⊤X⊤ 
+
+> i
+
+Xia = (Xia)⊤(Xia∗)
+
+∥Xia∥2 (184) so that ¯b = 1
+
+> N
+
+PNi=1 sib∗ = ¯ sb∗. For each i, the norm becomes 
+
+∥Xia∗b∗⊤
+
+− Xia¯ b⊤∥2 = ∥(Xia∗ − ¯sXia)b∗⊤
+
+∥2 (185) 
+
+= ∥Xia∗ − ¯sXia∥2∥b∗∥2 (186) using the fact that ∥uv ⊤∥2 = ∥u∥2∥v∥2 for vectors u and v. Therefore, E[ 1
+
+> N
+
+PNi=1 1 
+
+> m
+
+∥Xia∗b∗⊤
+
+− Xia¯ b⊤∥2] is reduced to E[ 1
+
+> N
+
+PNi=1 1 
+
+> m
+
+∥Xia∗ − Xia∥2] · ∥ b∗∥2.Since each entry of Xi is independently and identically distributed according to a standard Gaussian distribution, both a∗
+
+and a are unit vectors, the vectors Xia∗ and Xia are N (0 , Im). The cross-covariance is αIm where α = a⊤a∗.22 1210 1211 1212 1213 1214 1215 1216 1217 1218 1219 1220 1221 1222 1223 1224 1225 1226 1227 1228 1229 1230 1231 1232 1233 1234 1235 1236 1237 1238 1239 1240 1241 1242 1243 1244 1245 1246 1247 1248 1249 1250 1251 1252 1253 1254 1255 1256 1257 1258 1259 1260 1261 1262 1263 1264 
+
+Robust Federated Finetuning of LLMs via Alternating Optimization of LoRA 
+
+By linearity, we can show that 1
+
+> N
+
+PNi=1 1 
+
+> m
+
+∥Xia∗ − ¯sXia∥2 has the same expectation as 1 
+
+> m
+
+∥X1a∗ − ¯sX1a∥2 because all 
+
+(Xia∗, Xia) are i.i.d. pairs. Let z1 = s1 
+
+> N
+
+and z2 = s2+··· +sN 
+
+> N
+
+, we have ∥X1a∗ − z1X1a − z2X1a∥2. Let v = X1a∗, u1 =
+
+z1X1a and u2 = z2X1a. Thus, 
+
+∥X1a∗ − z1X1a − z2X1a∥2 = ∥v − u1 − u2∥2 (187) 
+
+= v⊤v + u⊤ 
+
+> 1
+
+u1 + u⊤ 
+
+> 2
+
+u2 − 2v⊤u1 − 2v⊤u2 + 2 u⊤ 
+
+> 1
+
+u2 (188) Now we compute the expectation term by term. 
+
+Expected value of v⊤v We have E[v⊤v] = E[∥X1a∗∥2] = m.
+
+Expected value of u⊤ 
+
+> 1
+
+u1 We have 
+
+u⊤ 
+
+> 1
+
+u1 = z21 ∥X1a∥2 (189) 
+
+= s21
+
+N 2 ∥X1a∥2 (190) 
+
+= 1
+
+N 2
+
+(( X1a)⊤(X1a∗)) 2
+
+∥X1a∥4 ∥X1a∥2 (191) 
+
+= 1
+
+N 2
+
+(( X1a)⊤(X1a∗)) 2
+
+∥X1a∥2 (192) Note that (X1a∗, X1a) is a correlated Gaussian pair with correlation α = a⊤a∗. Without loss of generality, we assume 
+
+a = e1 thus a∗ = αe1 + √1 − α2e2, where e1 and e2 are standard basis vectors in Rd. So we can get X1a = X1e1 = x1,1,where x1,1 denotes the first column of X1. Accordingly X1a∗ = αX1e1 + √1 − α2X1e2 = αx1,1 + √1 − α2x1,2 where 
+
+x1,2 denotes the second column of X1. Therefore (192) can be written as 1  
+
+> N2
+> (x⊤
+> 1,1(αx1,1+βx1,2)) 2
+> ∥x1,1∥2
+
+. Now we take expectation of it. 
+
+E
+
+ 1
+
+N 2
+
+(( X1a)⊤(X1a∗)) 2
+
+∥X1a∥2
+
+
+
+= E
+
+"
+
+1
+
+N 2
+
+(x⊤
+
+> 1,1
+
+(αx1,1 + βx1,2)) 2
+
+∥x1,1∥2
+
+#
+
+= 1
+
+N 2 E
+
+" (x⊤
+
+> 1,1
+
+(αx1,1 + βx1,2)) 2
+
+∥x1,1∥2
+
+#
+
+(193) Let r1 = ∥x1,1∥2 and r2 = x⊤
+
+> 1,1
+
+x1,2. We have 
+
+E
+
+" (x⊤
+
+> 1,1
+
+(αx1,1 + βx1,2)) 2
+
+∥x1,1∥2
+
+#
+
+= E
+
+ (αr 1 + βr 2)2
+
+r1
+
+
+
+(194) 
+
+= E
+
+ α2r21 + β2r22 + 2 αβr 1r2
+
+r1
+
+
+
+(195) 
+
+= E α2r1
+
+ + E
+
+ β2r22
+
+r1
+
+
+
++ E [2 αβr 2] (196) where E α2r1
+
+ = α2E ∥x1,1∥2 = α2m, and E [2 αβr 2] = 2 αβ E [r2] = 2 αβ E x⊤
+
+> 1,1
+
+x1,2
+
+ = 0 because x1,1 and x1,2 are independent standard Gaussian vectors. Then we analyze E
+
+h β2r22
+
+> r1
+
+i
+
+= β2E
+
+h r22
+
+> r1
+
+i
+
+. Condition on x1,1,
+
+E [r2|x1,1] = E x⊤
+
+> 1,1
+
+x1,2|x1,1
+
+ = x⊤
+
+> 1,1
+
+E [x1,2] = 0 (197) and Var (r2|x1,1) = ∥x1,1∥2 = r1, thus 
+
+r2|x1,1 = x⊤
+
+> 1,1
+
+x1,2|x1,1 ∼ N (0 , r 1) (198) Then we obtain 
+
+E r22 |x1,1
+
+ = r1 (199) 23 1265 1266 1267 1268 1269 1270 1271 1272 1273 1274 1275 1276 1277 1278 1279 1280 1281 1282 1283 1284 1285 1286 1287 1288 1289 1290 1291 1292 1293 1294 1295 1296 1297 1298 1299 1300 1301 1302 1303 1304 1305 1306 1307 1308 1309 1310 1311 1312 1313 1314 1315 1316 1317 1318 1319 
+
+Robust Federated Finetuning of LLMs via Alternating Optimization of LoRA 
+
+Therefore E
+
+h r22 
+
+> r1
+
+|x1,1
+
+i
+
+= E[r22 |x1,1] 
+
+> r1
+
+= 1 . We take total expectation E
+
+h r22
+
+> r1
+
+i
+
+= E
+
+h
+
+E
+
+h r22 
+
+> r1
+
+|x1,1
+
+ii 
+
+= 1 . Summarizing, 
+
+E
+
+ (( X1a)⊤(X1a∗)) 2
+
+∥X1a∥2
+
+
+
+= E
+
+ (αr 1 + βr 2)2
+
+r1
+
+
+
+(200) 
+
+= E α2r1
+
+ + E
+
+ β2r22
+
+r1
+
+
+
++ E [2 αβr 2] (201) 
+
+= α2m + β2 (202) 
+
+E u⊤ 
+
+> 1
+
+u1
+
+ = 1
+
+N 2 E
+
+ (( X1a)⊤(X1a∗)) 2
+
+∥X1a∥2
+
+
+
+(203) 
+
+= α2m + (1 − α2)
+
+N 2 (204) 
+
+Expected value of u⊤ 
+
+> 2
+
+u2 We have u⊤ 
+
+> 2
+
+u2 = z22 ∥X1a∥2 where z2 = s2+··· +sN 
+
+> N
+
+is independent of pair (X1a∗, X1a). To compute E z22 ∥X1a∥2, first we condition on z2 to obtain, 
+
+E z22 ∥X1a∥2|z2
+
+ = z22 E ∥X1a∥2 = z22 m (205) Then we take total expectation E z22 ∥X1a∥2 = E E z22 ∥X1a∥2|z2
+
+ = E z22 m = mE z22
+
+.
+
+E z22
+
+ = E
+
+ (s2 + · · · + sN )2
+
+N 2
+
+
+
+(206) 
+
+= 1
+
+N 2 E
+
+
+
+> N
+
+X
+
+> i=2
+
+s2 
+
+> i
+
++
+
+> N
+
+X
+
+> i=1 ,j =1
+> i̸=j
+
+sisj
+
+ (207) 
+
+= 1
+
+N 2
+
+
+
+> N
+
+X
+
+> i=2
+
+E s2
+
+> i
+
+ +
+
+> N
+
+X 
+
+> i=1 ,j =1
+> i̸=j
+
+E [sisj ]
+
+ (208) Write si = (Xia)⊤(Xia∗) 
+
+> ∥Xia∥2
+
+. Without loss of generality, we assume a = e1 thus a∗ = αe1 + √1 − α2e2, where e1 and e2 are standard basis vectors in Rd. Thus, we have Xia = Xie1 = xi, 1, where xi, 1 represents the first column of Xi. Similarly, 
+
+Xia∗ = αXie1 + √1 − α2Xie2 = αxi, 1 + √1 − α2xi, 2, where xi, 2 denotes the second column of Xi.Hence, 
+
+(Xia)⊤(Xia∗) = x⊤
+
+> i, 1
+
+(αxi, 1 + p1 − α2xi, 2) = α∥xi, 1∥2 + p1 − α2(x⊤
+
+> i, 1
+
+xi, 2) (209) With ∥Xia∥2 = ∥xi, 1∥2, we have 
+
+si = α∥xi, 1∥2 + √1 − α2(x⊤
+
+> i, 1
+
+xi, 2)
+
+∥xi, 1∥2 = α + p1 − α2 x⊤
+
+> i, 1
+
+xi, 2
+
+∥xi, 1∥2 (210) Let R = x⊤ 
+
+> i, 1xi, 2
+> ∥xi, 1∥2
+
+. Then 
+
+E s2
+
+> i
+
+ = E
+
+
+
+α + p1 − α2R
+
+2
+
+(211) 
+
+= E
+
+h
+
+α2 + (1 − α2)R2 + 2 αp1 − α2R
+
+i
+
+(212) 
+
+= α2 + (1 − α2)E R2 + 2 αp1 − α2E [R] (213) 24 1320 1321 1322 1323 1324 1325 1326 1327 1328 1329 1330 1331 1332 1333 1334 1335 1336 1337 1338 1339 1340 1341 1342 1343 1344 1345 1346 1347 1348 1349 1350 1351 1352 1353 1354 1355 1356 1357 1358 1359 1360 1361 1362 1363 1364 1365 1366 1367 1368 1369 1370 1371 1372 1373 1374 
+
+Robust Federated Finetuning of LLMs via Alternating Optimization of LoRA 
+
+For E [R] = E
+
+ x⊤
+
+> i, 1xi, 2
+> ∥xi, 1∥2
+
+
+
+, similarly as in (198), x⊤
+
+> i, 1
+
+xi, 2|xi, 1 ∼ N (0 , ∥xi, 1∥2), thus x⊤ 
+
+> i, 1xi, 2
+> ∥xi, 1∥2
+
+|xi, 1 ∼ N (0 , 1 
+
+> ∥xi, 1∥2
+
+), then 
+
+E [R] = E [E [R|xi, 1]] = 0 (214) For E R2, since x⊤
+
+> i, 1
+
+xi, 2|xi, 1 ∼ N (0 , ∥xi, 1∥2), so E (x⊤
+
+> i, 1
+
+xi, 2)2|xi, 1
+
+ = ∥xi, 1∥2. Thus, with R2 = (x⊤ 
+
+> i, 1xi, 2)2
+> ∥xi, 1∥4
+
+,
+
+E R2|xi, 1
+
+ = E (x⊤
+
+> i, 1
+
+xi, 2)2|xi, 1
+
+
+
+∥xi, 1∥4 = 1
+
+∥xi, 1∥2 (215) 
+
+E R2 = E
+
+ 1
+
+∥xi, 1∥2
+
+
+
+(216) For a m-dimensional standard Gaussian vector, ∥xi, 1∥2 follows a chi-squared distribution with m degrees of freedom. Therefore, E R2 = 1 
+
+> m−2
+
+. (213) becomes 
+
+E s2
+
+> i
+
+ = α2 + (1 − α2)E R2 + 2 αp1 − α2E [R] (217) 
+
+= α2 + (1 − α2) 1
+
+m − 2 (218) Now we compute E [sisj ] for i̸ = j. By independence of si and sj , E [sisj ] = E [si] · E [sj ] = E [si]2. Take expectation of (210), 
+
+E [si] = E
+
+"
+
+α + p1 − α2 x⊤
+
+> i, 1
+
+xi, 2
+
+∥xi, 1∥2
+
+#
+
+(219) 
+
+= α + p1 − α2E
+
+" x⊤
+
+> i, 1
+
+xi, 2
+
+∥xi, 1∥2
+
+#
+
+(220) 
+
+= α + p1 − α2E [R] (221) 
+
+= α (222) Hence, E [sisj ] = α2. Summarizing, 
+
+E u⊤ 
+
+> 2
+
+u2
+
+ = mE z22
+
+ (223) 
+
+= mN 2
+
+ (N − 1) E s2
+
+> i
+
+ + ( N − 1)( N − 2) E [sisj ] (224) 
+
+= mN 2
+
+
+
+(N − 1)( α2 + (1 − α2) 1
+
+m − 2 ) + ( N − 1)( N − 2) α2
+
+
+
+(225) 
+
+= mN 2
+
+
+
+(N − 1) 2α2 + ( N − 1) 1 − α2
+
+m − 2
+
+
+
+(226) 
+
+Expected value of v⊤u1 We have v⊤u1 = z1(X1a∗)⊤(X1a) = s1 
+
+> N
+
+(X1a∗)⊤(X1a). We factor out 1 
+
+> N
+
+, E v⊤u1
+
+ = 
+
+> 1
+> N
+
+E s1(X1a∗)⊤(X1a). By (202), 
+
+E s1(X1a∗)⊤(X1a) = E
+
+ (( X1a)⊤(X1a∗)) 2
+
+∥X1a∥2
+
+
+
+(227) 
+
+= α2m + (1 − α2) (228) Then 
+
+E v⊤u1
+
+ = α2m + (1 − α2)
+
+N (229) 25 1375 1376 1377 1378 1379 1380 1381 1382 1383 1384 1385 1386 1387 1388 1389 1390 1391 1392 1393 1394 1395 1396 1397 1398 1399 1400 1401 1402 1403 1404 1405 1406 1407 1408 1409 1410 1411 1412 1413 1414 1415 1416 1417 1418 1419 1420 1421 1422 1423 1424 1425 1426 1427 1428 1429 
+
+Robust Federated Finetuning of LLMs via Alternating Optimization of LoRA 
+
+Expected value of v⊤u2 We have v⊤u2 = z2(X1a∗)⊤(X1a). Condition on z2 which is independent of (X1a∗)⊤(X1a),we obtain 
+
+E z2(X1a∗)⊤(X1a)|z2
+
+ = z2E (X1a∗)⊤(X1a) (230) Still we assume a = e1 thus a∗ = αe1 + √1 − α2e2, where e1 and e2 are standard basis vectors in Rd. With X1a =
+
+X1e1 = x1,1, where x1,1 denotes the first column of X1, and X1a∗ = αX1e1 + √1 − α2X1e2 = αx1,1 + √1 − α2x1,2
+
+where x1,2 denotes the second column of X1, using (209), 
+
+E (X1a∗)⊤(X1a) = E
+
+h
+
+α∥x1,1∥2 + p1 − α2(x⊤
+
+> 1,1
+
+x1,2)
+
+i
+
+(231) 
+
+= αE ∥x1,1∥2 + z2
+
+p1 − α2E x⊤
+
+> 1,1
+
+x1,2
+
+ (232) 
+
+= αm (233) Thus z2E (X1a∗)⊤(X1a) = z2αm , Then we take total expectation 
+
+E E z2(X1a∗)⊤(X1a)|z2
+
+ = E [z2αm ] (234) 
+
+= αm E [z2] (235) where z2 = s2+··· +sN 
+
+> N
+
+. Therefore, 
+
+αm E [z2] = αm N
+
+> N
+
+X
+
+> i=2
+
+E [si] = mN (N − 1) α2 (236) where (236) follows by E [si] = α. Summarizing, we obtain E v⊤u2
+
+ = mN (N − 1) α2.
+
+Expected value of u⊤ 
+
+> 1
+
+u2 We have u⊤ 
+
+> 1
+
+u2 = z1z2∥X1a∥2. By definition of z1 and z2, we obtain 
+
+z1z2∥X1a∥2 = 1
+
+N 2 (( X1a∗)⊤(X1a)) 
+
+> N
+
+X
+
+> i=2
+
+si (237) Since (X1a∗)⊤(X1a) depends only on X1 , PNi=2 si is independent of X1, we obtain 
+
+E
+
+"
+
+1
+
+N 2 (( X1a∗)⊤(X1a)) 
+
+> N
+
+X
+
+> i=2
+
+si
+
+#
+
+= 1
+
+N 2 E (X1a∗)⊤(X1a) · E
+
+" NX
+
+> i=2
+
+si
+
+#
+
+(238) 
+
+= 1
+
+N 2 E (X1a∗)⊤(X1a) · (N − 1) E [si] (239) 
+
+= (N − 1) mα 2
+
+N 2 (240) where (240) follows by E (X1a∗)⊤(X1a) = αm and E [si] = α.Combining (204), (226),(229),(236),(240) and (188), 
+
+1
+
+m ∥X1a∗ − ¯sX1a∥2 = 1
+
+m (v⊤v + u⊤ 
+
+> 1
+
+u1 + u⊤ 
+
+> 2
+
+u2 − 2v⊤u1 − 2v⊤u2 + 2 u⊤ 
+
+> 1
+
+u2) (241) 
+
+= (1 − α2)
+
+
+
+1 + N (4 − m) − 2
+
+N 2m(m − 2) 
+
+
+
+(242) 
+
+= ( δ0)2(1 + ˜ c) (243) where δ0 is the angle distance between a and a∗. The quantity ˜c = N (4 −m)−2  
+
+> N2m(m−2)
+
+= O( 1 
+
+> N m
+
+) as N and m approach infinity. Therefore, 
+
+E
+
+"
+
+1
+
+N
+
+> N
+
+X
+
+> i=1
+
+1
+
+m ∥Xia∗b∗⊤
+
+− Xia¯b⊤∥2
+
+#
+
+= (1 + ˜ c)( δ0)2∥b∗∥2 (244) 26 1430 1431 1432 1433 1434 1435 1436 1437 1438 1439 1440 1441 1442 1443 1444 1445 1446 1447 1448 1449 1450 1451 1452 1453 1454 1455 1456 1457 1458 1459 1460 1461 1462 1463 1464 1465 1466 1467 1468 1469 1470 1471 1472 1473 1474 1475 1476 1477 1478 1479 1480 1481 1482 1483 1484 
+
+Robust Federated Finetuning of LLMs via Alternating Optimization of LoRA 
+
+A.5. Vector-vector case with heterogeneous clients 
+
+Consider a federated setting with N clients, each with the following local linear model 
+
+fi(Xi) = Xiab ⊤ (245) where a ∈ Rd is a unit vector and b ∈ Rd are the LoRA weights corresponding to rank r = 1 . In this setting, we model the local data of i-th client such that Yi = Xia∗b∗⊤ 
+
+> i
+
+for some ground truth LoRA weights a∗ ∈ Rd, which is a unit vector, and local b∗ 
+
+> i
+
+∈ Rd. We consider the following objective 
+
+min 
+
+> a∈Rd,b∈Rd
+
+1
+
+N
+
+> N
+
+X
+
+> i=1
+
+li(a, b) (246) We consider the local population loss li(a, b) = ∥a∗b∗⊤ 
+
+> i
+
+− ab ⊤∥2.We aim to learn a shared model ( a, b) for all the clients. It is straightforward to observe that ( a′, b′) is a global minimizer of if and only if a′b′⊤
+
+= a∗ ¯b∗, where ¯b∗ = 1
+
+> N
+
+PNi=1 b∗ 
+
+> i
+
+. The solution is unique and satisfies a′ = a∗ and b′ = ¯b∗. With this global minimizer, we obtain the corresponding minimum global error of 1
+
+> N
+
+PNi=1 ∥a∗(b∗ 
+
+> i
+
+− ¯b∗)⊤∥2.We aim to show that the training procedure described in Algorithm 2 learns the global minimizer (a∗, ¯b∗). First, we make typical assumption and definition. 
+
+Assumption A.12. There exists Lmax < ∞ (known a priori), s.t. ∥¯b∗∥ ≤ Lmax .
+
+Definition A.13. (Client variance) For γ > 0, we define γ2 := 1
+
+> N
+
+PNi=1 ∥b∗ 
+
+> i
+
+− ¯b∗∥2, where ¯b∗ = 1
+
+> N
+
+PNi=1 b∗ 
+
+> i
+
+.
+
+Theorem A.14. (Convergence of RoLoRA for linear regressor in heterogeneous setting) Let δt = ∥(Id − a∗a∗⊤
+
+)at∥ be the angle distance between a∗ and at of t-th iteration. Suppose we are in the setting described in Section A.5 and apply Algorithm 2 for optimization. Given a random initial a0, an initial angle distance δ0 ∈ (0 , 1) , we set the step size η ≤ 12L2max 
+
+and the number of iterations T ≥ 1 
+
+> c(1 −(δ0)2)
+
+log( δ0 
+
+> ϵ
+
+) for c ∈ (0 , 1) . Under these conditions, we achieve the following 
+
+sin θ(aT , a∗) ≤ ϵ, and ∥aT (bT +1 )⊤ − a∗(¯b∗)⊤∥ ≤ ϵ∥a∗(¯b∗)⊤∥
+
+which we refer to as ϵ-accurate recovery of the global minimizer. 
+
+Theorem A.14 follows by recursively applying Lemma A.16 for T iterations. We start by computing the update rule for a as in Lemma A.15. Using Lemma A.15, we analyze the convergence of a in Lemma A.16. We also show the global error that can be achieved by FFA-LoRA within this setting in Proposition A.17. 
+
+Lemma A.15. (Update for a) In RoLoRA for linear regressor, the update for a and b in each iteration is: 
+
+bt+1 = ¯b = ¯b∗a∗⊤ at (247) 
+
+at+1 = ˆ a = at − 2η(at ¯b⊤ ¯b − a∗ ¯b∗⊤ ¯b)
+
+∥ˆa+∥ (248) 
+
+where ¯b∗ = PNi=1 b∗ 
+
+> i
+
+, ∥ˆa+∥ = ∥at − 2η(at ¯b⊤ ¯b − a∗ ¯b∗⊤ ¯b)∥.Proof. Minimization for bi. At the start of each iteration, each client computes the analytic solution for bi by fixing a and solving their local objective argmin bi ∥a∗b∗⊤ 
+
+> i
+
+− ab ⊤ 
+
+> i
+
+∥2, where a∗ and a are both unit vectors. Setting a = at, we obtain 
+
+bi such that 
+
+bi = b∗ 
+
+> i
+
+a∗⊤
+
+aa⊤a = b∗ 
+
+> i
+
+a∗⊤
+
+a (249) (249) follows since a⊤a = 1 .
+
+Aggregation for bi. The server simply computes the average of {bi}Ni=1 and gets 
+
+¯b =
+
+> N
+
+X
+
+> i=1
+
+bi =
+
+> N
+
+X
+
+> i=1
+
+b∗ 
+
+> i
+
+a∗⊤ a = ¯b∗a∗⊤ a (250) 27 1485 1486 1487 1488 1489 1490 1491 1492 1493 1494 1495 1496 1497 1498 1499 1500 1501 1502 1503 1504 1505 1506 1507 1508 1509 1510 1511 1512 1513 1514 1515 1516 1517 1518 1519 1520 1521 1522 1523 1524 1525 1526 1527 1528 1529 1530 1531 1532 1533 1534 1535 1536 1537 1538 1539 
+
+Robust Federated Finetuning of LLMs via Alternating Optimization of LoRA 
+
+The server then sends ¯b to clients for synchronization. 
+
+Gradient Descent for ˆa. In this step, each client fixes bi to ¯b received from the server and update a using gradient descent. With the following gradient 
+
+∇ali(a, ¯b) = 2( a¯b⊤ ¯b − a∗b∗⊤ 
+
+> i
+
+¯b) (251) Thus, with step size η, a is updated such as 
+
+ˆa+ = a − ηN
+
+> N
+
+X
+
+> i=1
+
+∇ali(a, ¯b)= a − 2 ηN
+
+> N
+
+X
+
+> i=1
+
+(a¯b⊤ ¯b − a∗b∗⊤ 
+
+> i
+
+¯b)= a − 2η(a¯b⊤ ¯b − a∗ ¯b∗⊤ ¯b) (252) 
+
+ˆa = a − 2η(a¯b⊤ ¯b − a∗ ¯b∗⊤ ¯b)
+
+∥ˆa+∥ (253) 
+
+Lemma A.16. Let δt = | sin θ(a∗, at)| be the angle distance between a∗ and at. Assume that Assumption A.12 holds and 
+
+δt ≤ δt−1 ≤ · · · ≤ δ0, if η ≤ 12L2max 
+
+, then 
+
+| sin θ(at+1 , a∗)| = δt+1 ≤ δt · (1 − 2η(1 − (δ0)2)∥¯b∗∥2) (254) 
+
+Proof. From Lemma A.15, at+1 and bt+1 are computed as follows: 
+
+bt+1 = ¯b = ¯b∗a∗⊤ at (255) 
+
+at+1 = at − 2η(at ¯b⊤ ¯b − a∗ ¯b∗⊤ ¯b)
+
+∥at − 2η(at ¯b⊤ ¯b − a∗ ¯b∗⊤ ¯b)∥ (256) Note that at and at+1 are both unit vectors. Now, we multiply both sides of Equation (256) by the projection operator 
+
+P = Id − a∗(a∗)⊤, which is the projection to the direction orthogonal to a∗. We obtain: 
+
+Pa t+1 = Pa t − 2ηPa t ¯b⊤ ¯b + Pa ∗ ¯b∗⊤ ¯b
+
+∥at − 2η(at ¯b⊤ ¯b − a∗ ¯b∗⊤ ¯b)∥ (257) 
+
+= Pa t − 2ηPa t ¯b⊤ ¯b
+
+∥at − 2η(at ¯b⊤ ¯b − a∗ ¯b∗⊤ ¯b)∥ (258) The third term of the numerator is canceled since Pa ∗ = ( Id − a∗(a∗)⊤)a∗ = 0 . Thus, 
+
+∥Pa t+1 ∥ ≤ ∥Pa t∥| 1 − 2η¯b⊤ ¯b|∥at − 2η(at ¯b⊤ ¯b − a∗ ¯b∗⊤ ¯b)∥ (259) Let δt = | sin θ(a∗, at)|. Equation (257) becomes: 
+
+δt+1 ≤ δt |1 − 2η¯b⊤ ¯b|∥at − 2η(at ¯b⊤ ¯b − a∗ ¯b∗⊤ ¯b)∥ (260) 
+
+= δt
+
+|1 − 2η¯b⊤ ¯b|∥at(1 − 2η¯b⊤ ¯b) + 2 ηa∗ ¯b∗⊤ ¯b∥ (261) 
+
+= δtC (262) 28 1540 1541 1542 1543 1544 1545 1546 1547 1548 1549 1550 1551 1552 1553 1554 1555 1556 1557 1558 1559 1560 1561 1562 1563 1564 1565 1566 1567 1568 1569 1570 1571 1572 1573 1574 1575 1576 1577 1578 1579 1580 1581 1582 1583 1584 1585 1586 1587 1588 1589 1590 1591 1592 1593 1594 
+
+Robust Federated Finetuning of LLMs via Alternating Optimization of LoRA 
+
+Obviously C ≥ 0. We drop the superscript t when it is clear from context. Note that we have 
+
+C2 = |1 − 2η¯b⊤ ¯b|2
+
+∥a(1 − 2η¯b⊤ ¯b) + 2 ηa∗ ¯b∗⊤ ¯b∥2 (263) 
+
+= |1 − 2η¯b⊤ ¯b|2
+
+(1 − 2η¯b⊤ ¯b)2a⊤a + 4 η2(¯b∗⊤ ¯b)2 + 4 η(1 − 2η¯b⊤ ¯b)a⊤a∗ ¯b∗⊤ ¯b (264) 
+
+= |1 − 2η¯b⊤ ¯b|2
+
+(1 − 2η¯b⊤ ¯b)2 + 4 η2(¯b∗⊤ ¯b)2 + 4 η(1 − 2η¯b⊤ ¯b)a⊤a∗ ¯b∗⊤ ¯b (265) Recall that ¯b = ¯b∗a∗⊤
+
+a = ¯b∗ cos θ(a∗, a), (265) becomes: 
+
+C2 = |1 − 2η¯b⊤ ¯b|2
+
+(1 − 2η¯b⊤ ¯b)2 + 4 η2(¯b∗⊤ ¯b)2 + 4 η(1 − 2η¯b⊤ ¯b)a⊤a∗ ¯b∗⊤ ¯b (266) 
+
+= |1 − 2η¯b⊤ ¯b|2
+
+1 + 4 η2 ¯b⊤ ¯b(¯b∗⊤ ¯b∗ − ¯b⊤ ¯b) (267) 
+
+≤ (1 − 2η¯b⊤ ¯b)2 (268) 
+
+= (1 − 2η∥¯b∥2)2 (269) where (268) holds because ¯b∗⊤ ¯b∗ − ¯b⊤ ¯b = (1 − cos 2 θ(a∗, a)) ¯b∗⊤ ¯b∗ ≥ 0. Equation (269) implies C ≤ 1 − 2η∥¯b∥2
+
+if 2η∥¯b∥2 ≤ 1, which can be ensured by choosing a proper step size η ≤ 12L2
+
+> max
+
+≤ 12∥¯b∥2 . Now by the assumption that 
+
+δt ≤ δt−1 ≤ · · · ≤ δ0,
+
+C ≤ 1 − 2η∥¯b∥2 (270) 
+
+= 1 − 2η cos 2 θ(a∗, a)∥¯b∗∥2 (271) 
+
+= 1 − 2η(1 − (δt)2)∥¯b∗∥2 (272) 
+
+≤ 1 − 2η(1 − (δ0)2)∥¯b∗∥2 (273) Summarizing, we obtain δt+1 ≤ δtC ≤ δt(1 − 2η(1 − (δ0)2)∥¯b∗∥2).
+
+Proposition A.17. (FFA-LoRA lower bound) Suppose we are in the setting described in Section A.5. For any set of ground truth parameters ( a∗, {b∗ 
+
+> i
+
+}Ni=1 ), initialization a0, initial angle distance δ0 ∈ (0 , 1) , we apply Freezing-A scheme to obtain a shared global model ( a0, bF F A ), where bF F A = ¯b∗a∗⊤ a0. The global loss is 
+
+1
+
+N
+
+> N
+
+X
+
+> i=1
+
+li(a0, bF F A ) = γ2 + ∥¯b∗∥2δ20 (274) 
+
+Proof. Through single step of minimization on bi and corresponding aggregation, the minimum of the global objective is reached by FFA-LoRA. ¯bF F A is obtained through: 
+
+bi = b∗ 
+
+> i
+
+a∗⊤ a0
+
+a0⊤ a0 = b∗ 
+
+> i
+
+a∗⊤ a0 (275) 
+
+bF F A = 1
+
+N
+
+> N
+
+X
+
+> i=1
+
+bi = ¯b∗a∗⊤ a0 (276) Next we compute the global loss with a shared global model (a0, ¯bF F A ). Note that we use Tr (.) to denote the trace of a 29 1595 1596 1597 1598 1599 1600 1601 1602 1603 1604 1605 1606 1607 1608 1609 1610 1611 1612 1613 1614 1615 1616 1617 1618 1619 1620 1621 1622 1623 1624 1625 1626 1627 1628 1629 1630 1631 1632 1633 1634 1635 1636 1637 1638 1639 1640 1641 1642 1643 1644 1645 1646 1647 1648 1649 
+
+Robust Federated Finetuning of LLMs via Alternating Optimization of LoRA 
+
+matrix. 
+
+1
+
+N
+
+> N
+
+X
+
+> i=1
+
+li(a0, bF F A ) (277) 
+
+= 1
+
+N
+
+> N
+
+X
+
+> i=1
+
+∥a∗(b∗ 
+
+> i
+
+)⊤ − a0(bF F A )⊤∥2 (278) 
+
+= 1
+
+N
+
+> N
+
+X
+
+> i=1
+
+∥a∗(b∗ 
+
+> i
+
+)⊤ − a∗(¯b∗)⊤ + a∗(¯b∗)⊤ − a0(bF F A )⊤∥2 (279) 
+
+= 1
+
+N
+
+> N
+
+X
+
+> i=1
+
+(∥a∗(b∗ 
+
+> i
+
+)⊤ − a∗(¯b∗)⊤∥2 + ∥a∗(¯b∗)⊤ − a0(bF F A )⊤∥2
+
++ 2 Tr (( a∗(b∗ 
+
+> i
+
+)⊤ − a∗(¯b∗)⊤)⊤(a∗(¯b∗)⊤ − a0(bF F A )⊤)) (280) 
+
+= 1
+
+N
+
+> N
+
+X
+
+> i=1
+
+(∥a∗(b∗ 
+
+> i
+
+)⊤ − a∗(¯b∗)⊤∥2 + ∥a∗(¯b∗)⊤ − a0(bF F A )⊤∥2)+ 2 Tr (( a∗ 1
+
+N
+
+> N
+
+X
+
+> i=1
+
+(b∗ 
+
+> i
+
+)⊤ − a∗(¯b∗)⊤)⊤(a∗(¯b∗)⊤ − a0(bF F A )⊤)) (281) 
+
+= 1
+
+N
+
+> N
+
+X
+
+> i=1
+
+(∥a(b∗ 
+
+> i
+
+− ¯b∗)⊤∥2 + ∥a∗(¯b∗)⊤ − a0a0⊤a∗(¯b∗)⊤∥2) (282) 
+
+= 1
+
+N
+
+> N
+
+X
+
+> i=1
+
+∥b∗ 
+
+> i
+
+− ¯b∗∥2 + 1
+
+N
+
+> N
+
+X
+
+> i=1
+
+∥(Id − a0a0⊤
+
+)a∗(¯b∗)⊤∥2 (283) 
+
+= 1
+
+N
+
+> N
+
+X
+
+> i=1
+
+∥b∗ 
+
+> i
+
+− ¯b∗∥2 + 1
+
+N
+
+> N
+
+X
+
+> i=1
+
+∥(Id − a0a0⊤
+
+)a∗∥2∥¯b∗∥2 (284) 
+
+= γ2 + ∥¯b∗∥2δ20 (285) where (282) holds since the last term is 0, (283) and (284) hold since ∥uv ⊤∥ = ∥u∥ · ∥ v⊤∥ for vector u and v, (285) holds because of Definition A.13. 
+
+Proof of Theorem A.14 
+
+Proof. In order to achieve ϵ-recovery of a∗, we need 
+
+δ0(1 − c(1 − (δ0)2)) T ≤ ϵ (286) 
+
+(1 − c(1 − (δ0)2)) T ≤ ϵδ0 (287) 
+
+T log (1 − c(1 − (δ0)2)) ≤ log( ϵδ0 ) (288) (289) We proceed such that 
+
+T ≥ log( ϵδ0 )log (1 − c(1 − (δ0)2)) (290) 
+
+> log( ϵδ0 )
+
+−c(1 − (δ0)2) (291) 
+
+= 1
+
+c(1 − (δ0)2) log( δ0
+
+ϵ ) (292) 30 1650 1651 1652 1653 1654 1655 1656 1657 1658 1659 1660 1661 1662 1663 1664 1665 1666 1667 1668 1669 1670 1671 1672 1673 1674 1675 1676 1677 1678 1679 1680 1681 1682 1683 1684 1685 1686 1687 1688 1689 1690 1691 1692 1693 1694 1695 1696 1697 1698 1699 1700 1701 1702 1703 1704 
+
+Robust Federated Finetuning of LLMs via Alternating Optimization of LoRA 
+
+where (291) follows by using log(1 − x) < −x for |x| < 1.Now we show the convergence to the global minimizer. Recall that bT +1 = ¯b∗a∗⊤
+
+aT and δT = ∥(Id − aT (aT )⊤)a∗∥, we have 
+
+∥aT (bT +1 )⊤ − a∗ ¯b∗⊤
+
+∥ = ∥aT (aT )⊤a∗ ¯b∗⊤
+
+− a∗ ¯b∗⊤
+
+∥ (293) 
+
+= ∥(aT (aT )⊤ − Id)a∗ ¯b∗⊤
+
+∥ (294) 
+
+= ∥(Id − aT (aT )⊤)a∗∥ · ∥ ¯b∗∥ (295) 
+
+≤ ϵ∥¯b∗∥ (296) 
+
+= ϵ∥a∗ ¯b∗⊤
+
+∥ (297) where (297) is due to the fact that ∥xy ⊤∥ = ∥x∥∥ y∥ and ∥a∗∥ = 1 .Proposition A.17 shows that for any δ0 ∈ (0 , 1) , the global objective of FFA-LoRA is given by (285) , comprising two terms: 
+
+γ2, reflecting the heterogeneity of {b∗ 
+
+> i
+
+}Ni=1 , and ∥¯b∗∥2δ20 , due to the angular distance between a0 and a∗. By Theorem A.14, RoLoRA achieves ϵ-accurate recovery of the global minimizer, with global loss upper bounded by γ2 + ∥¯b∗∥2ϵ2, since RoLoRA reduces the angular distance loss from ∥¯b∗∥2δ20 to ∥¯b∗∥2ϵ2. We can make ϵ arbitrarily small by increasing the iterations. 
+
+## B. Experiments 
+
+B.1. Hyper-parameters for GLUE task 
+
+SST-2 QNLI MNLI QQP RTE Total comm. rounds 500 500 500 500 200 Batch Size 64 32 32 32 32 Local Epochs 20 20 20 20 20 
+
+Table 4. Hyper-parameters configurations. Note the total communication rounds are for the setting with 3 clients. When increasing the number of clients, we decrease the total communication rounds accordingly to maintain a constant sample count used during fine-tuning 
+
+We show the hyper-parameter configurations for each dataset in Table 4. 
+
+B.2. More Experimental Results 
+
+B.2.1. E FFECT OF NUMBER OF CLIENTS 
+
+Table 5 shows the selected layer set attached with LoRA modules for Table 1. We present Table 1 with the results of FlexLoRA (Bai et al., 2024) added in Table 6. 
+
+Layer Attributes SST-2 QNLI MNLI QQP RTE 
+
+P2
+
+Type Wv , W q Wv , W q Wv , W q Wv , W q Wv , W q
+
+Index {18 , . . . , 23 } {15 , . . . , 23 } {15 , . . . , 23 } {15 , . . . , 23 } {16 , . . . , 23 }
+
+Table 5. The selected layer set attached with LoRA modules for Table 1 
+
+B.2.2. E FFECT OF NUMBER OF LORA P ARAMETERS 
+
+In Table 7, we include the details about layers attached with LoRA adapters for different budget of finetuning parameters, for each dataset. B.2.3. A LIGN THE COMMUNICATION COST 
+
+In Table 8, we include the details about layers attached with LoRA adapters. 31 1705 1706 1707 1708 1709 1710 1711 1712 1713 1714 1715 1716 1717 1718 1719 1720 1721 1722 1723 1724 1725 1726 1727 1728 1729 1730 1731 1732 1733 1734 1735 1736 1737 1738 1739 1740 1741 1742 1743 1744 1745 1746 1747 1748 1749 1750 1751 1752 1753 1754 1755 1756 1757 1758 1759 
+
+Robust Federated Finetuning of LLMs via Alternating Optimization of LoRA 
+
+rank Clients num Method SST-2 QNLI MNLI QQP RTE Avg. 4 3LoRA 95.62 ±0.17 91.59 ±0.21 86.20 ±0.05 86.13 ±0.10 81.46 ±1.22 88.20 FFA-LoRA 95.18 ±0.09 91.35 ±0.32 84.58 ±0.21 85.50 ±0.25 81.10 ±0.33 87.48 FlexLoRA 94.91 ±0.18 90.16 ±0.49 85.16 ±0.69 85.69 ±0.17 79.3 ±1.05 87.04 RoLoRA 95.49 ±0.16 91.64 ±0.30 85.70 ±0.04 86.14 ±0.06 82.43 ±0.84 88.28 
+
+4 20 LoRA 94.3 ±0.27 86.67 ±2.02 78.55 ±7.31 83.1 ±0.04 51.87 ±3.24 78.90 FFA-LoRA 93.88 ±0.06 89.11 ±0.19 80.99 ±1.74 83.92 ±0.2 57.16 ±1.46 80.01 FlexLoRA 90.97 ±1.78 54.36 ±0.36 53.30 ±14.59 69.18 ±10.39 53.19 ±1.45 64.20 RoLoRA 94.88 ±0.18 90.35 ±0.37 85.28 ±1.04 85.83 ±0.1 78.82 ±1.7 87.03 
+
+4 50 LoRA 93.00 ±0.35 78.13 ±5.13 52.64 ±15.07 77.60 ±1.47 52.23 ±1.1 70.72 FFA-LoRA 93.23 ±0.12 85.05 ±0.34 69.97 ±5.57 78.44 ±0.41 55.72 ±1.99 76.48 FlexLoRA 54.08 ±5.5 55.4 ±2.03 39.14 ±2.35 72.00 ±7.64 52.71 ±0.00 54.67 RoLoRA 94.80 ±0.17 90.00 ±0.63 82.98 ±3.36 85.71 ±0.18 75.57 ±2.88 85.81 
+
+8 50 LoRA 93.00 ±0.23 79.87 ±1.52 56.96 ±2.02 77.45 ±1.97 53.79 ±6.57 64.03 FFA-LoRA 92.74 ±0.13 83.69 ±0.75 64.51 ±1.92 79.71 ±2.04 53.07 ±1.3 72.46 FlexLoRA 50.92 ±0.00 56.92 ±1.04 37.43 ±2.80 66.40 ±4.74 52.59 ±0.21 52.85 RoLoRA 94.53 ±0.17 90.1 ±0.45 85.17 ±0.41 85.25 ±0.13 76.3 ±4.9 86.27 
+
+Table 6. Results for four methods with RoBERTa-Large models with varying client numbers (3, 20, 50), maintaining a constant sample count during fine-tuning. Layer Attributes SST-2 QNLI MNLI QQP RTE 
+
+P1
+
+Type Wv Wv , W q Wv , W q Wv , W q Wv , W q
+
+Index {21 , . . . , 23 } {21 , . . . , 23 } {21 , . . . , 23 } {21 , . . . , 23 } {21 , . . . , 23 }P2
+
+Type Wv , W q Wv , W q Wv , W q Wv , W q Wv , W q
+
+Index {18 , . . . , 23 } {15 , . . . , 23 } {15 , . . . , 23 } {15 , . . . , 23 } {16 , . . . , 23 }P3 Type Wv , W q Wv , W q Wv , W q Wv , W q Wv , W q
+
+Index {0, . . . , 23 } {12 , . . . , 23 } {12 , . . . , 23 } {12 , . . . , 23 } {12 , . . . , 23 }
+
+Table 7. The selected layer set attached with LoRA for the setup of Figure 4 
+
+Figure 6. Results with RoBERTa-Large models on GLUE of different budget of finetuning parameters. It involves 3 clients using rank 8. 
+
+Figure 7. Results with RoBERTa-Large models on GLUE of different budget of finetuning parameters. It involves 3 clients using rank 2. 
+
+32 1760 1761 1762 1763 1764 1765 1766 1767 1768 1769 1770 1771 1772 1773 1774 1775 1776 1777 1778 1779 1780 1781 1782 1783 1784 1785 1786 1787 1788 1789 1790 1791 1792 1793 1794 1795 1796 1797 1798 1799 1800 1801 1802 1803 1804 1805 1806 1807 1808 1809 1810 1811 1812 1813 1814                                
+
+> Robust Federated Finetuning of LLMs via Alternating Optimization of LoRA
+> Figure 8. Results with RoBERTa-Large models on GLUE of different budget of finetuning parameters. It involves 3 clients using rank 1. Communication Cost LoRA FFA-LoRA RoLoRA 187.5 KB Type Wv, W qWv, W qWv, W q
+> Index {21 , . . . , 23 }{18 , . . . , 23 }{18 , . . . , 23 }
+> 250 KB Type Wv, W qWv, W qWv, W q
+> Index {20 , . . . , 23 }{16 , . . . , 23 }{16 , . . . , 23 }
+> Table 8. The selected layer set attached with LoRA modules for the setup of Figure 5
+
+B.2.4. C OMMONSENSE REASONING TASKS 
+
+We present the configurations for Table 2 in Table 9. We show the results under the same setup but using rank-2 LoRA modules in Table 10. Total comm. rounds Batch size Local Epochs Layer type attached with LoRA Layer index attached with LoRA 10 1 30 Wk, W v , W q , W o {26 , . . . , 31 } 
+
+> Table 9. Configurations for Commonsense Reasoning tasks.
+
+B.2.5. L ANGUAGE GENERATION TASKS 
+
+Model, Datasets and Metrics. We evaluate the performance of three federated finetuning methods with the model Llama-2-7B (Touvron et al., 2023), on two datasets: CodeAlpaca (Chaudhary, 2023) for coding tasks, and Alpaca (Taori et al., 2023) for general instruction-following tasks. Using HumanEval (Chen et al., 2021) as the metric for CodeAlpaca, we assess the model’s ability to generate accurate code solutions. For Alpaca, we employ MMLU (Massive Multitask Language Understanding) (Hendrycks et al., 2021) to evaluate the model’s performance across diverse domains. This provides an assessment of Llama-2-7B’s coding proficiency, and general language capabilities when finetuning in the federated setting. We show the setup in Table 11. 
+
+Results Table 12 presents the evaluation results of the Llama-2-7B model using three methods, across two tasks: Hu-manEval, and MMLU. The metrics reported include the average and standard deviation of performance over five seeds, with 50 clients involved. The results show that RoLoRA achieves the highest scores across most metrics, demonstrating slightly improved performance compared to LoRA and FFA-LoRA. The improvements are more evident in certain subcategories of the MMLU dataset. 33 1815 1816 1817 1818 1819 1820 1821 1822 1823 1824 1825 1826 1827 1828 1829 1830 1831 1832 1833 1834 1835 1836 1837 1838 1839 1840 1841 1842 1843 1844 1845 1846 1847 1848 1849 1850 1851 1852 1853 1854 1855 1856 1857 1858 1859 1860 1861 1862 1863 1864 1865 1866 1867 1868 1869 
+
+Robust Federated Finetuning of LLMs via Alternating Optimization of LoRA 
+
+BoolQ PIQA SIQA HellaSwag WinoGrande ARC-e ARC-c OBQA LoRA 34.36 ±16.90 42.87 ±14.05 19.12 ±4.22 26.21 ±1.91 47.2 ±0.64 10.31 ±5.96 9.84 ±6.13 12.33 ±7.46 
+
+FFA-LoRA 44.04 ±11.48 51.46 ±9.81 25.38 ±11.27 23.86 ±2.67 46.93 ±1.54 22.25 ±7.92 20.65 ±6.33 20.67 ±5.33 
+
+RoLoRA 61.3 ±0.99 60.81 ±6.35 37.97 ±5.39 29.62 ±2.62 49.59 ±1.2 37.05 ±2.92 29.09 ±3.33 28.93 ±4.64 
+
+Table 10. Results with Llama-2-7B models on commonsense reasoning tasks. It involves 50 clients using rank 2. 
+
+Total comm. rounds Batch size Local Epochs Layer type attached with LoRA Layer index attached with LoRA 100 1 30 Wk, W v , W q , W o {24 , . . . , 31 }
+
+Table 11. Configurations for language generation tasks. 
+
+LoRA FFA-LoRA RoLoRA HumanEval 12.96 ±0.37 13.29 ±0.21 13.45 ±0.28 
+
+MMLU 45.81 ±0.03 45.80 ±0.02 45.93 ±0.01 
+
+human 43.26 ±0.04 43.24 ±0.01 43.46 ±0.02 
+
+other 52.67 ±0.06 52.72 ±0.05 52.83 ±0.04 
+
+social 51.73 ±0.04 51.64 ±0.05 51.81 ±0.04 
+
+stem 37.10 ±0.03 37.12 ±0.01 37.05 ±0.02 
+
+Table 12. Results with Llama-2-7B model on HumanEval, and MMLU. We report the average and std. over five seeds. The number of clients is 50. The metric used across all tasks is accuracy, where higher values indicate better performance. 
+
+34

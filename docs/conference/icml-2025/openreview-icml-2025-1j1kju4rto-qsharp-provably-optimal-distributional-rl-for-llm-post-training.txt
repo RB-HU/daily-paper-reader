@@ -1,0 +1,1409 @@
+Title: Q: Provably Optimal Distributional RL for LLM Post-Training
+
+URL Source: https://openreview.net/pdf?id=1J1Kju4rto
+
+Number of Pages: 21
+
+Markdown Content:
+000 001 002 003 004 005 006 007 008 009 010 011 012 013 014 015 016 017 018 019 020 021 022 023 024 025 026 027 028 029 030 031 032 033 034 035 036 037 038 039 040 041 042 043 044 045 046 047 048 049 050 051 052 053 054 
+
+# Q♯ : Provably Optimal Distributional RL for LLM Post-Training 
+
+Anonymous Authors 1
+
+# Abstract 
+
+Reinforcement learning (RL) post-training is cru-cial for LLM alignment and reasoning, but ex-isting policy-based methods, such as PPO and DPO, can fall short of fixing shortcuts inherited from pre-training. In this work, we introduce Q♯ ,a value-based algorithm for KL-regularized RL that guides the reference policy using the optimal regularized Q function. We propose to learn the optimal Q function using distributional RL on an aggregated online dataset. Unlike prior value-based baselines that guide the model using un-regularized Q-values, our method is theoretically principled and provably learns the optimal policy for the KL-regularized RL problem. Empirically, 
+
+Q♯ outperforms prior baselines in math reasoning benchmarks while maintaining a smaller KL di-vergence to the reference policy. Theoretically, we establish a reduction from KL-regularized RL to no-regret online learning, providing the first bounds for deterministic MDPs under only realiz-ability. Thanks to distributional RL, our bounds are also variance-dependent and converge faster when the reference policy has small variance. In sum, our results highlight Q♯ as an effective ap-proach for post-training LLMs, offering both im-proved performance and theoretical guarantees. 
+
+# 1. Introduction 
+
+Reinforcement learning (RL) post-training is a critical step in the training process of large language models (LLMs) that aligns their generations with human preferences (Chris-tiano et al., 2017) and imbues them with reasoning abilities (Setlur et al., 2024; Guo et al., 2025). Post-training with RL typically occurs after the supervised learning stage (next-token prediction) and the LLM is trained to maximize the expected cumulative reward while minimizing the KL di-
+
+> 1Anonymous Institution, Anonymous City, Anonymous Region, Anonymous Country. Correspondence to: Anonymous Author
+> <anon.email@domain.com >.Preliminary work. Under review by the International Conference on Machine Learning (ICML). Do not distribute.
+
+vergence w.r.t. the reference model πref from supervised learning. This KL penalty is critical as it forces the LLM to stay close to πref during the optimization process and mitigates reward hacking and catastrophic forgetting. Most state-of-the-art LLMs (Ouyang et al., 2022; Dubey et al., 2024; Team et al., 2024) are currently post-trained with policy-based RL algorithms, which directly update the weights of the LLM with stochastic gradient descent via methods like RLOO (Kool et al., 2019), PPO (Schulman et al., 2017) and DPO (Rafailov et al., 2024). However, these methods can suffer from certain shortcuts that are picked up during pre-training, which fail to generalize for tasks that involve planning, e.g. , the star-graph task (Bachmann & Nagarajan, 2024). Instead, in this paper, we propose an RL algorithm that is value-based , where we guide the generations of the reference policy with a learned value func-tion, without modifying the weights of the reference policy model. Indeed, in Section 3.1, we show that value-based 
+
+post-training allows us to correct the biases and shortcuts within the reference policy. While there are existing value-based RL algorithms for LLM post-training, namely CD (Mudgal et al., 2023) and VAS (Han et al., 2024), they all have a major issue which is that they do not faithfully optimize the KL-constrained RL ob-jective. Specifically, they propose to guide πref using Qπref 
+
+,the expected reward-to-go under πref without KL regular-ization, which is not guaranteed to converge to the optimal policy π⋆,η . Instead, under the classical KL-regularized RL framework, we show that it is provably optimal to guide 
+
+πref using Q⋆,η , the expected reward-to-go under π⋆,η with KL-regularization, which is guaranteed to converge to π⋆,η .Thus, these approaches can suffer from sub-optimal reward and/or large KL deviations, both of which our approach Q♯ 
+
+provably fixes. We discuss this in more detail in Appendix A. In summary, our contributions are as follows: 1. We propose Q♯ , a principled algorithm for KL-regularized RL in deterministic MDPs, which includes LLMs, based on guiding πref with the soft Q⋆ learned with distributional RL (Section 2.2). 2. We prove variance-dependent PAC bounds for con-vergence to the optimal policy, which only requires realizability in the function class (Section 4). 1055 056 057 058 059 060 061 062 063 064 065 066 067 068 069 070 071 072 073 074 075 076 077 078 079 080 081 082 083 084 085 086 087 088 089 090 091 092 093 094 095 096 097 098 099 100 101 102 103 104 105 106 107 108 109 
+
+Q♯ : Provably Optimal Distributional RL for LLM Post-Training 
+
+Figure 1. (Left) A sketch of our post-training algorithm ( Q♯ ) based on distributional RL. Q♯ alternates between learning Z⋆ – the reward-to-go distribution of πref – and using the induced policy to collect new data and further improve the distributional estimate. (Right) Evaluation result on the GSM8K dataset (Cobbe et al., 2021). We see that Q♯ achieves both higher accuracy and lower KL compared to prior value-based post-training algorithms (Mudgal et al., 2023; Han et al., 2024). 
+
+3. We show that value-based post-training, which includes 
+
+Q♯ , can fix biases and shortcuts in a star-graph environ-ment (Bachmann & Nagarajan, 2024), while popular policy-based methods cannot (Section 3.1). 4. We provide extensive experiments on math reasoning tasks that validate the effectiveness of our method at maximizing reward while maintaining small KL devia-tions from the reference policy (Section 3.2). 
+
+# 2. Method 
+
+2.1. Preliminaries 
+
+The goal of this paper is to solve KL-regularized RL in deterministic Markov Decision Processes (MDPs), where LLM post-training is a special case and our main focus. First, we introduce the formal setup. The MDP consists of a state space X , action space Y, horizon H, transition kernels 
+
+(P1, . . . , P H ), where Ph : X × Y 7 → ∆( X ) and known reward functions (r1, . . . , r H ), where rh : X × Y 7 → R.To interact with the MDP, we use policies of the form π =(π1, . . . , π H ) s.t. πh : X 7 → ∆( Y), which takes actions given the current state at each step. For a given η > 0, the soft value V π,η of a policy π is the expected cumulative rewards subject to KL regularization, defined as, 
+
+Eπ [PHh=1 rh(xh, y h) − η KL (πh(xh) ∥ πref  
+
+> h
+
+(xh))] , (1) where recall the KL divergence is defined as KL (p ∥ q) = 
+
+Ez∼p[ln( p(z)/q (z))] for distributions p, q . In Equation (1), the expectation with subscript π denotes the randomness is coming from the random trajectory (x1, y 1, . . . , x H , y H )
+
+of π interacting with the MDP where the initial state x1 is sampled from a known distribution d1. Our goal is to learn the optimal policy π⋆,η = arg max π V π,η .A classical result is that KL-regularized RL can be solved us-ing the soft Bellman equations (Ziebart et al., 2008). Specif-ically, we can compute π⋆,η h by iterating the following equa-tions from h = H, H − 1, . . . , 1:
+
+V ⋆,η H+1 (x) = 0 ,Q⋆,η h (x, y ) = rh(x, y ) + Ex′∼Ph(x,y )[V ⋆,η h+1 (x′)] ,π⋆,η h (y | x) ∝ πref  
+
+> h
+
+(y | x) exp( η−1Q⋆,η h (x, y )) , (2) 
+
+V ⋆,η h (x) = η ln Ey∼πref (x) exp( η−1Q⋆,η h (x, y )) .
+
+In other words, the optimal action distribution π⋆,η h (· | x)
+
+is simply the softmax of the Q⋆,η h function weighted by 
+
+πref ’s action distribution. Moreover, Q⋆,η h has a special inter-pretation: it is the highest achievable expected cumulative reward with KL regularization starting from state x, ac-tion y, at time h. Specifically, if we define Qπ,η h (x, y ) = 
+
+Eπ [P 
+
+> t≥h
+
+rt(xt, y t) − ηI [t > h ] KL (πt(xt) ∥ πref  
+
+> t
+
+(xt)) |
+
+xh = x, y h = y], then Q⋆,η h (x, y ) = max π Qπ,η h (x, y ) and the argmax is precisely the π⋆,η h defined in Equation (2). Similarly, if we define V π,η h (x) = Eπ [P 
+
+> t≥h
+
+rt(xt, y t) −
+
+η KL (πt(xt) ∥ πref  
+
+> t
+
+(xt)) | xh = x], then V ⋆,η h (x) =max π V π,η h (x).In this paper, we focus on solving deterministic MDPs where the transitions Ph are deterministic, which includes LLM post-training and many other problems ( e.g. , diffusion, Domingo-Enrich et al., 2024) as a special case. 
+
+Assumption 2.1. The transitions Ph are deterministic. Under Assumption 2.1, we can greatly simplify the value function by shedding its recursive dependencies: 
+
+exp( η−1V ⋆,η h (x)) = Ey∼πref  
+
+> h(x)
+
+[exp( η−1rh(x, y ) + η−1V ⋆,η h+1 (x′))] (3) 
+
+= Eπref [exp( η−1 P 
+
+> t≥h
+
+rt(xt, y t)) | xh = x], (4) where Equation (3) is due to deterministic Ph, and Equa-tion (4) is due to unrolling for multiple steps. In sum, we have shown the following theorem which is a known result from Pich ´e et al. (2018); Li et al. (2024); Domingo-Enrich et al. (2024). 2110 111 112 113 114 115 116 117 118 119 120 121 122 123 124 125 126 127 128 129 130 131 132 133 134 135 136 137 138 139 140 141 142 143 144 145 146 147 148 149 150 151 152 153 154 155 156 157 158 159 160 161 162 163 164 
+
+> Q♯ : Provably Optimal Distributional RL for LLM Post-Training
+
+Theorem 2.2. Under Assumption 2.1, we have 
+
+V ⋆,η h (xh) = η ln Eπref [exp( η−1 P 
+
+> t≥h
+
+rt(xt, y t)) | xh],Q⋆,η h (xh, y h) = η ln Eπref [exp( η−1 P 
+
+> t≥h
+
+rt(xt, y t)) | xh, y h].
+
+This shows that V ⋆,η and Q⋆,η are simple functionals of 
+
+Z⋆ – the cumulative reward distribution of πref – where the functional is f (P ) = η ln EP exp( X/η ). In other words, if we learn the cumulative reward distribution of πref , then we can directly compute V ⋆,η and Q⋆,η , without any dynamic programming. This has several benefits. First, we do not require temporal difference (TD) learn-ing ( i.e. , bootstrapping) which is notoriously unstable with deep networks (Van Hasselt et al., 2018) and re-quires completeness-type assumptions to guarantee con-vergence in theory (Munos & Szepesv ´ari, 2008). Sec-ond, fitting the reward-to-go distribution Z⋆ or regressing 
+
+Eπref [exp( η−1 P 
+
+> t≥h
+
+rt)] is a standard supervised learning task with a fixed target, which is much more stable in prac-tice and well-understood in theory. Notably, there is no boot-strapping or changing targets which is what renders deep RL fragile. Third, we can leverage distributional RL (DistRL) to fit the reward-to-go distribution, which has many benefits for representation learning (Bellemare et al., 2017; Lyle et al., 2019), lower variance updates (Rowland et al., 2023), and second-order bounds (Wang et al., 2024a;b). For Dis-tRL, our ability to avoid TD is a significant advantage since the distributional Bellman operator is not even a contraction for certain metrics (Bellemare et al., 2017). 
+
+Applicability to LLMs. For our theoretical framework, we study the deterministic MDP model since it captures the LLM post-training problem as a special case (Chris-tiano et al., 2017). Specifically, the initial state x1 is the prompt, the intermediate state xh is the current pre-fix, and the action yh is the next token or next block of tokens. So, the policy is simply the LLM’s autoregres-sive generation process. The transition function simply concatenates the LLM’s continuation to the prefix, i.e. ,
+
+Ph(xh, y h) = xhyh, which is a deterministic operation. In many cases, the reward function is sparse, i.e. , only rH
+
+is non-zero, in which case Theorem 2.2 can be simplified to Q⋆,η h (xh, y h) = η ln Eπref [exp( η−1r(xH , y H )) | xh, y h].For example, in math tasks, it is the correctness of the solu-tion; in chat, it is the preference of the response measured by a (learned) reward model. In sum, our theoretical model is directly applicable to LLM post-training. 
+
+Inference with Cumulative Reward Distribution. Let Z⋆
+
+denote the conditional distribution of cumulative rewards under roll-outs from πref ; that is, 
+
+Z⋆h(x, y ) D
+
+= P 
+
+> t≥h
+
+rt(xt, y t) | xh = x, y h = y, 
+
+where (xh, y h, . . . , x H , y H ) is a random trajectory under 
+
+πref and D
+
+= denotes that two random variables have equal probability laws. Combining Theorem 2.2 and Equation (2), we have that π⋆,η can be expressed in terms of Z⋆:
+
+π⋆,η h (y | x) ∝ πref  
+
+> h
+
+(y | x)Ez∼Z⋆h (x,y )[exp( z/η )] .
+
+This motivates us to define the policy induced by a given distribution Z : X × Y 7 → ∆( R) as 
+
+πZ,η h (y | x) ∝ πref  
+
+> h
+
+(y | x)Ez∼Zh(x,y )[exp( z/η )] . (5) Since π⋆,η = πZ⋆,η , this naturally motivates learning a good estimate bZ ≈ Z⋆ via distributional RL and plugging back into Equation (5) to obtain a good policy, which is the crux of our Q♯ algorithm. 
+
+2.2. Algorithm Q♯ 
+
+We propose Q-Sharp ( Q♯ ), a distributional value-based algo-rithm for solving KL-regularized RL in deterministic MDPs. 
+
+Q♯ is an iterative algorithm that collects data from progres-sively better policies to learn the target distribution Z⋆. In this section, we describe the Q♯ algorithm using practical no-tation for deep neural networks and LLMs; in Section 4, we will provide a theoretically grounded version using online learning oracles and prove convergence guarantees under the mild assumption of realizability. Let Zθh : X × Y → ∆( R) be a conditional distribution with parameters θ. For a label R ∈ R (e.g. , a sample from Z⋆) and an estimate ˆZ, let L(R, ˆZ) be a distribu-tional loss function for learning θ⋆, the optimal parameter that minimizes the distance between Z⋆ and Zθ . For ex-ample, if Z⋆h(x, y ) D
+
+= Ber( p⋆h(x, y )) is always Bernoulli, then Zθh(x, y ) can be parameterized by a neural network that outputs a single scalar estimate of p⋆h. Then the natural loss is binary cross-entropy (BCE), i.e. ,
+
+Lbce (r, ˆp) = −r ln ˆ p − (1 − r) ln(1 − ˆp).
+
+This is useful in tasks like math or multiple choice questions where the reward is binary. If there is no a priori structure about the reward distribution, we can use a non-parametric estimator such as histogram models that discretize the re-ward space into bins and train with maximum likelihood (MLE) loss (Bellemare et al., 2017): 
+
+Lmle (r, ˆz) = − ln ˆ z[idx( r)] ,
+
+where idx( r) is the index of the bin that r falls into and ˆz[i]
+
+is the i-th bin’s probability estimate. Q♯ is amenable to any distributional RL loss function (Bellemare et al., 2023). Then, the key idea is to iteratively update the current pa-rameters θk using new data collected from the current in-duced policy πk ← πZθk 
+
+> ,η
+
+. Specifically, the data collection 3165 166 167 168 169 170 171 172 173 174 175 176 177 178 179 180 181 182 183 184 185 186 187 188 189 190 191 192 193 194 195 196 197 198 199 200 201 202 203 204 205 206 207 208 209 210 211 212 213 214 215 216 217 218 219 
+
+> Q♯ : Provably Optimal Distributional RL for LLM Post-Training
+
+process rolls-in πk for h − 1 steps until xh, finishes the tra-jectory with πref and collects the cumulative rewards Rh,k 
+
+henceforth, which is exactly a sample from Z⋆h(xh). These samples are added to the dataset and the parameters are updated via gradient descent on the distributional loss func-tion. This procedure is repeated until convergence. The full algorithm is described in Algorithm 1. Our iterative data collection process is similar in spirit to DAgger (Ross et al., 2011) and AggreVaTe (Ross & Bagnell, 2014). A key difference is that DAgger and AggreVaTe are interactive imitation learning algorithms that require rolling out with an expert policy, while Q♯ does not require access to any expert policies and can learn simply from interactions with the environment. 
+
+Algorithm 1 Q♯  
+
+> 1:
+
+Input: reference policy πref . 
+
+> 2:
+
+Initialize θ1 and dataset Dh = ∅ for all h. 
+
+> 3:
+
+for k = 1 , 2, . . . until convergence do  
+
+> 4:
+
+Let πk ← πZθk ,η be policy induced by Zθk . 
+
+> 5:
+
+for i = 1 , 2, . . . , N do  
+
+> 6:
+
+Sample a switching time h ∼ [H]. 
+
+> 7:
+
+Roll-in with πk for h − 1 steps.  
+
+> 8:
+
+Resume trajectory with πref from xh. 
+
+> 9:
+
+Let Rt denote cumulative rewards after time t. 
+
+> 10:
+
+Add (xt, y t, R t) to Dt, ∀t ≥ h. 
+
+> 11:
+
+end for  
+
+> 12:
+
+Update θk by minimizing the distributional loss: 
+
+θk+1 ← arg min θ
+
+P 
+
+> h
+
+EDh [L(Rh, Z θ (xh, y h))] . 
+
+> 13:
+
+end for  
+
+> 14:
+
+Output: Final θk.Once we have learned a good parameter θk with Algorithm 1 such that Zθk
+
+≈ Z⋆, we can induce a near-optimal policy 
+
+πθk ,η via Equation (5). In Section 4, we prove that this procedure indeed converges to the optimal policy under the mild realizability assumption. We remark that CD (Mudgal et al., 2023) and VAS (Han et al., 2024) are related value-based algorithms for LLM post-training, but there are at least three shortcomings. First, CD and VAS use Qπref ,0, the non-regularized Q-function of πref , to guide the generations, which does not solve KL-regularized RL in general – in Section 4, we indeed show there are simple MDPs where CD and VAS provably fail to maximize the reward and/or stay close to πref . In contrast, 
+
+Q♯ uses Q⋆,η to guide πref , which is principled and provably converges to π⋆,η under a mild assumption of realizability. Second, CD and VAS are offline algorithms that operate on a fixed dataset, while Q♯ is an online algorithm that interleaves data collection and parameter updates, which leads to more robust generalization (Ross et al., 2011; Ross & Bagnell, 2014). Third, CD and VAS use squared loss regression to learn Qπref ,0, which implicitly assumes that the cumulative reward distributed as a homoskedastic gaussian. In contrast, Q♯ uses the distributional RL framework which is provably more sample efficient (Wang et al., 2023; 2024b) and often learns better policies in practice (Bellemare et al., 2017; Lyle et al., 2019). 
+
+Inference with many η. The learned reward distribution 
+
+bZθ does not depend on η, and thus a single distributional reward network can support a range of η at inference time. 
+
+# 3. Experiments 
+
+3.1. Star-Graph         
+
+> Figure 2. A star-graph G(2 ,3) w/ degree d= 2 , length ℓ= 3 .The shortcut response picks an incorrect random node from center.
+
+We start with the star-graph task from Bachmann & Nagara-jan (2024), which is illustrated in Figure 2. A star-graph 
+
+G(d, ℓ ) consists of d paths of length ℓ connected to a central node. For this task, the LM’s prompt contains the edges of a star-shaped graph and the start/goal nodes, and the LM is required to generate a path from the start to the goal node. While this task is deceptively easy, Bachmann & Nagarajan (2024) showed that pre-training a GPT-2 model from scratch with next-token prediction actually learns an incorrect short-cut called “Clever Hans”, where the model randomly picks the first node and follows the wrong path until the final node. Hence, for a star-graph with degree d, the shortcut policy only has a success rate of 1/d . Thus, Bachmann & Nagarajan (2024) showed that next-token prediction does not generalize well when applied to planning tasks. A natural question is: can this shortcut be fixed during post-training? We evaluate Q♯ alongside popular policy-based algorithms such as REINFORCE and DPO, and report the final test-set accuracies in Figure 3. We find Q♯ is able to correct this shortcut, approaching 100% test-set accuracy. However, we find that policy-based algorithms such as RE-INFORCE and DPO consistently fail to fix the shortcut and DPO often worsens the test set performance even further. This is likely due to the fact that once the neural net has learned the shortcut, it is difficult to unlearn. Thus, this synthetic task demonstrates the value in value-based algo-rithms, such as Q♯ and CD, for post-training LLMs. Please see Appendix C for implementation details. 4220 221 222 223 224 225 226 227 228 229 230 231 232 233 234 235 236 237 238 239 240 241 242 243 244 245 246 247 248 249 250 251 252 253 254 255 256 257 258 259 260 261 262 263 264 265 266 267 268 269 270 271 272 273 274 
+
+> Q♯ : Provably Optimal Distributional RL for LLM Post-Training
+
+3.2. Math Reasoning Datasets. We also experiment on mathematical reasoning datasets, namely GSM8K (Cobbe et al., 2021) and MATH (Hendrycks et al., 2021). GSM8K consists of grade school arithmetic word problems and MATH contains high school mathematical competition problems that are much more challenging. In addition, we create a 90%-10% split on the original training set to be our training set for learning and validation set for hyperparameter tuning. For reporting test set performance, we use the entire GSM8K test set and a random subset of MATH test set, MATH-500 which we follow from several previous work (Lightman et al., 2023; Wang et al., 2024c). 
+
+Models. We use Llama 3 (Dubey et al., 2024) series of models since they are competitive in math reasoning and have a wide range of parameter sizes. Unless otherwise specified, the Q⋆,η function in Q♯ is parametrized and ini-tialized with a Llama 3.2 1B model and η = 0 .1 is used as we find it gives good and consistent performance. We run 
+
+Q♯ for two iterations and observe performance convergence. Additional details on models and Q♯ training can be found in Appendix D and E. 
+
+Evaluation metrics. We evaluate performance with single sample accuracy and majority voting accuracy. For sin-gle sample accuracy (denoted as pass@1 ), one generation is sampled per problem and the correctness is evaluated against the ground truth final answer. For majority voting 
+
+accuracy (denoted as maj1@k ), k generations are sampled and the most common final answer among them is checked for correctness. In our experiments, we use k = 8 and all generations are sampled with temperature T = 0 .8 and nucleus sampling p = 0 .9. The prompt template used for evaluation can be found in Appendix F. 
+
+Main Results. In Table 1, we show the performance of Q♯ 
+
+on GSM8K (Top) and MATH (Bottom) when πref is either Lllama 3 or 3.1 8B. Note that although both Llama 3 and Llama 3.1 have 8B parameters, Llama 3.1 is significantly                 
+
+> Figure 3. Test-set accuracies for GPT-2 when pre-trained with next-token prediction, and post-trained with REINFORCE, DPO or
+> Q♯ . Only Q♯ is able to fix the Clever Hans cheat and achieve an accuracy much higher than 1/d on G(d, ℓ ).
+> Table 1. Comparison of Q♯ with πref and CD baseline on GSM8K (Top) and MATH (Bottom). For both Llama 3 and Llama 3.1 8B, Q♯ consistently improves both pass@1 and majority voting accuracy upon baselines while incurring minimal KL deviation.
+
+πref Llama 3 8B Llama 3.1 8B Methods πref CD Q♯ πref CD Q♯ 
+
+pass@1 ↑ 69.1 77.8 78.4 82.9 84.5 85.1 
+
+maj1@8 ↑ 85.8 87.2 88.1 90.5 90.9 91.4 
+
+KL-Divergence ↓ - 6.39 2.65 - 7.43 3.67                              
+
+> πref Llama 3 8B Llama 3.1 8B Methods πref CD Q♯ πref CD Q♯
+> pass@1 ↑25.4 24.9 27.1 43.9 45.3 46.7
+> maj1@8 ↑34.3 34.3 37.9 57.0 59.0 60.1
+> KL-Divergence ↓-15.27 7.14 -26.8 8.69
+
+better than Llama 3 for both datasets. Across all settings, we observe that Q♯ consistently outperforms πref , improving 
+
+pass@1 accuracy as much as 9% on GSM8K for Llama 3 8B, with just 1B additional parameters. In addition, we evaluate the CD baseline (Mudgal et al., 2023; Han et al., 2024) which guides πref with the incorrect Qπref ,0 function instead. We find that Q♯ consistently improves upon CD on two accuracy metrics while at the same time incurring lower KL divergence w.r.t. πref . In sum, Q♯ Pareto-dominates the baseline for the KL-regularized RL problem where reward should be higher and KL should be lower. 
+
+Larger πref and Q♯ sizes. We also investigate how the per-formance scales as we vary πref and Q♯ model sizes. In Table 2, we summarize the results of using 70B versions of Llama 3 and Llama 3.1 as πref on MATH. Compared to their 8B counterparts, both Llama 3 and Llama 3.1 are much stronger reasoning models, reaching pass@1 accuracy of 45.6% and 60.6% for Llama 3 and 3.1 respectively. Given the significant performance improvement, Q♯ of size 1B is still capable of guiding and improving the generation of 70B πref , improving Llama 3.1 pass@1 and maj1@8 by 2.5% and 3.5% respectively. As we increase Q♯ size to 3B, pass@1 for both Llama 3 and Llama 3.1 continues to improve, which suggests the scalability of Q♯ . As we compare with Table 1 (Bottom) for Llama 3.1, we also high-light that with 9B parameters (8B πref + 1B Q♯ ), its majority voting accuracy already catches up with the pass@1 ac-curacy of the 70B πref model in Table 2, which could be a low-resource alternative. The pass@1 accuracy increases but maj1@8 accuracy decreases slightly for Llama 3 model. We hypothesize that this is because Q♯ leads to more diverse generations on harder problems which boosts pass@1 but less consistent correct generations for easier problems. 
+
+Q♯ as a reward model. Since Q♯ learns a token-level 
+
+Q function, besides guiding πref generation, we can also re-purpose it as a reward model that efficiently evaluates 
+
+5275 276 277 278 279 280 281 282 283 284 285 286 287 288 289 290 291 292 293 294 295 296 297 298 299 300 301 302 303 304 305 306 307 308 309 310 311 312 313 314 315 316 317 318 319 320 321 322 323 324 325 326 327 328 329 
+
+Q♯ : Provably Optimal Distributional RL for LLM Post-Training 
+
+Table 2. Performance of πref and Q♯ on MATH with larger πref and 
+
+Q♯ model sizes. Q♯ of size 1B is capable of guiding a 70B πref 
+
+model. Increasing Q♯ model sizes to 3B also leads to noticeably better performance for Llama 3.1 70B.                               
+
+> πref Llama 3 70B Llama 3.1 70B
+> Q♯ Model None Llama 3.2 1B Llama 3.2 3B None Llama 3.2 1B Llama 3.2 3B
+> pass@1 ↑45.6 46.4 46.7 60.6 63.1 64.1
+> maj1@8 ↑55.6 55.5 55.3 69.0 72.5 72.7
+> KL-Divergence ↓-3.12 5.15 -4.98 4.99
+
+Table 3. Performance of πref and Q♯ on GSM8K and MATH when using Q♯ also as a reward model to evaluate complete generations. The reward model can determine the best generation among all generations for a problem and consistently improves maj1@8 for 
+
+πref and Q♯ own generations. 
+
+Setting Llama 3 8B GSM8K Llama 3.1 8B MATH Methods πref Q♯ πref Q♯ 
+
+pass@1 69.1 78.4 43.9 46.7 
+
+maj1@8 85.8 88.1 57.0 60.1 
+
+Q♯ -RM Best of 8 85.9 86.0 54.0 54.0 
+
+Q♯ -RM maj1@8 88.5 89.2 59.2 60.6 
+
+how good a complete generation is with just one forward pass. To calculate the reward / score of a generation, we compute Q(generation , EOS ). Since Llama 3 8B and Llama 3.1 8B with Q♯ shows a greater absolute improvement over 
+
+πref on GSM8K and MATH respectively, we investigate if their performance can be further improved with Q♯ reward model. In Table 3, we tabulate Q♯ -RM Best of 8 and Q♯ -RM 
+
+maj1@8 accuracy on the two settings for both πref and Q♯ 
+
+generations. Both Q♯ -RM metrics use k = 8 generations where Q♯ -RM Best of 8 selects the highest scored sample for evaluation and Q♯ -RM maj1@8 performs majority voting by aggregating the total score for each unique final answer. It can be seen that Q♯ -RM maj1@8 consistently enhances vanilla maj1@8 for both GSM8K and MATH, indicating the general benefit of using Q♯ as a reward model. We also see that the reward model can be used on both πref and Q♯ 
+
+own generations to further improve performance, which suggests the (same) reward model has generalizability for evaluating diverse generations. Lastly, Q♯ -RM Best of 8 also significantly improves upon pass@1 by more than 10% for πref generations on both GSM8K and MATH. We note that although Best of 8 underperforms maj1@8 or Q♯ -RM maj1@8 for GSM8K and MATH, majority voting is not a generally applicable approach for all reasoning tasks since for proof-based questions, how to aggregate final answers is not immediately obvious. Best of N using reward model, however, can still be readily applied. Therefore, a large improvement from pass@1 for Best of 8 is meaningful and demonstrates the effectiveness of Q♯ reward model. 
+
+The effect of η. In Figure 4, we show the performance and KL divergence tradeoff for CD and Q♯ on the GSM8K validation set. The left figure shows that the pass@1 ac-curacy can be improved by incurring more KL penalty for 10 1 10 2  
+
+> KL-Divergence
+> 0.50
+> 0.55
+> 0.60
+> 0.65
+> 0.70
+> 0.75
+> 0.80
+> pass@1
+> Pass@1 vs. KL-Divergence
+> CD
+> Q# 10 110 2
+> KL-Divergence
+> 10 0
+> 10 1
+> 1
+> 1vs. KL-Divergence
+> CD
+> Q#
+
+Figure 4. Performance tradeoff of CD and Q♯ on the validation set of GSM8K. (Left) pass@1 accuracy vs. KL divergence. Q♯ 
+
+dominates CD by achieving higher accuracy with a lower KL penalty. (Right) Different η leads to different KL for CD and Q♯ .The KL of CD blows up quickly and significantly deviates from 
+
+πref whereas Q♯ is more stable. 
+
+both CD and Q♯ . Q♯ dominates CD by achieving a better Pareto frontier than CD. In addition, we empirically find that CD performance is much more sensitive to a proper choice of η. As seen in the right figure, as η−1 increases, CD incurs a very large KL and starts to significantly deviate from πref , which leads to performance that is even worse than the original πref . Q♯ , however, is more stable and does not require extensive search for η, which provides another empirical benefit for Q♯ .
+
+Ablations. We ablate on several of our design choices in Table 4 on the validation set of GSM8K and MATH for 
+
+pass@1 accuracy. The first column (Prefix) is whether we train on all the prefixes after switching to πref . As seen in Algorithm 1 Line 10, our default is to train on all t ≥ h
+
+instead of just t = h. From a supervised learning perspec-tive, this makes training samples no longer IID. However, we find out the additional large amount of training data helps Q♯ learning significantly for as much as 4%. We also experiment with two types of parametrization for learning 
+
+Q⋆,η : Q-type and V-type. The Q-type takes input of x and computes Q⋆,η (x, y ) for all y in the vocabulary of the πref 
+
+model. The V-type takes input of concatenated x and a specific token ˆy and outputs a single value that represents 
+
+Q⋆,η (x, ˆy). By comparing the results on second row and the fourth row, we observe that V-type is better than Q-type. We hypothesize that this is because V-type has fewer number of parameters than Q-type but performs more computation per token. More details on Q-type and V-type can be found in Appendix D. We also compare the distributional version of 
+
+Q♯ with direct MSE regression based. The regression based 
+
+Q♯ consistently underperforms and this is expected since for the math reasoning tasks, we know the underlying reward distribution is Bernoulli (either 0 or 1). Finally, we find that running Algorithm 1 for more than one iteration can further boosts the performance of Q♯ slightly. We observe no major improvement beyond two iterations and therefore we by default run Q♯ for two iterations. 
+
+Qualitative comparison. In Figure 5, we show a few gen-erations side by side from πref and Q♯ to qualitatively vi-6330 331 332 333 334 335 336 337 338 339 340 341 342 343 344 345 346 347 348 349 350 351 352 353 354 355 356 357 358 359 360 361 362 363 364 365 366 367 368 369 370 371 372 373 374 375 376 377 378 379 380 381 382 383 384 
+
+Q♯ : Provably Optimal Distributional RL for LLM Post-Training 
+
+Table 4. Ablations of Q♯ (last row) on pass@1 with various con-figurations on the validation set of GSM8K and MATH. The im-provement suggests that our design choices all contribute positively to the final performance.                               
+
+> Prefix Type Opt. # Iter. Llama 3 8B GSM8K Llama 3.1 8B MATH Single VDist. 180.5 64.5 All QDist. 181.4 66.4 All VMSE 181.4 65.4 All VDist. 182.3 67.4 All VDist. 283.5 68.5
+
+sualize the effect of guidance on math reasoning questions. We observe that the generations from πref and Q♯ usually start off with similar prefixes, which is another supporting evidence for the low KL deviation of Q♯ . However, Q♯ 
+
+can successfully mitigate mistakes from πref and leads to generally better reasoning chain-of-thought than πref . Full analysis on more examples can be found in Appendix G. 
+
+# 4. Theory 
+
+In this section, we provide theoretical analyses for Q♯ and prior value-based post-training approaches, including CD (Mudgal et al., 2023) and VAS (Han et al., 2024). 
+
+4.1. CD & VAS are sub-optimal for KL-regularized RL 
+
+First, CD and VAS both propose to reweight πref (· | x) with the unregularized Q-function of πref :
+
+πCD ,η (y | x) ∝ πref (y | x) exp( Qπref 
+
+(x, y )/η ), (6) where recall that Qπref  
+
+> h
+
+(xh, y h) = Eπref [P 
+
+> t≥h
+
+rt | xh, y h].Comparing with Equation (2), we can already see that πCD ,η 
+
+does not match the optimal policy π⋆,η , as Qπref 
+
+can be arbitrarily far from Q⋆,η . In particular, πCD may fail to optimize the KL-regularized RL objective and exhibit two failure cases, which we demonstrate with a simple MDP. 
+
+x1
+
+xL
+
+r = 0 .1
+
+1
+
+pL
+
+xR
+
+r = 1 
+
+0.05 
+
+r = 0 
+
+0.95 
+
+pR
+
+Z⋆L = δ(0 .1) Z⋆R = Ber(0 .05) 
+
+Example 1. A tree MDP where edges are labeled with πref ’s action probability. Specifically, πref goes to the left sub-tree w.p. pL and the right sub-tree w.p. pR, where pL, p R > 0. The left sub-tree gives r = 0 .1 w.p. 1. In the right sub-tree, πref chooses reward 1
+
+w.p. 0.05 and chooses reward 0 w.p. 0.95 .
+
+First, we show that CD fails to maximize expected reward in this MDP, even as the KL-regularizer η decays to zero. 
+
+Theorem 4.1. Under Example 1, CD learns to always select the left sub-tree as η → 0, which gives a sub-optimal reward of 0.1, while π⋆,η learns to always select the right sub-tree and chooses the path that gives reward 1.Proof. First, for CD, we have Qπref 
+
+(x1, a L) = 0 .1 and 
+
+Qπref 
+
+(x1, a R) = 0 .05 . Hence, CD’s probability of selecting the left sub-tree is pL exp(0 .1/η )   
+
+> pLexp(0 .1/η )+ pRexp(0 .05 /η )
+
+, which con-verges to 1 as η → 0. Next, for Q♯ , we have Q⋆,η (x1, a L) = 0.1 and Q⋆,η (x1, a R) = η ln(0 .05 exp(1 /η ) + 0 .95) .Hence, Q♯ ’s probability of selecting the left sub-tree is    
+
+> pLexp(0 .1/η )
+> pLexp(0 .1/η )+ pR(0 .05 exp(1 /η )+0 .95)
+
+, which converges to 0
+
+as η → 0. Thus, CD learns the sub-optimal path. Next, we show that CD also incurs a higher KL than Q♯ .
+
+Theorem 4.2. Under Example 1, CD’s KL converges to 
+
+ln(1 /p L) while Q♯ ’s KL converges to ln(1 /p R) as η → 0.Thus if pL ≪ pR, CD converges to a higher KL than Q♯ .Proof. As shown in Theorem 4.1, CD learns to select the left sub-tree while Q♯ learns to select the right sub-tree as 
+
+η → 0. Then, the KLs simply follow by definition. In sum, we proved that Example 1, CD both incurs a higher KL and achieves a lower sub-optimal reward compared to 
+
+Q♯ . Thus, Q♯ generally Pareto-dominates CD in the reward-KL trade-off, which matches our empirical findings. 
+
+4.2. Performance Guarantee for Q♯ 
+
+We prove that the learned policy by Q♯ is guaranteed to converge to the optimal policy with enough samples. This result holds in rich-observation MDPs where the size of the state space can be exponentially large or infinite, so long as the mild realizability assumption holds. To setup, let F be a distributional function class for mod-eling Z⋆, the reward-to-go distribution under πref . Each element of F has type f = ( f1, . . . , f H ) and fh : X ×Y 7 → 
+
+∆([0 , V max ]) .1 For purpose of analysis, we assume access to a no-regret online learning oracle for the maximum like-lihood (MLE) loss, which proceeds as follows: for each iteration k = 1 , 2, . . . , K , given any {xh,k , y h,k , R h,k }Hh=1 ,the oracle outputs bZk ∈ F s.t. 
+
+PKk=1 
+
+PHh=1 log Z⋆h(Rh,k | xh,k , y h,k )
+
+− log bZh,k (Rh,k | xh,k , y h,k ) ≤ Reg mle (K).
+
+No-regret online learning is well-studied in the literature (Cesa-Bianchi & Lugosi, 2006; Orabona, 2019) and is a standard tool when reducing decision making to supervised learning (Ross et al., 2011; Foster & Krishnamurthy, 2021; 
+
+> 1
+
+Suppose rewards-to-go under πref lie in [0 , V max ] w.p. 1.
+
+7385 386 387 388 389 390 391 392 393 394 395 396 397 398 399 400 401 402 403 404 405 406 407 408 409 410 411 412 413 414 415 416 417 418 419 420 421 422 423 424 425 426 427 428 429 430 431 432 433 434 435 436 437 438 439 
+
+> Q♯ : Provably Optimal Distributional RL for LLM Post-Training
+
+Wang et al., 2023). For example, if F is finite and satisfies realizability, then Vovk’s aggregating algorithm ensures that Reg mle (K) ≲ ln( |F| ) (Vovk, 1995). 2
+
+Assumption 4.3 (Realizability) . Z⋆ ∈ F .The following algorithm is a slightly modified version of Algorithm 1 amenable for theoretical analysis. The only differences with Algorithm 1 are: (1) we use the MLE oracle to learn bZk, and (2) for purpose of local exploration, we play a random action at the switching time h before following 
+
+πref to the end of the trajectory (Ross & Bagnell, 2014). 
+
+Algorithm 2 Q♯ (Theory Version)  
+
+> 1:
+
+Input: reference πref , iteration count K, regularizer η. 
+
+> 2:
+
+Initialize bZ1 randomly.  
+
+> 3:
+
+for k = 1 , 2, . . . , K do  
+
+> 4:
+
+Let πk ← π bZk ,η . 
+
+> 5:
+
+for step h = 1 , 2, . . . , H do  
+
+> 6:
+
+Roll-in with πk for h − 1 steps and see xh,k . 
+
+> 7:
+
+Play random action yh,k and transit to xh+1 ,k . 
+
+> 8:
+
+Resume trajectory with πref from xh+1 ,k . 
+
+> 9:
+
+Let Rh,k be cumulative rewards after time h. 
+
+> 10:
+
+end for  
+
+> 11:
+
+Input {xh,k , y h,k , R h,k }h∈[H] to MLE oracle.  
+
+> 12:
+
+Receive bZk from MLE oracle.  
+
+> 13:
+
+end for  
+
+> 14:
+
+Output: bZ1, . . . , bZK .We now state our main PAC bound for Q♯ .
+
+Theorem 4.4. Fix any η ∈ (0 , V max ] and δ ∈ (0 , 1) . Under Assumptions 2.1 and 4.3, Algorithm 2 ensures w.p. at least 
+
+1 − δ, setting β = ln(1 /δ ) + Reg mle (K), we have 
+
+PKk=1 V ⋆,η − V πk ,η ≲
+
+AV max (
+
+qPHh=1 
+
+PKk=1 CV 2
+
+> h,k
+
+(x, y ) · β + max h∈[H] Eh · β),
+
+where CV h,k (x, y ) := 
+
+√Var πk (exp( Z⋆h (xh,y h)/η ))    
+
+> Eπk[exp( Z⋆h(xh,y h)/η )]
+
+is the co-efficient of variation of exp( Z⋆h(xh, y h)/η ), x h, y h ∼ πk,and Eh := ∥exp(( V max −Q⋆,η h (xh, y h)) /η )∥L∞(πref ) is the envelope of exp(( V max − Q⋆,η h (xh, y h)) /η ) under πref .
+
+We highlight this applies to rich-observation MDPs where our only requirement for F is realizability. Moreover, our bound scales with the function class’s complexity, i.e. ,
+
+ln( |F| ), and does not contain structural complexity mea-sures. In contrast, prior bounds in RL theory require stronger assumptions such as Bellman completeness (Chen & Jiang, 2019; Wang et al., 2021; Foster et al., 2021b; Jin et al., 2021; Chang et al., 2022; Ayoub et al., 2024; Wang et al., 2024b), even in deterministic MDPs (Wu et al., 2024), and/or scale with structural complexity measures such as coverability         
+
+> 2a≲bis short for a≤Cb for some universal constant C.
+
+(Xie et al., 2022; Mhammedi et al., 2024) or eluder dimen-sion (Russo & Van Roy, 2013; Jin et al., 2021). Also, we highlight that Algorithm 2 is model-free and com-putationally efficient . In contrast, most prior algorithms re-quire computationally hard exploration with version spaces (Jiang et al., 2017; Dann et al., 2018; Jin et al., 2021; Xie et al., 2022; Wang et al., 2024b). Thus, Theorem 4.4 shows that it is possible to achieve both statistical and computa-tional efficiency under mild assumptions by simply operat-ing within the KL-regularized RL framework, which itself is of great relevance for LLM post-training. We remark that Uehara et al. (2023) observed similar benefits in offline RL while we study the harder online setting. Moreover, thanks to distributional RL, Theorem 4.4 is a second-order bound (Wang et al., 2024a;b) com-prising of two main terms. The leading term 
+
+O(
+
+qPHh=1 
+
+PKk=1 CV 2
+
+> h,k
+
+(x, y )) is the summed coeffi-cient of variations, which in the worst case scales like qPHh=1 E2
+
+> h
+
+K. However, in benign cases where Z⋆h has small or zero variance, this term vanishes and we are left with the lower order term O(max h∈[H] Eh ln( K)) which only grows logarithmically in K. While in the worst-case, our envelope term is exponential in η−1, it is interestingly also instance-dependent. Specifically, our envelope term is exp(( V max − Q⋆,η h (xh, y h)) /η ) which involves the opti-mal policy’s Q-function Q⋆,η . Thus, if the optimal policy achieves near-maximal reward, i.e. , if Q⋆,η ≈ V max , then the envelope term becomes closer to 1, avoiding the expo-nential dependence on η−1.
+
+Remark: Modification for Regret Bound. It is possible to turn Theorem 4.4 into a regret bound by replacing random action in Line 7 of Algorithm 2 with a no-regret contex-tual bandit oracle, where “context” is xh, action is yh and “reward” is Rh. This is alike the steps needed to convert AggreVaTe’s PAC bound into a regret bound (Ross & Bag-nell, 2014). Our theory can be interpreted as a regret/PAC reduction from KL-regularized RL in deterministic MDPs to no-regret online learning, which mirrors the type of guar-antees obtained for AggreVaTe (Ross & Bagnell, 2014). 
+
+# 5. Conclusion 
+
+We introduce Q♯ , a theoretically-grounded distributional RL algorithm for LLM post-training that provably converges to the optimal policy under mild assumptions. Through experiments on both synthetic and math reasoning tasks, we demonstrated that Q♯ consistently outperforms prior value-based methods by achieving higher accuracy with lower KL divergence from the reference policy. Our approach’s suc-cess in correcting pre-training shortcuts, combined with its practical advantages, establishes Q♯ as a promising direction for enhancing LLM capabilities in post-training. 8440 441 442 443 444 445 446 447 448 449 450 451 452 453 454 455 456 457 458 459 460 461 462 463 464 465 466 467 468 469 470 471 472 473 474 475 476 477 478 479 480 481 482 483 484 485 486 487 488 489 490 491 492 493 494 
+
+> Q♯ : Provably Optimal Distributional RL for LLM Post-Training
+
+# Impact Statement 
+
+This paper presents work whose goal is to advance the field of Machine Learning. There are many potential societal consequences of our work, none which we feel must be specifically highlighted here. 
+
+# References 
+
+Ayoub, A., Wang, K., Liu, V., Robertson, S., McInerney, J., Liang, D., Kallus, N., and Szepesvari, C. Switching the loss reduces the cost in batch reinforcement learn-ing. In Forty-first International Conference on Machine Learning , 2024. URL https://openreview.net/ forum?id=7PXSc5fURu .Bachmann, G. and Nagarajan, V. The pitfalls of next-token prediction. arXiv preprint arXiv:2403.06963 , 2024. Bellemare, M. G., Dabney, W., and Munos, R. A distribu-tional perspective on reinforcement learning. In Inter-national conference on machine learning , pp. 449–458. PMLR, 2017. Bellemare, M. G., Dabney, W., and Rowland, M. Distribu-tional reinforcement learning . MIT Press, 2023. Cesa-Bianchi, N. and Lugosi, G. Prediction, learning, and games . Cambridge university press, 2006. Chang, J., Wang, K., Kallus, N., and Sun, W. Learning bellman complete representations for offline policy evalu-ation. In International Conference on Machine Learning ,pp. 2938–2971. PMLR, 2022. Chen, J. and Jiang, N. Information-theoretic considerations in batch reinforcement learning. In International Con-ference on Machine Learning , pp. 1042–1051. PMLR, 2019. Christiano, P. F., Leike, J., Brown, T., Martic, M., Legg, S., and Amodei, D. Deep reinforcement learning from human preferences. Advances in neural information pro-cessing systems , 30, 2017. Cobbe, K., Kosaraju, V., Bavarian, M., Chen, M., Jun, H., Kaiser, L., Plappert, M., Tworek, J., Hilton, J., Nakano, R., et al. Training verifiers to solve math word problems. 
+
+arXiv preprint arXiv:2110.14168 , 2021. Dabney, W., Rowland, M., Bellemare, M., and Munos, R. Distributional reinforcement learning with quantile re-gression. In Proceedings of the AAAI conference on artificial intelligence , volume 32, 2018. Dann, C., Jiang, N., Krishnamurthy, A., Agarwal, A., Lang-ford, J., and Schapire, R. E. On oracle-efficient pac rl with rich observations. Advances in neural information processing systems , 31, 2018. Domingo-Enrich, C., Drozdzal, M., Karrer, B., and Chen, R. T. Adjoint matching: Fine-tuning flow and diffusion generative models with memoryless stochastic optimal control. arXiv preprint arXiv:2409.08861 , 2024. Donsker, M. D. and Varadhan, S. S. Asymptotic evaluation of certain markov process expectations for large time. iv. 
+
+Communications on pure and applied mathematics , 36 (2):183–212, 1983. Dubey, A., Jauhri, A., Pandey, A., Kadian, A., Al-Dahle, A., Letman, A., Mathur, A., Schelten, A., Yang, A., Fan, A., et al. The llama 3 herd of models. arXiv preprint arXiv:2407.21783 , 2024. Farebrother, J., Orbay, J., Vuong, Q., Ta ¨ıga, A. A., Cheb-otar, Y., Xiao, T., Irpan, A., Levine, S., Castro, P. S., Faust, A., et al. Stop regressing: Training value func-tions via classification for scalable deep rl. arXiv preprint arXiv:2403.03950 , 2024. Foster, D. J. and Krishnamurthy, A. Efficient first-order contextual bandits: Prediction, allocation, and triangular discrimination. Advances in Neural Information Process-ing Systems , 34:18907–18919, 2021. Foster, D. J., Kakade, S. M., Qian, J., and Rakhlin, A. The statistical complexity of interactive decision mak-ing. arXiv preprint arXiv:2112.13487 , 2021a. Foster, D. J., Krishnamurthy, A., Simchi-Levi, D., and Xu, Y. Offline reinforcement learning: Fundamental barri-ers for value function approximation. arXiv preprint arXiv:2111.10919 , 2021b. Fox, R., Pakman, A., and Tishby, N. Taming the noise in reinforcement learning via soft updates. arXiv preprint arXiv:1512.08562 , 2015. Guo, D., Yang, D., Zhang, H., Song, J., Zhang, R., Xu, R., Zhu, Q., Ma, S., Wang, P., Bi, X., et al. Deepseek-r1: In-centivizing reasoning capability in llms via reinforcement learning. arXiv preprint arXiv:2501.12948 , 2025. Haarnoja, T., Zhou, A., Abbeel, P., and Levine, S. Soft actor-critic: Off-policy maximum entropy deep reinforce-ment learning with a stochastic actor. In International conference on machine learning , pp. 1861–1870. PMLR, 2018. Han, S., Shenfeld, I., Srivastava, A., Kim, Y., and Agrawal, P. Value augmented sampling for language model alignment and personalization. arXiv preprint arXiv:2405.06639 ,2024. Hendrycks, D., Burns, C., Kadavath, S., Arora, A., Basart, S., Tang, E., Song, D., and Steinhardt, J. Measuring math-ematical problem solving with the math dataset. arXiv preprint arXiv:2103.03874 , 2021. 9495 496 497 498 499 500 501 502 503 504 505 506 507 508 509 510 511 512 513 514 515 516 517 518 519 520 521 522 523 524 525 526 527 528 529 530 531 532 533 534 535 536 537 538 539 540 541 542 543 544 545 546 547 548 549 
+
+> Q♯ : Provably Optimal Distributional RL for LLM Post-Training
+
+Jiang, N., Krishnamurthy, A., Agarwal, A., Langford, J., and Schapire, R. E. Contextual decision processes with low bellman rank are pac-learnable. In International Con-ference on Machine Learning , pp. 1704–1713. PMLR, 2017. Jin, C., Liu, Q., and Miryoosefi, S. Bellman eluder di-mension: New rich classes of rl problems, and sample-efficient algorithms. Advances in neural information processing systems , 34:13406–13418, 2021. Kool, W., van Hoof, H., and Welling, M. Buy 4 reinforce samples, get a baseline for free! 2019. Leviathan, Y., Kalman, M., and Matias, Y. Fast inference from transformers via speculative decoding. In Inter-national Conference on Machine Learning , pp. 19274– 19286. PMLR, 2023. Li, X., Zhao, Y., Wang, C., Scalia, G., Eraslan, G., Nair, S., Biancalani, T., Ji, S., Regev, A., Levine, S., et al. Derivative-free guidance in continuous and discrete dif-fusion models with soft value-based decoding. arXiv preprint arXiv:2408.08252 , 2024. Lightman, H., Kosaraju, V., Burda, Y., Edwards, H., Baker, B., Lee, T., Leike, J., Schulman, J., Sutskever, I., and Cobbe, K. Let’s verify step by step. arXiv preprint arXiv:2305.20050 , 2023. Liu, A., Han, X., Wang, Y., Tsvetkov, Y., Choi, Y., and Smith, N. A. Tuning language models by proxy. In First Conference on Language Modeling , 2024. URL https: //openreview.net/forum?id=dribhnhm1i .Loshchilov, I., Hutter, F., et al. Fixing weight decay regu-larization in adam. arXiv preprint arXiv:1711.05101 , 5, 2017. Lyle, C., Bellemare, M. G., and Castro, P. S. A compara-tive analysis of expected and distributional reinforcement learning. In Proceedings of the AAAI Conference on Artificial Intelligence , volume 33, pp. 4504–4511, 2019. Mhammedi, Z., Foster, D. J., and Rakhlin, A. The power of resets in online reinforcement learning. In The Thirty-eighth Annual Conference on Neural Information Pro-cessing Systems , 2024. URL https://openreview. net/forum?id=7sACcaOmGi .Mudgal, S., Lee, J., Ganapathy, H., Li, Y., Wang, T., Huang, Y., Chen, Z., Cheng, H.-T., Collins, M., Strohman, T., et al. Controlled decoding from language models. arXiv preprint arXiv:2310.17022 , 2023. Munos, R. and Szepesv ´ari, C. Finite-time bounds for fitted value iteration. Journal of Machine Learning Research , 9 (5), 2008. Orabona, F. A modern introduction to online learning. arXiv preprint arXiv:1912.13213 , 2019. Ouyang, L., Wu, J., Jiang, X., Almeida, D., Wainwright, C., Mishkin, P., Zhang, C., Agarwal, S., Slama, K., Ray, A., et al. Training language models to follow instructions with human feedback. Advances in neural information processing systems , 35:27730–27744, 2022. Pich ´e, A., Thomas, V., Ibrahim, C., Bengio, Y., and Pal, C. Probabilistic planning with sequential monte carlo methods. In International Conference on Learning Rep-resentations , 2018. Radford, A., Wu, J., Child, R., Luan, D., Amodei, D., Sutskever, I., et al. Language models are unsupervised multitask learners. OpenAI blog , 1(8):9, 2019. Rafailov, R., Sharma, A., Mitchell, E., Manning, C. D., Er-mon, S., and Finn, C. Direct preference optimization: Your language model is secretly a reward model. Ad-vances in Neural Information Processing Systems , 36, 2024. Ross, S. and Bagnell, J. A. Reinforcement and imitation learning via interactive no-regret learning. arXiv preprint arXiv:1406.5979 , 2014. Ross, S., Gordon, G., and Bagnell, D. A reduction of imita-tion learning and structured prediction to no-regret online learning. In Proceedings of the fourteenth international conference on artificial intelligence and statistics , pp. 627–635. JMLR Workshop and Conference Proceedings, 2011. Rowland, M., Tang, Y., Lyle, C., Munos, R., Bellemare, M. G., and Dabney, W. The statistical benefits of quantile temporal-difference learning for value estimation. In In-ternational Conference on Machine Learning , pp. 29210– 29231. PMLR, 2023. Russo, D. and Van Roy, B. Eluder dimension and the sample complexity of optimistic exploration. Advances in Neural Information Processing Systems , 26, 2013. Schulman, J., Wolski, F., Dhariwal, P., Radford, A., and Klimov, O. Proximal policy optimization algorithms. 
+
+arXiv preprint arXiv:1707.06347 , 2017. Setlur, A., Nagpal, C., Fisch, A., Geng, X., Eisenstein, J., Agarwal, R., Agarwal, A., Berant, J., and Kumar, A. Re-warding progress: Scaling automated process verifiers for llm reasoning. arXiv preprint arXiv:2410.08146 , 2024. Team, G., Riviere, M., Pathak, S., Sessa, P. G., Hardin, C., Bhupatiraju, S., Hussenot, L., Mesnard, T., Shahri-ari, B., Ram ´e, A., et al. Gemma 2: Improving open language models at a practical size. arXiv preprint arXiv:2408.00118 , 2024. 10 550 551 552 553 554 555 556 557 558 559 560 561 562 563 564 565 566 567 568 569 570 571 572 573 574 575 576 577 578 579 580 581 582 583 584 585 586 587 588 589 590 591 592 593 594 595 596 597 598 599 600 601 602 603 604 
+
+> Q♯ : Provably Optimal Distributional RL for LLM Post-Training
+
+Uehara, M., Kallus, N., Lee, J. D., and Sun, W. Offline minimax soft-q-learning under realizability and partial coverage. Advances in Neural Information Processing Systems , 36, 2023. Van Hasselt, H., Doron, Y., Strub, F., Hessel, M., Sonnerat, N., and Modayil, J. Deep reinforcement learning and the deadly triad. arXiv preprint arXiv:1812.02648 , 2018. Vovk, V. G. A game of prediction with expert advice. In 
+
+Proceedings of the eighth annual conference on Compu-tational learning theory , pp. 51–60, 1995. Wang, K., Zhou, K., Wu, R., Kallus, N., and Sun, W. The benefits of being distributional: Small-loss bounds for reinforcement learning. Advances in Neural Information Processing Systems , 36, 2023. Wang, K., Kallus, N., and Sun, W. The central role of the loss function in reinforcement learning. arXiv preprint arXiv:2409.12799 , 2024a. Wang, K., Oertell, O., Agarwal, A., Kallus, N., and Sun, W. More benefits of being distributional: Second-order bounds for reinforcement learning. International Confer-ence of Machine Learning , 2024b. Wang, P., Li, L., Shao, Z., Xu, R., Dai, D., Li, Y., Chen, D., Wu, Y., and Sui, Z. Math-shepherd: Verify and reinforce llms step-by-step without human annotations. In Proceed-ings of the 62nd Annual Meeting of the Association for Computational Linguistics (Volume 1: Long Papers) , pp. 9426–9439, 2024c. Wang, Y., Wang, R., and Kakade, S. An exponential lower bound for linearly realizable mdp with constant subopti-mality gap. Advances in Neural Information Processing Systems , 34:9521–9533, 2021. Wu, R., Sekhari, A., Krishnamurthy, A., and Sun, W. Computationally efficient rl under linear bellman com-pleteness for deterministic dynamics. arXiv preprint arXiv:2406.11810 , 2024. Xie, T., Foster, D. J., Bai, Y., Jiang, N., and Kakade, S. M. The role of coverage in online reinforcement learning. 
+
+arXiv preprint arXiv:2210.04157 , 2022. Yang, K. and Klein, D. FUDGE: Controlled text gen-eration with future discriminators. In Toutanova, K., Rumshisky, A., Zettlemoyer, L., Hakkani-Tur, D., Belt-agy, I., Bethard, S., Cotterell, R., Chakraborty, T., and Zhou, Y. (eds.), Proceedings of the 2021 Conference of the North American Chapter of the Association for Computational Linguistics: Human Language Technolo-gies , pp. 3511–3535, Online, June 2021. Association for Computational Linguistics. doi: 10.18653/v1/2021. naacl-main.276. URL https://aclanthology. org/2021.naacl-main.276/ .Zhao, S., Brekelmans, R., Makhzani, A., and Grosse, R. Probabilistic inference in language models via twisted sequential monte carlo. arXiv preprint arXiv:2404.17546 ,2024. Ziebart, B. D., Maas, A. L., Bagnell, J. A., Dey, A. K., et al. Maximum entropy inverse reinforcement learning. In 
+
+Aaai , volume 8, pp. 1433–1438. Chicago, IL, USA, 2008. 11 605 606 607 608 609 610 611 612 613 614 615 616 617 618 619 620 621 622 623 624 625 626 627 628 629 630 631 632 633 634 635 636 637 638 639 640 641 642 643 644 645 646 647 648 649 650 651 652 653 654 655 656 657 658 659 
+
+> Q♯ : Provably Optimal Distributional RL for LLM Post-Training
+
+# A. Related Works 
+
+From the empirical side, the most relevant works are controlled decoding (CD; Mudgal et al., 2023) and value augmented sampling (VAS; Han et al., 2024). These two works both propose to guide the reference policy πref with Qπref ,0, the expected reward-to-go under πref without KL regularization. As discussed in Section 4.1, guiding with Qπref ,0 is not principled for the KL-regularized RL problem and can lead to both sub-optimal reward and large KL from πref . In contrast, we propose to guide πref with Q⋆,η , the expected reward-to-go under the optimal policy with KL regularization, which is the correct closed-form of the optimal policy. In terms of reweighting πref with classifier scores, FUDGE (Yang & Klein, 2021) is another closely related work but their derivation is based on Bayes rule and FUDGE does not solve KL-regularized RL. Sequential Monte Carlo (SMC) methods (Pich ´e et al., 2018; Zhao et al., 2024) also reweight πref ’s distribution with a twist function, where the optimal twist function is analogous to our Q⋆,η . One key difference is that SMC performs resampling while we directly combine logits of πref and exp( Q⋆,η ) to avoid importance sampling, which has higher variance. Finally, none of these prior works apply distributional RL losses (Bellemare et al., 2017; Dabney et al., 2018; Farebrother et al., 2024; Ayoub et al., 2024) or online data aggregation (Ross et al., 2011) to learn Q⋆,η , which we showed to be beneficial in our ablations. Indeed, CD and VAS both use square loss regression over a fixed offline dataset. We also cite some tangentially related works. Proxy tuning (Liu et al., 2024) and speculative decoding (Leviathan et al., 2023) both use a small model to guide the logit distribution of a large πref model. Speculative decoding is focused on maximizing the large model’s likelihood, which does not relate to any extrinsic rewards. In our framework, the classifier model can be any size relative to πref , although deeper investigation into the computational benefits of using a small classifier is a promising direction for future work. 
+
+From the theoretical side, KL-regularized RL is closely related to soft RL or maximum entropy RL which are well-studied (Ziebart et al., 2008; Fox et al., 2015; Haarnoja et al., 2018; Pich ´e et al., 2018). The optimal policy decomposition in deterministic MDPs is also known in prior works (Li et al., 2024; Domingo-Enrich et al., 2024). Our contribution is an algorithm that provably learns Q⋆,η using distributional RL (Bellemare et al., 2017) and data aggregation (Ross et al., 2011). This enables us to prove a reduction of KL-regularized RL (in deterministic MDPs) to no-regret online learning, which ensures convergence to the optimal policy with realizability being the only assumption for function approximation. Notably we are able to avoid more stringent conditions such as completeness or structural MDP conditions which are ubiquitous in the current literature (Wang et al., 2021; Jin et al., 2021; Chang et al., 2022; Wang et al., 2023; 2024b; Ayoub et al., 2024; Xie et al., 2022). Uehara et al. (2023) observed similar benefits in offline RL, while we provide guarantees for the harder online RL setting. We remark that our theoretical guarantees are quite similar in structure to that of AggreVaTe (Ross & Bagnell, 2014), which is a reduction of imitation learning to no-regret online learning. Besides the obvious difference in problem setting, another improvement from our work is using distributional RL theory to prove second-order bounds. Notably, we are able to prove second-order bounds without any completeness assumptions that were required in (Wang et al., 2023; 2024a;b). 
+
+# B. Proofs 
+
+In this section, we provide the full proof for Theorem 4.4. 
+
+Theorem 4.4. Fix any η ∈ (0 , V max ] and δ ∈ (0 , 1) . Under Assumptions 2.1 and 4.3, Algorithm 2 ensures w.p. at least 
+
+1 − δ, setting β = ln(1 /δ ) + Reg mle (K), we have 
+
+PKk=1 V ⋆,η − V πk ,η ≲
+
+AV max (
+
+qPHh=1 
+
+PKk=1 CV 2
+
+> h,k
+
+(x, y ) · β + max h∈[H] Eh · β),
+
+where CV h,k (x, y ) := 
+
+√Var πk (exp( Z⋆h (xh,y h)/η ))    
+
+> Eπk[exp( Z⋆h(xh,y h)/η )]
+
+is the coefficient of variation of exp( Z⋆h(xh, y h)/η ), x h, y h ∼ πk, and 
+
+Eh := ∥exp(( V max − Q⋆,η h (xh, y h)) /η )∥L∞(πref ) is the envelope of exp(( V max − Q⋆,η h (xh, y h)) /η ) under πref .Proof. Fix any η ∈ (0 , V max ). Let Qh,k (x, y ) = η ln Ez∼ bZh,k (x,y ) exp( z/η ) denote the induced soft Q function from the 12 660 661 662 663 664 665 666 667 668 669 670 671 672 673 674 675 676 677 678 679 680 681 682 683 684 685 686 687 688 689 690 691 692 693 694 695 696 697 698 699 700 701 702 703 704 705 706 707 708 709 710 711 712 713 714 
+
+Q♯ : Provably Optimal Distributional RL for LLM Post-Training 
+
+distributional estimate bZk. Let πkh(y | x) ∝ πref  
+
+> h
+
+(y | x) exp( Qh,k (x, y )/η ) denote the induced policy from Qh,k . Then, 
+
+V ⋆,η − V πk ,η 
+
+> (i)
+
+= PHh=1 Eπk [Q⋆,η h (xh, π ⋆,η h ) − Q⋆,η h (xh, π kh) + ηKL (πkh(xh) ∥ πref  
+
+> h
+
+(xh)) − ηKL (π⋆,η h (xh) ∥ πref  
+
+> h
+
+(xh))] = PHh=1 Eπk [Q⋆,η h (xh, π ⋆,η h ) − ηKL (π⋆,η h (xh) ∥ πref  
+
+> h
+
+(xh)) − (Qh,k (xh, π kh) − ηKL (πkh(xh) ∥ πref  
+
+> h
+
+(xh))) + Qh,k (xh, π kh) − Q⋆,η h (xh, π kh)] 
+
+> (ii )
+
+≤ PHh=1 Eπk [Q⋆,η h (xh, π ⋆,η h ) − ηKL (π⋆,η h (xh) ∥ πref  
+
+> h
+
+(xh)) − (Qh,k (xh, π ⋆,η h ) − ηKL (π⋆,η h (xh) ∥ πref  
+
+> h
+
+(xh))) + Qh,k (xh, π kh) − Q⋆,η h (xh, π kh)] = PHh=1 Eπk [Q⋆,η h (xh, π ⋆,η h ) − Qh,k (xh, π ⋆,η h ) + Qh,k (xh, π kh) − Q⋆,η h (xh, π kh)] 
+
+≤ 2 PHh=1 Exh∼πk [max π∈{ π⋆,π k } Q⋆,η h (xh, π ) − Qh,k (xh, π ) ]
+
+≤ 2A PHh=1 Exh∼πk ,y h∼Unif( A) Q⋆,η h (xh, y h) − Qh,k (xh, y h) ,
+
+where (i) is by the performance difference lemma in the soft MDP (Lemma B.2); (ii) is by Donsker-Varadhan (Lemma B.1) which proves that πkh(xh) = arg max π Eπ [Qh,k (xh, π ) − KL (π(xh) ∥ πref  
+
+> h
+
+(xh))] . Now, we bound the difference between the optimal and learned Q functions: 
+
+Q⋆,η h (x, y ) − Qh,k (x, y )
+
+= η ln Ez∼Z⋆h (x,y ) exp( z/η ) − ln Ez∼ bZh,k (x,y ) exp( z/η )
+
+> (i)
+
+≲ η(1 + Vmax /η )
+
+
+
+CV z∼Z⋆h (x,y )(exp( z/η )) Hh,k (x, y ) + exp( Vmax /η )−1  
+
+> Ez∼Z⋆h(x,y )exp( z/η )
+
+H2
+
+> h,k
+
+(x, y )
+
+
+
+= ( η + Vmax )
+
+
+
+CV z∼Z⋆h (x,y )(exp( z/η )) Hh,k (x, y ) + exp( Vmax /η )exp( Q⋆,η h (x,y )/η ) H2
+
+> h,k
+
+(x, y )
+
+
+
+,
+
+where (i) is by Lemma B.4 and the fact that Z⋆, bZk ∈ [0 , V max ] and Hh,k (x, y ) := H(Z⋆h(x, y ), bZh,k (x, y )) is the Hellinger distance between the learned bZh,k and optimal Z⋆h.Thus, if we let xh, y h ∼ πk ◦h Unif( A) denote the distribution of rolling in with πk until xh and taking a random 
+
+yh ∼ Unif( A), then we have: 
+
+PKk=1 V ⋆,η − V πk ,η 
+
+≤ 2A PHh=1 
+
+PKk=1 Eπk ◦hUnif( A) Q⋆,η h (xh, y h) − Qh,k (xh, y h)
+
+≲ AV max 
+
+PHh=1 
+
+PKk=1 Eπk ◦hUnif( A)
+
+h
+
+CV z∼Z⋆h (x,y )(exp( z/η )) Hh,k (xh, y h) + exp( Vmax /η )exp( Q⋆,η h (xh,y h)/η ) H2
+
+> h,k
+
+(x, y )
+
+i
+
+≤ AV max 
+
+qPHh=1 
+
+PKk=1 Eπk ◦hUnif( A)[CV 2
+
+> h,k
+
+(xh, y h)] 
+
+qPHh=1 
+
+PKk=1 Eπk ◦hUnif( A)[H2
+
+> h,k
+
+(xh, y h)] + AV max exp( Vmax /η )exp( Q⋆,η h (xh,y h)/η ) L∞(πk ◦hUnif( A)) 
+
+· PHh=1 
+
+PKk=1 Eπk ◦hUnif( A)[H2
+
+> h,k
+
+(xh, y h)] .
+
+The final step is to bound the summed Hellinger square terms. This can be done via Multiplicative Azuma’s inequality and Foster et al. (2021a, Lemma A.14), which shows that for any δ ∈ (0 , 1) , we have P 
+
+> h,k
+
+Eπk ◦hUnif( A)[H2
+
+> h,k
+
+(xh, y h)] ≲
+
+P 
+
+> h,k
+
+H2
+
+> h,k
+
+(xh,k , y h,k ) + ln(1 /δ ) ≲ Reg mle (K) + ln(1 /δ ), which recall is exactly the definition of β. This finishes the proof of Theorem 4.4. 
+
+Lemma B.1 (Donsker-Varadhan’s Variational Formula; Donsker & Varadhan, 1983) . For any prior p ∈ ∆(Θ) , consider the KL-regularized optimization: 
+
+π⋆ = arg max π∈∆(Θ) V (π) := Eπ [Q(θ) − ηKL (π(θ) ∥ p(θ))] .
+
+The optimal policy π⋆ is given by π⋆(θ) ∝ p(θ) exp( Q(θ)/η ) and it has value V (π⋆) = η ln Eθ∼p exp( Q(θ)/η ).
+
+13 715 716 717 718 719 720 721 722 723 724 725 726 727 728 729 730 731 732 733 734 735 736 737 738 739 740 741 742 743 744 745 746 747 748 749 750 751 752 753 754 755 756 757 758 759 760 761 762 763 764 765 766 767 768 769 
+
+Q♯ : Provably Optimal Distributional RL for LLM Post-Training 
+
+Lemma B.2 (Soft Performance Difference Lemma (PDL)) . For any f and π,
+
+V π − f1(x1, π ) = 
+
+> H
+
+X
+
+> h=1
+
+Eπ [( T πh fh+1 − fh)( xh, y h)] − ηKL (π1(x1) ∥ πref  
+
+> 1
+
+(x1)) .
+
+For any π, π ′,
+
+V π − V π′
+
+=
+
+> H
+
+X
+
+> h=1
+
+Eπ [Qπ′ 
+
+> h
+
+(xh, y h) − Qπ′ 
+
+> h
+
+(xh, π ′) + ηKL (π′
+
+> h
+
+(xh) ∥ πref  
+
+> h
+
+(xh)) − ηKL (πh(xh) ∥ πref  
+
+> h
+
+(xh))] .
+
+Proof. Let KL (πh(xh)) := KL (πh(xh) ∥ πref  
+
+> h
+
+(xh)) denote KL-divergence w.r.t. πref . Then, 
+
+V π − V π′
+
+= PHh=1 Eπ [rh − ηKL (πh(xh))] − (Qπ′ 
+
+> 1
+
+(x1, π ′) − ηKL (π′
+
+> 1
+
+(x1))) = PHh=1 Eπ [rh − ηKL (π′
+
+> h+1
+
+(xh+1 )) + ηKL (π′
+
+> h+1
+
+(xh+1 )) + Qπ′
+
+> h+1
+
+(xh+1 , π ′) − Qπ′ 
+
+> h
+
+(xh, π ′) − ηKL (πh(xh))] + ηKL (π′
+
+> 1
+
+(x1)) = PHh=1 Eπ [rh − ηKL (π′
+
+> h+1
+
+(xh+1 )) + Qπ′
+
+> h+1
+
+(xh+1 , π ′) − Qπ′ 
+
+> h
+
+(xh, π ′) + ηKL (π′
+
+> h
+
+(xh)) − ηKL (πh(xh))] = PHh=1 Eπ [T π′ 
+
+> h
+
+Qπ′
+
+> h+1
+
+(xh, y h) − Qπ′ 
+
+> h
+
+(xh, π ′) + ηKL (π′
+
+> h
+
+(xh)) − ηKL (πh(xh))] = PHh=1 Eπ [Qπ′ 
+
+> h
+
+(xh, y h) − Qπ′ 
+
+> h
+
+(xh, π ′) + ηKL (π′
+
+> h
+
+(xh)) − ηKL (πh(xh))] .
+
+Lemma B.3. For any two numbers x, y ∈ [exp( a), exp( b)] , we have 
+
+|ln( x) − ln( y)| ≤ (1 + b − a) x − yy .
+
+If b − a ≥ 12 , then max(1 , b−a 
+
+> 1−exp( a−b)
+
+) ≤ 3( b − a).Proof. If x ≥ y, then ln( x) − ln( y) = ln(1 + ( x − y)/y ) ≤ (x − y)/y . If x < y , then ln( y) − ln( x) = − ln(1 + ( x − y)/y ).By premise, we have 0 ≥ x−yy ≥ exp( a − b) − 1. Note that − ln(1 + z) is convex and is thus upper bounded by the line connecting (0 , 0) and (exp( a − b) − 1, b − a), i.e. , − ln(1 + z) ≤ b−a 
+
+> 1−exp( a−b)
+
+|z| for 0 ≥ z ≥ exp( a − b) − 1. Thus, 
+
+− ln(1 + ( x − y)/y ) ≤ b−a 
+
+> 1−exp( a−b)
+> x−yy
+
+. Thus, we’ve shown that |ln( x) − ln( y)| ≤ max 
+
+
+
+1, b−a
+
+> 1−exp( a−b)
+
+
+
+| x−yy |. Finally, since x 
+
+> 1−exp( −x)
+
+≤ 1 + x when x ≥ 0, we have max(1 , b−a 
+
+> 1−exp( a−b)
+
+) ≤ max(1 , 1 + b − a) = 1 + b − a.
+
+Lemma B.4. For any distributions p, q on [a, b ], we have 
+
+|ln P 
+
+> z
+
+p(z)ez − ln P 
+
+> z
+
+q(z)ez | ≲ (1 + b − a)
+
+ √Var q (ez )  
+
+> Eqez
+
+H(p, q ) + exp( b)−exp( a)  
+
+> Eqez
+
+H2(p, q )
+
+
+
+,
+
+where H2(p, q ) = 12
+
+P 
+
+> z
+
+(pp(z) − pq(z)) 2 is the squared Hellinger distance. Proof. By Lemma B.3, we have |ln P 
+
+> z
+
+p(z)ez − ln P 
+
+> z
+
+q(z)ez | ≤ (1 + b − a)   
+
+> P
+> z(p(z)−q(z)) ez
+> P
+> zq(z)ez
+
+. By Lemma B.5, we have that the numerator is bounded by pVar q (ez )H(p, q ) + (exp( b) − exp( a)) H2(p, q ).
+
+Lemma B.5 (Second-Order Lemma) . Suppose p, q are distributions on the interval [a, b ]. Then, we have 
+
+|¯p − ¯q| ≲ pVar( p)H(p, q ) + ( b − a)H2(p, q ).
+
+14 770 771 772 773 774 775 776 777 778 779 780 781 782 783 784 785 786 787 788 789 790 791 792 793 794 795 796 797 798 799 800 801 802 803 804 805 806 807 808 809 810 811 812 813 814 815 816 817 818 819 820 821 822 823 824 
+
+> Q♯ : Provably Optimal Distributional RL for LLM Post-Training
+
+Proof. Define p′, q ′ as the normalized distributions on [0 , 1] , i.e. , p′ is the law of X′ = ( X − a)/(b − a) where X ∼ p.Then, we have 
+
+|¯p − ¯q| = ( b − a)|¯p′ − ¯q′|
+
+≲ (b − a)( pVar( p′)H(p′, q ′) + H2(p′, q ′)) = pVar( p)H(p, q ) + ( b − a)H2(p, q ),
+
+where the ≲ step is due to the second-order lemma of Wang et al. (2024a). 15 825 826 827 828 829 830 831 832 833 834 835 836 837 838 839 840 841 842 843 844 845 846 847 848 849 850 851 852 853 854 855 856 857 858 859 860 861 862 863 864 865 866 867 868 869 870 871 872 873 874 875 876 877 878 879 
+
+> Q♯ : Provably Optimal Distributional RL for LLM Post-Training
+
+# C. Additional Details for Star-Graph Experiments 
+
+Following Bachmann & Nagarajan (2024), we used the GPT-2 Small architecture with nlayers = 12 , e dim = 768 , n heads = 12 
+
+(Radford et al., 2019). We used the same custom tokenizer from Bachmann & Nagarajan (2024). Starting from a randomly initialized model, we train the model with next-token prediction on a training set of 200 k randomly generated graphs and correct responses – this is called the “pre-trained” model. As observed by Bachmann & Nagarajan (2024), the pre-trained model learns a Clever Hans shortcut, which randomly generates a path from the central node (although the first and last nodes always match start and goal nodes). We highlight that this is a failure in generalization, since the pre-trained model achieves 100% accuracy on the training set and 1/d accuracy on the test set. Thus, in a graph G(d, ℓ ), the pre-trained model only outputs the correct path with 1/d accuracy. Then, we perform post-training with the pre-trained model as πref , on a newly generated training set of 200 k random graphs. The reward function we consider is simply 1 if the whole response is correct and 0 otherwise. We evaluate three post-training algorithms: REINFORCE, DPO and Q♯ . For DPO, we generate pairwise responses with ychosen being the correct response and yreject being the Clever Hans shortcut. For Q♯ , we evaluate the setting where η → 0. We used AdamW with weight decay 0.01 and learning rate 3e − 5, and batch size 256 . All models were trained until convergence. 
+
+# D. Additional Model Details 
+
+πref models. All models we use in the experiments are the ”Instruct” versions. That is, Llama 3 8B refers to 
+
+meta-llama/Meta-Llama-3-8B-Instruct and we use the default chat template and system message from Meta to interact with them. 
+
+Q♯ models. Two variants for Q♯ are implemented and experimented: Q-type and V-type. Specifically, the Q-type takes input of a partial generation x and computes Q⋆,η (x, y ) for all y in the vocabulary of the πref model whereas the V-type takes input of concatenated x and a specific token ˆy and outputs a single value that represents Q⋆,η (x, ˆy). Because of the key difference, Q-type therefore can efficiently calculate Q⋆,η with just one forward pass and its model architecture can also be identical to the original LLM. V-type, however, has a prohibitive inference cost with a naive implementation since it requires making |V | forward passes at every decoding step to calculate the full Q function. In the paragraph below, we discuss our efficient implementation to address this issue. For Q-type, we initialize the model directly from Llama 3.2 1B and for V-type, we replace the last layer of Llama 3.2 1B with a randomly initialized fully connected layer with output size of 1. Therefore, V-type Q♯ also has slightly fewer number of parameters than Q-type. We by default use V-type Q♯ in our experiments. 
+
+Efficient inference with V-type. To speed up inference for V-type, we note that not all tokens in the vocabulary are worth computing its value since for any partial generation x, most tokens have extremely low probability from πref as the next token candidate. In our preliminary experiments, we have found that only computing the values for the top 20 tokens ranked by πref give similar performance compared to computing for all tokens. Additionally, we also note that the values for these tokens can be computed in one forward pass. To accomplish this, we input a partial generation x and the top 20 candidate next tokens together, modify the attention mask so that the candidate tokens do not attend to each other but still to x. This allows us to compute the values for these top tokens in just one additional forward pass without any approximation. 
+
+# E. Q♯ Training Settings 
+
+We collect 16 samples for each question in the training set and label every sample either as correct (1) or incorrect (0) based on the final answer. The first round of training data is collected with just πref . For training Q♯ model, we filter out samples from questions where all samples are either correct or incorrect. we use a learning rate of 2e − 5 and weight decay of 0.01 
+
+with AdamW optimizer (Loshchilov et al., 2017). The model is trained for 5 epochs. We train Q♯ for two iterations as we observe performance converges. In the second iteration, we repeat the above data collection procedure and concatenate the training data from the first round. The model is always trained from scratch between iterations. 
+
+# F. Additional Evaluation Details 
+
+We evaluate all methods and models with zero-shot prompting. The prompt template is ’Problem: \n\n{0} Write your answer inside \\ boxed {{}} .\n\nSolution:’ where {0} is replaced by the actual question from the 16 880 881 882 883 884 885 886 887 888 889 890 891 892 893 894 895 896 897 898 899 900 901 902 903 904 905 906 907 908 909 910 911 912 913 914 915 916 917 918 919 920 921 922 923 924 925 926 927 928 929 930 931 932 933 934 
+
+Q♯ : Provably Optimal Distributional RL for LLM Post-Training 
+
+dataset. The MATH-500 dataset can also be found at Huggingface 3.
+
+# G. Qualitative Examples 
+
+In Figure 5 and the ones below it, we qualitative visualize side by side generation results from πref and Q♯ on Llama 3 8B GSM8K and Llama 3.1 8B MATH settings. In the first example of Figure 5, we observe πref and Q♯ start off similarly by calculating the total number of cookies Shannon eat but πref starts to roughly guess the answer (highlighted in red) without calculating the answer precisely, where Q♯ calculates the answer step by step (in blue). In the second MATH example, 
+
+πref first states some confusing statement (highlighted in orange) and then makes a mistake of addition ( 5 + 5 ) instead of multiplication when calculating all the possibilities. Q♯ , however, correctly solves the problem by multiplying the options (5 ∗ 5) for Paul and Jesse and then adds the single case when using the number of 2, arriving at the correct answer. More examples can be found in subsequent pages with various levels of difficulty. We highlight that Q♯ can still make confusing statements similar to πref even in solution that arrives at the correct final answer. For example, in the Cecilia puppy example (the first after Figure 5), similar to πref , Q♯ also makes a division of 1 when it should be multiplication. 
+
+Problem from GSM8K: Shannon makes her own madeleine cookies and eats 2 a night as a treat. She wants to make enough cookies to last her for 30 days by storing them in the freezer. Her recipe makes 1 dozen madeleine cookies. How many dozens of cookies will she need to make so she has enough for 30 days? 
+
+Incorrect Solution from πref : Since Shannon eats 2 cookies per night, she will eat 2 · 30 = 60 cookies over 30 days. She will need 7 dozen cookies, since 7 · 12 = 84 > 60 .Final Answer: The final answer is 7. I hope it is correct. 
+
+Correct Solution from Q♯ : Shannon eats 2 cookies per night, so she will eat 2 * 30 = 60 cookies in 30 days. Since 1 dozen cookies is 12, we can divide 60 by 12 to find out how many dozens she needs. 60 ÷ 12 = 5. The answer is 5 dozens. 
+
+Counting & Probability Problem from MATH: Paul and Jesse each choose a number at random from the first six primes. What is the probability that the sum of the numbers they choose is even? 
+
+Incorrect Solution from πref : To find the probability that the sum of the numbers Paul and Jesse choose is even, we need to consider the possible combinations of even and odd numbers. The first six primes are 2, 3, 5, 7, 11, and 13. Since 2 is the only even prime number, we will always have one even number and one or more odd numbers. For the sum to be even, both numbers must be either even or odd. If Paul chooses the even number (2), Jesse can choose any of the 5 odd numbers (3, 5, 7, 11, 13), resulting in 5 possibilities. If Paul chooses any of the 5 odd numbers, Jesse can choose the even number (2), resulting in 5 more possibilities. Therefore, there are 5 + 5 = 10 possibilities where the sum is even. The total number of possible combinations is 6 * 6 = 36 (6 choices for Paul and 6 choices for Jesse). The probability that the sum of the numbers Paul and Jesse choose is even is 10/36, which simplifies to 5/18. The answer is: 518 
+
+Correct Solution from Q♯ : The first six primes are 2, 3, 5, 7, 11, and 13. For the sum of the numbers Paul and Jesse choose to be even, they must either both choose even numbers or both choose odd numbers. There is only one even prime number, which is 2. Paul has 6 options, and Jesse also has 6 options. The total number of possibilities is 6 * 6 = 36. For the case where both choose the even number, there is only one possibility (2, 2). For the case where both choose odd numbers, there are 5 options for Paul and 5 options for Jesse. The total number of possibilities is 5 * 5 = 25. So, the total number of possibilities where the sum is even is 1 + 25 = 26. The probability that the sum of the numbers they choose is even is 26/36 = 13/18. The answer is 13 18 .
+
+Figure 5. Example generations from πref and Q♯ on GSM8K and MATH questions. πref consistently fails to solve the problems compared to Q♯ . The generations from πref and Q♯ usually start off with similar reasoning chain-of-thought but πref gradually makes unjustified reasoning leap or simply a guess of the answer whereas Q♯ tends to be more logical for solving the problems. Colors are manually added for ease of visualization. Blue represents correct reasoning steps or answers, red represents clearly incorrect ones and orange represents ambiguous or minor mistake that could potentially lead to clearly incorrect steps or answers. 
+
+> 3
+
+https://huggingface.co/datasets/HuggingFaceH4/MATH-500 
+
+17 935 936 937 938 939 940 941 942 943 944 945 946 947 948 949 950 951 952 953 954 955 956 957 958 959 960 961 962 963 964 965 966 967 968 969 970 971 972 973 974 975 976 977 978 979 980 981 982 983 984 985 986 987 988 989 
+
+Q♯ : Provably Optimal Distributional RL for LLM Post-Training Problem from GSM8K: Cecilia just bought a new puppy. According to her veterinarian, she has to feed the puppy 1 cup of dog food every day for the first 180 days. Then she has to feed the puppy 2 cups of dog food every day for the rest of its life. If one bag of dog food contains 110 cups, how many bags of dog food will Cecilia use in the first year? 
+
+Incorrect Solution from πref : For the first 180 days, Cecilia needs 180 1 = 180 cups of dog food. For the rest of the year, she needs 365 −180 2 = 92 .5 cups of dog food. So in total she needs 180 + 92 .5 = 272 .5 cups of dog food. If one bag of dog food contains 110 cups, then she will need 272 .5110 = 2.5 bags of dog food. Final Answer: The final answer is 2.5. I hope it is correct. 
+
+Correct Solution from Q♯ : The first 180 days, she will need to feed her puppy 180 1 = 180 cups of dog food. After that, she will need to feed her puppy 365-180=185 days of 2 cups each, for a total of 2 · 185 = 370 cups of dog food. So, the total amount of dog food needed in the first year is 180 + 370 = 550 cups. Since each bag of dog food contains 110 cups, the number of bags needed is 550 110 = 5 .
+
+Problem from GSM8K: According to its nutritional info, a bag of chips has 250 calories per serving. If a 300g bag has 5 servings, how many grams can you eat if your daily calorie target is 2000 and you have already consumed 1800 calories? 
+
+Incorrect Solution from πref : Let’s break this down step by step! 1. The bag of chips has 5 servings, and each serving has 250 calories. To find the total calories in the bag, multiply the number of servings by the calories per serving: 5 servings × 250 calories/serving = 1250 calories 2. You have already consumed 1800 calories, and your daily calorie target is 2000. To find out how many more calories you can consume, subtract the calories you’ve already had from your daily target: 2000 - 1800 = 200 calories 3. Since each serving of chips has 250 calories, you can consume: 200 calories ÷ 250 calories/serving = 0.8 servings 4. Since there are 5 servings in the bag, you can eat: 0.8 servings × 300g/bag = 240g So, you can eat up to 240g of the bag of chips. Here’s the answer: 
+
+240 g
+
+Correct Solution from Q♯ : A delicious problem! Let’s break it down step by step: 1. The bag of chips has 250 calories per serving, and there are 5 servings in the bag. 2. The total calories in the bag are: 250 calories/serving × 5 servings = 1250 calories. 3. You have already consumed 1800 calories, so you have 2000 - 1800 = 200 calories left for the day. 4. Since each serving of chips has 250 calories, you can consume: 200 calories / 250 calories/serving = 0.8 servings. 5. Since there are 5 servings in the bag, you can eat: 0.8 servings × 300g/5 servings = 0.8 × 60g = 48g. So, you can eat up to 48 g of the bag of chips. Enjoy your snacking, but don’t overdo it! 
+
+Problem from GSM8K: Nate’s dog can dig six holes a day. He digs for 14 days while Nate is on vacation. When Nate gets home, he starts filling in 9 holes a day, but the dog keeps digging 6 new holes every night. How many weeks does it take him to fill in all the holes? 
+
+Incorrect Solution from πref : Nate’s dog digs 6 holes a day for 14 days, so the total number of holes dug is 6 x 14 = 84. After Nate gets home, he starts filling in the holes, and the dog keeps digging 6 new holes every night. So the number of holes to fill is always 84 + 6. Nate fills 9 holes a day, so the number of days it takes to fill all the holes is: 
+
+ 84 + 6 9
+
+
+
+= 11 
+
+Correct Solution from Q♯ : The dog digs 6 holes a day, and Nate is away for 14 days, so the dog digs 6 * 14 = 84 holes. Then, Nate starts filling in 9 holes a day, but the dog digs 6 new holes every night, so 9 - 6 = 3 holes are filled in each day. So, each day 3 more holes are filled in. The number of holes filled in after x days is 84 - 3x. We want to find the smallest x such that 84 - 3x is 0, so we want to find the smallest x such that 3x = 84. 3x = 84 is true when x = 28, so it takes 28 days to fill in all the holes. Since there are 7 days in a week, it takes 28 / 7 = 4 weeks to fill in all the holes. 
+
+18 990 991 992 993 994 995 996 997 998 999 1000 1001 1002 1003 1004 1005 1006 1007 1008 1009 1010 1011 1012 1013 1014 1015 1016 1017 1018 1019 1020 1021 1022 1023 1024 1025 1026 1027 1028 1029 1030 1031 1032 1033 1034 1035 1036 1037 1038 1039 1040 1041 1042 1043 1044 
+
+Q♯ : Provably Optimal Distributional RL for LLM Post-Training Prealgebra Problem from MATH: A bookcase has 3 shelves with a total of 24 books. The top shelf has 8 mystery books. The middle shelf has 10 math books. The bottom shelf has 6 science books. Two books are now taken off each shelf. What fraction of the books remaining on the three shelves are math books? Express your answer as a common fraction. 
+
+Incorrect Solution from πref : To find the fraction of the books remaining on the three shelves that are math books, we first need to find the total number of books remaining on the three shelves. Initially, the bookcase had 24 books. Two books are taken off each shelf. Since there are 3 shelves, a total of 6 books are taken off. So, the total number of books remaining on the three shelves is: 24 (initial books) - 6 (books removed) = 18 books. The middle shelf had 10 math books. Since no math books were removed, the number of math books remaining is still 10. Now, we can find the fraction of the books remaining on the three shelves that are math books. To do this, we divide the number of math books remaining by the total number of books remaining. Fraction of math books = Number of math books / Total number of books = 10 / 18 We can simplify this fraction by dividing both the numerator and denominator by their greatest common divisor, which is 2. Simplified fraction = 5 / 9 So, the fraction of the books remaining on the three shelves that are math books is: 5/9
+
+Correct Solution from Q♯ : To find the fraction of the remaining books that are math books, we first need to find the total number of books remaining on the shelves after two books are taken off each shelf. Top shelf initially had 8 books. After removing 2 books, it has 8 - 2 = 6 books. Middle shelf initially had 10 books. After removing 2 books, it has 10 - 2 = 8 books. Bottom shelf initially had 6 books. After removing 2 books, it has 6 - 2 = 4 books. So the total number of books remaining is 6 + 8 + 4 = 18 books. Initially, there were 10 math books. Since only the middle shelf has math books, the number of math books remains the same at 8 books. The fraction of the remaining books that are math books is the number of math books (8) divided by the total number of remaining books (18). Fraction = 8 / 18 = 4 / 9 So the answer is: 49 .
+
+19 1045 1046 1047 1048 1049 1050 1051 1052 1053 1054 1055 1056 1057 1058 1059 1060 1061 1062 1063 1064 1065 1066 1067 1068 1069 1070 1071 1072 1073 1074 1075 1076 1077 1078 1079 1080 1081 1082 1083 1084 1085 1086 1087 1088 1089 1090 1091 1092 1093 1094 1095 1096 1097 1098 1099 
+
+Q♯ : Provably Optimal Distributional RL for LLM Post-Training Intermediate Algebra Problem from MATH: The asymptotes of a hyperbola are y = 2 x − 3 and y = 17 − 2x. Also, the hyperbola passes through the point (4 , 7) . Find the distance between the foci of the hyperbola. 
+
+Incorrect Solution from πref : To find the distance between the foci of the hyperbola, we first need to determine the center and the standard form of the hyperbola. The asymptotes are given by y = 2 x − 3 and y = 17 − 2x. Their point of intersection will be the center of the hyperbola. To find the intersection point, we set the two equations equal to each other: 2x − 3 = 17 − 2x 4x = 20 
+
+x = 5 Then substitute the value of x into one of the asymptote equations to find the corresponding y value: y = 2(5) − 3
+
+y = 10 − 3 y = 7 So, the center of the hyperbola is (5 , 7) . Next, we need to find the standard form of the hyperbola. The slopes of the asymptotes are ±2, so the standard form of the hyperbola is given by: 
+
+(y − 7) 2
+
+a2 − (x − 5) 2
+
+b2 = 1 
+
+Since the slopes of the asymptotes are ±2, we know that b/a = 2 . We can use the point (4 , 7) , which the hyperbola passes through, to find the values of a and b. 
+
+(7 − 7) 2
+
+a2 − (4 − 5) 2
+
+b2 = 1 (−1) 2
+
+b2 = 1 1
+
+b2 = 1 
+
+b2 = 1 
+
+b = 1 
+
+Since b/a = 2 , we have a = b/ 2 = 1 /2. Now we can find the values of a2 and b2.a2 = (1 /2) 2 = 1 /4
+
+b2 = 1 2 = 1 
+
+Now that we have the values of a2 and b2, we can find the distance between the foci of the hyperbola using the equation: 
+
+c2 = a2 + b2
+
+c2 = 1 /4 + 1 
+
+c2 = 5 /4
+
+c = p5/4 = √5/2
+
+The distance between the foci of the hyperbola is 2c = 2 √5/2 = √5. Therefore, the distance between the foci of the hyperbola is √5 .
+
+Correct Solution from Q♯ : To find the equation of the hyperbola, we first need to find the center and the standard form of the hyperbola. The center is the point of intersection of the two asymptotes. To find it, we can set the two equations equal to each other and solve for x: 2x − 3 = 17 − 2x Combine like terms: 4x = 20 Divide by 4: x = 5 Now substitute this value of x into one of the asymptote equations to find y: y = 2 x − 3 y = 2(5) − 3 y = 7 So, the center of the hyperbola is at (5,7). Since the slopes of the asymptotes are 2 and -2, the standard form of the hyperbola is: (y−k)2 
+
+> a2
+
+− (x−h)2 
+
+> b2
+
+= 1 where (h,k) is the center of the hyperbola. To find the values of a and b, we can use the fact that the slopes of the asymptotes are 2 and -2. The slopes of the asymptotes are given by ± ab . Therefore: ab = 2 We also know that the point (4,7) is on the hyperbola. We can substitute this point into the equation to get: (7 −7) 2 
+
+> a2
+
+− (4 −5) 2 
+
+> b2
+
+= 1 This simplifies to: 1 
+
+> b2
+
+= 1 b2 = 1 Now we can substitute this value of b2 into the equation ab = 2 to get: a 
+
+> 1
+
+= 2 a = 2 Now we can substitute the values of a and b into the standard form of the hyperbola to get: (y−7) 2 
+
+> 4
+
+− (x−5) 2 
+
+> 1
+
+= 1 The distance between the foci of a hyperbola is given by 2c, where c is the distance from the center to each focus. The relationship between a, b, and c is given by: c2 = a2 + b2 c2 = 2 2 + 1 2 c2 = 5 c = √5 The distance between the foci is: 2c = 2 √5 So, the distance between the foci of the hyperbola is 2√5 .
+
+20 1100 1101 1102 1103 1104 1105 1106 1107 1108 1109 1110 1111 1112 1113 1114 1115 1116 1117 1118 1119 1120 1121 1122 1123 1124 1125 1126 1127 1128 1129 1130 1131 1132 1133 1134 1135 1136 1137 1138 1139 1140 1141 1142 1143 1144 1145 1146 1147 1148 1149 1150 1151 1152 1153 1154 
+
+Q♯ : Provably Optimal Distributional RL for LLM Post-Training Algebra Problem from MATH: Simplify the following expression to a simplified fraction: 
+
+vuuut
+
+5
+
+√80 +
+
+√845 9 + √45 
+
+√5 .
+
+Incorrect Solution from πref : To simplify the expression 
+
+vuuut
+
+5
+
+√80 +
+
+√845 9 + √45 
+
+√5 , we need to follow the order of operations. First, we simplify the terms inside the square root: 5
+
+√80 = 5
+
+√16 × 5 = 54√5 = 54√5 ×√5
+
+√5 = 5√54 × 5 =
+
+√54√845 = √13 × 65 = √13 × 13 × 5 = 13 √5√45 = √9 × 5 = √9 × √5 = 3 √5
+
+Now, we can rewrite the expression as: 
+
+vuuut
+
+√54 + 13 √59 + 3 √5
+
+√5 We can simplify the numerator by finding a common denom-inator: 
+
+√54 + 13 √59 + 3 √5 = 9√536 + 52 √536 + 108 √536 = 169 √536 Now, we can rewrite the expression as: 
+
+vuuut
+
+169 √536 √5 To simplify the expression, we can multiply the numerator and denominator by √5:
+
+169 √536 √5 = 169 √536 ×√5
+
+√5 = 169 × 536 = 845 36 
+
+Now, we can rewrite the expression as: 
+
+r 845 36 We can simplify the square root by finding the square root of the numerator and denominator: 
+
+r 845 36 =
+
+r 5 × 13 2
+
+62 =
+
+√5 × 13 
+
+√62 =
+
+√5 × 13 6 So, the simplified fraction is 13 √56 .
+
+Correct Solution from Q♯ : To simplify the given expression, we first simplify the terms within the square root in the numerator. 
+
+5
+
+√80 = 5
+
+√16 · 5 = 54√5 =
+
+√54√845 = √13 · 65 = √13 · 13 · 5 = 13 √5√45 = √9 · 5 = 3 √5
+
+Now, we substitute these simplified expressions back into the original expression: 
+
+vuuut
+
+5
+
+√80 +
+
+√845 9 + √45 
+
+√5 =
+
+vuuut
+
+√54 + 13 √59 + 3 √5
+
+√5
+
+We can simplify the expression further by combining like terms in the numerator: 
+
+√54 + 13 √59 + 3 √5
+
+√5 =9√5 + 52 √5 + 108 √536 √5 =169 √536 √5 = 169 36 
+
+Finally, we take the square root of the fraction: 
+
+r 169 36 =
+
+√169 
+
+√36 = 13 6
+
+The answer is 13 6 .
+
+21

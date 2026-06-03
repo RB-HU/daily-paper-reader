@@ -1,0 +1,1229 @@
+Title: AlphaDPO: Adaptive Reward Margin for Direct Preference Optimization
+
+URL Source: https://openreview.net/pdf?id=ETLKYVMVLt
+
+Number of Pages: 17
+
+Markdown Content:
+# AlphaDPO: Adaptive Reward Margin for Direct Preference Optimization 
+
+Junkang Wu 1 Xue Wang 2 Zhengyi Yang 1 Jiancan Wu 1 Jinyang Gao 2 Bolin Ding 2 Xiang Wang 1 * 
+
+Xiangnan He 1 * 
+
+## Abstract 
+
+Aligning large language models (LLMs) with hu-man preferences requires balancing policy opti-mization with computational stability. While re-cent offline methods like DPO and SimPO by-pass reinforcement learning’s complexity, they face critical limitations: DPO relies on static ref-erence models that degrade with policy updates, and SimPO assumes a uniform target reward mar-gin that ignores instance-wise preference strength. We propose AlphaDPO, an adaptive preference optimization framework that dynamically repa-rameterizes the reference distribution to address these issues. Our key innovation lies in an im-plicit reference model ˆπref ∝ U (y|x)( πθ /π ref )α,which interpolates between policy-driven special-ization and uniform exploration while enabling instance-adaptive reward margins. Theoretically, we prove AlphaDPO implicitly controls sequen-tial KL divergence between iterative policy up-dates, ensuring stability even with poorly cali-brated reference models. Empirically, AlphaDPO achieves state-of-the-art performance on AlpacaE-val 2 (58.7% LC win rate) and Arena-Hard (35.7% win rate) across Mistral2-7B, Llama3-8B, and Gemma2-9B, demonstrating robust alignment without multi-stage training. Our work establishes adaptive reference reparameterization as a princi-pled mechanism for preference optimization. The code is available at https://github.com/ junkangwu/alpha-DPO .
+
+## 1. Introduction 
+
+Learning from human feedback is essential for aligning large language models (LLMs) with human values and inten-      
+
+> *Equal contribution 1MoE Key Lab of BIPC, University of Sci-ence and Technology of China 2Alibaba Group. Correspondence to: Xiang Wang <xiangwang1223@gmail.com >, Xiangnan He
+> <hexn@ustc.edu.cn >.
+> Proceedings of the 42 nd International Conference on Machine Learning , Vancouver, Canada. PMLR 267, 2025. Copyright 2025 by the author(s).
+
+tions (Leike et al., 2018), ensuring they are helpful, honest, and harmless (Askell et al., 2021). Reinforcement learn-ing from human feedback (RLHF) (Christiano et al., 2017; Ouyang et al., 2022; Stiennon et al., 2020) is a widely used method for fine-tuning LLMs to achieve this goal. However, RLHF faces challenges, particularly in computational effi-ciency and training stability due to its multi-stage process. Recently, alternative offline algorithms like DPO (Rafailov et al., 2023) and SimPO (Meng et al., 2024) have been explored. Specifically, DPO reparameterizes the reward function in RLHF to directly learn a policy model ( πθ ) from preference data, removing the need for an explicit reward model. Building on DPO, SimPO removes the reference model requirement but introduces a target reward margin γ
+
+to enhance the separation between response pairs, achieving leading performance. This naturally raises the question: 
+
+Do we really need a reference model in the alignment process? 
+
+This question prompts a deeper analysis of SimPO’s under-lying mechanism: it can be viewed as a variant of DPO where the original reference model πref is replaced by an 
+
+implicit reference model ˆπref . In SimPO, the target reward margin γ actually reflects a constant difference between the log likelihoods of a selected response and a rejected one, i.e., (log ˆ πref (yw|x) − log ˆ πref (yl|x)). As the constant difference γ is independent of arbitrary responses, this im-plicitly assumes a uniform reference distribution ( cf. Fig-ure 1). By tuning γ, SimPO effectively finds an “ideal” uniform implicit reference model , yielding substantial per-formance improvements over standard DPO, particularly when the original reference model πref is suboptimal (Hong et al., 2024). While conceptually appealing with empir-ical improvements, SimPO has two inherent limitations: (1) Applying the same target reward margin to all pairwise comparisons ignores the variability in the data (Yang et al., 2024; Wu et al., 2024), potentially compromising decision quality in some cases; and (2) The implicit assumption of a uniform reference model somehow lacks a solid theoreti-cal foundation. These limitations could hinder the model’s ability to achieve alignment across varied training data, es-pecially in domains with diverse preferences or complex reward structures (Morimura et al., 2024; He et al., 2024). 1AlphaDPO: Adaptive Reward Margin for Direct Preference Optimization   
+
+> Figure 1. DPO, SimPO and AlphaDPO mainly differ in their implicit reference model , as indicated in the shaded box, leading to variations in their respective loss functions. AlphaDPO outperforms DPO and SimPO across a wide range of settings on AlpacaEval 2.
+
+In response to these challenges, we propose an adaptive pref-erence distribution, which gives rise to an adaptive reward margin for different response pairs. We term this simple yet effective preference optimization algorithm AlphaDPO. Specifically, the adaptive preference distribution is heuris-tically set as: ˆπref (y|x) = U (y|x) ( πθ (y|x)/π ref (y|x)) α.Here, U (y|x), inspired by SimPO, employs a uniform dis-tribution to establish an initial target reward margin, while the term (πθ (y|x)/π ref (y|x)) α adjusts the balance between the policy model πθ and the reference model πref to achieve a personalized reward margin. When α = 0 , AlphaDPO reduces to SimPO; as α increases, the ratio between πθ and 
+
+πref becomes dominant, enabling a personalized, dynamic target. More important, AlphaDPO offers several intriguing theoretical insights: We demonstrate that AlphaDPO bal-ances alignment and diversity via KL divergence control. By approximating the sequential KL divergence between the policy and the reference model, AlphaDPO achieves computational efficiency and robustness, particularly when the reference model is not well-calibrated at the token level. Extensive analysis indicates that AlphaDPO leverages pref-erence data more effectively by assigning personalized mar-gins to each pair, resulting in an improved policy model. As demonstrated in Figure 1, our method consistently outper-forms DPO and SimPO across three base model settings (Mistral2-7B, Llama3-8B, and Gemma2-9B) on AlpacaEval 2 and Arena-Hard ( cf. Section 5). Notably, we achieve a 58.7 length-controlled win rate on AlpacaEval 2, and a 35.7 win rate on Arena-Hard, establishing it as the strongest 8B open-source model to date. 
+
+## 2. Preliminaries 
+
+Offline Alignment. In the offline alignment problem, we have access to a dataset D = {(x, y w, y l)} comprising prompts x and labeled response pairs (yw, y l) obtained from a reference policy πref . Here, yw is the preferred (winning) response and yl is the less preferred (losing) response. Al-though the underlying latent reward function r∗(x, y ) that governs these preferences is not directly observable, the Bradley-Terry (BT) model (Bradley & Terry, 1952) pro-vides a framework for modeling pairwise comparisons: 
+
+P(yw ≻ yl|x) = exp( r∗(x, y w)) exp( r∗(x, y w)) + exp( r∗(x, y l)) , (1) where r∗(x, y ) assigns a latent reward to each response y
+
+given prompt x. The goal of offline alignment is to learn a policy πθ that approximates r∗(x, y ) using D.
+
+Reinforcement Learning from Human Feedback (RLHF). Classical offline alignment algorithms employ reinforcement learning with a KL-regularized reward ob-jective (Bai et al., 2022; Ziegler et al., 2019; Ouyang et al., 2022), defined for a regularization parameter η > 0:
+
+max 
+
+> πθ
+
+Ex∼D ,y ∼πθ (y|x)[rϕ(x, y )] −βDKL [πθ (y|x)|| πref (y|x)] ,
+
+(2) where rϕ(x, y ) is the reward function learned using the BT model on the preference dataset, πθ is the policy model being optimized, πref is the fixed reference policy, typically obtained via supervised fine-tuning. The KL-divergence regularizes the policy to remain close to the reference model. 
+
+Directed Preference Optimization (DPO). DPO (Rafailov et al., 2023) is a leading offline preference optimization method. Instead of learning an explicit reward model, DPO reparameterizes the reward function r(x, y ) using a closed-form expression involving the optimal policy: 
+
+r(x, y ) = β log πθ (y|x)
+
+πref (y|x) + β log Z(x), (3) where Z(x) is the partition function independent of y. This leads to the DPO loss for any triplet (x, y w, y l):
+
+LDPO (πθ ; πref ) = −E(x,y w ,y l)∼D 
+
+
+
+log σ
+
+
+
+β log πθ (yw|x)
+
+πθ (yl|x) − β log πref (yw|x)
+
+πref (yl|x)
+
+ 
+
+. (4) 2AlphaDPO: Adaptive Reward Margin for Direct Preference Optimization 
+
+where σ(·) denotes the sigmoid function. 
+
+Simple Preference Optimization (SimPO). SimPO (Meng et al., 2024) introduces two key contributions: (1) a length-normalized reward, calculated as the average log-probability per token of a response under the policy model πθ , and (2) a target reward margin γ to ensure the reward difference between winning and losing responses exceeds this margin. The SimPO loss is formulated as: 
+
+LSimPO (πθ ) = −E(x,y w ,y l)∼D 
+
+
+
+log σ
+
+ β
+
+|yw| log πθ (yw|x) − β
+
+|yl| log πθ (yl|x) − γ
+
+ 
+
+,
+
+(5) where |y| denotes the length ( i.e., number of tokens) of response y, normalizing the reward by response lengths, and γ is the target reward margin. 
+
+## 3. Method 
+
+In this section, we establish a unified framework that con-nects DPO and SimPO (Section 3.1), highlighting the criti-cal role of the reference model in preference optimization. We then introduce AlphaDPO (Section 3.2), a new prefer-ence optimization algorithm that synergizes the strengths of both DPO and SimPO. 
+
+3.1. A Common Framework for DPO and SimPO 
+
+A key insight in our work is that SimPO implicitly adopts a uniform distribution over the vocabulary as its reference model, whereas DPO employs the SFT model as the refer-ence. By examining the role of the reference model in both methods, we derive the following result: 
+
+Theorem 3.1. Let U (y|x) denote a uniform distribution over the vocabulary for a given input x, replacing πref (y|x)
+
+in the DPO loss function. Then, the DPO loss function simplifies to: 
+
+L(πθ ; U ) = −E(x,y w ,y l)∼D 
+
+[log σ (β (log πθ (yw|x) − log πθ (yl|x)) − γ)] , (6) 
+
+where γ = β (log U (yw|x) − log U (yl|x)) is a constant. Under a length-normalized reward formulation, this loss function becomes: 
+
+LLN (πθ ; U ) = −E(x,y w ,y l)∼D 
+
+
+
+log σ
+
+ β
+
+|yw| log πθ (yw|x) − β
+
+|yl| log πθ (yl|x) − γ
+
+ 
+
+.
+
+(7) 
+
+Therefore, SimPO can be interpreted as a special case of DPO where the reference model is a uniform distribution. Remark 3.2 . Why do winning and losing responses have different probabilities under a uniform policy? Although both winning and losing responses are sampled from the r0 100 200 300 400            
+
+> Step
+> 40
+> 20
+> 0
+> 20
+> 40
+> log  ref (yw|x) log  ref (yl|x)
+> DPO
+> Figure 2. log πref (yw|x)−log πref (yl|x)along the training steps. The random fluctuations suggest πref struggles to distinguish be-tween the preferred and less preferred responses.
+
+same policy model, their selection probabilities diverge through the reward model’s scoring mechanism. Specif-ically, winning response ( yw) are those assigned higher scores, while losing response ( yl) receive lower scores. Even under a uniform policy, these selections remain distinct be-cause their selection probabilities are tied to their relative scores, not to the underlying uniform distribution over the response space. Theorem 3.1 establishes a unified framework for DPO and SimPO by showing that replacing the reference model πref 
+
+in DPO with a uniform distribution U reduces the DPO loss to the SimPO loss, up to a constant term γ. This reveals that SimPO is essentially DPO with a uniform reference model. Consequently, the term β (log πref (yw|x) − log πref (yl|x)) 
+
+collapses to a constant, reflecting the difference in selection probabilities induced by the scoring mechanism. This em-phasizes the pivotal role of the implicit reference model in preference optimization. 
+
+Limitations of DPO: As depicted in Figure 2, the reference model πref in DPO may not effectively distinguish between the preferred ( yw) and less preferred ( yl) responses, as its outputs do not inherently reflect the preference information. In contrast, using a uniform distribution as in SimPO results in a reward margin γ, ensuring that the reward difference between the preferred and less preferred responses is entirely governed by the policy model πθ .
+
+Limitations of SimPO : While SimPO simplifies the loss function by using a constant offset γ, this one-size-fits-all approach overlooks the variability inherent in different data instances. The fixed γ across all training samples could lead to suboptimal performance, especially in the presence of noise or inconsistencies in the data. Moreover, completely discarding reference model πref may eliminate potentially useful prior knowledge about language structure and se-mantic relationships that could help discriminate between similar response pairs. 3AlphaDPO: Adaptive Reward Margin for Direct Preference Optimization 
+
+3.2. Proposed Method: AlphaDPO 
+
+Our analysis highlights the significant impact of the refer-ence model in preference optimization. To overcome the limitations identified in both DPO and SimPO, we propose the following principles: 
+
+Principle 1 : The reference model should contribute to dif-ferentiating between preferred and less preferred responses. 
+
+Principle 2 : The reference model should adapt to discrep-ancies between response pairs to capture instance-specific nuances. 
+
+Principle 1 addresses the shortcoming in DPO, where the reference model may inadequately distinguish between yw
+
+and yl, introducing uncertainty without a guaranteed mar-gin. Principle 2 rectifies the oversimplification in SimPO, where the absence of a reference model fails to account for variability across different instances. 
+
+Deriving the AlphaDPO Objective. Starting from the stan-dard Reinforcement Learning (RL) objective for preference optimization, we redefine the reference model πref as an 
+
+implicit reference model ˆπref , formulated as: 
+
+ˆπref (y|x) ∝ U (y|x)
+
+ πθ (y|x)
+
+πref (y|x)
+
+α
+
+, (8) where α is a hyperparameter that determines the extent to which the policy model πθ modifies the reference model 
+
+πref , and U (y|x) represents a uniform distribution provid-ing a stable baseline. This formulation shares structural similarities with the weak-to-strong preference optimiza-tion framework (Zhu et al., 2025), where the aligned strong model πstrong  
+
+> r
+
+is expressed as: 
+
+πstrong  
+
+> r
+
+(y | x) ∝ πstrong ref (y | x)
+
+ πweak  
+
+> r
+
+(y | x)
+
+πweak ref (y | x)
+
+α
+
+. (9) Both formulations employ model ratios to dynamically ad-just the reference distribution — πθ 
+
+> πref
+
+in Equation 8 and πweak 
+
+> r
+> πweak ref
+
+in Equation 9. Specifically, ˆπref interpolates between ex-isting methods, controlled by the smoothness parameter α:i) When α = 0 , ˆπref reduces to the uniform distribution 
+
+U (y|x), equivalent to the assumption in SimPO. ii) When 
+
+α = 1 , ˆπref fully incorporates the proportionality πθ 
+
+> πref
+
+, align-ing with DPO. The motivation behind this redefinition is to overcome the potential suboptimality of both SimPO and DPO by learn-ing instance-specific adjustments while preserving useful prior knowledge. Rather than relying on either a fixed ref-erence model or a constant margin, ˆπref creates a flexible framework that can better capture varying degrees of prefer-ence strength across different instances. Further details are provided in Appendix C. Substituting ˆπref into the original DPO loss function, we obtain the AlphaDPO objective: 
+
+LAlphaDPO (πθ , π ref )= −E(x,y w ,y l)∼D 
+
+
+
+log σ
+
+
+
+β log πθ (yw|x)
+
+πθ (yl|x) − β log ˆπref (yw|x)ˆπref (yl|x)
+
+ 
+
+= −E(x,y w ,y l)∼D 
+
+
+
+log σ
+
+
+
+β
+
+
+
+log πθ (yw|x)
+
+πθ (yl|x)
+
+
+
+− [γ + αM (x, y w, y l)] 
+
+ 
+
+,
+
+(10) where γ = β
+
+
+
+log U (yw |x) 
+
+> U(yl|x)
+
+
+
+is a constant offset as before, and M (x, y w, y l) is defined as: 
+
+M (x, y w, y l) = β
+
+
+
+log πθ (yw|x)πref (yl|x)
+
+πref (yw|x)πθ (yl|x)
+
+
+
+. (11) The term M (x, y w, y l) measures the divergence between the policy model πθ and the reference model πref over the response pairs, effectively capturing instance-specific dis-crepancies as described in Principle 2. 
+
+Stop Gradient on ˆπref : Although ˆπref depends on πθ and 
+
+πref , it is intended to serve as a fixed reference during op-timization. To prevent gradients from backpropagating through ˆπref to πθ , we apply a stop-gradient operation, de-noted as sg[ ·], ensuring that ˆπref remains constant during the policy updates. 
+
+Normalization of M (x, y w, y l): To stabilize training and avoid M (x, y w, y l) dominating the loss due to scale varia-tions, we apply Z-score normalization (Patro & Sahu, 2015) to M :
+
+M ∗(x, y w, y l) = M (x, y w, y l) − μM
+
+σM
+
+, (12) where μM and σM are the mean and standard deviation of 
+
+M computed over the training dataset. 
+
+Length-normalized Reward Formulation : Inspired by SimPO, we incorporate length normalization into our method. This adjustment ensures that rewards are scaled appropriately with respect to the length of the sequences, thereby stabilizing the training process. As demonstrated in our experiments ( cf. Appendix D.2), we also confirmed that even without length normalization, our method remains effective and continues to show performance improvements. 
+
+Final Objective : Incorporating the above considerations, the final AlphaDPO loss function becomes: 
+
+LAlphaDPO (πθ , π ref ) = −E(x,y w ,y l)∼D 
+
+[log σ (u(x, y w, y l) − sg [ γ + αM ∗(x, y w, y l)])] , (13) where u(x, y w, y l) = β  
+
+> |yw|
+
+log πθ (yw|x) − β 
+
+> |yl|
+
+log πθ (yl|x).This formulation ensures balanced influence between the 4AlphaDPO: Adaptive Reward Margin for Direct Preference Optimization 
+
+policy and reference models, aligning with Principles 1 and 2. By incorporating the normalized discrepancy term 
+
+M ∗(x, y w, y l), AlphaDPO adaptively adjusts the margin between preferred and less preferred responses based on instance-specific differences, enhancing learning. 
+
+## 4. Theoretical Analysis of AlphaDPO 
+
+Balancing alignment performance with response diversity is crucial in recent alignment methods (Zeng et al., 2024; Wang et al., 2024a; Ji et al., 2024a). A popular approach is the Token-Level Direct Preference Optimization (TDPO) method (Zeng et al., 2024), which introduces fine-grained control of the KL divergence at the token level. Given a prompt x and preceding tokens y<t , the policy πθ generates the next token z by sampling from πθ (z|x, y <t ).By mapping the reward model to a token-level format, the TDPO loss is defined as: 
+
+LTDPO (πθ ) = −E(x,y w ,y l)∼D 
+
+
+
+log σ
+
+
+
+β log πθ (yw |x)
+
+πref (yw |x) − β log πθ (yl|x)
+
+πref (yl|x) − δ(x, y w , y l)
+
+ 
+
+,
+
+(14) 
+
+where the margin term δ(x, y w, y l) is defined as: 
+
+δ(x, y w , y l) = βDSeqKL [x, y l; πref || πθ ] − βDSeqKL [x, y w ; πref || πθ ],
+
+(15) 
+
+= β
+
+> |yl|
+
+X
+
+> t=1
+
+Ez [log πref (z|[x, y <t l ]) 
+
+πθ (z|[x, y <t l ]) ] − β 
+
+> |yw|
+
+X
+
+> t=1
+
+Ez [log πref (z|[x, y <t w ]) 
+
+πθ (z|[x, y <t w ]) ].
+
+(16) 
+
+Here, z ∼ πref and DSeqKL [x, y ; πref || πθ ] denotes the se-quential KL divergence between πref and πθ along the se-quence y given x.Below we present a lemma establishing theoretical connec-tions between TDPO and AlphaDPO w.r.t. the margin terms. 
+
+Lemma 4.1 (Equivalence of Margin Terms) . Consider the margin term δ(x, y w, y l) that represents the difference in sequential KL divergences between a reference policy πref 
+
+and policy πθ for preferred sequence yw and rejected se-quence yl, conditioned on input x: 
+
+δ(x, y w, y l) = βDSeqKL [x, y l; πref || πθ ]
+
+− βDSeqKL [x, y w; πref || πθ ], (17) 
+
+Under the assumption that the sequential KL divergence can be approximated by the log-likelihood ratio of complete se-quences, the margin term δ(x, y w, y l) admits the following approximation: 
+
+δ(x, y w, y l) ≈ β
+
+
+
+log πθ (yw|x)
+
+πref (yw|x) − log πθ (yl|x)
+
+πref (yl|x)
+
+
+
+= M (x, y w, y l),
+
+where M (x, y w, y l) is the margin term in the AlphaDPO objective. 
+
+The proof follows from the sequence-level approximation of the KL divergence between πref and πθ along a sequence 
+
+y, where: 
+
+DSeqKL [x, y ; πref || πθ ] = 
+
+> |y|
+
+X
+
+> t=1
+
+Ez∼πref 
+
+
+
+log πref (z|x, y <t )
+
+πθ (z|x, y <t )
+
+
+
+≈ log πref (y|x)
+
+πθ (y|x) .
+
+Applying this approximation to both yw and yl, the dif-ference δ(x, y w, y l) simplifies to the difference of log-probability ratios, thereby establishing the equivalence with the margin term in AlphaDPO. Lemma 4.1 highlights that the margin term δ(x, y w, y l),which represents the sequential KL divergence difference between preferred and rejected responses, can be directly mapped to the term M (x, y w, y l) in AlphaDPO. This map-ping underscores the theoretical connection between the two approaches in terms of alignment control. While TDPO operates at the token level and provides fine-grained control, AlphaDPO offers greater computational efficiency by oper-ating at the sequence level without sacrificing performance (cf. Appendix Table 6). Moreover, the sequence-level ap-proximation enhances robustness to token-level noise in πref ,making AlphaDPO particularly suited for scenarios where the reference policy may not be perfectly aligned. 
+
+Advantages of the margin term δ(x, y w, y l). The core contribution of TDPO lies in introducing the margin term 
+
+r(x, y w) − r(x, y l) − δ(x, y w, y l), which is similar to DPO with an offset (Amini et al., 2024) and helps control the KL divergence. In contrast, AlphaDPO generalizes this ap-proach by replacing δ(x, y w, y l) with M (x, y w, y l), a more flexible margin term inspired by SimPO. Appendix Table 6 supports this with performance comparisons between TDPO and AlphaDPO. These findings illustrate: i) Adding an off-set to DPO and its variants is a robust strategy, applicable to both TDPO and AlphaDPO. ii) The choice of offset is critical — the sequence-level margin term M (x, y w, y l) is particularly effective when applied to potentially unreliable reference models. 
+
+## 5. Experiments 
+
+In this section, we present the main results of our experi-ments, highlighting the superior performance of AlphaDPO over existing methods on various benchmarks and ablation studies to analyze the impact of different components of AlphaDPO. 5AlphaDPO: Adaptive Reward Margin for Direct Preference Optimization   
+
+> Table 1. AlpacaEval 2, Arena-Hard results across four settings. “WR” denotes the raw win rate,“LC” the length-controlled win rate, and “SC” the style-controlled win rate. The best results are highlighted in bold, while the second-best are underlined.
+
+Method Llama3-Instruct (8B) Mistral-Instruct (7B) AlpacaEval 2 Arena-Hard AlpacaEval 2 Arena-Hard LC (%) WR (%) SC (%) LC (%) WR (%) LC (%) WR (%) SC (%) LC (%) WR (%) 
+
+SFT 24.0 23.6 22.1 22.2 22.4 19.0 15.4 18.3 13.2 12.9 DPO 40.2 38.1 31.9 32.0 31.2 20.3 17.9 18.9 13.7 13.4 IPO 35.9 34.4 29.2 29.9 30.2 22.3 18.6 22.4 16.6 16.2 CPO 29.6 34.4 26.3 28.1 29.4 26.2 31.7 26.6 21.4 23.8 
+
+KTO 38.3 34.1 30.3 30.6 30.3 19.4 20.3 21.5 16.0 16.8 ORPO 31.6 29.8 26.6 26.6 26.3 24.0 23.0 24.4 18.5 18.6 R-DPO 40.3 37.3 33.1 32.9 32.9 21.4 22.2 18.7 14.0 13.8 SimPO 43.8 38.0 33.5 33.5 32.6 30.2 32.1 25.6 19.8 20.1 AlphaDPO 46.6 38.1 34.1 34.2 33.3 32.3 32.6 27.2 21.5 21.5 
+
+Method Llama3-Instruct v0.2 (8B) Gemma2-Instruct (9B) AlpacaEval 2 Arena-Hard AlpacaEval 2 Arena-Hard LC (%) WR (%) SC (%) LC (%) WR (%) LC (%) WR (%) SC (%) LC (%) WR (%) 
+
+SFT 24.0 23.6 22.1 22.2 22.4 48.7 36.5 32.0 42.2 42.1 DPO 51.9 50.8 26.1 31.5 33.9 70.4 66.9 43.9 55.6 58.8 IPO 40.6 39.6 31.1 34.2 34.9 62.6 58.4 41.1 51.9 53.5 CPO 36.5 40.8 29.4 32.8 34.2 56.4 53.4 42.4 53.3 55.2 KTO 41.4 36.4 27.1 29.5 28.9 61.7 55.5 41.7 52.3 53.8 ORPO 36.5 33.1 28.8 30.8 30.4 56.2 46.7 35.1 45.3 46.2 R-DPO 51.6 50.7 29.2 34.3 35.0 68.3 66.9 45.1 55.9 57.9 SimPO 55.6 49.6 28.5 34.0 33.6 72.4 65.0 45.0 56.1 57.8 AlphaDPO 58.7 51.1 30.8 36.3 35.7 73.4 66.1 48.6 59.3 60.8 
+
+5.1. Experiments Setup Models and training settings. We optimize preferences using three model families: Llama3-8B (AI@Meta, 2024), Mistral2-7B (Jiang et al., 2023), and Gemma2-9B (Rivi `ere et al., 2024), all in the Instruct setup. Following Meng et al. (2024), we utilize pre-trained instruction-tuned models (meta-llama/Meta-Llama-3-8B-Instruct, mistralai/Mistral-7B-Instruct-v0.2, google/gemma-2-9b-it) as SFT models. For a fair comparison, we use the same training data as SimPO: princeton-nlp/llama3-ultrafeedback-armorm 1, princeton-nlp/mistral-instruct-ultrafeedback 2,and princeton-nlp/gemma2-ultrafeedback-armorm 3 for Llama3-8B, Mistral2-7B, and Gemma2-9B, respec-tively. Additionally, the v0.2 Llama3-Instruct setup uses RLHFlow/ArmoRM-Llama3-8B-v0.1 (Wang et al., 2024b) 
+
+> 1https://huggingface.co/datasets/princeton-nlp/llama3-ultrafeedback-armorm
+> 2https://huggingface.co/datasets/princeton-nlp/mistral-instruct-ultrafeedback
+> 3https://huggingface.co/datasets/princeton-nlp/gemma2-ultrafeedback-armorm
+
+as the reward model for ranking generated data, significantly enhancing performance. These configurations represent state-of-the-art methods, positioning our models among the top performers on various leaderboards. 
+
+Evaluation benchmarks. We evaluate our models using two widely recognized open-ended instruction-following benchmarks: AlpacaEval 2 (Li et al., 2023) and Arena-Hard (Li et al., 2024). These benchmarks assess the models’ conversational abilities across a diverse range of queries and are extensively used by the research community. For AlpacaEval 2, we report the length-controlled win rate (LC) and raw win rate (WR). For Arena-Hard, we provide the win rate (WR), length-controlled win rate (LC), and style-controlled win rate (SC) compared to baseline models. Note that style significantly impacts performance on these leader-boards. 
+
+Baselines. We compare AlphaDPO with several state-of-the-art preference optimization methods: DPO (Rafailov et al., 2023), SimPO (Meng et al., 2024), IPO (Azar et al., 2024), CPO (Xu et al., 2024), KTO (Ethayarajh et al., 2024), ORPO (Hong et al., 2024), and R-DPO (Park et al., 2024). 6AlphaDPO: Adaptive Reward Margin for Direct Preference Optimization                                                                                                          
+
+> Table 2. Ablation studies under Llama3-Instruct v0.2 and Mistral-Instruct settings. We ablate each key design of AlphaDPO and explore variants of the implicit reference model ˆπref .
+> Method Llama3-Instruct v0.2 (8B) Mistral-Instruct (7B) AlpacaEval 2 Arena-Hard AlpacaEval 2 Arena-Hard LC (%) WR (%) SC (%) LC (%) WR (%) LC (%) WR (%) SC (%) LC (%) WR (%)
+> U(·| x)55.6 49.6 28.5 34.0 33.6 30.2 32.1 25.6 19.8 20.1
+> U(·| x) ( πθ(·| x)/π ref (·| x)) α58.7 51.1 30.8 36.3 35.7 32.3 32.6 27.2 21.5 21.5 w/o Normalization 56.5 49.7 23.1 28.4 27.7 32.1 33.1 25.2 19.7 19.6 w/o sg 2.7 3.7 7.7 5.4 6.3 27.2 27.7 25.8 20.3 20.7
+> γ= 0 51.2 44.9 30.0 34.5 33.3 31.9 31.3 24.2 19.6 19.3
+> U(·| x) ( πθ(·| x)) α57.2 50.4 27.6 33.5 32.9 31.6 34.1 26.9 21.3 21.5
+> U(·| x) ( πref (·| x)) α56.3 49.5 29.0 34.3 33.5 28.6 30.9 25.5 20.1 20.3
+> U(·| x) (1 /π ref (·| x)) α56.3 49.2 29.0 34.4 33.8 32.2 33.1 26.0 20.7 20.6
+
+We also include the SFT model as a baseline. We thor-oughly tune the hyperparameters for each baseline and re-port the best performance. Further details can be found in Appendix D.1. 
+
+5.2. Main Results AlphaDPO consistently outperforms existing preference optimization methods. As shown in Table 1, while all preference optimization algorithms improve over the SFT baseline, AlphaDPO achieves superior performance com-pared to existing methods specifically on the AlpacaEval 2 LC metric. These significant improvements highlight the robustness and effectiveness of AlphaDPO. Specifically, Al-phaDPO outperforms the best baseline by an average of 3 percentage points in AlpacaEval 2 LC win rate. Fur-thermore, on benchmarks such as Arena-Hard, AlphaDPO achieves state-of-the-art or second-best results, demonstrat-ing its competitiveness across different evaluation settings. 
+
+Impact of Metrics on Leaderboard Rankings. While both benchmarks are widely used, the standard win rate (WR) metric shows poor separability among different methods, making it challenging to distinguish their relative perfor-mance. Minor differences in WR may stem from biases towards generating detailed or aesthetically pleasing re-sponses, aligning with observations by Dubois et al. (2024) and Chen et al. (2024a). In contrast, the length-controlled (LC) and style-controlled (SC) win rates offer more reliable and interpretable metrics, as they reduce the influence of verbosity and stylistic biases, thereby better reflecting true performance. 
+
+The importance of the design on the implicit refer-ence model. As the core contribution of this work is to propose a novel reference model ˆπref (y|x) =
+
+U (y|x) ( πθ (y|x)/π ref (y|x)) α, we also evaluate other vari-ants of the reference model. Specifically, we com-pare AlphaDPO with three variants: (1) ˆπref (y|x) =
+
+U (y|x) ( πθ (y|x)) α, (2) ˆπref (y|x) = U (y|x) ( πref (y|x)) α,and (3) ˆπref (y|x) = U (y|x) (1 /π ref (y|x)) α. As shown in Table 2, most of the variants perform better than SimPO (ˆπref (y|x) = U (y|x)), which demonstrates the importance of adaptive margin between pairs. Besides, our proposed reference model consistently outperforms other variants, indicating the effectiveness of the proposed design. 
+
+All key designs in AlphaDPO are crucial. To further an-alyze the impact of different components in AlphaDPO, we conduct ablation studies by removing key components from AlphaDPO. As shown in Table 2, removing normal-ization, stop gradient, or setting γ = 0 all lead to significant performance drops, highlighting the importance of these components in AlphaDPO. 
+
+5.3. KL divergence control in AlphaDPO Outstanding Performance and Lower KL. As noted in Rafailov et al. (2023); Zeng et al. (2024), it is crucial to consider both performance and KL divergence when com-paring algorithms. A slightly higher win rate accompanied by a significantly higher KL divergence is often not de-sirable. In line with the design principles of TDPO, we implemented SimPO and AlphaDPO. Figure 3a 3b presents the KL divergence curves. The results indicate that as α
+
+increases, the KL divergence of AlphaDPO remains stable or even decreases slightly when compared to SimPO. This demonstrates that AlphaDPO not only achieves superior performance but also maintains a lower KL divergence, in-dicating a better balance between alignment and control of KL divergence during the training process. 
+
+Mitigating Over-Optimization. Over-optimization, as de-scribed by Gao et al. (2023) and Rafailov et al. (2024), refers to a phenomenon where model performance exhibits a hump-shaped pattern across different targets: beyond an optimal point, further increasing the KL budget results in diminishing returns. To investigate this, we evaluate 7AlphaDPO: Adaptive Reward Margin for Direct Preference Optimization 0 100 200 300 400  
+
+> Step
+> 0.0
+> 0.5
+> 1.0
+> 1.5
+> 2.0
+> KL divergence on  yw SimPO
+> Ours( =0.3)
+
+(a) KL divergence of yw over steps. 0 100 200 300 400   
+
+> Step
+> 0.0
+> 0.5
+> 1.0
+> 1.5
+> 2.0
+> 2.5
+> 3.0
+> KL divergence on  yl SimPO
+> Ours( =0.3)
+
+(b) KL divergence of yl over steps. 3 4 5 6 7 
+
+> Square Root of KL divergence
+> 20
+> 30
+> 40
+> 50
+> Length Control Win Rate
+> SimPO
+> AlphaDPO
+
+(c) LC and KL divergence. 
+
+Figure 3. Analysis of KL divergence and LC trade-off. (a) KL divergence for chosen samples ( yw ), (b) KL divergence for rejected samples (yl), and (c) relationship between LC and KL divergence. 0 0.01 0.05 0.1 0.2                      
+
+> 55
+> 57
+> 59
+> LC on AlpacaEval 2
+> 27
+> 29
+> 31
+> SC on Arena-Hard 10 010 20 30
+> Reward diff. r(x,yw)r(x,yl)
+> 0.0
+> 0.1
+> Density
+> AlphaDPO( =0.0)
+> AlphaDPO( =0.1)
+> AlphaDPO( =0.3)
+> AlphaDPO( =0.5) 6420
+> Avg. log prob on winning p(yw|x)
+> 0.0
+> 0.2
+> 0.4
+> 0.6
+> Density
+> AlphaDPO( =0.0)
+> AlphaDPO( =0.1)
+> AlphaDPO( =0.3)
+> AlphaDPO( =0.5)
+
+Figure 4. Impact of α on (a) LC and SC win rate, (b) reward difference distribution, and (c) log-likelihood distribution of chosen responses in AlphaDPO. 
+
+SimPO and AlphaDPO at four intermediate checkpoints, corresponding to different KL budgets. As illustrated in Figure 3c, it is intriguing that while the performance of our approach does decrease with increasing KL budget, the de-cline is relatively modest. This indicates that our method effectively mitigates the issue of over-optimization. 
+
+5.4. The Impact of α in AlphaDPO Effect of α on Performance. We investigated how the pa-rameter α in AlphaDPO impacts the win rate on AlpacaEval 2 and Arena-Hard. The results, as shown in Figure 4 (a), in-dicate that the style-control win rate on Arena-Hard initially increases and then decreases with increasing α. In contrast, the length-control win rate on AlpacaEval 2 exhibits a con-sistently increasing trend. This suggests that the optimal value of α varies depending on the evaluation benchmarks. Further experiments refer to Appendix D.3. 
+
+Impact of α on the reward distribution. We visualize the distribution of the learned reward margin r(x, y w)−r(x, y l)
+
+and the log likelihood of the chosen response log πθ (yw|x)
+
+under different α values in Figure 4 (b,c). Decreasing α
+
+results in a flatter reward margin, while the log likelihood distribution remains relatively unchanged. Conversely, in SimPO ( cf. Figure 6), increasing γ yields a flatter reward margin distribution but at the cost of also flattening the log likelihood distribution, which undesirably lowers the log likelihood of positive samples. This indicates that Al-phaDPO can better balance the relationship between the reward margin and log likelihood. 
+
+## 6. Discussion 
+
+Conclusion. We proposed AlphaDPO, an adaptive prefer-ence optimization method that improves LLM alignment by introducing a dynamic reward margin based on instance-specific differences. AlphaDPO addresses limitations in previous methods like DPO and SimPO by balancing align-ment and diversity through KL divergence control. Our theoretical guarantees and empirical results show that Al-phaDPO consistently outperforms baselines on benchmarks like AlpacaEval 2 and Arena-Hard, with significant improve-ments in win rates, establishing it as a robust solution for LLM fine-tuning. 
+
+Limitations and Future Work. While AlphaDPO en-hances performance, it introduces an additional hyperpa-rameter, α, requiring manual tuning. Future work could focus on developing an adaptive approach to automatically adjust this parameter. Additionally, although we show Al-phaDPO’s theoretical equivalence to online methods, it re-mains an offline approach. Extending it to online learning would allow real-time adaptation, broadening its application in interactive environments. Lastly, we observed that dif-ferent benchmarks, such as AlpacaEval 2 and Arena-Hard, require distinct parameter settings for optimal performance. Investigating a more generalized approach that adapts effec-tively across multiple benchmarks would further improve the model’s versatility. 8AlphaDPO: Adaptive Reward Margin for Direct Preference Optimization 
+
+## Impact Statement 
+
+This work introduces AlphaDPO, an adaptive preference op-timization framework that improves Large Language Model (LLM) alignment with human preferences. By establishing a more principled and effective mechanism for preference optimization, AlphaDPO contributes to developing more robustly aligned LLMs, a crucial step towards safer and more beneficial AI systems. 
+
+## Acknowledgment 
+
+This research is supported by the National Science and Technology Major Project (2023ZD0121102), and the Na-tional Natural Science Foundation of China (62302321, U24B20180). This research was also supported by the ad-vanced computing resources provided by the Supercomput-ing Center of the USTC. 
+
+## References 
+
+AI@Meta. Llama 3 model card. 2024. URL 
+
+https://github.com/meta-llama/llama3/ blob/main/MODEL_CARD.md .Amini, A., Vieira, T., and Cotterell, R. Direct pref-erence optimization with an offset. arXiv preprint arXiv:2402.10571 , 2024. Anthony, T., Tian, Z., and Barber, D. Thinking fast and slow with deep learning and tree search. NeurIPS , 2017. Askell, A., Bai, Y., Chen, A., Drain, D., Ganguli, D., Henighan, T., Jones, A., Joseph, N., Mann, B., Das-Sarma, N., Elhage, N., Hatfield-Dodds, Z., Hernandez, D., Kernion, J., Ndousse, K., Olsson, C., Amodei, D., Brown, T. B., Clark, J., McCandlish, S., Olah, C., and Kaplan, J. A general language assistant as a laboratory for alignment. CoRR , abs/2112.00861, 2021. Azar, M. G., Rowland, M., Piot, B., Guo, D., Calandriello, D., Valko, M., and Munos, R. A general theoretical paradigm to understand learning from human preferences. In AISTATS , 2024. Bai, Y., Jones, A., Ndousse, K., Askell, A., Chen, A., Das-Sarma, N., Drain, D., Fort, S., Ganguli, D., Henighan, T., Joseph, N., Kadavath, S., Kernion, J., Conerly, T., Showk, S. E., Elhage, N., Hatfield-Dodds, Z., Hernandez, D., Hume, T., Johnston, S., Kravec, S., Lovitt, L., Nanda, N., Olsson, C., Amodei, D., Brown, T. B., Clark, J., Mc-Candlish, S., Olah, C., Mann, B., and Kaplan, J. Training a helpful and harmless assistant with reinforcement learn-ing from human feedback. ArXiv , abs/2204.05862, 2022. Bradley, R. A. and Terry, M. E. Rank analysis of incom-plete block designs: I. the method of paired comparisons. 
+
+Biometrika , 1952. Chen, G. H., Chen, S., Liu, Z., Jiang, F., and Wang, B. Humans or llms as the judge? A study on judgement biases. Arxiv , abs/2402.10669, 2024a. Chen, L., Zhu, C., Soselia, D., Chen, J., Zhou, T., Goldstein, T., Huang, H., Shoeybi, M., and Catanzaro, B. ODIN: Disentangled reward mitigates hacking in RLHF. In 
+
+ICML , 2024b. Christiano, P. F., Leike, J., Brown, T. B., Martic, M., Legg, S., and Amodei, D. Deep reinforcement learning from human preferences. In NIPS , pp. 4299–4307, 2017. Conover, M., Hayes, M., Mathur, A., Xie, J., Wan, J., Shah, S., Ghodsi, A., Wendell, P., Zaharia, M., and Xin, R. Free dolly: Introducing the world’s first truly open instruction-tuned LLM, 2023. URL https: //www.databricks.com/blog/2023/04/12/ \dolly-first-open-commercially-viable\ -instruction-tuned-llm .Ding, N., Chen, Y., Xu, B., Qin, Y., Zheng, Z., Hu, S., Liu, Z., Sun, M., and Zhou, B. Enhancing chat language mod-els by scaling high-quality instructional conversations. In 
+
+EMNLP , 2023. Dong, H., Xiong, W., Goyal, D., Zhang, Y., Chow, W., Pan, R., Diao, S., Zhang, J., Shum, K., and Zhang, T. RAFT: reward ranked finetuning for generative foundation model alignment. Trans. Mach. Learn. Res. , 2023. Dubois, Y., Galambosi, B., Liang, P., and Hashimoto, T. B. Length-controlled alpacaeval: A simple way to debias automatic evaluators. In COLM , 2024. Ethayarajh, K., Xu, W., Muennighoff, N., Jurafsky, D., and Kiela, D. KTO: Model alignment as prospect theoretic optimization. In ICML , 2024. Gao, L., Schulman, J., and Hilton, J. Scaling laws for reward model overoptimization. In ICML , 2023. Geng, X., Gudibande, A., Liu, H., Wallace, E., Abbeel, P., Levine, S., and Song, D. Koala: A dialogue model for academic research. Blog post, April , 1:6, 2023. Gorbatovski, A., Shaposhnikov, B., Malakhov, A., Sur-nachev, N., Aksenov, Y., Maksimov, I., Balagansky, N., and Gavrilov, D. Learn your reference model for real good alignment. In ICLR , 2025. Guo, S., Zhang, B., Liu, T., Liu, T., Khalman, M., Llinares, F., Ram ´e, A., Mesnard, T., Zhao, Y., Piot, B., Ferret, J., and Blondel, M. Direct language model alignment from online AI feedback. Arxiv , abs/2402.04792, 2024. 9AlphaDPO: Adaptive Reward Margin for Direct Preference Optimization 
+
+Havrilla, A., Raparthy, S., Nalmpantis, C., Dwivedi-Yu, J., Zhuravinskyi, M., Hambro, E., and Railneau, R. GLoRe: When, where, and how to improve LLM reasoning via global and local refinements. In ICML , 2024. He, L., Xia, M., and Henderson, P. What’s in your” safe” data?: Identifying benign data that breaks safety. COLM ,2024. Hong, J., Lee, N., and Thorne, J. ORPO: Monolithic prefer-ence optimization without reference model. In EMNLP ,2024. Ji, H., Lu, C., Niu, Y., Ke, P., Wang, H., Zhu, J., Tang, J., and Huang, M. Towards efficient exact optimization of language model alignment. In ICML , 2024a. Ji, K., He, J., and Gu, Q. Reinforcement learning from hu-man feedback with active queries. CoRR , abs/2402.09401, 2024b. Jiang, A. Q., Sablayrolles, A., Mensch, A., Bamford, C., Chaplot, D. S., de Las Casas, D., Bressand, F., Lengyel, G., Lample, G., Saulnier, L., Lavaud, L. R., Lachaux, M.-A., Stock, P., Scao, T. L., Lavril, T., Wang, T., Lacroix, T., and Sayed, W. E. Mistral 7B. ArXiv , abs/2310.06825, 2023. Kingma, D. P. and Ba, J. Adam: A method for stochastic optimization. arXiv preprint arXiv:1412.6980 , 2014. K ¨opf, A., Kilcher, Y., von R ¨utte, D., Anagnostidis, S., Tam, Z. R., Stevens, K., Barhoum, A., Nguyen, D. M., Stan-ley, O., Nagyfi, R., et al. Openassistant conversations-democratizing large language model alignment. In Thirty-seventh Conference on Neural Information Processing Systems Datasets and Benchmarks Track , 2023. Lambert, N., Pyatkin, V., Morrison, J. D., Miranda, L. J. V., Lin, B. Y., Chandu, K. R., Dziri, N., Kumar, S., Zick, T., Choi, Y., Smith, N. A., and Hajishirzi, H. RewardBench: Evaluating reward models for language modeling. In 
+
+NAACL , 2025. Langley, P. Crafting papers on machine learning. In ICML ,2000. Leike, J., Krueger, D., Everitt, T., Martic, M., Maini, V., and Legg, S. Scalable agent alignment via reward modeling: a research direction. CoRR , abs/1811.07871, 2018. Li, T., Chiang, W.-L., Frick, E., Dunlap, L., Zhu, B., Gonzalez, J. E., and Stoica, I. From live data to high-quality benchmarks: The Arena-Hard pipeline, April 2024. URL https://lmsys.org/blog/ 2024-04-19-arena-hard/ .Li, X., Zhang, T., Dubois, Y., Taori, R., Gulrajani, I., Guestrin, C., Liang, P., and Hashimoto, T. B. AlpacaE-val: An automatic evaluator of instruction-following models. https://github.com/tatsu-lab/ alpaca_eval , 2023. Lightman, H., Kosaraju, V., Burda, Y., Edwards, H., Baker, B., Lee, T., Leike, J., Schulman, J., Sutskever, I., and Cobbe, K. Let’s verify step by step. In ICLR , 2024. Liu, T., Qin, Z., Wu, J., Shen, J., Khalman, M., Joshi, R., Zhao, Y., Saleh, M., Baumgartner, S., Liu, J., Liu, P. J., and Wang, X. Lipo: Listwise preference optimization through learning-to-rank. In NAACL , 2025a. Liu, Y., Liu, P., and Cohan, A. Understanding reference policies in direct preference optimization. In NAACL ,2025b. Luo, H., Sun, Q., Xu, C., Zhao, P., Lou, J., Tao, C., Geng, X., Lin, Q., Chen, S., and Zhang, D. Wizardmath: Empow-ering mathematical reasoning for large language models via reinforced evol-instruct. In ICLR , 2025. Meng, Y., Xia, M., and Chen, D. Simpo: Simple preference optimization with a reference-free reward. In NeurIPS ,2024. Morimura, T., Sakamoto, M., Jinnai, Y., Abe, K., and Ariu, K. Filtered direct preference optimization. In EMNLP ,2024. Ouyang, L., Wu, J., Jiang, X., Almeida, D., Wainwright, C. L., Mishkin, P., Zhang, C., Agarwal, S., Slama, K., Ray, A., Schulman, J., Hilton, J., Kelton, F., Miller, L., Simens, M., Askell, A., Welinder, P., Christiano, P. F., Leike, J., and Lowe, R. Training language models to follow instructions with human feedback. In NeurIPS ,2022. Park, R., Rafailov, R., Ermon, S., and Finn, C. Disentangling length from quality in direct preference optimization. In 
+
+ACL , 2024. Patro, S. G. K. and Sahu, K. K. Normalization: A prepro-cessing stage. Arxiv , abs/1503.06462, 2015. Rafailov, R., Sharma, A., Mitchell, E., Manning, C. D., Ermon, S., and Finn, C. Direct preference optimization: Your language model is secretly a reward model. In 
+
+NeurIPS , 2023. Rafailov, R., Chittepu, Y., Park, R., Sikchi, H., Hejna, J., Knox, W. B., Finn, C., and Niekum, S. Scaling laws for reward model overoptimization in direct alignment algorithms. In NeurIPS , 2024. 10 AlphaDPO: Adaptive Reward Margin for Direct Preference Optimization 
+
+Rivi `ere, M., Pathak, S., Sessa, P. G., Hardin, C., Bhupati-raju, S., Hussenot, L., Mesnard, T., Shahriari, B., Ram ´e, A., Ferret, J., Liu, P., Tafti, P., Friesen, A., Casbon, M., Ramos, S., Kumar, R., Lan, C. L., Jerome, S., Tsitsulin, A., Vieillard, N., Stanczyk, P., Girgin, S., Momchev, N., Hoffman, M., Thakoor, S., Grill, J., Neyshabur, B., Bachem, O., Walton, A., Severyn, A., Parrish, A., Ahmad, A., Hutchison, A., Abdagic, A., Carl, A., Shen, A., Brock, A., Coenen, A., Laforge, A., Paterson, A., Bastian, B., Piot, B., Wu, B., Royal, B., Chen, C., Kumar, C., Perry, C., Welty, C., Choquette-Choo, C. A., Sinopalnikov, D., Weinberger, D., Vijaykumar, D., Rogozinska, D., Her-bison, D., Bandy, E., Wang, E., Noland, E., Moreira, E., Senter, E., Eltyshev, E., Visin, F., Rasskin, G., Wei, G., Cameron, G., Martins, G., Hashemi, H., Klimczak-Plucinska, H., Batra, H., Dhand, H., Nardini, I., Mein, J., Zhou, J., Svensson, J., Stanway, J., Chan, J., Zhou, J. P., Carrasqueira, J., Iljazi, J., Becker, J., Fernandez, J., van Amersfoort, J., Gordon, J., Lipschultz, J., Newlan, J., Ji, J., Mohamed, K., Badola, K., Black, K., Millican, K., McDonell, K., Nguyen, K., Sodhia, K., Greene, K., Sj ¨osund, L. L., Usui, L., Sifre, L., Heuermann, L., Lago, L., and McNealus, L. Gemma 2: Improving open lan-guage models at a practical size. CoRR , abs/2408.00118, 2024. Schulman, J., Wolski, F., Dhariwal, P., Radford, A., and Klimov, O. Proximal policy optimization algorithms. 
+
+arXiv preprint arXiv:1707.06347 , 2017. Song, F., Yu, B., Li, M., Yu, H., Huang, F., Li, Y., and Wang, H. Preference ranking optimization for human alignment. In AAAI , 2024. Stiennon, N., Ouyang, L., Wu, J., Ziegler, D. M., Lowe, R., Voss, C., Radford, A., Amodei, D., and Christiano, P. F. Learning to summarize with human feedback. In 
+
+NeurIPS , 2020. Swamy, G., Dann, C., Kidambi, R., Wu, S., and Agarwal, A. A minimaximalist approach to reinforcement learning from human feedback. In ICML , 2024. Taori, R., Gulrajani, I., Zhang, T., Dubois, Y., Li, X., Guestrin, C., Liang, P., and Hashimoto, T. B. Stanford alpaca: An instruction-following llama model, 2023. Wang, C., Jiang, Y., Yang, C., Liu, H., and Chen, Y. Beyond reverse KL: generalizing direct preference optimization with diverse divergence constraints. In ICLR , 2024a. Wang, H., Xiong, W., Xie, T., Zhao, H., and Zhang, T. Inter-pretable preferences via multi-objective reward modeling and mixture-of-experts. In EMNLP , 2024b. Wu, J., Xie, Y., Yang, Z., Wu, J., Gao, J., Ding, B., Wang, X., and He, X. β-dpo: Direct preference optimization with dynamic β. In NeurIPS , 2024. Xiong, W., Dong, H., Ye, C., Zhong, H., Jiang, N., and Zhang, T. Gibbs sampling from human feedback: A provable KL- constrained framework for RLHF. CoRR ,abs/2312.11456, 2023. Xu, H., Sharaf, A., Chen, Y., Tan, W., Shen, L., Durme, B. V., Murray, K., and Kim, Y. J. Contrastive preference optimization: Pushing the boundaries of LLM perfor-mance in machine translation. In ICML , 2024. Yang, S., Cui, L., Cai, D., Huang, X., Shi, S., and Lam, W. Not all preference pairs are created equal: A recipe for annotation-efficient iterative preference learning. In ACL ,2024. Ye, C., Xiong, W., Zhang, Y., Jiang, N., and Zhang, T. A theoretical analysis of nash learning from human feed-back under general kl-regularized preference. CoRR ,abs/2402.07314, 2024. Yuan, H., Yuan, Z., Tan, C., Wang, W., Huang, S., and Huang, F. RRHF: rank responses to align language mod-els with human feedback. In NeurIPS , 2023. Yuan, W., Pang, R. Y., Cho, K., Li, X., Sukhbaatar, S., Xu, J., and Weston, J. Self-rewarding language models. In 
+
+ICML , 2024. Zeng, Y., Liu, G., Ma, W., Yang, N., Zhang, H., and Wang, J. Token-level direct preference optimization. In ICML ,2024. Zhang, S., Yu, D., Sharma, H., Yang, Z., Wang, S., Hassan, H., and Wang, Z. Self-exploring language models: Active preference elicitation for online alignment. TMLR , 2025. Zhou, C., Liu, P., Xu, P., Iyer, S., Sun, J., Mao, Y., Ma, X., Efrat, A., Yu, P., Yu, L., et al. LIMA: Less is more for alignment. NeurIPS , 2023. Zhu, W., He, Z., Wang, X., Liu, P., and Wang, R. Weak-to-strong preference optimization: Stealing reward from weak aligned model. In ICLR , 2025. Ziegler, D. M., Stiennon, N., Wu, J., Brown, T. B., Radford, A., Amodei, D., Christiano, P. F., and Irving, G. Fine-tuning language models from human preferences. ArXiv ,abs/1909.08593, 2019. 11 AlphaDPO: Adaptive Reward Margin for Direct Preference Optimization 
+
+## A. Related Work 
+
+Reinforcement learning from human feedback. RLHF is a technique that aligns large language models with human preferences and values (Christiano et al., 2017; Ziegler et al., 2019; Ouyang et al., 2022; Azar et al., 2024). Traditional RLHF can be divided into three stages: supervised fine-tuning (Zhou et al., 2023; Taori et al., 2023; Geng et al., 2023; Conover et al., 2023; K ¨opf et al., 2023; Ding et al., 2023), reward modeling (Gao et al., 2023; Luo et al., 2025; Chen et al., 2024b; Lightman et al., 2024; Havrilla et al., 2024; Lambert et al., 2025), and policy optimization (Schulman et al., 2017; Anthony et al., 2017). In the third stage, Proximal Policy Optimization (PPO) is a widely used algorithm. Additionally, Xiong et al. (2023) proposed efficient algorithms for the reverse-KL regularized contextual bandit framework in RLHF. Ye et al. (2024) introduced provably efficient algorithms for KL-regularized Nash-Learning from Human Feedback (NLHF). Furthermore, Ji et al. (2024b) developed an active-query-based PPO algorithm with specific regret bounds and query complexity. 
+
+Offline direct preference optimization. Several alternative preference optimization objectives have been proposed in addition to DPO (Rafailov et al., 2023). IPO (Azar et al., 2024) addresses the overfitting issues associated with DPO. ORPO (Hong et al., 2024) and SimPO (Meng et al., 2024) aim to eliminate the dependence on a reference model. R-DPO (Park et al., 2024) focuses on mitigating exploitation based on sequence length. KTO (Ethayarajh et al., 2024) deals with preference optimization when data are not pairwise. CPO (Xu et al., 2024) and β-DPO(Wu et al., 2024) emphasize the quality of preference data. Another line of research explores comparisons among more than two instances (Dong et al., 2023; Liu et al., 2025a; Song et al., 2024; Yuan et al., 2023). 
+
+Online direct preference optimization. Offline direct preference optimization methods are simple but rely on preference data collected offline. RLHF methods interact online with the language model being aligned but require policy gradients. In contrast, online direct preference optimization methods combine the advantages of both approaches. Yuan et al. (2024) proposed a “self-rewarding” approach in which the policy being aligned provides online feedback to itself. Alternatively, OAIF (Guo et al., 2024) is a novel online preference optimization method that can leverage feedback from any LLM, including those stronger than the LLM being aligned. Swamy et al. (2024) also concurrently investigate the importance of online preference but still rely on reward models (RMs). SELMA (Zhang et al., 2025) improves exploration efficiency by selectively favoring responses with high potential rewards rather than indiscriminately sampling unseen responses. 
+
+## B. Proofs 
+
+B.1. Proof of Theorem 3.1 Theorem 3.1. Let U (y|x) denote a uniform distribution over the vocabulary for a given input x, replacing πref (y|x) in the DPO loss function. Then, the DPO loss function simplifies to: 
+
+L(πθ ; U ) = −E(x,y w ,y l)∼D 
+
+[log σ (β (log πθ (yw|x) − log πθ (yl|x)) − γ)] , (6) 
+
+where γ = β (log U (yw|x) − log U (yl|x)) is a constant. Under a length-normalized reward formulation, this loss function becomes: 
+
+LLN (πθ ; U ) = −E(x,y w ,y l)∼D 
+
+
+
+log σ
+
+ β
+
+|yw| log πθ (yw|x) − β
+
+|yl| log πθ (yl|x) − γ
+
+ 
+
+. (7) 
+
+Therefore, SimPO can be interpreted as a special case of DPO where the reference model is a uniform distribution. Proof. Let U (y|x) denote a uniform distribution over the vocabulary V for a given input x. Specifically, for any sequence y,the uniform distribution is defined as: 
+
+U (y|x) = 
+
+> |y|
+
+Y
+
+> t=1
+
+1
+
+|V| =
+
+ 1
+
+|V| 
+
+|y|
+
+.
+
+Consider the DPO loss function: 
+
+LDPO (πθ ; πref ) = −E(x,y w ,y l)∼D 
+
+
+
+log σ
+
+
+
+β log πθ (yw|x)
+
+πθ (yl|x) − β log πref (yw|x)
+
+πref (yl|x)
+
+ 
+
+.
+
+12 AlphaDPO: Adaptive Reward Margin for Direct Preference Optimization 
+
+By substituting πref = U , the term involving the reference policy simplifies to: 
+
+β log πref (yw|x)
+
+πref (yl|x) = β (log U (yw|x) − log U (yl|x)) = γ, 
+
+where γ is a constant. This constancy arises because yw and yl are chosen from distinct subsets of the vocabulary, ensuring that log U (yw|x) − log U (yl|x) does not depend on the lengths of the sequences but is instead determined by the fixed probabilities of the respective subsets. Consequently, γ remains fixed across all samples in D.Substituting back into the DPO loss function, we obtain: 
+
+L(πθ ; U ) = −E(x,y w ,y l)∼D [log σ (β (log πθ (yw|x) − log πθ (yl|x)) − γ)] .
+
+Under the length-normalized reward formulation, the rewards are adjusted by the lengths of the sequences yw and yl. This normalization yields: 
+
+LLN (πθ ; U ) = −E(x,y w ,y l)∼D 
+
+
+
+log σ
+
+ β
+
+|yw| log πθ (yw|x) − β
+
+|yl| log πθ (yl|x) − γ
+
+ 
+
+.
+
+Here, γ remains a fixed constant since it is derived from the uniform distribution over distinct vocabulary subsets corre-sponding to yw and yl.Comparing this with the SimPO loss function: 
+
+LSimPO (πθ ) = −E(x,y w ,y l)∼D 
+
+
+
+log σ
+
+ β
+
+|yw| log πθ (yw|x) − β
+
+|yl| log πθ (yl|x) − γ
+
+ 
+
+,
+
+it is evident that: 
+
+LLN (πθ ; U ) = LSimPO (πθ ).
+
+Thus, when the reference policy πref is a uniform distribution over distinct vocabulary subsets for yw and yl, the DPO loss function simplifies to the SimPO loss function with γ being a fixed constant. This establishes that SimPO is a special case of DPO under the specified conditions. 
+
+B.2. Proof of Lemma 4.1 Lemma B.1 (Equivalence of Margin Terms) . Consider the margin term δ(x, y w, y l) that represents the difference in sequential KL divergences between a reference policy πref and policy πθ for preferred sequence yw and rejected sequence 
+
+yl, conditioned on input x: 
+
+δ(x, y w, y l) = βDSeqKL [x, y l; πref || πθ ]
+
+− βDSeqKL [x, y w; πref || πθ ], (17) 
+
+Under the assumption that the sequential KL divergence can be approximated by the log-likelihood ratio of complete sequences, the margin term δ(x, y w, y l) admits the following approximation: 
+
+δ(x, y w, y l) ≈ β
+
+
+
+log πθ (yw|x)
+
+πref (yw|x) − log πθ (yl|x)
+
+πref (yl|x)
+
+
+
+= M (x, y w, y l),
+
+where M (x, y w, y l) is the margin term in the AlphaDPO objective. Proof of Lemma 4.1. We begin by expanding the definition of δ(x, y w, y l):
+
+δ(x, y w, y l) = βDSeqKL [x, y l; πref ∥πθ ] − βDSeqKL [x, y w; πref ∥πθ ]
+
+Expanding each sequential KL divergence, we have: 13 AlphaDPO: Adaptive Reward Margin for Direct Preference Optimization 
+
+DSeqKL [x, y ; πref ∥πθ ] = 
+
+> |y|
+
+X
+
+> t=1
+
+Ez∼πref 
+
+
+
+log πref (z | [x, y <t ]) 
+
+πθ (z | [x, y <t ]) 
+
+
+
+Substituting this into the expression for δ, we obtain: 
+
+δ(x, y w, y l) = β
+
+> |yl|
+
+X
+
+> t=1
+
+Ez∼πref 
+
+
+
+log πref (z | [x, y <t l ]) 
+
+πθ (z | [x, y <t l ]) 
+
+
+
+− β 
+
+> |yw|
+
+X
+
+> t=1
+
+Ez∼πref 
+
+
+
+log πref (z | [x, y <t w ]) 
+
+πθ (z | [x, y <t w ]) 
+
+
+
+Under the assumption that the reference policy πref has large errors, we approximate the expectation Ez∼πref with a uniform distribution. This approximation simplifies each expectation term as follows: 
+
+> |y|
+
+X
+
+> t=1
+
+Ez∼πref 
+
+
+
+log πref (z | [x, y <t ]) 
+
+πθ (z | [x, y <t ]) 
+
+
+
+≈ log πθ (y | x)
+
+πref (y | x)
+
+Applying this approximation to both sequential KL divergence terms, we obtain: 
+
+δ(x, y w, y l) ≈ β
+
+
+
+log πθ (yl | x)
+
+πref (yl | x) − log πθ (yw | x)
+
+πref (yw | x)
+
+
+
+This expression can be rewritten as: 
+
+δ(x, y w, y l) ≈ β
+
+
+
+log πθ (yw | x)
+
+πref (yw | x) − log πθ (yl | x)
+
+πref (yl | x)
+
+
+
+= M (x, y w, y l)
+
+where M (x, y w, y l) is the margin term defined in the AlphaDPO objective. Thus, we have shown that: 
+
+δ(x, y w, y l) ≈ M (x, y w, y l)
+
+This completes the proof. 
+
+## C. The motivation for the proposed ˆπref (y|x)
+
+The motivation for the proposed reference policy ˆπref (y|x) can be clarified as follows: • Utility Theory Perspective: The proposed ˆπref (y|x) is designed with the uniform distribution U (y|x) as a baseline. The term 
+
+ πθ (y|x)
+
+> πref (y|x)
+
+α
+
+dynamically adjusts the reward margin by balancing contributions from the policy and reference models. This mechanism can be interpreted through the lens of utility theory as relative attractiveness, enabling adaptive instance-specific reward modeling. • Gradient Perspective By introducing ˆπref (y|x), the framework mitigates the label flipping issues found in DPO or SimPO. In the SimPO framework, the gradient is expressed as: 
+
+∇θ LSimPO (πθ ) = −βE(x,y w ,y l)∼D 
+
+
+
+sθ
+
+ 1
+
+|yw| ∇θ log πθ (yw|x) − 1
+
+|yl| ∇θ log πθ (yl|x)
+
+ 
+
+,
+
+where sθ = σ
+
+ β 
+
+> |yl|
+
+log πθ (yl|x) − β  
+
+> |yw|
+
+log πθ (yw|x) + γ
+
+
+
+.This formulation may amplify weights when the reward estimate is incorrect. By contrast, under AlphaDPO: 
+
+sθ = σ
+
+ β
+
+|yl| log πθ (yl|x) − β
+
+|yw| log πθ (yw|x) + γ + αM (x, y w, y l)
+
+
+
+,
+
+14 AlphaDPO: Adaptive Reward Margin for Direct Preference Optimization 
+
+the additional αM (x, y w, y l) component increases weight when the reward estimate is accurate, ensuring a more robust reward signal. • Motivational Core The central goal of the proposed AlphaDPO is to address the unreliability of the reference policy, as outlined in Section 3.1. By integrating the policy model into the reference model design, the quality of the reference model is enhanced, improving fine-tuning performance. Similar concepts have been explored in recent works (Gorbatovski et al., 2025; Liu et al., 2025b). 
+
+## D. Experiments 
+
+D.1. Implementation Details 
+
+We observed that the performance of various methods is highly sensitive to model parameters and learning rates. To ensure a fair comparison, we conducted a hyperparameter search as specified in the respective papers. The specific search ranges are detailed in Table 3. Furthermore, due to recent updates to both Llama3-8b and Instruct-7b models, we had to re-implement SimPO as the original results were no longer directly applicable. 
+
+Training hyperparameters. For other parameters, we used a consistent batch size of 128 across all methods. The learning rate was searched within the range of [3e-7, 5e-7, 8e-7, 1e-6], and all models were trained for a single epoch with a cosine learning rate schedule and a 10% warmup phase. Adam was used as the optimizer (Kingma & Ba, 2014). Additionally, the maximum sequence length was set to 2048. 
+
+Table 3. Various preference optimization objectives and hyperparameter search range. 
+
+Method Objective Hyperparameter 
+
+DPO (Rafailov et al., 2023) − log σ
+
+
+
+β log πθ (yw |x)  
+
+> πref (yw|x)
+
+− β log πθ (yl|x)
+
+> πref (yl|x)
+
+
+
+β ∈ [0 .01 , 0.05 , 0.1] 
+
+IPO (Azar et al., 2024) 
+
+
+
+log πθ (yw |x)  
+
+> πref (yw|x)
+
+− log πθ (yl|x) 
+
+> πref (yl|x)
+
+− 12τ
+
+2
+
+τ ∈ [0 .01 , 0.1, 0.5, 1.0] 
+
+CPO (Xu et al., 2024) − log σ (β log πθ (yw |x) − β log πθ (yl|x)) − λ log πθ (yw |x) α = 1 .0, β ∈ [0 .01 , 0.05 , 0.1] 
+
+KTO (Ethayarajh et al., 2024) −λw σ
+
+
+
+β log πθ (yw |x)  
+
+> πref (yw|x)
+
+− zref 
+
+
+
++ λlσ
+
+
+
+zref − β log πθ (yl|x)
+
+> πref (yl|x)
+
+
+
+, λl = λw = 1 .0
+
+where zref = E(x,y )∼D [βKL (πθ (y|x)|| πref (y|x))] β ∈ [0 .01 , 0.05 , 0.1] 
+
+ORPO (Hong et al., 2024) − log pθ (yw |x) − λ log σ
+
+
+
+log pθ (yw |x)1−pθ (yw |x) − log pθ (yl|x)1−pθ (yl|x)
+
+
+
+, λ ∈ [0 .1, 0.5, 1.0, 2.0] 
+
+where pθ (y|x) = exp 
+
+ 1 
+
+> |y|
+
+log πθ (y|x)
+
+
+
+R-DPO (Park et al., 2024) − log σ
+
+
+
+β log πθ (yw |x)  
+
+> πref (yw|x)
+
+− β log πθ (yl|x) 
+
+> πref (yl|x)
+
+− (α|yw | − α|yl|)
+
+ α ∈ [0 .05 , 0.1, 0.5, 1.0] 
+
+β ∈ [0 .01 , 0.05 , 0.1] 
+
+SimPO (Meng et al., 2024) − log σ
+
+ β  
+
+> |yw|
+
+log πθ (yw |x) − β 
+
+> |yl|
+
+log πθ (yl|x) − γ
+
+ β ∈ [2 .0, 4.0, 6.0, 8.0] 
+
+γ ∈ [0 .3, 0.5, 1.0, 1.2, 1.4, 1.6] 
+
+AlphaDPO − log σ (u(x, y w , y l) − sg [ γ + αM ∗(x, y w , y l)]) β ∈ [2 .5, 10 .0] , γ ∈ [0 .1, 0.3, 0.5] 
+
+where u(x, y w , y l) = β  
+
+> |yw|
+
+log πθ (yw |x) − β 
+
+> |yl|
+
+log πθ (yl|x) α ∈ [1 e − 2, 5e − 2, 0.1, 0.2] 
+
+Table 4. The hyperparameter values in AlphaDPO used for each training setting. 
+
+Setting β γ α Learning rate 
+
+Mistral-Instruct 2.5 0.15 5e-2 6e-7 
+
+Llama3-Instruct 2.5 0.6 0.2 1e-6 
+
+Llama3-Instruct-v0.2 10.0 0.4 0.2 1e-6 
+
+Gemma2-Instruct 10.0 0.4 5e-2 8e-7 
+
+Hyperparameter in AlphaDPO. Table 4 outlines the hyperparameters used for AlphaDPO under various settings. It’s important to note that while our approach involves three key parameters, we have found through experience that β can be reliably set to 10.0 by default. Among these parameters, γ typically requires more careful tuning. As for α, we have observed consistent performance improvements when set to 5e-2 by default. If you are already familiar with the parameter settings for SimPO, you can focus your search primarily on α or simply adopt the default setting of α = 5 e − 2.15 AlphaDPO: Adaptive Reward Margin for Direct Preference Optimization 0.00 0.05 0.10 0.15 0.20             
+
+> x
+> 28
+> 29
+> 30
+> 31
+> 32
+> LC
+> Mistral IT 7B
+> 0.00 0.05 0.10 0.15 0.20
+> x
+> 44
+> 46
+> 48
+> 50
+> 52
+> 54
+> Llama3 IT 8B
+> 0.00 0.05 0.10 0.15 0.20
+> x
+> 55.5
+> 56.0
+> 56.5
+> 57.0
+> 57.5
+> 58.0
+> 58.5
+> Llama3 IT 8B v0.2
+> 0.00 0.05 0.10 0.15 0.20
+> x
+> 72.0
+> 72.2
+> 72.4
+> 72.6
+> 72.8
+> 73.0
+> 73.2
+> 73.4
+> Gemma2 IT 9B
+
+Figure 5. AlphaDPO LC on AlpacaEval 2 with different α values. 
+
+Decoding hyperparameters. The decoding hyperparameters used in this study are the same as those employed by SimPO 4.We extend our sincere gratitude to the SimPO team for sharing their invaluable insights. 
+
+Computation environment. All training experiments presented in this paper were conducted using 8×A100 GPUs, as per the procedures detailed in the alignment-handbook repository. 5
+
+D.2. AlphaDPO without length-normalized 
+
+In this paper, we consider length-normalized training as a stability technique and not as a primary contribution of this work. Existing research (Meng et al., 2024) has demonstrated that length normalization can indeed enhance model performance, particularly with respect to the length control win rate. However, to validate the general applicability of AlphaDPO—specifically, its stability and performance without length normalization—we conducted experiments across several models: meta-llama/Meta-Llama-3-8B-Instruct, mistralai/Mistral-7B-Instruct-v0.2, and google/gemma-2-9b-it. We evaluated DPO, SimPO without length normalization, and AlphaDPO without length normalization. The experimental results, as shown in Table 5, demonstrate that AlphaDPO consistently achieves performance improvements even without the use of length normalization. This indicates the robustness and general effectiveness of AlphaDPO. 
+
+Table 5. Performance comparison without length-normalization on AlpacaEval2. “LC” denotes the length-controlled win rate, and “WR” represents the raw win rate. 
+
+Method Llama3-Instruct (8B) Mistral-Instruct (7B) Llama3-Instruct v0.2 (8B) Gemma2-Instruct (9B) LC (%) WR (%) LC (%) WR (%) LC (%) WR (%) LC (%) WR (%) 
+
+DPO 40.2 38.1 20.3 18.0 51.1 53.3 70.2 66.9 SimPO w/o LN 42.4 40.4 30.5 38.2 49.2 52.6 71.2 69.9 AlphaDPO w/o LN 44.4 42.6 32.0 38.4 51.1 54.0 72.7 70.5 
+
+D.3. AlphaDPO with differenct α
+
+To analyze the impact of α on the model, we adjust its value for four different models. The results are illustrated in Figure 5. When α is set to 0, the model degenerates to SimPO. As α increases, performance improves across all models, although the optimal value of α varies among them. This highlights the significance of α.It is noteworthy that within the parameter tuning range [1e-2, 5e-2, 0.1, 0.2], the optimal α values are consistently around 0.1 or even closer to 5e-2. 
+
+> 4
+
+https://github.com/princeton-nlp/SimPO/tree/main/eval 
+
+> 5
+
+https://github.com/huggingface/alignment-handbook 
+
+16 AlphaDPO: Adaptive Reward Margin for Direct Preference Optimization 10 0 10 20 30                               
+
+> Reward diff. r(x,yw)r(x,yl)
+> 0.0
+> 0.1
+> 0.2
+> Density
+> SimPO( =0.0)
+> SimPO( =0.1)
+> SimPO( =0.3)
+> SimPO( =0.5) 10 010 20 30
+> Reward diff. r(x,yw)r(x,yl)
+> 0.0
+> 0.1
+> Density
+> AlphaDPO( =0.0)
+> AlphaDPO( =0.1)
+> AlphaDPO( =0.3)
+> AlphaDPO( =0.5) 6420
+> Avg. log prob on winning p(yw|x)
+> 0.0
+> 0.5
+> 1.0
+> 1.5
+> 2.0
+> 2.5
+> Density
+> SimPO( =0.0)
+> SimPO( =0.1)
+> SimPO( =0.3)
+> SimPO( =0.5) 6420
+> Avg. log prob on winning p(yw|x)
+> 0.0
+> 0.2
+> 0.4
+> 0.6
+> Density
+> AlphaDPO( =0.0)
+> AlphaDPO( =0.1)
+> AlphaDPO( =0.3)
+> AlphaDPO( =0.5)
+
+Figure 6. (a) SimPO: Reward difference distribution under different γ values. (b) AlphaDPO : Reward difference distribution under different α values. (c) SimPO: Log likelihood distribution on chosen responses under different γ values. (d) AlphaDPO : Log likelihood distribution on chosen responses under different α values. 
+
+D.4. Comparison With TDPO 
+
+To investigate the relationship between TDPO and AlphaDPO, we conducted the experiments, with the results outlined below. 
+
+Table 6. Performance comparison between TDPO and AlphaDPO. 
+
+Method Llama3-Instruct (8B) LC (%) WR (%) 
+
+TDPO 52.8 45.9 AlphaDPO w/ δ(x, y w, y l) 56.9 50.4 AlphaDPO w/ M (x, y w, y l) 58.7 51.1 
+
+In its original form, TDPO did not perform well on Llama3-8B. By applying Lemma 4.1, we modified the expression 
+
+M (x, y w, y l) in AlphaDPO to use TDPO’s δ(x, y w, y l), converting our sentence-level estimations to a token-level calculation. This adjustment resulted in a noticeable performance improvement, which we attribute to the length-normalization, γ and z-score normalization of δ(x, y w, y l). Nevertheless, the modified TDPO still underperformed compared to AlphaDPO. This indicates that, when the πref is suboptimal, token-level calculations are prone to significant errors. 17
