@@ -25,5 +25,73 @@ subscriptions:
     stage: A
     diff_threshold_pct: 15
   keyword_recall_mode: or
-  intent_profiles: []
-source_backends: {}
+  intent_profiles:
+    - tag: fla
+      description: 请帮我查找六个月内主题与金融领域内大模型、智能体后训练相关的论文
+      enabled: true
+      paper_sources:
+        - arxiv
+        - biorxiv
+      keywords:
+        - keyword: agent post-training
+          keyword_cn: 智能体后训练
+          query: techniques for post-training of autonomous agents
+        - keyword: reinforcement learning from human feedback finance
+          keyword_cn: 人类反馈强化学习金融
+          query: RLHF methods for financial domain adaptation
+        - keyword: instruction tuning financial
+          keyword_cn: 指令微调金融
+          query: instruction tuning of large models for financial tasks
+        - keyword: financial agent alignment
+          keyword_cn: 金融智能体对齐
+          query: alignment techniques for financial AI agents
+        - keyword: multi-turn dialogue agent training finance
+          keyword_cn: 多轮对话智能体训练金融
+          query: training conversational agents for finance with multi-turn dialogues
+        - keyword: financial task-oriented agents
+          keyword_cn: 面向金融任务的智能体
+          query: task-oriented agents for financial domain
+      intent_queries:
+        - query: post training techniques for financial agents using large language models
+          query_cn: 使用大语言模型对金融智能体进行后训练的技术
+          enabled: true
+          source: manual
+          note: ''
+        - query: fine tuning and alignment methods for financial large model agents
+          query_cn: 金融大模型智能体的微调和对齐方法
+          enabled: true
+          source: manual
+          note: ''
+        - query: reinforcement learning based post training of agents in finance
+          query_cn: 基于强化学习的金融智能体后训练
+          enabled: true
+          source: manual
+          note: ''
+      updated_at: '2026-06-03T20:54:22.846Z'
+source_backends:
+  arxiv:
+    papers_table: arxiv_papers
+    use_vector_rpc: true
+    vector_rpc: match_arxiv_papers
+    vector_rpc_exact: match_arxiv_papers_exact
+    use_bm25_rpc: true
+    bm25_rpc: match_arxiv_papers_bm25
+    sync_table: arxiv_sync_status
+    sync_success_value: success
+    schema: public
+    kind: supabase
+    enabled: true
+    url: https://lyucdwgefyfbmaiopjbk.supabase.co
+    anon_key: sb_publishable_lX-oi64Uxyd7SIVv3_w2Uw_MTOojeKq
+  biorxiv:
+    papers_table: biorxiv_papers
+    use_vector_rpc: true
+    vector_rpc: match_biorxiv_papers_exact
+    vector_rpc_exact: match_biorxiv_papers_exact
+    use_bm25_rpc: true
+    bm25_rpc: match_biorxiv_papers_bm25
+    schema: public
+    kind: supabase
+    enabled: true
+    url: https://lyucdwgefyfbmaiopjbk.supabase.co
+    anon_key: sb_publishable_lX-oi64Uxyd7SIVv3_w2Uw_MTOojeKq
