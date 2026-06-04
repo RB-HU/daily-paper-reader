@@ -1,0 +1,2683 @@
+Title: 12739_Robust_Reinforcement_Lea.pdf
+
+URL Source: https://openreview.net/pdf?id=IJGEtuVqwf
+
+Number of Pages: 41
+
+Markdown Content:
+# Robust Reinforcement Learning in Finance: Modeling Market Impact with Elliptic Uncertainty Sets 
+
+Shaocong Ma 
+
+Department of Computer Science University of Maryland College Park, MD 20742, USA 
+
+scma0908@umd.edu 
+
+Heng Huang ˚
+
+Department of Computer Science University of Maryland College Park, MD 20742, USA 
+
+heng@umd.edu 
+
+# Abstract 
+
+In financial applications, reinforcement learning (RL) agents are commonly trained on historical data, where their actions do not influence prices. However, during deployment, these agents trade in live markets where their own transactions can shift asset prices, a phenomenon known as market impact. This mismatch between training and deployment environments can significantly degrade performance. Tra-ditional robust RL approaches address this model misspecification by optimizing the worst-case performance over a set of uncertainties, but typically rely on symmet-ric structures that fail to capture the directional nature of market impact. To address this issue, we develop a novel class of elliptic uncertainty sets. We establish both implicit and explicit closed-form solutions for the worst-case uncertainty under these sets, enabling efficient and tractable robust policy evaluation. Experiments on single-asset and multi-asset trading tasks demonstrate that our method achieves superior Sharpe ratio and remains robust under increasing trade volumes, offering a more faithful and scalable approach to RL in financial markets. 
+
+# 1 Introduction 
+
+Reinforcement learning (RL) has emerged as a promising decision-making framework for quantitative trading strategies [ 1, 2 ], including portfolio optimization [ 3 –13 ], automatic trading [ 3 , 14 –19 ], market making [ 20 – 22 ], and option hedging [ 23 , 24 ]. RL’s appeal in finance lies in its ability to learn adaptive strategies directly from data, without strong market assumptions [ 1]. This makes it well-suited for capturing complex market dynamics and aligning with the sequential nature of financial decision-making. One of the primary challenges in training a robust and consistently profitable RL agent lies in handling the market impact [ 25 – 27 ]; that is, the influence of the agent’s own trades on asset prices in the deployed environment. For example, when a trader buys or sells a large volume of an asset, it can temporarily drive the price up or down, respectively (as illustrated in Figure 1). Typically, RL agents are trained on historical market data where market impact is absent. However, during deployment, the environment shifts from a passive historical setting to the real market, where the agent’s actions actively affect prices. This discrepancy between training and deployment environments undermines the optimality and robustness of the learned policy, and leads us to the central question in this paper: 
+
+Q: Can we train RL agents on historical data while robustly accounting for market impact during deployment? 
+
+> ˚
+
+This work was partially supported by NSF IIS 2347592, 2348169, DBI 2405416, CCF 2348306, CNS 2347617, RISE 2536663. 39th Conference on Neural Information Processing Systems (NeurIPS 2025). Figure 1: Market impact illustration using AMZN stock on June 21, 2012, based on 5-level LOBSTER data [ 47 ]. The left panel shows the price response to executing a buy order of 100 shares at the time 
+
+t “ 0 ms , which consumes ask-side liquidity within 1000 ms and induces an immediate upward shift in price. The right panel shows the analogous impact of a sell order. This plot indicates that the transition dynamics induced by trading are not symmetrically distributed around the nominal kernel. To address this central question, we adopt the framework of robust RL [ 28 – 46 ], which is designed to handle model misspecification ; that is, the mismatch between the training and deployment envi-ronments. The robust RL framework explicitly acknowledges that the real market environment may differ from the simulated training environment, and it aims to learn policies that are resilient under a range of perturbations. However, existing robust RL approaches face a key limitations in financial applications; that is, traditional uncertainty sets are typically symmetric, which fail to capture the directional nature of market impact. Addressing this challenge motivates our threefold contributions :(1) We propose a novel class of uncertainty sets, elliptic uncertainty sets (Definition 3.2), which generalize traditional ℓp-norm balls to the ellipse-like structure. These sets better capture the empirically observed directional nature of market impact as illustrated in Figure 1. (2) On the theoretical side, we derive closed-form solutions for solving the worst-case transition kernel under the proposed uncertainty sets (Theorem 3.4). Furthermore, under certain conditions, we present the explicit solutions (Theorem 3.5). This development significantly broadens the scope of tractable robust RL problems beyond symmetric (ball-shaped) uncertainty sets, enabling more faithful representation of market impact. (3) We empirically evaluate our approach on real-world financial data using trade-level market impact simulations in Section 4. Experimental results demonstrate that our method consistently outperforms the standard single-asset intra-day trading strategy and existing RL baselines in terms of Sharpe ratio. Moreover, we validate the robustness of our method under increasing strategy volume, confirming its effectiveness in high-volume regimes. 
+
+1.1 Related Work Existing Approaches to Handle Market Impact The most common approach for handling market impact is to simulate the electronic market more accurately. By applying high-fidelity market simulators, often built upon limit order book (LOB) dynamics [ 25 , 26 , 48 –50 ], trade-level data [ 51 ,52 ], or large-scale agent-based simulators [ 53 –56 ], it captures more detailed market microstructure and reduces the gap between the simulated and the real trading environments. Prominent approaches to incorporating market impact into backtesting include agent-based simulation frameworks [ 53 – 56 ], data-driven LOB reconstruction models [ 57 , 58 , 50 ], and hybrid systems that integrate historical data replay with synthetic order flow generation [ 59 , 60 ]. However, access to high-quality market data is often limited, and simulating market environments with agent-based systems remains prohibitively expensive. Therefore, a practical alternative is to train the agent directly on historical data without market impact while still encouraging it to account for potential worst-case scenarios. 2Robust RL in Finance Robust RL, with its intrinsic ability to handle model misspecification, pro-vides a natural framework for incorporating market impact considerations during training. Jaimungal et al. [ 3] propose a robust reinforcement learning framework based on rank-dependent utility to address uncertainty in financial decision-making, demonstrating the effectiveness of robust RL in portfolio allocation, benchmark strategy optimization, and statistical arbitrage. Shi et al. [ 5] formulate portfolio optimization as a robust RL problem to enhance resilience. We et al. [ 24 ] extend robust risk-aware RL to manage the risks associated with path-dependent financial derivatives, showcasing its effectiveness in complex hedging scenarios. However, existing work primarily focuses on fully symmetric uncertainty sets, which fail to capture the directional characteristics of financial markets. Addressing this limitation is the central focus of our paper. 
+
+Modeling the Uncertainty Set in Robust RL The uncertainty set captures the discrepancy between training and deployment environments. However, robust RL becomes computationally intractable when the uncertainty set is highly irregular [ 28 , 44 , 39 , 40 ]. To mitigate this issue, it is common to impose structural assumptions that enable tractable solutions. We highlight several representative structures, with further details deferred to Appendix A.1. The R-contamination model [ 31 ] defines an uncertainty set as a sphere of radius R centered around the nominal transition kernel, admitting analytical solutions for robust policy evaluation. The ℓp-norm uncertainty sets are also widely studied due to their closed-form solutions [ 39 , 40 ]. The integral probability metric (IPM) and double-sampling uncertainty sets have been shown to allow efficient computation [ 43 ]. Other works include uncertainty sets based on the Wasserstein metric and f -divergence, which have also received considerable attention [61–63]. 
+
+# 2 Preliminaries: Robust Reinforcement Learning 
+
+We focus on the discounted infinite-horizon Markov Decision Processes (MDPs) [ 64 ], formally defined as a five-tuple pS, A, P, r, γ q, where S and A denote the state and action spaces 2, respectively. The transition kernel Pps1 | s, a q specifies the probability of transitioning to state s1 from state s after taking action a. The reward function r : S Ñ r 0, 1s assigns a bounded reward to each state, and the discount factor γ P p 0, 1q models the agent’s preference for immediate rewards over future ones. Instead of assuming a fixed transition kernel P, we account for the effects of model misspecification .Let P0 denote the nominal transition kernel, and define the ps, a q-uncertainty set Us,a Ă R|S| at the point ps, a q P S ˆ A as (ps, a q-Uncertainty Set) Us,a :“ t us,a P R|S| | us,a P Cs,a , u J
+
+> s,a
+
+1|S| “ 0u,
+
+where Cs,a Ă R|S| is a convex set, 1|S| is an all-one vector with the dimension |S| (for convenience, we will usually omit the subscript |S|). The convex set is commonly chosen as a ball-shaped set (e.g. 
+
+Cs,a “ Bppβs,a q :“ t us,a P R|S| | } us,a }p ď βs,a u for the ℓp-norm uncertainty set), where βs,a ě 0
+
+is a radius parameter that quantifies the allowable deviation. The zero-sum constraint uJ
+
+> s,a
+
+1|S| “ 0
+
+ensures the perturbed transition Pp¨ | s, a q ` us,a remains a valid probability distribution. The 
+
+uncertainty set U and the robust transition model are then defined as (Uncertainty Set) U :“ ą
+
+> ps,a qP SˆA
+
+Us,a , (1) (Robust Transition Model) PU :“
+
+!
+
+Pu :“ P0 ` u
+
+ˇˇˇ u P U
+
+)
+
+, (2) respectively. Throughout this paper, we assume the parameter of uncertainty set is chosen appro-priately such that all elements in the robust transition model is well-defined [ 39 , 40 ]. Given these notations in place, we define the value function of the policy π with the uncertainty u as the value   
+
+> 2For theoretical analysis, we restrict our attention to MDPs with finite state and action spaces. This assumption avoids the technical complications arising from continuous or hybrid spaces, which, although explored in some prior work [ 65 –68 ], remain analytically open without imposing additional assumptions, especially for robust RL problems. Nevertheless, our empirical results extend to continuous settings, demonstrating the practical applicability of our approach beyond the theoretical scope.
+
+3Figure 2: Illustration of the transition kernel in a simplified robust RL setting using an ℓ8-norm uncertainty set. Only one of the upward (buy) or downward (sell) shift is plausible in a given scenario; however, the ball-shaped uncertainty set must include both shifts due to its symmetric structure, which motivates us to propose an uncertainty set with non-symmetric structures. function with the transition probability Pu P P:
+
+V πu psq :“ E“ 8ÿ
+
+> t“0
+
+γtrpst, a tq | s0 “ s, Pu, π ‰,
+
+The robust value function is the worst-case value function over all uncertainties; that is V π psq :“
+
+min uPU V πu psq. Similarly, we can also define the robust Q-function and the robust advantage function as Qπ ps, a q :“ min u E“ ř 8 
+
+> t“0
+
+γtrpst, a tq | s0 “ s, a 0 “ a, Pu, π ‰ and Aπ ps, a q :“ Qπ ps, a q ´ 
+
+V π psq, respectively. The goal of robust RL is to learn a parameterized policy πθ that maximizes the worst-case value function V πθ ps0q, where s0 denotes the initial state. A standard approach applies the robust policy gradient formula [28]: 
+
+∇θ V π psq “ Es„dπθ ,a „πθ rQπθ ps, a q∇θ log πθ pa|sqs ,
+
+where dπθ is the stationary distribution induced by πθ , and Qπθ denotes the robust Q-function. This formulation reduces robust RL to a gradient-based optimization problem, shifting the main challenge of robust RL to accurately evaluate the robust value function, which is our focus in Section 3.3. 
+
+# 3 Modeling Market Impact with Elliptic Uncertainty Sets 
+
+3.1 Limitations of Symmetric Uncertainty Sets 
+
+Robust MDPs offer an ideal framework to handle model misspecification by allowing the transition kernel to deviate within a prescribed uncertainty set. However, most existing formulations adopt symmetric structures, typically the ball defined by a specific norm, that treat all directions of perturbation equally. While mathematically convenient, these symmetric structures often fail to reflect the directional nature of real-world uncertainties. Symmetry in this context typically refers to invariance under the signed permutation group (see Appendix A.2 for details). A canonical example is the ℓp-norm ball: 
+
+Bppβq :“ t u P Rd | } u}p ď βu,
+
+which satisfies the property that for any u P Bppβq, all signed permutations of u are also contained in the set. It enforces an implicit assumption of isotropic uncertainty, equally plausible in all directions, which often includes unrealistic perturbations. We demonstrate it in the following example: 
+
+Example 3.1 (Symmetric Sets Fail to Capture Directional Uncertainty) . In financial markets, large buy or sell orders induce directional shifts in asset prices due to liquidity consumption (see Figure 1). In Figure 2, we consider the following classical ℓ8-norm ps, a q-uncertainty set: 
+
+Us,a :“ ␣u P Rd | } u}8 ď 2ε, u J1 “ 0( .
+
+4This set includes, for example, the perturbation vectors 
+
+u1 “ r ε, ε, ´2ε, 0, 0sJ, and u2 “ r 0, 0, ´2ε, ε, ε sJ.
+
+Both u1 and u2 satisfy the norm and mean constraints, and since they are signed permutations of each other, they must either both belong to Us,a or be excluded together. However, this symmetry fails to reflect market realities: under a buy action, u1 represents a plausible upward shift due to liquidity-driven market impact, while u2, corresponding to a downward shift, is implausible. Thus, the symmetric structure forces inclusion of perturbations that contradict the directional market impact, potentially leading to overly conservative or unrealistic robust policies. This observation underscores the importance of developing a robust RL framework that can capture the directional nature of environment shifts observed in financial markets. To this end, we introduce a novel class of elliptic uncertainty sets , which generalize traditional norm-bounded sets by allowing non-symmetric perturbations, while retaining closed-form tractability under certain conditions. 
+
+On the Conservativeness of Robust Policies Although our proposed elliptic uncertainty sets better capture the directional nature of market impact, this alone does not immediately clarify why they improve robustness. To illustrate the underlying intuition, we present a simple example: • The robust value function V π :“ min uPU V πu models the worst-case discounted future return. If the uncertainty set U is larger, it is more conservative, as it yields smaller value. • In the ideal case, the uncertainty set consists of a single element u0 that exactly characterizes the MDP induced by the true market impact. Training an RL agent on the robust MDP with U “ u0
+
+is then equivalent to training directly on the real LOB data. • In the less ideal case where U includes additional elements, e.g. U “ t u0, u 1u. The robust value function may still achieve its minimum at u0 (u0 “ arg min u min uPU V πu ). In this scenario, the robust formulation reduces to the ideal case. Otherwise, if the minimum is attained at some 
+
+u ‰ u0, the robust value becomes strictly smaller than V πu0 , making the policy more conservative. Unfortunately, neither our approach nor standard robust RL methods can theoretically rule out this latter “overly conservative” scenario. Our guiding intuition, however, is that smaller uncertainty sets are less likely to contain such overly conservative elements. By trimming down the traditional uncertainty sets, our method reduces the risk of unnecessary conservatism, though it does not eliminate it entirely. 
+
+3.2 The Elliptic Uncertainty Sets 
+
+The elliptic uncertainty sets generalize the classical ℓp-norm uncertainty set by incorporating direc-tional non-symmetry. Formally, we have the following definition: 
+
+Definition 3.2 (Elliptic ps, a q-Uncertainty Set) . For each state-action pair ps, a q P S ˆ A, the elliptic 
+
+ps, a q-uncertainty set is defined as 
+
+Us,a :“
+
+#
+
+u P R|S|
+
+ˇˇˇˇˇ
+
+> N
+
+ÿ
+
+> n“1
+
+}u ´ us,a n } ď βs,a , u J1|S| “ 0
+
++
+
+, (3) where tus,a n uNn“1 P R|S| are called the foci of the ellipse, βs,a ě 0 is the uncertainty size , and 
+
+} ¨ } : Rd Ñ R is an arbitrary norm. Particularly, when } ¨ } is taken as the ℓp-norm ( p P r 1, `8s ), 
+
+Us,a is called the ℓp-ellipse uncertainty set .Here the constraint uJ1|S| “ 0 ensures the perturbed transition still defines a valid probability distribution. For convenience, we will omit the superscript in us,a n and the subscript in βs,a when the context is clear. Importantly, we note that it is unavoidable that the element in Us,a may not be a valid probability distribution when some entries of u ` P0p¨| s, a q are negative. To avoid this scenario, we include the following regular condition, which is also presented in the ℓp-norm uncertainty set literature [39, 40]: 
+
+Assumption 3.3. For the given MDP pS, A, P0, r, γ q, for any set of foci tus,a n uNn“1, there exists a constant β ą 0 such that for all βs,a ă β, Eq. (3) induces valid probability transitions; that is, all entries of u ` P0p¨| s, a q are non-negative. 
+
+5Connection to the Classical Ellipse Our definition draws directly from the geometric characteriza-tion of an ellipse: the set of points for which the sum of distances to multiple foci is bounded by a constant βs,a . We show that it recovers classical structures as special cases with the following two concrete examples: (1) When N “ 1 and u1 “ 0, the set Eq. (3) reduces to the ℓp-norm ball 
+
+Bppβq :“ t u | } u}p ď βu,
+
+which aligns with the standard uncertainty set used in robust RL (e.g., [39, 40, 28]). (2) When N “ 2 and p “ 2, Eq. (3) becomes }u ´ u1}2 ` } u ´ u2}2 ď β. Defining the midpoint 
+
+¯u :“ u1`u2 
+
+> 2
+
+, there exists a matrix A such that this constraint is equivalent to a classical quadratic form of an ellipse: 
+
+pu ´ ¯uqJApu ´ ¯uq ď 1,
+
+where the detailed derivation is given in Lemma B.10. These examples demonstrate that our formulation significantly generalizes classical ellipses by allowing arbitrary norms and accommodating multiple foci, thereby enabling more flexible modeling of non-symmetric perturbations. However, such generality often comes at the cost of increased complexity. To address this concern, in the next section, we show that, under certain parameter choices, our proposed uncertainty set remains as trackable as traditional ℓp-norm uncertainty sets. 
+
+Limitations & Potential Directions As our approach is mainly adopted from the ℓp-norm un-certainty set, it does not guarantee that the resulting distributions are absolutely continuous with respect to the nominal transition distribution even with Assumption 3.3. One potential solution is incorporating f -divergence or distributionally robust RL techniques [69–74]. 
+
+3.3 Solving the Worst-Case Uncertainty 
+
+Solving the worst-case uncertainty u˚ :“ arg min V πu ps0q plays a crucial role in efficient robust policy evaluation. The ℓp-norm uncertainty set [ 39 , 40 ] and the R-contamination model [ 31 ] are popular as the solution u˚ is closed-form. When the uncertainty set is complicated, many existing robust RL methods require an external optimization loop to determine the worst-case transition probability, which can be impractical in real-world scenarios. To address this issue, we derive an implicit solution (Theorem 3.4) for the worst-case uncertainty that avoids additional interaction with the environment. Under certain conditions, we further provide an explicit closed-form solution (Theorem 3.5), enabling direct computation without the need for external solvers. We start with recapping some backgrounds in robust TD learning. Let V denote all functions mapping from the state space S to the Euclidean space R. Given that U is an arbitrary uncertainty set, the robust Bellman operator associated with the policy π, T π 
+
+> U
+
+: V Ñ V, is defined as 
+
+T π 
+
+> U
+
+vpsq “ ÿ
+
+> aPA
+
+πpa|sq
+
+«
+
+rps, a q ` γ min 
+
+> uPUs,a
+
+uJv ` γ ÿ
+
+> s1PS
+
+P0ps1|s, a qvps1q
+
+ff 
+
+.
+
+As shown by [ 75 , 28 ], when γ P p 0, 1q, the robust Bellman operator is a contraction operator, which admits the unique fixed point as the robust value function V π P V. When U is given by the ℓp-ellipse uncertainty set (Eq. (3)), then 
+
+T π 
+
+> U
+
+vpsq “ ÿ
+
+> aPA
+
+πpa|sq
+
+»—–rps, a q ` γ min ř 
+
+> n}u´un}ď βuJ1“0
+
+uJv ` γ ÿ
+
+> s1PS
+
+P0ps1|s, a qvps1q
+
+fi ffi fl .
+
+It turns out that if we can solve the optimization problem 
+
+min ř 
+
+> n}u´un}ď βs,a
+> uJ1“0
+
+uJv, (4) the robust Bellman operator is just the standard Bellman operator (over the nominal transition probability) with a solved shift. As the result, we can simply apply the standard TD-learning with adding this correction term to solve the desired robust value function. In the following theorem, we present a general recipe of solving this optimization problem. 6Theorem 3.4 (Implicit) . Let d :“ | S| be the cardinal of state space. Suppose that tunuNn“1 Ă Rd
+
+for each ps, a q P S ˆ A, the uncertainty size β ě 0, and v P Rd. Then there exists λ˚ and μ˚ such that the optimization problem defined by Eq. (4) is solved by 
+
+u˚ “ arg min 
+
+> u
+
+“pv ` μ˚1qJu ` λ˚
+
+> N
+
+ÿ
+
+> n“1
+
+}u ´ un}p
+
+‰.
+
+Remark. We say a solution of the optimization problem is “implicit” if it can be represented as an equation in the form gpu, v, β, tunuq “ 0. In this theorem, as the right-hand side 
+
+Gpu, v, β, tunuq :“ p v ` μ˚1qJu ` λ˚
+
+> N
+
+ÿ
+
+> n“1
+
+}u ´ un}p
+
+is proper, convex, and coercive; we can surely re-write it as the sub-gradient form by letting 
+
+gpu, v, β, tunuq P B uGpu, v, β, tunuq .
+
+Then we obtain the implicit representation gpu, v, β, tunuq “ 0. Moreover, we derive the formula of 
+
+λ˚ and μ˚ beyond the existence; the full result is presented in Theorem B.12 with more details. The implicit solution has already shown significant advances compared to some of existing robust RL methods which typically require to solve the worst-case transition probability using additional state-action sample generated from the agent-environment iteration. However, it is still (slightly) impractical to solve additional convex optimization problems in every iteration. Fortunately, under certain conditions, the solution can be “explicit”; that is, we can write the optimal solution in the form of u˚ “ f pv, β, tunuq .
+
+Theorem 3.5 (Explicit) . Let d :“ | S| be the cardinal of state space. Suppose that tunuNn“1 Ă Rd
+
+for each ps, a q P S ˆ A, the uncertainty size β ě 0, and v P Rd. The optimization problem defined by Eq. (4) is explicitly solved in the following cases: (a) Let N “ 1 and 1 
+
+> p
+
+` 1 
+
+> q
+
+“ 1. Then the minimizer of Eq. (4) is given by 
+
+u˚ “ u1 ` β sign pv ` μ˚1q d | v ` μ˚1|q´1
+
+}v ` μ˚1}q´1
+
+> q
+
+.
+
+Here sign and | ¨ | are coordinate-wise sign function and absolute value, respectively; d is the coordinate-wise product; and μ˚ :“ arg min μPR }v ` μ1}q .(b) Let p “ 1 and N “ 2. Suppose that β ą } u2 ´ u1}1. Then the minimizer of Eq. (4) is given by 
+
+u˚ “ u1 ` u2
+
+2 ´ β ´ } u1 ´ u2}1
+
+2
+
+“sign pv ` μ˚1q d It| v`μ˚1|“ 2λ˚u
+
+‰ .
+
+Here sign , | ¨ | , and I are coordinate-wise sign function, absolute value, and indicator function, respectively; d is the coordinate-wise product; 
+
+μ˚ :“ ´ max j vj ` min j vj
+
+2 , and λ˚ :“ ´ max j vj ´ min j vj
+
+4 .
+
+(c) Let p “ 2 and N “ 2. Suppose that β ą } u2 ´ u1}2. Then the minimizer of Eq. (4) is given by 
+
+u˚ “ u1 ` u2
+
+2 ´
+
+aβ2 ´ } u2 ´ u1}22
+
+21
+
+λ˚ Ω´1pv ` μ˚1q.
+
+Here Ω : “ I ´ 1 
+
+> β2
+
+pu2 ´ u1qp u2 ´ u1qJ;
+
+λ˚ “
+
+b
+
+pv ` μ˚1qJΩ´1pv ` μ˚1q, and μ˚ “ ´ vJΩ´111JΩ´11 .
+
+Remark. This result presents a clean form of the worst-case uncertainty u˚ under certain conditions. Unlike the implicit case where it takes an additional root-finding algorithm to solve an approximated 
+
+u˚, in the explicit case, if the current value function v P V is given and the parameters of the uncertainty set ( ui and β) have been determined, the uncertainty u˚ can be explicitly solved. The full proof is presented in Theorem B.13. 73.4 Robust TD Learning Algorithm 
+
+Given Theorem 3.4 and Theorem 3.5 in place, we immediately obtain the robust TD learning algorithm for robust policy evaluation. Given the current value function v, we can calculate u˚ using the implicit and the explicit formula; assume the current state-action pair is given as ps, a, s 1q, then the updated value function is given by 
+
+v1psq “ vpsq ` η
+
+˜
+
+rps, a q ` γ ÿ
+
+> s1
+
+`P0ps1|s, a q ` u˚ps1q˘ “ vps1q ` γv ps1q‰ ´ vpsq
+
+¸
+
+. (5) We can further simplify this update rule by using an unbiased estimator of that: 
+
+v1psq “ vpsq ` ηγv Ju˚ ` η `rps, a q ` γv ps1q ´ vpsq˘ , (6) where s1 „ P0p¨| s, a q. The formulation leads us to Algorithm 1. 
+
+Algorithm 1: Robust Policy Evaluation 
+
+Input: The target policy π, the foci tpiuNi“1 Ă Rd, and tβs,a u the uncertainty size Sample the initial state s0 from the initial distribution; Initialize the value function v0;
+
+for t “ 0, 1, 2, . . . , T ´ 1 do 
+
+Sample the action at „ πp¨| stq; Transition from st to st`1 „ P0p¨| st, a tq;Calculate u˚ using tpiuNi“1, tβs,a u, and vt;Robust TD-learning: v1psq “ vpsq ` ηγv Ju˚ ` η prps, a q ` γv ps1q ´ vpsqq ;
+
+end Output: The final value function vT
+
+Remark. The convergence of this algorithm, as well as its corresponding Actor-Critic-style policy gradient algorithm, follows directly by applying the standard proof routine from the robust RL literature (e.g. [ 43 ]). For completeness, we include the convergence result and full proof in the supplementary material. 
+
+# 4 Experiments 
+
+To validate our theoretical findings and demonstrate the practical effectiveness of robust RL framework in the environment with the market impact, we conduct experiments on two different tasks that are closely tied to market impact: (1) minute-level single-asset strategy, and (2) large-volume portfolio rebalancing. In minute-level trading, even small trade sizes can noticeably move prices, leading to slippage. Similarly, large-scale portfolio rebalancing, often performed by large financial institutions, can significantly affect asset prices due to the large order volumes involved. 
+
+4.1 Performance Comparison on Single-Asset Intra-Day Trading 
+
+We start with the single-asset minute-level trading. The non-RL baseline is chosen as the momentum strategy [ 76 ], which is designed based on the empirical observation where assets that have performed well in the recent past are more likely to continue performing well in the near future. 
+
+Training and Evaluation of RL Agents We implement a Gym-like RL environment [ 77 , 78 ]constructed on historical data, with full environment details provided in Appendix C.3. All RL agents are trained on one year of earlier historical data (from May 9th, 2021 to May 9th, 2022 as the nominal environment) without accounting for market impact. Their performances are then evaluated over the period from June 9 to December 9, 2022, with the market impact included. To simulate market impact, we reconstruct LOB dynamics using a short period of real trading orders and determine the execution price via the volume-weighted average price (VWAP). A simple example illustrating this estimation process is shown in Table 2, Appendix C. 
+
+Results As shown in Table 1, our proposed method consistently outperforms the momentum strategy, the non-robust RL, and the symmetric robust RL baselines (based on ℓp-norm balls) in terms of the 8Table 1: Performance comparison of different RL agents on selected assets under the simulated market impact from June 9 to December 9, 2022. Robust RL with ℓp-ellipse uncertainty set consistently achieves the highest Sharpe ratio.                                                      
+
+> Asset Method Final Value ($) Annualized Return (%) Sharpe Ratio Max Drawdown (%)
+> META Momentum 96 334 ´7.3% ´0.95 ´4.2%
+> Non-Robust RL 120 347 44 .8% 1.74 ´11 .3%
+> Robust RL ( ℓp-Ball) 97 103 ´5.7% ´0.28 ´13 .4%
+> Robust RL ( ℓp-Ellipse) 138 011 90 .8% 2.48 ´9.9%
+> MSFT Momentum 105 163 10 .6% 1.10 ´5.3%
+> Non-Robust RL 87 440 ´23 .5% ´1.75 ´16 .9%
+> Robust RL ( ℓp-Ball) 92 159 ´15 .1% ´0.82 ´11 .2%
+> Robust RL ( ℓp-Ellipse) 111 485 24 .4% 1.20 ´10 .1%
+> SPY Momentum 107 333 15 .2% 1.69 ´3.2%
+> Non-Robust RL 91 947 ´15 .5% ´1.64 ´11 .9%
+> Robust RL ( ℓp-Ball) 100 560 1.1% 0.17 ´6.4%
+> Robust RL ( ℓp-Ellipse) 109 272 19 .4% 1.60 ´5.8%
+
+Figure 3: Performance comparison of trading strategies on the META stock from June 9 to December 9, 2022, under simulated market impact. The left panel compares the final portfolio values with (in red) and without market impact (in green), illustrating the robustness of each method to execution-related slippage. The right panel shows the cumulative returns over the evaluation period, tracking the performance of the four strategies in Table 1, alongside the baseline performance of the META stock. risk-adjusted return (Sharpe Ratio). These experiments validate the following key understandings: 
+
+(i) While robust RL with symmetric uncertainty sets significantly mitigates the effects of market impact (as illustrated in the left panel of Figure 3), it often produces overly conservative strategies that compromise profitability by taking implausible perturbations into consideration; (ii) the non-robust RL usually suffers greater risk exposure, resulting in the highest Max Drawdown among all methods; (iii) in contrast, the proposed ℓp-ellipse uncertainty set effectively captures the directional non-symmetry of market impact, allowing the agent to achieve a more favorable trade-off between robustness and return. 
+
+4.2 Robustness to the Market Impact Scaling in the Trading Volume 
+
+In this subsection, we show that a policy trained in a low-volume environment continues to mitigate market impact when transferred to portfolios with significantly larger volumes. We consider a multi-asset portfolio allocation task, modeling the realistic setting where large volumes are traded over short periods to maintain a low-variance portfolio. The same Gym-like RL environment and evaluation period from the previous experiment are used. We evaluate the robustness to the market impact using the relative portfolio gap, the normalized absolute difference in final portfolio value with and without market impact: Relative Port. Gap “ |Port. Value with MI ´ Port. Value without MI |
+
+Initial Cash ,
+
+where MI represents the market impact. Additional experimental details are provided in Appendix C. 9Figure 4: Robustness of RL agents to market impact under increasing trading volumes. The left three panels show normalized portfolio values over time across initial cash levels, with dashed and solid lines indicating performance with and without market impact, respectively. The right panel shows the relative portfolio gap, which increases sharply for the non-robust agent but remains small and stable for the robust RL agent with ℓp-elliptic uncertainty sets. 
+
+Results As shown in Figure 4, the robust RL agent with ℓp-ellipse uncertainty set consistently outperforms the non-robust RL method both in return and in mitigating the effects of market impact. While the performance gap is small at low volume, the non-robust agent degrades rapidly as volume increases, suffering from instability and larger drawdowns. In contrast, the robust agent remains stable and profitable even at high volume ( „ 200 M), demonstrating strong scalability. 
+
+# 5 Conclusion & Broader Impact 
+
+This paper focuses on the market impact appearing in quantitative trading, where an agent’s actions affect prices. By modeling the training environment as the nominal transition kernel, the proposed novel ℓp-ellipse uncertainty sets better captures the non-symmetric nature of price responses compared to traditional symmetric sets. We established the theoretical tractability of this approach by deriving implicit and explicit closed-form solutions for robust policy evaluation within this framework, enabling efficient robust TD-learning algorithms that account for the market impact during training on the nominal historical environment. Experiments on real historical data demonstrated that our method significantly improves robustness and risk-adjusted returns over non-RL, non-robust RL, and symmetric robust RL baselines. This work broadens the applicability of tractable robust RL and offers a more faithful modeling approach for market impact. The broader impact involves potentially more stable and profitable automated trading strategies. 
+
+# References                
+
+> [1] Ben Hambly, Renyuan Xu, and Huining Yang. Recent advances in reinforcement learning in finance.
+> Mathematical Finance , 33(3):437–503, 2023. [2] Nikolaos Pippas, Cagatay Turkay, and Elliot A Ludvig. The evolution of reinforcement learning in quantitative finance. arXiv preprint arXiv:2408.10932 , 2024. [3] Sebastian Jaimungal, Silvana M Pesenti, Ye Sheng Wang, and Hariom Tatsat. Robust risk-aware reinforce-ment learning. SIAM Journal on Financial Mathematics , 13(1):213–226, 2022. [4] Pengqian Yu, Joon Sern Lee, Ilya Kulyatin, Zekun Shi, and Sakyasingha Dasgupta. Model-based deep reinforcement learning for dynamic portfolio optimization. arXiv preprint arXiv:1901.08740 , 2019. [5] Xiaochuan Shi, Yihua Zhou, and Lei Wu. Robust reinforcement learning for portfolio management via competition and cooperation strategies, 2023. ICLR 2024 Conference Withdrawn Submission. [6] Philip Ndikum and Serge Ndikum. Advancing investment frontiers: Industry-grade deep reinforcement learning for portfolio optimization. arXiv preprint arXiv:2403.07916 , 2024. [7] Carlos Betancourt and Wen-Hui Chen. Deep reinforcement learning for portfolio management of markets with a dynamic number of assets. Expert Systems with Applications , 164:114002, 2021. [8] Amine Mohamed Aboussalah and Chi-Guhn Lee. Continuous control with stacked deep dynamic recurrent reinforcement learning for portfolio optimization. Expert Systems with Applications , 140:112891, 2020.
+
+10 [9] Min-Yuh Day, Ching-Ying Yang, and Yensen Ni. Portfolio dynamic trading strategies using deep rein-forcement learning. Soft Computing , 28(15):8715–8730, 2024. [10] Yuh-Jong Hu and Shang-Jen Lin. Deep reinforcement learning for optimizing finance portfolio management. In 2019 amity international conference on artificial intelligence (AICAI) , pages 14–20. IEEE, 2019. [11] Angelos Filos. Reinforcement learning for portfolio management. arXiv preprint arXiv:1909.09571 , 2019. [12] WARAMETH NUIPIAN, PHAYUNG MEESAD, et al. Dynamic Portfolio Management with Deep Reinforcement Learning . PhD thesis, King Mongkut’s University of Technology North Bangkok, 2025. [13] Farzan Soleymani and Eric Paquet. Financial portfolio optimization with online deep reinforcement learning and restricted stacked autoencoder—deepbreath. Expert Systems with Applications , 156:113456, 2020. [14] Hyunmin Cho and Hyun Joon Shin. Trading strategies using reinforcement learning. Journal of the Korea Academia-Industrial cooperation Society , 22(1):123–130, 2021. [15] John Moody and Matthew Saffell. Learning to trade via direct reinforcement. IEEE transactions on neural Networks , 12(4):875–889, 2001. [16] Yang Li, Wanshan Zheng, and Zibin Zheng. Deep robust reinforcement learning for practical algorithmic trading. IEEE Access , 7:108014–108022, 2019. [17] Ji-Heon Park, Jae-Hwan Kim, and Jun-Ho Huh. Deep reinforcement learning robots for algorithmic trading: Considering stock market conditions and us interest rates. IEEE Access , 12:20705–20725, 2024. [18] Yasmeen Ansari, Sadaf Yasmin, Sheneela Naz, Hira Zaffar, Zeeshan Ali, Jihoon Moon, and Seungmin Rho. A deep reinforcement learning-based decision support system for automated stock market trading. 
+
+IEEE Access , 10:127469–127501, 2022. [19] Xing Wu, Haolei Chen, Jianjia Wang, Luigi Troiano, Vincenzo Loia, and Hamido Fujita. Adaptive stock trading strategies with deep reinforcement learning methods. Information Sciences , 538:142–158, 2020. [20] Olivier Guéant, Charles-Albert Lehalle, and Joaquin Fernandez-Tapia. Dealing with the inventory risk: a solution to the market making problem. Mathematics and Financial Economics , 7(4):477–507, 2013. [21] Joel Hasbrouck. Empirical Market Microstructure: The Institutions, Economics, and Econometrics of Securities Trading . Oxford University Press, Oxford, UK, 2007. [22] Zihao Zhang, Stefan Zohren, and Stephen Roberts. Deep reinforcement learning for trading. arXiv preprint arXiv:1911.10107 , 2019. [23] Hans Buehler, Lukas Gonon, Josef Teichmann, and Ben Wood. Deep hedging. Quantitative Finance ,19(8):1271–1291, 2019. [24] David Wu and Sebastian Jaimungal. Robust risk-aware option hedging. Applied Mathematical Finance ,30(3):153–174, 2023. [25] Robert Almgren and Neil Chriss. Optimal execution of portfolio transactions. Journal of Risk , 3:5–40, 2001. [26] Anna A Obizhaeva and Jiang Wang. Optimal trading strategy and supply/demand dynamics. Journal of Financial markets , 16(1):1–32, 2013. [27] Bence Tóth, Zoltán Eisler, and J-P Bouchaud. The square-root impace law also holds for option markets. 
+
+Wilmott , 2016(85):70–73, 2016. [28] Yan Li, Guanghui Lan, and Tuo Zhao. First-order policy optimization for robust markov decision process. 
+
+arXiv preprint arXiv:2209.10579 , 2022. [29] Yike Li, Yunzhe Tian, Endong Tong, Wenjia Niu, and Jiqiang Liu. Robust reinforcement learning via progressive task sequence. In IJCAI , pages 455–463, 2023. [30] Guanlin Liu, Zhihan Zhou, Han Liu, and Lifeng Lai. Efficient action robust reinforcement learning with probabilistic policy execution uncertainty. Transactions on Machine Learning Research , 2024. [31] Yue Wang and Shaofeng Zou. Online robust reinforcement learning with model uncertainty. In Advances in Neural Information Processing Systems , volume 34, 2021. 
+
+11 [32] Shangding Gu, Laixi Shi, Muning Wen, Ming Jin, Eric Mazumdar, Yuejie Chi, Adam Wierman, and Costas Spanos. Robust gymnasium: A unified modular benchmark for robust reinforcement learning. In 
+
+International Conference on Learning Representations , 2025. [33] Lerrel Pinto, James Davidson, Rahul Sukthankar, and Abhinav Gupta. Robust adversarial reinforcement learning. arXiv preprint arXiv:1703.02702 , 2017. [34] Kishan Panaganti, Zaiyan Xu, Dileep Kalathil, and Mohammad Ghavamzadeh. Robust reinforcement learning using offline data. In Advances in Neural Information Processing Systems , volume 35, 2022. [35] Minghong Fang, Xilong Wang, and Neil Zhenqiang Gong. Provably robust federated reinforcement learning. arXiv preprint arXiv:2502.08123 , 2025. [36] Wei Shen, Xiaoying Zhang, Yuanshun Yao, Rui Zheng, Hongyi Guo, and Yang Liu. Robust rlhf with noisy rewards. In International Conference on Learning Representations , 2025. Withdrawn submission. [37] Shaocong Ma, Ziyi Chen, Shaofeng Zou, and Yi Zhou. Decentralized robust v-learning for solving markov games with model uncertainty. Journal of Machine Learning Research , 24(371):1–40, 2023. [38] Pierre Clavier, Laixi Shi, Erwan Le Pennec, Eric Mazumdar, Adam Wierman, and Matthieu Geist. Near-optimal distributionally robust reinforcement learning with general l_p norms. Advances in Neural Information Processing Systems , 37:1750–1810, 2024. [39] Navdeep Kumar, Kfir Levy, Kaixin Wang, and Shie Mannor. An efficient solution to s-rectangular robust markov decision processes. arXiv preprint arXiv:2301.13642 , 2023. [40] Navdeep Kumar, Esther Derman, Matthieu Geist, Kfir Y Levy, and Shie Mannor. Policy gradient for rectangular robust markov decision processes. Advances in Neural Information Processing Systems ,36:59477–59501, 2023. [41] Runyu Zhang, Yang Hu, and Na Li. Soft robust MDPs and risk-sensitive MDPs: Equivalence, policy gradient, and sample complexity. In The Twelfth International Conference on Learning Representations ,2024. [42] Zifan Wu, Chao Yu, Chen Chen, Jianye Hao, and Hankz Hankui Zhuo. Plan to predict: Learning an uncertainty-foreseeing model for model-based reinforcement learning. Advances in Neural Information Processing Systems , 35:15849–15861, 2022. [43] Ruida Zhou, Tao Liu, Min Cheng, Dileep Kalathil, PR Kumar, and Chao Tian. Natural actor-critic for robust reinforcement learning with function approximation. Advances in neural information processing systems , 36:97–133, 2023. [44] Qiuhao Wang, Chin Pang Ho, and Marek Petrik. Policy gradient in robust mdps with global convergence guarantee. In International Conference on Machine Learning , pages 35763–35797. PMLR, 2023. [45] Zhongchang Sun, Sihong He, Fei Miao, and Shaofeng Zou. Policy optimization for robust average reward mdps. Advances in Neural Information Processing Systems , 37:17348–17372, 2024. [46] Shaocong Ma, Ziyi Chen, Yi Zhou, and Heng Huang. Rectified robust policy optimization for model-uncertain constrained reinforcement learning without strong duality. Transactions on Machine Learning Research , 2025. [47] Ruihong Huang and Tomas Polak. Lobster: Limit order book reconstruction system. Available at SSRN 1977207 , 2011. [48] Jean-Philippe Bouchaud, Julien Kockelkoren, and Zoltan Eisler. The price impact of order book events: Market orders, limit orders and cancellations. Quantitative Finance , 9(3):283–297, 2009. [49] Jim Gatheral, Alexander Schied, and Aleksey Slynko. Transient linear price impact and fredholm integral equations. Mathematical Finance , 22(3):445–474, 2012. [50] Leonardo Berti, Bardh Prenkaj, and Paola Velardi. Trades: Generating realistic market simulations with diffusion models. arXiv preprint arXiv:2502.07071 , 2025. [51] Robert Almgren, Chee Thum, Emmanuel Hauptmann, and Hong Li. Direct estimation of equity market impact. Risk , 18(7):58–62, 2005. [52] Anastasia Bugaenko. Empirical study of market impact conditional on order-flow imbalance. arXiv preprint arXiv:2004.08290 , 2020. 
+
+12 [53] Michaël Karpe, Jin Fang, Zhongyao Ma, and Chen Wang. Multi-agent reinforcement learning in a realistic limit order book market simulation. In Proceedings of the first ACM international conference on AI in finance , pages 1–7, 2020. [54] Andrew Todd, Peter Beling, William Scherer, and Steve Y. Yang. Agent-based financial markets: A review of the methodology and domain. In 2016 IEEE Symposium Series on Computational Intelligence (SSCI) ,pages 1–5. IEEE, 2016. [55] Shen Gao, Yuntao Wen, Minghang Zhu, Jianing Wei, Yuhan Cheng, Qunzi Zhang, and Shuo Shang. Simulating financial market via large language model based agents. arXiv preprint arXiv:2406.19966 ,2024. [56] Junjie Li, Yang Liu, Weiqing Liu, Shikai Fang, Lewen Wang, Chang Xu, and Jiang Bian. Mars: a financial market simulation engine powered by generative foundation model. In The Thirteenth International Conference on Learning Representations , 2025. [57] Martin D. Gould, Mason A. Porter, Stacy Williams, Mark McDonald, Daniel J. Fenn, and Sam D. Howison. Limit order books. Quantitative Finance , 13(11):1709–1742, 2013. [58] Avraam Tsantekidis, Nikolaos Passalis, Anastasios Tefas, Juho Kanniainen, Moncef Gabbouj, and Alexan-dros Iosifidis. Forecasting stock prices from limit order book using convolutional neural networks. In 2017 IEEE 19th Conference on Business Informatics (CBI) , volume 1, pages 7–12. IEEE, 2017. [59] Vincent Ragel. Reinforcement Learning for systematic market making strategies . PhD thesis, Université Paris-Saclay, 2024. [60] Zhenglong Li, Vincent Tam, and Kwan L. Yeung. Developing a multi-agent and self-adaptive framework with deep reinforcement learning for dynamic portfolio risk management. arXiv preprint arXiv:2402.00515 ,2024. [61] Mohammed Amin Abdullah, Hang Ren, Haitham Bou Ammar, Vladimir Milenkovic, Rui Luo, Mingtian Zhang, and Jun Wang. Wasserstein robust reinforcement learning. arXiv preprint arXiv:1907.13196 , 2019. [62] Yufei Kuang, Miao Lu, Jie Wang, Qi Zhou, Bin Li, and Houqiang Li. Learning robust policy against disturbance in transition dynamics via state-conservative policy optimization. In Proceedings of the AAAI Conference on Artificial Intelligence , volume 36–7, pages 7247–7254, 2022. [63] John C Duchi and Hongseok Namkoong. Learning models with uniform performance via distributionally robust optimization. The Annals of Statistics , 49(3):1378–1406, 2021. [64] Richard S Sutton, Andrew G Barto, et al. Reinforcement learning: An introduction , volume 1. MIT press Cambridge, 1998. [65] Yanwei Jia and Xun Yu Zhou. Policy gradient and actor-critic learning in continuous time and space: Theory and algorithms. Journal of Machine Learning Research , 23(275):1–50, 2022. [66] Huaqing Xiong, Tengyu Xu, Lin Zhao, Yingbin Liang, and Wei Zhang. Deterministic policy gradient: Convergence analysis. In Uncertainty in Artificial Intelligence , pages 2159–2169. PMLR, 2022. [67] Kaiqing Zhang, Zhuoran Yang, and Tamer Basar. Networked multi-agent reinforcement learning in continuous spaces. In 2018 IEEE conference on decision and control (CDC) , pages 2771–2776. IEEE, 2018. [68] Bin Hu, Kaiqing Zhang, Na Li, Mehran Mesbahi, Maryam Fazel, and Tamer Ba¸ sar. Toward a theoretical foundation of policy optimization for learning control policies. Annual Review of Control, Robotics, and Autonomous Systems , 6(1):123–158, 2023. [69] Elena Smirnova, Elvis Dohmatob, and Jérémie Mary. Distributionally robust reinforcement learning. arXiv preprint arXiv:1902.08708 , 2019. [70] Jose Blanchet, Miao Lu, Tong Zhang, and Han Zhong. Double pessimism is provably efficient for distributionally robust offline reinforcement learning: Generic algorithm and robust partial coverage. 
+
+Advances in Neural Information Processing Systems , 36:66845–66859, 2023. [71] Yiting He, Zhishuai Liu, Weixin Wang, and Pan Xu. Sample complexity of distributionally robust off-dynamics reinforcement learning with online interaction. In Forty-second International Conference on Machine Learning , 2025. 
+
+13 [72] Yan Li and Alexander Shapiro. Rectangularity and duality of distributionally robust markov decision processes. arXiv preprint arXiv:2308.11139 , 2023. [73] Zhishuai Liu and Pan Xu. Distributionally robust off-dynamics reinforcement learning: Provable efficiency with linear function approximation. In International Conference on Artificial Intelligence and Statistics ,pages 2719–2727. PMLR, 2024. [74] Miao Lu, Han Zhong, Tong Zhang, and Jose Blanchet. Distributionally robust reinforcement learning with interactive data collection: Fundamental hardness and near-optimal algorithms. Advances in Neural Information Processing Systems , 37:12528–12580, 2024. [75] Wolfram Wiesemann, Daniel Kuhn, and Berç Rustem. Robust markov decision processes. Mathematics of Operations Research , 38(1):153–183, 2013. [76] Carlo Zarattini, Andrew Aziz, and Andrea Barbon. Beat the market: An effective intraday momentum strategy for s&p500 etf (spy). Available at SSRN 4824172 , 2024. [77] Greg Brockman, Vicki Cheung, Ludwig Pettersson, Jonas Schneider, John Schulman, Jie Tang, and Wojciech Zaremba. Openai gym. arXiv preprint arXiv:1606.01540 , 2016. [78] Mark Towers, Ariel Kwiatkowski, Jordan Terry, John U Balis, Gianluca De Cola, Tristan Deleu, Manuel Goulao, Andreas Kallinteris, Markus Krimmel, Arjun KG, et al. Gymnasium: A standard interface for reinforcement learning environments. arXiv preprint arXiv:2407.17032 , 2024. [79] Stephen Boyd and Lieven Vandenberghe. Convex Optimization . Cambridge University Press, 2004. [80] Stephen Roman. Advanced Linear Algebra . Graduate Texts in Mathematics. Springer, third edition, 2008. [81] Neal Parikh, Stephen Boyd, et al. Proximal algorithms. Foundations and trends® in Optimization ,1(3):127–239, 2014. [82] Jonathan M. Borwein and Adrian S. Lewis. Convex Analysis and Nonlinear Optimization: Theory and Examples . Springer, 2 edition, 2006. [83] John Schulman, Filip Wolski, Prafulla Dhariwal, Alec Radford, and Oleg Klimov. Proximal policy optimization algorithms. arXiv preprint arXiv:1707.06347 , 2017. [84] Shaocong Ma, Yi Zhou, and Shaofeng Zou. Variance-reduced off-policy tdc learning: Non-asymptotic convergence analysis. Advances in neural information processing systems , 33:14796–14806, 2020. [85] Shaocong Ma, Ziyi Chen, Yi Zhou, and Shaofeng Zou. Greedy-gq with variance reduction: Finite-time analysis and improved complexity. arXiv preprint arXiv:2103.16377 , 2021. [86] Yi Zhou, Shaocong Ma, et al. Stochastic optimization methods for policy evaluation in reinforcement learning. Foundations and Trends® in Optimization , 6(3):145–192, 2024. [87] Shengbo Wang, Nian Si, Jose Blanchet, and Zhengyuan Zhou. Sample complexity of variance-reduced distributionally robust q-learning. Journal of Machine Learning Research , 25(341):1–77, 2024. 
+
+14 NeurIPS Paper Checklist 
+
+1. Claims 
+
+Question: Do the main claims made in the abstract and introduction accurately reflect the paper’s contributions and scope? Answer: [Yes] Justification: Yes, we have clearly listed the main contributions in the introduction section. Guidelines: • The answer NA means that the abstract and introduction do not include the claims made in the paper. • The abstract and/or introduction should clearly state the claims made, including the contributions made in the paper and important assumptions and limitations. A No or NA answer to this question will not be perceived well by the reviewers. • The claims made should match theoretical and experimental results, and reflect how much the results can be expected to generalize to other settings. • It is fine to include aspirational goals as motivation as long as it is clear that these goals are not attained by the paper. 2. Limitations 
+
+Question: Does the paper discuss the limitations of the work performed by the authors? Answer: [Yes] Justification: We have discussed the limitation in the appendix. Guidelines: • The answer NA means that the paper has no limitation while the answer No means that the paper has limitations, but those are not discussed in the paper. • The authors are encouraged to create a separate "Limitations" section in their paper. • The paper should point out any strong assumptions and how robust the results are to violations of these assumptions (e.g., independence assumptions, noiseless settings, model well-specification, asymptotic approximations only holding locally). The authors should reflect on how these assumptions might be violated in practice and what the implications would be. • The authors should reflect on the scope of the claims made, e.g., if the approach was only tested on a few datasets or with a few runs. In general, empirical results often depend on implicit assumptions, which should be articulated. • The authors should reflect on the factors that influence the performance of the approach. For example, a facial recognition algorithm may perform poorly when image resolution is low or images are taken in low lighting. Or a speech-to-text system might not be used reliably to provide closed captions for online lectures because it fails to handle technical jargon. • The authors should discuss the computational efficiency of the proposed algorithms and how they scale with dataset size. • If applicable, the authors should discuss possible limitations of their approach to address problems of privacy and fairness. • While the authors might fear that complete honesty about limitations might be used by reviewers as grounds for rejection, a worse outcome might be that reviewers discover limitations that aren’t acknowledged in the paper. The authors should use their best judgment and recognize that individual actions in favor of transparency play an impor-tant role in developing norms that preserve the integrity of the community. Reviewers will be specifically instructed to not penalize honesty concerning limitations. 3. Theory assumptions and proofs 
+
+Question: For each theoretical result, does the paper provide the full set of assumptions and a complete (and correct) proof? Answer: [Yes] 15 Justification: We have provided the full proof in the appendix. Guidelines: • The answer NA means that the paper does not include theoretical results. • All the theorems, formulas, and proofs in the paper should be numbered and cross-referenced. • All assumptions should be clearly stated or referenced in the statement of any theorems. • The proofs can either appear in the main paper or the supplemental material, but if they appear in the supplemental material, the authors are encouraged to provide a short proof sketch to provide intuition. • Inversely, any informal proof provided in the core of the paper should be complemented by formal proofs provided in appendix or supplemental material. • Theorems and Lemmas that the proof relies upon should be properly referenced. 4. Experimental result reproducibility 
+
+Question: Does the paper fully disclose all the information needed to reproduce the main ex-perimental results of the paper to the extent that it affects the main claims and/or conclusions of the paper (regardless of whether the code and data are provided or not)? Answer: [Yes] Justification: We include the source code and reproducing instructions in the supplementary material. Guidelines: • The answer NA means that the paper does not include experiments. • If the paper includes experiments, a No answer to this question will not be perceived well by the reviewers: Making the paper reproducible is important, regardless of whether the code and data are provided or not. • If the contribution is a dataset and/or model, the authors should describe the steps taken to make their results reproducible or verifiable. • Depending on the contribution, reproducibility can be accomplished in various ways. For example, if the contribution is a novel architecture, describing the architecture fully might suffice, or if the contribution is a specific model and empirical evaluation, it may be necessary to either make it possible for others to replicate the model with the same dataset, or provide access to the model. In general. releasing code and data is often one good way to accomplish this, but reproducibility can also be provided via detailed instructions for how to replicate the results, access to a hosted model (e.g., in the case of a large language model), releasing of a model checkpoint, or other means that are appropriate to the research performed. • While NeurIPS does not require releasing code, the conference does require all submis-sions to provide some reasonable avenue for reproducibility, which may depend on the nature of the contribution. For example (a) If the contribution is primarily a new algorithm, the paper should make it clear how to reproduce that algorithm. (b) If the contribution is primarily a new model architecture, the paper should describe the architecture clearly and fully. (c) If the contribution is a new model (e.g., a large language model), then there should either be a way to access this model for reproducing the results or a way to reproduce the model (e.g., with an open-source dataset or instructions for how to construct the dataset). (d) We recognize that reproducibility may be tricky in some cases, in which case authors are welcome to describe the particular way they provide for reproducibility. In the case of closed-source models, it may be that access to the model is limited in some way (e.g., to registered users), but it should be possible for other researchers to have some path to reproducing or verifying the results. 5. Open access to data and code 
+
+Question: Does the paper provide open access to the data and code, with sufficient instruc-tions to faithfully reproduce the main experimental results, as described in supplemental material? 16 Answer: [Yes] Justification: We include the source code and reproducing instructions in the supplementary material. The data is accessed using the third-party API. Guidelines: • The answer NA means that paper does not include experiments requiring code. • Please see the NeurIPS code and data submission guidelines ( https://nips.cc/ public/guides/CodeSubmissionPolicy ) for more details. • While we encourage the release of code and data, we understand that this might not be possible, so “No” is an acceptable answer. Papers cannot be rejected simply for not including code, unless this is central to the contribution (e.g., for a new open-source benchmark). • The instructions should contain the exact command and environment needed to run to reproduce the results. See the NeurIPS code and data submission guidelines ( https: //nips.cc/public/guides/CodeSubmissionPolicy ) for more details. • The authors should provide instructions on data access and preparation, including how to access the raw data, preprocessed data, intermediate data, and generated data, etc. • The authors should provide scripts to reproduce all experimental results for the new proposed method and baselines. If only a subset of experiments are reproducible, they should state which ones are omitted from the script and why. • At submission time, to preserve anonymity, the authors should release anonymized versions (if applicable). • Providing as much information as possible in supplemental material (appended to the paper) is recommended, but including URLs to data and code is permitted. 6. Experimental setting/details 
+
+Question: Does the paper specify all the training and test details (e.g., data splits, hyper-parameters, how they were chosen, type of optimizer, etc.) necessary to understand the results? Answer:[Yes] Justification: We explicitly specify the details in the code and supplementary material. Guidelines: • The answer NA means that the paper does not include experiments. • The experimental setting should be presented in the core of the paper to a level of detail that is necessary to appreciate the results and make sense of them. • The full details can be provided either with the code, in appendix, or as supplemental material. 7. Experiment statistical significance 
+
+Question: Does the paper report error bars suitably and correctly defined or other appropriate information about the statistical significance of the experiments? Answer: [Yes] Justification: Our evaluation environment is deterministic; that is, there is no randomness. Guidelines: • The answer NA means that the paper does not include experiments. • The authors should answer "Yes" if the results are accompanied by error bars, confi-dence intervals, or statistical significance tests, at least for the experiments that support the main claims of the paper. • The factors of variability that the error bars are capturing should be clearly stated (for example, train/test split, initialization, random drawing of some parameter, or overall run with given experimental conditions). • The method for calculating the error bars should be explained (closed form formula, call to a library function, bootstrap, etc.) • The assumptions made should be given (e.g., Normally distributed errors). 17 • It should be clear whether the error bar is the standard deviation or the standard error of the mean. • It is OK to report 1-sigma error bars, but one should state it. The authors should preferably report a 2-sigma error bar than state that they have a 96% CI, if the hypothesis of Normality of errors is not verified. • For asymmetric distributions, the authors should be careful not to show in tables or figures symmetric error bars that would yield results that are out of range (e.g. negative error rates). • If error bars are reported in tables or plots, The authors should explain in the text how they were calculated and reference the corresponding figures or tables in the text. 8. Experiments compute resources 
+
+Question: For each experiment, does the paper provide sufficient information on the com-puter resources (type of compute workers, memory, time of execution) needed to reproduce the experiments? Answer: [Yes] Justification: Included in the appendix. Guidelines: • The answer NA means that the paper does not include experiments. • The paper should indicate the type of compute workers CPU or GPU, internal cluster, or cloud provider, including relevant memory and storage. • The paper should provide the amount of compute required for each of the individual experimental runs as well as estimate the total compute. • The paper should disclose whether the full research project required more compute than the experiments reported in the paper (e.g., preliminary or failed experiments that didn’t make it into the paper). 9. Code of ethics 
+
+Question: Does the research conducted in the paper conform, in every respect, with the NeurIPS Code of Ethics https://neurips.cc/public/EthicsGuidelines ?Answer: [Yes] Justification: We have reviewed this code of ethics. Guidelines: • The answer NA means that the authors have not reviewed the NeurIPS Code of Ethics. • If the authors answer No, they should explain the special circumstances that require a deviation from the Code of Ethics. • The authors should make sure to preserve anonymity (e.g., if there is a special consid-eration due to laws or regulations in their jurisdiction). 10. Broader impacts 
+
+Question: Does the paper discuss both potential positive societal impacts and negative societal impacts of the work performed? Answer: [Yes] Justification: We have included this in the conclusion section. Guidelines: • The answer NA means that there is no societal impact of the work performed. • If the authors answer NA or No, they should explain why their work has no societal impact or why the paper does not address societal impact. • Examples of negative societal impacts include potential malicious or unintended uses (e.g., disinformation, generating fake profiles, surveillance), fairness considerations (e.g., deployment of technologies that could make decisions that unfairly impact specific groups), privacy considerations, and security considerations. 18 • The conference expects that many papers will be foundational research and not tied to particular applications, let alone deployments. However, if there is a direct path to any negative applications, the authors should point it out. For example, it is legitimate to point out that an improvement in the quality of generative models could be used to generate deepfakes for disinformation. On the other hand, it is not needed to point out that a generic algorithm for optimizing neural networks could enable people to train models that generate Deepfakes faster. • The authors should consider possible harms that could arise when the technology is being used as intended and functioning correctly, harms that could arise when the technology is being used as intended but gives incorrect results, and harms following from (intentional or unintentional) misuse of the technology. • If there are negative societal impacts, the authors could also discuss possible mitigation strategies (e.g., gated release of models, providing defenses in addition to attacks, mechanisms for monitoring misuse, mechanisms to monitor how a system learns from feedback over time, improving the efficiency and accessibility of ML). 11. Safeguards 
+
+Question: Does the paper describe safeguards that have been put in place for responsible release of data or models that have a high risk for misuse (e.g., pretrained language models, image generators, or scraped datasets)? Answer: [NA] Justification: The paper poses no such risks. Guidelines: • The answer NA means that the paper poses no such risks. • Released models that have a high risk for misuse or dual-use should be released with necessary safeguards to allow for controlled use of the model, for example by requiring that users adhere to usage guidelines or restrictions to access the model or implementing safety filters. • Datasets that have been scraped from the Internet could pose safety risks. The authors should describe how they avoided releasing unsafe images. • We recognize that providing effective safeguards is challenging, and many papers do not require this, but we encourage authors to take this into account and make a best faith effort. 12. Licenses for existing assets 
+
+Question: Are the creators or original owners of assets (e.g., code, data, models), used in the paper, properly credited and are the license and terms of use explicitly mentioned and properly respected? Answer: [NA] Justification: The paper does not use existing assets. Guidelines: • The answer NA means that the paper does not use existing assets. • The authors should cite the original paper that produced the code package or dataset. • The authors should state which version of the asset is used and, if possible, include a URL. • The name of the license (e.g., CC-BY 4.0) should be included for each asset. • For scraped data from a particular source (e.g., website), the copyright and terms of service of that source should be provided. • If assets are released, the license, copyright information, and terms of use in the package should be provided. For popular datasets, paperswithcode.com/datasets 
+
+has curated licenses for some datasets. Their licensing guide can help determine the license of a dataset. • For existing datasets that are re-packaged, both the original license and the license of the derived asset (if it has changed) should be provided. 19 • If this information is not available online, the authors are encouraged to reach out to the asset’s creators. 13. New assets 
+
+Question: Are new assets introduced in the paper well documented and is the documentation provided alongside the assets? Answer: [NA] Justification: The source code is for reviewing purpose only and is not considered as the released new asset. Guidelines: • The answer NA means that the paper does not release new assets. • Researchers should communicate the details of the dataset/code/model as part of their submissions via structured templates. This includes details about training, license, limitations, etc. • The paper should discuss whether and how consent was obtained from people whose asset is used. • At submission time, remember to anonymize your assets (if applicable). You can either create an anonymized URL or include an anonymized zip file. 14. Crowdsourcing and research with human subjects 
+
+Question: For crowdsourcing experiments and research with human subjects, does the paper include the full text of instructions given to participants and screenshots, if applicable, as well as details about compensation (if any)? Answer: [NA] Justification: The paper does not involve crowdsourcing nor research with human subjects. Guidelines: • The answer NA means that the paper does not involve crowdsourcing nor research with human subjects. • Including this information in the supplemental material is fine, but if the main contribu-tion of the paper involves human subjects, then as much detail as possible should be included in the main paper. • According to the NeurIPS Code of Ethics, workers involved in data collection, curation, or other labor should be paid at least the minimum wage in the country of the data collector. 15. Institutional review board (IRB) approvals or equivalent for research with human subjects 
+
+Question: Does the paper describe potential risks incurred by study participants, whether such risks were disclosed to the subjects, and whether Institutional Review Board (IRB) approvals (or an equivalent approval/review based on the requirements of your country or institution) were obtained? Answer: [NA] Justification: The paper does not involve crowdsourcing nor research with human subjects. Guidelines: • The answer NA means that the paper does not involve crowdsourcing nor research with human subjects. • Depending on the country in which research is conducted, IRB approval (or equivalent) may be required for any human subjects research. If you obtained IRB approval, you should clearly state this in the paper. • We recognize that the procedures for this may vary significantly between institutions and locations, and we expect authors to adhere to the NeurIPS Code of Ethics and the guidelines for their institution. • For initial submissions, do not include any information that would break anonymity (if applicable), such as the institution conducting the review. 20 16. Declaration of LLM usage 
+
+Question: Does the paper describe the usage of LLMs if it is an important, original, or non-standard component of the core methods in this research? Note that if the LLM is used only for writing, editing, or formatting purposes and does not impact the core methodology, scientific rigorousness, or originality of the research, declaration is not required. Answer: [NA] Justification: The core method development in this research does not involve LLMs as any important, original, or non-standard components. Guidelines: • The answer NA means that the core method development in this research does not involve LLMs as any important, original, or non-standard components. • Please refer to our LLM policy ( https://neurips.cc/Conferences/2025/LLM )for what should or should not be described. 21 Appendix 
+
+# Table of Contents 
+
+A Backgrounds 22 
+
+A.1 Common Uncertainty Sets in the Literature . . . . . . . . . . . . . . . . . . . . 22 A.2 The Signed Permutation Group . . . . . . . . . . . . . . . . . . . . . . . . . . 23 
+
+B Worst-Case Uncertainty under ℓp-Ellipse Uncertainty Sets 24 
+
+B.1 Supporting Lemmas . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 24 B.2 Implicit Solution . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 31 B.3 Explicit Solution . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 32 
+
+C Experiment Details 35 
+
+C.1 Hardware and System Environment . . . . . . . . . . . . . . . . . . . . . . . . 35 C.2 Task Descriptions . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 35 C.3 Reinforcement Learning Framework . . . . . . . . . . . . . . . . . . . . . . . 36 C.4 Parameter Details . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 37 C.5 Omitted Visualization . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 37 C.6 Other Implementation Details . . . . . . . . . . . . . . . . . . . . . . . . . . . 37 
+
+D Limitations 38 E Additional Supplementary Materials 38 
+
+E.1 Convergence of Robust TD-Learning . . . . . . . . . . . . . . . . . . . . . . . 38 E.2 Parameter Setting and Grid-Search . . . . . . . . . . . . . . . . . . . . . . . . 39 E.3 Other Implementation Details . . . . . . . . . . . . . . . . . . . . . . . . . . . 40 
+
+# A Backgrounds 
+
+A.1 Common Uncertainty Sets in the Literature 
+
+When evaluating the robust Bellman operator 
+
+T π 
+
+> U
+
+vpsq “ ÿ
+
+> aPA
+
+πpa|sq
+
+«
+
+rps, a q ` γ min 
+
+> PPPs,a
+
+ÿ
+
+> s1PS
+
+Pps1|s, a qvps1q
+
+ff 
+
+, (7) the uncertainty set U “ t Ps,a ups,a qP SˆA plays a crucial role. Certain structures in U enable efficient robust policy evaluation. Below, we summarize several widely adopted constructions. 
+
+f -divergence The f -divergence family [ 62 , 63 ] generalizes statistical distances between distribu-tions using a convex function f : p0, 8q Ñ R with f p1q “ 0. For distributions P and P0 such that 
+
+P ! P0, the f -divergence is defined as 
+
+Df pP}P0q :“
+
+ż
+
+> S
+
+P0psqf
+
+ˆ Ppsq
+
+P0psq
+
+˙
+
+ds. 
+
+Special cases include the Kullback-Leibler divergence ( f ptq “ t log t), total variation distance (f ptq “ 12 |t ´ 1|), and χ2-divergence ( f ptq “ p t ´ 1q2). In robust RL, the f -divergence ball around the nominal transition kernel P0p¨| s, a q yields the uncertainty set 
+
+Ps,a “
+
+!
+
+Pp¨| s, a q P ∆|S| | Df pPp¨| s, a q} P0p¨| s, a qq ď βs,a 
+
+)
+
+.
+
+The inner minimization in Eq. (7) becomes a distributionally robust optimization problem over P0.As the result, the robust policy evaluation under the KL-divergence often requires to repeatedly solve an additional convex program. 22 R-contamination Model The R-contamination model [ 31 ] assumes that the true transition kernel lies within a convex mixture of the nominal model P0 and an arbitrary distribution P1:
+
+Ps,a “
+
+!
+
+p1 ´ RqP0p¨| s, a q ` RP1p¨| s, a q | P1p¨| s, a q P ∆|S|
+
+)
+
+,
+
+where R P r 0, 1s quantifies the contamination level. This model leads to closed-form solutions for the robust Bellman operator, with the worst-case distribution taking mass at the minimum of the value function v. As a result, this setup enables efficient and model-free learning algorithms, including robust variants of Q-learning, TD learning, and policy gradients. It is particularly well-suited for online learning, where P0 evolves with the observed data. 
+
+ℓp-norm These sets constrain the deviation from the nominal model P0p¨| s, a q using the ℓp-norm: 
+
+Pppq 
+
+> s,a
+
+“
+
+!
+
+Pp¨| s, a q P ∆|S| | } Pp¨| s, a q ´ P0p¨| s, a q} p ď βs,a 
+
+)
+
+.
+
+When p “ 1, the constraint corresponds to total variation distance, while p “ 8 bounds the largest single-coordinate deviation. These sets are commonly used due to their interpretability and explicit analytical solution given in [ 39 , 40 ]. However, their axis-aligned geometry can lead to overly conservative policies in high dimensions. 
+
+Integral Probability Metric (IPM) The IPM measures the discrepancy between distributions through expectations over a function class F:
+
+dF pP, P0q :“ sup  
+
+> fPF
+
+|EPrf s ´ EP0 rf s| .
+
+The corresponding uncertainty sets are: 
+
+Ps,a “
+
+!
+
+Pp¨| s, a q P ∆|S| | dF pPp¨| s, a q, P0p¨| s, a qq ď βs,a 
+
+)
+
+.
+
+The IPM-based uncertainty sets are particularly useful when the state space is extremely large or continuous, as explicitly solve the minimization problem in Eq. (7) does not requires to access values at all states [43]. 
+
+Wasserstein Distance The Wasserstein distance [ 61 ], grounded in optimal transport theory, ac-counts for the geometry of the state space. Given a cost function d : S ˆ S Ñ R` and p ě 1, the 
+
+p-Wasserstein distance between P and P0 is 
+
+WppP, P0q :“
+
+ˆ
+
+inf 
+
+> γPΓpP,P0q
+
+ż
+
+> SˆS
+
+dps, s 1qpdγ ps, s 1q
+
+˙1{p
+
+,
+
+where ΓpP, P0q denotes the set of joint distributions (couplings) with marginals P and P0. The uncertainty set is then 
+
+Ps,a “
+
+!
+
+Pp¨| s, a q P ∆|S| | WppPp¨| s, a q, P0p¨| s, a qq ď βs,a 
+
+)
+
+.
+
+Despite their strong theoretical properties, solving the inner minimization often requires dual formu-lations or approximation techniques. 
+
+General Uncertainty Sets There are also many techniques developed to handle the situation where the uncertainty set is general. For example, However, [ 44 ] proposes a bilevel approach that iteratively solves the worst-case transition kernel to approximate the robust value function. However, as demonstrated in [28, 44, 75], solving robust RL problems in the general case is NP-hard. 
+
+A.2 The Signed Permutation Group 
+
+The signed permutation group plays a central role in characterizing the symmetry structure of uncertainty sets in our robust RL framework. Informally, this group consists of all matrices in 
+
+R|S|ˆ| S| satisfying the following conditions: 1. Each entry is either 0, 1, or ´1.23 2. Each row and each column contains exactly one nonzero entry. In other words, every element of this group is a matrix obtained by permuting the standard basis vectors of R|S| and possibly flipping their signs. Each such matrix can be expressed as the product 
+
+DP , where D is a diagonal matrix with diagonal entries in t˘ 1u, and P is a permutation matrix representing an element of the symmetric group S|S|. This leads to the following formal definition: 
+
+Definition A.1 (Signed Permutation Group) . Let S|S| denote the permutation group over |S| elements, and let pZ2q|S| be the direct sum of |S| copies of the cyclic group of order 2. Then the signed permutation group , denoted by Signed pS|S|q, is the semidirect product: 
+
+Signed pS|S|q – p Z2q|S| ¸ S|S|,
+
+where the action of S|S| on pZ2q|S| is given by permuting the order. In this work, we define the “symmetry” of sets as the invariance under the group action induced by the signed permutation group. Specifically, we say a set B Ă R|S| is symmetric under a group action 
+
+by G if g ¨ B Ď B for all g P G (or G ¨ B :“ t g ¨ bugPG,b PB Ď B). This notion of symmetry leads to the following structural property of ℓp-norm balls: 
+
+Proposition A.2. Let B :“ t Bppβqu pě1,β ě0 be the family of ℓp-norm balls, where Bppβq :“ t u P
+
+Rd | } u}p ď βu. If there exists a group G such that all elements in B are symmetric under the group action by G, then G must be isomorphic to a subgroup of Signed pSdq.Proof. All elements in B are symmetric under the group action by G; that is, for every p ě 1 and every β ě 0,
+
+g`Bppβq˘ “ Bppβq @g P G. 
+
+Therefore, the act g : Rd Ñ Rd is a norm-preserving bijection; by the Mazur-Ulam theorem, it must be affine. Then as it preserves 0, it must be linear. In particular, taking p “ 1 and β “ 1, each g P G is an (invertible) linear isometry of the 1-norm unit ball 
+
+B1p1q “ ␣u P Rd : }u}1 ď 1(,
+
+whose extreme points are exactly ␣˘e1, ˘e2, . . . , ˘ed
+
+(.
+
+Because a linear automorphism of a polytope must permute its extreme points, for each i and each 
+
+g P G there must exist a sign εi P t˘ 1u and an index σpiq P t 1, . . . , d u such that 
+
+gpeiq “ εieσpiq.
+
+Thus in the standard basis g is represented by a signed permutation matrix :
+
+g “ DP, 
+
+where D “ diag pε1, . . . , ε dq and P is the permutation matrix corresponding to σ P Sd. Hence every 
+
+g P G lies in the signed permutation group Signed pSdq. In other words G Ď Signed pSdq, which equivalently shows G is isomorphic to a subgroup of Signed pSdq.This result provides a useful insight in designing the ℓp-ellipse set: the signed permutation group is the largest group under which all ℓp-norm balls are symmetric. Consequently, to construct a set with less symmetry than the standard ℓp-norm balls (as we aim to do with our ℓp-ellipse sets), it is necessary to enlarge the family B to include non-ball shapes. 
+
+# B Worst-Case Uncertainty under ℓp-Ellipse Uncertainty Sets 
+
+B.1 Supporting Lemmas Definition B.1 (Minkowski sum) . Given two sets A, B Ď Rd, the Minkowski sum ` : 2 Rd
+
+ˆ 2Rd
+
+Ñ
+
+2Rd
+
+is defined as 
+
+A ` B “ t a ` b | a P A, b P Bu.
+
+24 Definition B.2 (Fenchel conjugate [ 79 ]) . Let g : Rd Ñ R be a function over Rd. Its Fenchel conjugate is denoted as g˚ : Rd Ñ R and is defined as 
+
+g˚pyq :“ sup 
+
+> xPRd
+
+␣yJx ´ gpxq( .
+
+We include the following famous Hölder’s inequality without providing the proof. 
+
+Lemma B.3 (Hölder’s inequality) . Let p, q P r 1, `8s satisfy 1 
+
+> p
+
+` 1 
+
+> q
+
+“ 1. For every f, g P Rd
+
+f Jg ď } f }p}g}q .
+
+Moreover, equality holds if and only if 
+
+g “ 0 or g
+
+}g}q
+
+P Jppf q,
+
+where Jppf q denotes any ℓp-unit vector that attains the maximum inner product with f :
+
+Jppf q “ arg max  
+
+> }u}p“1
+
+f Ju. (8) 
+
+Proof. The proof can be found in [80]. 
+
+Lemma B.4. For any x, y P Rd and radii r, s ě 0, the Minkowski sum of the two ℓp-norm balls (p ě 1)
+
+Bppx, r q “ t u P Rd | } u ´ x} ď ru, Bppy, s q “ t v P Rd | } v ´ y} ď su
+
+is again a ball, namely 
+
+Bppx, r q ` Bppy, s q “ Bp
+
+`x ` y, r ` s˘.
+
+Proof. For convenience, we omit p at the subscript in this proof. It suffices to show two inclusions. • Bpx, r q ` Bpy, s q Ď Bpx ` y, r ` sq.
+
+Take any 
+
+z “ u ` v, u P Bpx, r q, v P Bpy, s q.
+
+Then by the triangle inequality, 
+
+››z ´ p x ` yq›› “ ››pu ´ xq ` p v ´ yq›› ď } u ´ x} ` } v ´ y} ď r ` s. 
+
+Hence z P Bpx ` y, r ` sq, proving the first inclusion. • Bpx ` y, r ` sq Ď Bpx, r q ` Bpy, s q.
+
+Let z P Bpx ` y, r ` sq, so }z ´ p x ` yq} ď r ` s. Set 
+
+α “ rr ` s , β “ sr ` s pif r ` s “ 0 then r “ s “ 0 and the statement is trivial q.
+
+Define u “ x ` α`z ´ p x ` yq˘ and v “ y ` β`z ´ p x ` yq˘. Then 
+
+u ` v “ x ` y ` p α ` βq`z ´ p x ` yq˘ “ x ` y ` z ´ p x ` yq “ z, 
+
+and 
+
+}u ´ x} “ α}z ´ p x ` yq} ď rr ` s pr ` sq “ r, 
+
+}v ´ y} “ β}z ´ p x ` yq} ď sr ` s pr ` sq “ s. 
+
+Thus u P Bpx, r q and v P Bpy, s q, so z “ u ` v P Bpx, r q ` Bpy, s q. This proves the reverse inclusion. Combining (1) and (2) gives the desired equality Bpx, r q ` Bpy, s q “ B`x ` y, r ` s˘.
+
+25 Lemma B.5. Let gpuq “ řNi“1 }u ´ ui}p. Then the Fenchel conjugate of g : Rd Ñ R is 
+
+g˚puq “ 
+
+$&%
+
+inf ř  
+
+> iyi“y
+> }yi}qď1
+
+ř 
+
+> i
+
+yJ 
+
+> i
+
+ui, }y}q ď 1,
+
+`8 , otherwise. 
+
+.
+
+Proof. The key is that gpuq “ řNi“1 }u ´ ui}p is a sum of N “shifted-norms,” and the Fenchel conjugate (Definition B.2) of a sum is the infimal convolution of the conjugates. We proceed in two steps. • Let f pxq “ } x}p be a single ℓp-norm mapping and q be the dual of q satisfying 1 
+
+> p
+
+` 1 
+
+> q
+
+“ 1
+
+By [79], it is standard that 
+
+f ˚pyq “ sup 
+
+> xPRd
+
+␣yJx ´ } x}p
+
+( “
+
+"0, }y}q ď 1,
+
+`8 , otherwise. Then we consider its “shift” by ui. Let fipuq :“ } u ´ ui}p. By the translation rule for Fenchel conjugates [81, 82], 
+
+f ˚ 
+
+> i
+
+pyq “ sup 
+
+> u
+
+tyJu ´ } u ´ ui}pu “ sup 
+
+> t
+
+tyJpt ` uiq ´ } t}pu
+
+looooooooooooomooooooooooooon 
+
+> t“u´ui
+
+“ yJui ` f ˚pyq.
+
+Hence, f ˚ 
+
+> i
+
+pyq “ 
+
+"yJui, }y}q ď 1,
+
+`8 , otherwise. .• As the Fenchel conjugate of }u ´ ui}p has been evaluated, the Fenchel conjugate of their sum is given by 
+
+g˚pyq “ 
+
+$&%
+
+inf ř  
+
+> iyi“y
+> }yi}qď1
+
+ř 
+
+> i
+
+yJ 
+
+> i
+
+ui, }y}q ď 1,
+
+`8 , otherwise. 
+
+.
+
+Applying this infimal convolution requires each component fi : Rd Ñ R is proper, convex, and lower semicontinuous, which is automatically satisfied by the ℓp-norm. 
+
+Lemma B.6. Let po, λ o, ˜ωo P Rd and γo ě 0 be given constants. Let 1 
+
+> p
+
+` 1 
+
+> q
+
+“ 1. Then the optimization problem 
+
+ϑo “ inf   
+
+> w:}w}qďC
+
+ppo ` λoqJ w
+
+has the unique minimizer given by 
+
+w˚ “ ´ C Jq ppo ` λoq}po ` λo}p
+
+“ ´ C sign ppo ` λoq d | po ` λo|p´1
+
+}po ` λo}p´1
+
+> p
+
+,
+
+where d represent the coordinate-wise product and | ¨ | is the coordinate-wise absolute value. The optimal value is solved as 
+
+ϑo “ ´ C}po ` λo}p.
+
+Proof. By Hölder’s inequality, 
+
+ppo ` λoqJ w ě ´} po ` λo}p}w}q .
+
+To make the Hölder’s inequality achieve the equality, we choose w “ ´ tJ q ppo ` λoq for some t,where Jq is the q-unit vector defined in Eq. (8). Then by letting }w}q “ C, we obtain the final result. 26 Lemma B.7. Suppose that v P Rd, tuiuNi“1 Ă Rd, and μ ě 0, and the norm exponent 1 
+
+> p
+
+` 1 
+
+> q
+
+“ 1
+
+(for p ě 1). Let w “ v ` μ1 and C :“ } w}q . Then the optimization problem 
+
+min 
+
+> twiuNi“1ĂRd
+> N
+
+ÿ
+
+> i“1
+
+wJ 
+
+> i
+
+ui
+
+s.t. 
+
+> N
+
+ÿ
+
+> i“1
+
+wi “ w
+
+}wi}q ď C
+
+is feasible and solves the minimizer 
+
+wi, ˚ “ ´} v ` μ1}q
+
+sign pui ` ˜λq d | ui ` ˜λ|p´1
+
+}ui ` ˜λ}p´1
+
+> p
+
+,
+
+for i “ 1, 2, . . . , N , where ˜λ˚ P Rd is given by 
+
+˜λ˚ “ arg min 
+
+> ˜λ
+
+#
+
+˜λJw ` } w}qNÿ
+
+> i“1
+
+}ui ` ˜λ}p
+
++
+
+. (˚)
+
+Proof. We consider the constrained Lagrangian function 
+
+˜Lpt wiu, ˜λq “ 
+
+> N
+
+ÿ
+
+> i“1
+
+”
+
+uJ 
+
+> i
+
+wi ` ˜λJwi
+
+ı
+
+´ ˜λJw. 
+
+where }wi}q ď C :“ } w}q . Let the dual function ϑp˜λq :“ inf twiu ˜Lpt wiu, ˜λq. Define 
+
+ϑip˜λq “ inf 
+
+> wi
+
+´
+
+ui ` ˜λ
+
+¯J
+
+wi.
+
+By Lemma B.6, it solves 
+
+wi, ˚ “ ´ C Jq
+
+`ui ` λ˘
+
+∥ui ` λ∥p
+
+“ ´ C sign pui ` ˜λq d | ui ` ˜λ|p´1
+
+}ui ` ˜λ}p´1
+
+> p
+
+As the result, 
+
+max 
+
+> ˜λ
+
+ϑp˜λq “ min 
+
+> ˜λ
+
+#
+
+˜λJw ` C
+
+> N
+
+ÿ
+
+> i“1
+
+}ui ` ˜λ}p
+
++
+
+Recall that w “ v ` μ1 P Rd is a given vector. Denote 
+
+˜λ˚ “ arg min 
+
+> ˜λ
+
+#
+
+˜λJw ` C
+
+> N
+
+ÿ
+
+> i“1
+
+}ui ` ˜λ}p
+
++
+
+.
+
+Put it back to wi, ˚, we obtain the final result. 
+
+Lemma B.8. Suppose that tuiuNi“1 Ă Rd, β ě 0, and v P Rd. Let 
+
+φpλ, μ q “ ´ λβ ` inf 
+
+> u
+
+”
+
+pv ` μ1qJu ` λ
+
+> N
+
+ÿ
+
+> i“1
+
+}u ´ ui}p
+
+ı
+
+,
+
+where p P r 1, `8s and 1 
+
+> p
+
+` 1 
+
+> q
+
+“ 1. Then 
+
+sup 
+
+> λě0
+
+φpλ, μ q “ ´} v ` μ1}q β `
+
+> N
+
+ÿ
+
+> i“1
+
+wJ
+
+> i, ˚
+
+ui,
+
+27 where 
+
+wi, ˚ :“ ´} v ` μ1} sign pui ` ˜λ˚q d | ui ` ˜λ˚|p´1
+
+}ui ` ˜λ˚}p´1
+
+> p
+
+, ˜λ˚ “ arg min 
+
+> ˜λ
+
+#
+
+˜λJw ` C
+
+> N
+
+ÿ
+
+> i“1
+
+}ui ` ˜λ}p
+
++
+
+.
+
+Consequently, the optimal pλ˚, μ ˚q of achieving sup λ,μ φpλ, μ q is given by 
+
+μ˚ “ arg max 
+
+> μ
+
+#
+
+´} v ` μ1}q β `
+
+> N
+
+ÿ
+
+> i“1
+
+wJ
+
+> i, ˚
+
+ui.
+
++
+
+, and λ˚ “ } v ` μ˚1}q .
+
+Proof. We take the transformation w :“ v ` μ1. Then 
+
+φpλ, μ q “ ´ λβ ` inf 
+
+> u
+
+”
+
+wJu ` λ
+
+> N
+
+ÿ
+
+> i“1
+
+}u ´ ui}p
+
+ı
+
+.
+
+For any convex g, by the definition of Fenchel conjugate (Definition B.2), we have 
+
+inf 
+
+> u
+
+“wJu ` λg puq‰ “ ´ λ g˚`´w{λ˘loooomoooon 
+
+“ sup 
+
+> y
+
+␣p´ w{λqJy ´ gpyq(
+
+.
+
+Here gpuq “ ř 
+
+> i
+
+}u ´ ui}p. Its conjugate is given by Lemma B.5, 
+
+g˚pzq “ 
+
+"inf ř  
+
+> izi“z, }zi}qď1
+
+ř 
+
+> i
+
+zJ 
+
+> i
+
+ui, }z}q ď 1,
+
+`8 , otherwise. .
+
+where 1 
+
+> p
+
+` 1 
+
+> q
+
+“ 1. We put it back to inf u
+
+“wJu ` λg puq‰ “ ´ λg ˚`´w{λ˘, which leads to 
+
+inf 
+
+> u
+
+“wJu ` λg puq‰ “ ´ λ inf ř  
+
+> izi“´ w{λ
+> }zi}qď1
+
+ÿ
+
+> i
+
+zJ 
+
+> i
+
+ui,
+
+where } wλ }q ď 1. As the result, we take wi “ ´ λz i to obtain 
+
+inf 
+
+> u
+
+“wJu ` λg puq‰ “
+
+#
+
+inf ř  
+
+> iwi“w, }wi}qďλ
+
+řNi“1 wJ 
+
+> i
+
+ui, }w}q ď λ, 
+
+´8 , else. Thus, the full dual becomes 
+
+φpλ, μ q “ 
+
+#
+
+´λβ ` inf ř  
+
+> iwi“v`μ1,}wi}qďλ
+
+řNi“1 wJ 
+
+> i
+
+ui, }w}q ď λ, 
+
+´8 , else. For a fixed μ, we need λ ě } w}q to keep φ finite, and φpλ, μ q is decreasing in λ. Hence the best choice is 
+
+λ˚ “ } w}q “ } v ` μ1}q ,
+
+giving 
+
+sup 
+
+> λě0
+
+φpλ, μ q “ ´} v ` μ1}q β ` inf ř  
+
+> iwi“v`μ1,}wi}qď} v`μ1}q
+> N
+
+ÿ
+
+> i“1
+
+wJ 
+
+> i
+
+ui.
+
+It leads to another optimization problem inf ř  
+
+> iwi“v`μ1,}wi}qď} v`μ1}q
+
+řNi“1 wJ 
+
+> i
+
+ui. We construct another Lagrangian function to solve it. Denote wi, ˚ as the minimizer given by Lemma B.7. Then we obtain 
+
+max  
+
+> λě0
+
+φpλ, μ q “ ´} v ` μ1}q β `
+
+> N
+
+ÿ
+
+> i“1
+
+wJ
+
+> i, ˚
+
+ui.
+
+It recovers the optimal dual variable z is given by 
+
+z˚ “ ´ 
+
+> N
+
+ÿ
+
+> i“1
+
+ωi, ˚
+
+λ˚ “ ÿ
+
+> i“1
+
+sign pui ` ˜λ˚q d | ui ` ˜λ˚|p´1
+
+}ui ` ˜λ˚}p´1
+
+> p
+
+,
+
+where 
+
+˜λ˚ “ arg min 
+
+> ˜λ
+
+#
+
+˜λJw ` C
+
+> N
+
+ÿ
+
+> i“1
+
+}ui ` ˜λ}p
+
++
+
+.
+
+28 Lemma B.9. Suppose that tuiu2 
+
+> i“1
+
+Ă R, λ ą 0, β ě 0, w P R is non-zero, q P r 1, `8s , and  
+
+> 1
+> p
+
+` 1 
+
+> q
+
+“ 1. Define 
+
+φ “ min 
+
+> uPR
+
+#
+
+uw ` λ
+
+> 2
+
+ÿ
+
+> i“1
+
+|u ´ ui|
+
++
+
+.
+
+Then when |w| ď 2λ , the problem is solved as 
+
+φ “ w u1 ` u2
+
+2 ` p λ ´ |w|
+
+2 q| u1 ´ u2|.
+
+Proof. We start from the general case. Define f puq “ uw ` λ řNi“1 |u ´ ui|. If |w| ď λN , then the sub-gradient is given by 
+
+Bf puq Q w ` λ
+
+> N
+
+ÿ
+
+> i“1
+
+sign pu ´ uiq
+
+where sign ptq :“
+
+$&%
+
+´1, t ă 0,
+
+0, t “ 0,
+
+1, t ą 0.
+
+Write tuiuNi“1 Ă R in the increasing order: 
+
+up1q ď up2q ď ¨ ¨ ¨ ď upN q.
+
+Define k˚ :“ r N ´w{λ 
+
+> 2
+
+s. Then 
+
+u˚ “ upk˚q
+
+is the explicit solution. To prove it, we consider u P p upk˚q, u pk˚`1qq; it is larger than exactly k˚
+
+ui’s. That is, 
+
+Bf puq “ w ` λpk˚ ´ p N ´ k˚qq ě 0.
+
+Whenever u ă upk˚q, the sign of sub-gradient becomes negative. As the result, f puq is decreasing when u ă upk˚q then increasing when u ą upk˚q. Now we set N “ 2. The problem gives 
+
+u˚ “ u1 ` u2 ´ sign pwq|u1 ´ u2|
+
+2 .
+
+When w ě 0, sign pwq “ ` 1 and 
+
+u˚ “ u1 ` u2 ´ | u1 ´ u2|
+
+2 “ min tu1, u 2u “ up1q.
+
+When w ă 0, sign pwq “ ´ 1 and 
+
+u˚ “ u1 ` u2 ` | u1 ´ u2|
+
+2 “ max tu1, u 2u “ up2q.
+
+Therefore, this formula recovers the original general case solution. Putting it back to φ solves this problem. The following lemma connects the sum-of-distance description to the quadratic form of an ellipse. 
+
+Lemma B.10. Suppose that tuiu2 
+
+> i“1
+
+Ă Rd, β ě 0, and β ą } u1 ´ u2}2. The ellipse set is given by 
+
+E :“ t u | } u ´ u1}2 ` } u ´ u2}2 ď βu.
+
+Then there exists a matrix A such that 
+
+E “ t u | p u ´ ¯uqJApu ´ ¯uq ď 1u,
+
+where ¯u :“ u1`u2 
+
+> 2
+
+. More explicitly, the matrix A has the form 
+
+A “ 4
+
+β2 ´ } u2 ´ u1}22
+
+I ´ 4
+
+β2pβ2 ´ } u2 ´ u1}22q pu2 ´ u1qp u2 ´ u1qJ.
+
+29 Proof. Define 
+
+¯u “ u1 ` u2
+
+2 , f “ }u2 ´ u1}2
+
+2 , a “ β
+
+2 , b “ aa2 ´ f 2, e “ u2 ´ u1
+
+}u2 ´ u1}2
+
+,
+
+and decompose each u P Rd by 
+
+x “ u ´ ¯u. 
+
+Then u1 “ ¯u ´ f e , u2 “ ¯u ` f e , and 
+
+}u ´ u1}2 ` } u ´ u2}2 “ } x ` f e }2 ` } x ´ f e }2.
+
+Hence 
+
+}u ´ u1}2 ` } u ´ u2}2 ď β ðñ }x ` f e }2 ` } x ´ f e }2 ď 2a. 
+
+Now decompose x into 
+
+α “ eJx, ξ2 “ } x}22 ´ α2,
+
+so that 
+
+}x ˘ f e }2 “ apα ˘ f q2 ` ξ2.
+
+The inequality apα ` f q2 ` ξ2 ` apα ´ f q2 ` ξ2 ď 2a is equivalent, after two squarings, to 
+
+α2
+
+a2 ` ξ2
+
+b2 ď 1, where b2 “ a2 ´ f 2.
+
+Finally, observe that 
+
+α2 “ xJpee Jqx, ξ2 “ xJ`I ´ ee J˘x, 
+
+so α2
+
+a2 ` ξ2
+
+b2 “ xJ
+
+´ 1 
+
+> a2
+
+ee J ` 1 
+
+> b2
+
+pI ´ ee Jq
+
+¯
+
+x. 
+
+Setting A “ 1 
+
+> a2
+
+ee J ` 1 
+
+> b2
+
+pI ´ ee Jq implies pu ´ ¯uqJApu ´ ¯uq ď 1. It exactly characterizes 
+
+tu | } u ´ u1}2 ` } u ´ u2}2 ď βu. Simplifying the form of A leads to 
+
+A “ 4
+
+β2 ´ } u2 ´ u1}22
+
+I ´ 4
+
+β2pβ2 ´ } u2 ´ u1}22q pu2 ´ u1qp u2 ´ u1qJ.
+
+This completes the proof. 
+
+Lemma B.11. Let v P Rd, let A P Rdˆd be symmetric positive definite, and let ¯p P Rd. Define 
+
+F pμq “ ´ 
+
+b
+
+pv ` μ1qJA´1pv ` μ1q ` p v ` μ1qJ ¯p, μ P R.
+
+Further set 
+
+α “ 1JA´11, β “ vJA´11, γ “ vJA´1v, δ “ 1J ¯p. 
+
+If δ2 ă α, then F attains a unique maximizer 
+
+μ˚ “ ´ βα ` δα?α ´ δ2
+
+aαγ ´ β2 “ μ˚
+
+“ ´ vJA´111JA´11 ` 1J ¯p
+
+1JA´11a1JA´11 ´ p 1J ¯pq2
+
+b
+
+p1JA´11qp vJA´1vq ´ p vJA´11q2.
+
+Proof. We begin by computing the derivative of 
+
+F pμq “ ´ 
+
+b
+
+pv ` μ1qJA´1pv ` μ1q ` p v ` μ1qJ ¯p. 
+
+Using the notation α “ 1JA´11, β “ vJA´11, γ “ vJA´1v, and δ “ 1J ¯p, one checks 
+
+pv ` μ1qJA´1pv ` μ1q “ αμ 2 ` 2βμ ` γ, 
+
+so 
+
+F 1pμq “ ´ αμ ` β
+
+aαμ 2 ` 2βμ ` γ ` δ. 
+
+30 Setting F 1pμq “ 0 gives the stationarity condition 
+
+αμ ` β “ δaαμ 2 ` 2βμ ` γ, 
+
+which upon squaring yields the quadratic equation 
+
+`α2 ´ αδ 2˘μ2 ` 2β`α ´ δ2˘μ ` `β2 ´ δ2γ˘ “ 0.
+
+Let δ2 ă α. Here α ´ δ2 ą 0, so dividing by α ´ δ2 gives 
+
+αμ 2 ` 2βμ ` β2 ´ δ2γα ´ δ2 “ 0,
+
+whose two roots are 
+
+μ “ ´ βα ˘ δα?α ´ δ2
+
+aαγ ´ β2.
+
+One verifies by inspecting lim μÑ˘8 F 1pμq “ δ ¯ ?α that exactly the “ `” choice yields a change of sign from ` to ´, and hence is the unique global maximizer. 
+
+B.2 Implicit Solution 
+
+In this subsection, we recap and prove the full version of Theorem 3.4. 
+
+Theorem B.12. Let d :“ | S| be the cardinal of state space and 1 
+
+> p
+
+` 1 
+
+> q
+
+“ 1 for p, q P r 1, `8s .Suppose that tuiuNi“1 Ă Rd for each ps, a q P S ˆ A, the uncertainty size β ě 0, and v P Rd. The solution of 
+
+min 
+
+> uPRd
+
+vJu
+
+s.t. 
+
+> N
+
+ÿ
+
+> i“1
+
+}u ´ ui}p ď β, (9) 
+
+1Ju “ 0.
+
+is given by 
+
+u˚ “ arg min 
+
+> u
+
+“pv ` μ˚1qJu ` λ˚
+
+> N
+
+ÿ
+
+> i“1
+
+}u ´ ui}p
+
+‰,
+
+where $’’’’’&’’’’’%
+
+μ˚ “ arg max μ
+
+!
+
+´} v ` μ1}q β ` řNi“1 wJ
+
+> i, ˚
+
+ui.
+
+)
+
+,λ˚ “ } v ` μ˚1}q ,
+
+˜λ˚pμq “ arg min ˜λ
+
+!˜λJpv ` μ1q ` } v ` μ1}q
+
+řNi“1 }ui ` ˜λ}p
+
+)
+
+,wi, ˚pμq “ ´} v ` μ1}q sign pui`˜λ˚qd| ui`˜λ˚|p´1
+
+> }ui`˜λ˚}p´1
+> p
+
+,. (10) 
+
+Remark (The procedure of solving u˚). To obtain u˚, it suffices to solve μ˚ and λ˚ as v and all ui’s have been given. The first step is to solve 
+
+$&%
+
+˜λ˚pμq “ arg min ˜λ
+
+!˜λJpv ` μ1q ` } v ` μ1}q
+
+řNi“1 }ui ` ˜λ}p
+
+)
+
+.wi, ˚pμq “ ´} v ` μ1}q sign pui`˜λ˚qd| ui`˜λ˚|p´1
+
+> }ui`˜λ˚}p´1
+> p
+
+,
+
+for i “ 1, 2, . . . , N . Both variables depend on the variable μ and other values are known. The next step is to solve 
+
+#
+
+μ˚ “ arg max μ
+
+!
+
+´} v ` μ1}q β ` řNi“1 wJ
+
+> i, ˚
+
+ui.
+
+)
+
+,λ˚ “ } v ` μ˚1}q .
+
+Once pμ˚, λ ˚q is solved, the primal variable μ˚ is obtained immediately. 31 Proof. Our goal is to solve the following constrained optimization problem: 
+
+min 
+
+> uPRd
+
+vJu
+
+s.t. 
+
+> N
+
+ÿ
+
+> i“1
+
+}u ´ ui}p ď β, 
+
+1Ju “ 0.
+
+As it is a constrained optimization problem, the standard approach of solving this problem is using Lagrangian multipliers. we introduce the Lagrangian multipliers λ ě 0 for the inequality and μ P R
+
+for the equality. The Lagrangian function is 
+
+Lpu, λ, μ q “ vJu ` λ` Nÿ
+
+> i“1
+
+}u ´ ui}p ´ β˘ ` μp1Juq,
+
+with λ ě 0, μ P R. Because this optimization problem is a standard convex optimization problem with satisfying the Slater’s condition, we have the strong duality 
+
+inf  
+
+> u
+
+sup 
+
+> λ,μ
+
+Lpu, λ, μ q
+
+looooooooomooooooooon 
+
+> original opt. prob.
+
+“ sup 
+
+> λ,μ
+
+inf  
+
+> u
+
+Lpu, λ, μ q.
+
+Then we turn the original optimization problem into solving its dual-form problem. We let the dual function be φpλ, μ q :“ inf u Lpu, λ, μ q. Then 
+
+φpλ, μ q “ ´ λβ ` inf 
+
+> u
+
+”
+
+pv ` μ1qJu ` λ
+
+> N
+
+ÿ
+
+> i“1
+
+}u ´ ui}p
+
+ı
+
+.
+
+The above formulation plays the crucial role in our proof. For the implicit solution, we will follow Lemma B.8 to complete the remaining calculation. For the explicit solution, this dual form can be significantly simplified in some cases. By Lemma B.8, the dual form can be simplified as 
+
+max  
+
+> λ,μ
+
+φpλ, μ q “ ´} v ` μ˚1}q β `
+
+> N
+
+ÿ
+
+> i“1
+
+wJ
+
+> i, ˚
+
+ui, . 
+
+where 
+
+wi, ˚ :“ ´} v ` μ1} sign pui ` ˜λ˚q d | ui ` ˜λ˚|p´1
+
+}ui ` ˜λ˚}p´1
+
+> p
+
+, ˜λ˚ “ arg min 
+
+> ˜λ
+
+#
+
+˜λJw ` C
+
+> N
+
+ÿ
+
+> i“1
+
+}ui ` ˜λ}p
+
++
+
+.
+
+and 
+
+μ˚ “ arg max 
+
+> μ
+
+#
+
+´} v ` μ1}q β `
+
+> N
+
+ÿ
+
+> i“1
+
+wJ
+
+> i, ˚
+
+ui.
+
++
+
+, λ˚ “ } v ` μ˚1}q .
+
+The optimal primary variable is given as 
+
+u˚ “ arg min 
+
+> u
+
+“pv ` μ˚1qJu ` λ˚
+
+> N
+
+ÿ
+
+> i“1
+
+}u ´ ui}p
+
+‰.
+
+B.3 Explicit Solution 
+
+In this subsection, we recap and prove the full version of Theorem 3.5. 
+
+Theorem B.13. Let d :“ | S| be the cardinal of state space. Suppose that tuiuNi“1 Ă Rd for each 
+
+ps, a q P S ˆ A, the uncertainty size β ě 0, and v P Rd. The optimization problem defined by Eq. (4) 
+
+is explicitly solved in the following cases: 
+
+32 (a) Let N “ 1. then 
+
+μ˚ “ u1 ` β sign pv ` μ˚1q d | v ` μ˚1|q´1
+
+}v ` μ˚1}q´1
+
+> q
+
+.
+
+(b) Let p “ 1 and N “ 2. Define ¯u “ u1`u2 
+
+> 2
+
+,
+
+μ˚ “ ´ vmax ` vmin 
+
+2 and λ˚ “ 12 }v ` 1μ˚}8 “ vmax ´ vmin 
+
+4 .
+
+Suppose that β ą } u2 ´ u1}1. Then the explicit solution to the optimization problem Eq. (4) is given as 
+
+u˚ “ ¯u ´ β ´ } u1 ´ u2}1
+
+2
+
+“sign pv ` μ˚1q d It| v`μ˚1|“ 2λ˚u
+
+‰ .
+
+(c) Let p “ 2 and N “ 2. Define ¯u “ u1`u2 
+
+> 2
+
+,
+
+Ω : “ Ωpu1, u 2, β q “ 
+
+„
+
+I ´ 1
+
+β2 pu2 ´ u1qp u2 ´ u1qJ
+
+ȷ
+
+, (11) 
+
+λ˚ “
+
+b
+
+pv ` μ˚1qJΩ´1pv ` μ˚1q, and μ˚ “ ´ vJΩ´111JΩ´11 . (12) 
+
+Suppose that β ą } u2 ´ u1}2. Then the explicit solution to the optimization problem Eq. (4) is given as 
+
+u˚ “ ¯u ´
+
+aβ2 ´ } u2 ´ u1}22
+
+21
+
+λ˚ Ω´1pv ` μ˚1q.
+
+Proof. We follow the standard routine used in proving Theorem B.12. (a) When N “ 1 the objective optimization problem is given by 
+
+min 
+
+> uPRd
+
+vJu
+
+s.t. }u ´ u1}p ď 1,
+
+1Ju “ 0.
+
+We take the transformation u1 “ u ´ u1. It still satisfies 1Ju1 “ 0. Then the problem become 
+
+min 
+
+> u1PRd
+
+vJu1
+
+s.t. }u1}p ď 1,
+
+1Ju1 “ 0.
+
+This transformation has turned this problem into the standard ℓp-norm structure, which has been explicitly solved in [39, 40]. The optimal u1 is given for arbitrary p ě 1 as 
+
+u1˚ “ β sign pv ` μ˚1q| v ` μ˚1|q´1
+
+}v ` μ˚1}q´1
+
+> q
+
+,
+
+where μ˚ “ arg min μPR }v ` μ1}q . As the result, 
+
+u˚ “ u1˚ ` u1 “ u1 ` β sign pv ` μ˚1q| v ` μ˚1|q´1
+
+}v ` μ˚1}q´1
+
+> q
+
+.
+
+(b) When p “ 1, we define the order 
+
+up1q,j ď up2q,j ď ¨ ¨ ¨ ď upN q,j ,
+
+33 We follow the same routine as Theorem B.12 and derive the dual function φpλ, μ q:
+
+φpλ, μ q “ ´ λβ ` inf 
+
+> u
+
+”
+
+pv ` μ1qJu ` λ
+
+> N
+
+ÿ
+
+> i“1
+
+}u ´ ui}1
+
+ı
+
+> piq
+
+“ ´ λβ ` inf 
+
+> u
+
+” dÿ
+
+> j“1
+
+pvj ` μquj ` λ
+
+> N
+
+ÿ
+
+> i“1
+> d
+
+ÿ
+
+> j“1
+
+|uj ´ uij |
+
+ı
+
+“ ´ λβ `
+
+> d
+
+ÿ
+
+> j“1
+
+inf 
+
+> uj
+
+”
+
+pvj ` μquj ` λ
+
+> N
+
+ÿ
+
+> i“1
+
+|uj ´ uij |
+
+ı
+
+.
+
+where piq decomposes the ℓ1-norm by coordinates. When N “ 2, by Lemma B.9, the dual function is solved as 
+
+φpλ, μ q “ ´ λβ `
+
+> d
+
+ÿ
+
+> j“1
+
+inf 
+
+> uj
+
+”
+
+pvj ` μquj ` λ
+
+> N
+
+ÿ
+
+> i“1
+
+|uj ´ uij |
+
+ı
+
+“ ´ λβ `
+
+> d
+
+ÿ
+
+> j“1
+
+”
+
+pvj ` μq u1j ` u2j
+
+2 ` p λ ´ |vj ` μ|
+
+2 q| u1j ´ u2j |
+
+ı
+
+“ ´ λβ ` p v ` 1μqJ ¯u ` r 2λ1 ´ p v ` 1μqs J | u1 ´ u2
+
+2 |.
+
+As the smaller λ is, the larger φpλ, μ q is. It achieves the supremum at λ˚ “ max j vj `μ 
+
+> 2
+
+“ 
+
+> 12
+
+}v ` 1μ}8. Then we solve 
+
+sup 
+
+> λ
+
+φpλ, μ q“ ´ 12 }v ` 1μ}8β ` p v ` 1μqJ ¯u ` } v ` 1μ}8} u1 ´ u2
+
+2 }1 ´ p v ` 1μqJ| u1 ´ u2
+
+2 |.
+
+Then we have 
+
+sup 
+
+> μ
+
+sup 
+
+> λ
+
+φpμ, λ q “ ´ β ´ } u2 ´ u1}1
+
+2 inf 
+
+> μ
+
+„
+
+}v ` μ1}8 ` pv ` μ1qJ|u1 ´ u2|
+
+β ´ } u2 ´ u1}1
+
+ȷ
+
+` vJ ¯u. 
+
+As β ´ } u2 ´ u1}1 ą 0, it solves 
+
+μ˚ “ ´ vmax ` vmin 
+
+2 and λ˚ “ 12 }v ` 1μ˚}8 “ vmax ´ vmin 
+
+4 .
+
+Now we consider the KKT condition of the original Lagrangian function. We solve 
+
+Buj Lpu, λ, μ q “ λ sign puj ´ u1j q ` λ sign puj ´ u2j q ` vj ` μ Q 0.
+
+For inactive coordinate, the optimal value is attained for arbitrary uj P p up1qj , u p2qj q; in these cases, we simply take uj “ u1j `u1j 
+
+> 2
+
+. There are exactly two active coordinates matching the corner-case condition |vj ` μ˚| “ 2λ˚: j˚ “ arg max vj and j˚ “ arg min vj . In these cases we take uj as u1j `u1j 
+
+> 2
+
+subtracting a drift. It finally solves 
+
+u˚ “ ¯u ´ β ´ } u1 ´ u2}1
+
+2
+
+„
+
+sign pv ´ vmax ` vmin 
+
+2 q d It| v´ vmax `vmin 2 |“ vmax ´vmin 2 u
+
+ȷ
+
+.
+
+The magnitude coefficient is used to ensure that u˚ belongs to }u˚}1 ď β.(c) By Lemma B.10, there exists a semi-positive definite matrix A such that 
+
+tu | } u ´ u1}2 ` } u ´ u2}2 ď βu “ t u | p u ´ ¯uqJApu ´ ¯uq ď 1u,
+
+where ¯u :“ u1`u2 
+
+> 2
+
+. As the result, the objective optimization problem can be simplified as 
+
+min 
+
+> uPRd
+
+vJu
+
+s.t. pu ´ ¯uqJApu ´ ¯uq ď 1,
+
+1Ju “ 0.
+
+34 We follow the same routine as Theorem B.12 and derive the dual function φpλ, μ q:
+
+φpλ, μ q “ ´ λ ` inf 
+
+> u
+
+”
+
+pv ` μ1qJu ` λpu ´ ¯uqJApu ´ ¯uq
+
+ı
+
+“ ´ λ ` p v ` μ1qJ ¯u ´ 14λ pv ` μ1qJA´1pv ` μ1q,
+
+where the infimum is attained at u˚ “ ¯u ´ 12λ A´1pv ` μ1q. Then 
+
+sup 
+
+> λ,μ
+
+φpλ, μ q “ sup 
+
+> λ,μ
+
+"
+
+´λ ` p v ` μ1qJ ¯u ´ 14λ pv ` μ1qJA´1pv ` μ1q
+
+*
+
+> piq
+
+“ sup 
+
+> μ
+
+"
+
+´
+
+b
+
+pv ` μ1qJA´1pv ` μ1q ` p v ` μ1qJ ¯u
+
+*
+
+where (i) applies the optimal choice λ˚pμq “ 12
+
+apv ` μ1qJA´1pv ` μ1q and μ˚ is given by Lemma B.11 to solve this maximization problem. As the result, 
+
+u˚ “ ¯u ´ 12λ˚ A´1pv ` μ˚1q
+
+where λ˚ “ 12
+
+apv ` μ˚1qJA´1pv ` μ˚1q and 
+
+μ˚ “ ´ vJA´111JA´11 ` 1J ¯p
+
+1JA´11a1JA´11 ´ p 1J ¯pq2
+
+b
+
+p1JA´11qp vJA´1vq ´ p vJA´11q2.
+
+Here, the matrix A is determined by tu1, u 2u2 
+
+> i“1
+
+and the vector v in Lemma B.10. We recall that 
+
+1J ¯u “ 0. Therefore, μ˚ is further simplified as 
+
+μ˚ “ ´ vJA´111JA´11 .
+
+It completes the proof in the part (c). 
+
+# C Experiment Details 
+
+In this section, we include the omitted details of Section 4. All source codes and hyper-parameter settings are available in the supplementary materials. 
+
+C.1 Hardware and System Environment 
+
+We conducted our experiments on a laptop running Windows 11 Home. The device is equipped with 32GB of RAM, 1TB SSD, an AMD Ryzen 9 7940HS processor and a NVIDIA GeForce RTX 4070 Laptop GPU. Our implementation was tested using Python version 3.10.10. Additional dependencies are listed in the supplementary requirements.txt file. The actual hardware requirement for running our implementation is significantly lower than the specification listed above. Most experiments can be reproduced on consumer-grade machines with 8–16GB RAM and any CUDA-compatible NVIDIA GPU. 
+
+C.2 Task Descriptions Multi-Asset Portfolio Rebalancing This task captures the setting where an institutional investor reallocates capital across multiple assets over discrete time intervals to maintain a desired risk-return profile. It reflects strategic portfolio management, such as end-of-day rebalancing or tactical asset allocation. The task emphasizes robustness to market impact under varying capital scales, which is critical for large-volume institutional strategies. In our experiment, we select five representative ETFs, SPY, TLT, GLD, EFA, and VNQ, and use historical data from May 9, 2021 to May 9, 2022 for training. Evaluation is conducted on the out-of-sample period from June 9 to December 9, 2022. 35 Table 2: Example of ask-side execution from an AMZN order book snapshot (21 June 2012). This table shows how our simulator determines the execution price for a market buy order. Instead of using the last trade price, the simulator consumes liquidity by filling shares at each ask level in order, starting from the best price. It calculates the VWAP based on the prices and quantities filled, and uses this VWAP as the final executed price. 
+
+Level Price (USD) Depth (sh) Exec. 100 sh Exec. 1 000 sh 
+
+Level 1 223.95 100 100 100 Level 2 223.99 100 0 100 Level 3 224.00 220 0 220 Level 4 224.25 100 0 100 Level 5 224.40 547 0 480 
+
+VWAP paid — — 223.95 224.21 Single-Asset Intra-Day Trading This task models the decision-making process of an agent that repeatedly buys or sells a single asset over short time intervals, such as minutes or seconds. It reflects the setting of mid-frequency or algorithmic trading, where even small trades can shift market prices. The goal is to maximize the risk-adjusted cumulative return while accounting for execution slippage, making it a standard benchmark for evaluating RL-based trading strategies. We follow the exactly same training and evaluation period as the multi-asset portfolio rebalancing task. In our experiments, we use minute-level historical data for the assets including META, MSFT, and SPY. The observation includes stock price, trading volume, implied volatility, and current portfolio return. During evaluate, we reconstruct the LOB dynamics using the tick-level trade data; the execution price is then simulated as illustrated in Table 2. Same as the multi-asset portfolio rebalancing experiment, the training data covers the period from May 9th, 2021 to May 9th, 2022, and the evaluation period is from June 9 to December 9, 2022. All data are accessed via the Polygon.io Stock Market API. 
+
+C.3 Reinforcement Learning Framework 
+
+We implemented a Gym-like RL trading environment [ 77 , 78 ] using the historical data including the stock price, trading volume, the implied volatility, and the current portfolio return. Instead of using a single timestep data, we set lookback_period “ 30 to account for 30 previous timestep; as the result, the observed state contains lookback_period ˆ 4 “ 120 dimension. Given the state described above, we assign the transition probability from the current state st to the next state st`1 as the probability 1, independent with the action. The action is implemented as a single float value that determines the position size relative to the maximum possible position size based on the available capital. The reward is a Sharpe-like ratio that consists of two components: 
+
+reward “ current_return current_volatility ` ε ´ δ ˆ |current_position ´ previous_position |
+
+max_shares .
+
+where ε ą 0 is a small constant to ensure numerical stability, and δ is a tunable coefficient controlling the strength of the transaction cost penalty. The first term encourages higher risk-adjusted return, while the second term discourages frequent or drastic position shifts, which aligns with practical trading considerations under market impact or slippage. We also include 0.1% transaction cost throughout the experiment. 
+
+Uncertainty Restriction to Execution Prices Instead of perturbing the whole transition probability, we restrict the perturbation on the execution price. The formulation of restriction is given as follows: we denote the state st as two components ppt, f tq, and we hope perturb the transition on pt only. We re-write the transition probability using the conditional probability 
+
+Ppst`1 | st, a tq “ Pppt`1, f t`1 | st, a tq“ Pppt`1 | st, a tqPpft`1 | pt`1, s t, a tq.
+
+Then we set the uncertainty u as the perturbation on the kernel Pppt`1 | st, a tq instead of the whole transition kernel Ppst`1 | st, a tq.36 Momentum Strategy The momentum strategy is a classical intra-day minute-level algorithmic trading method that exploits intraday time-series momentum to generate trading signals. We follow the classical implementation presented by [ 76 ]. The core idea of the momentum strategy is based on the empirical observation where assets that have performed well in the recent past are more likely to continue performing well in the near future, while poorly performing assets are likely to continue underperforming. 
+
+C.4 Parameter Details 
+
+Detailed descriptions of all parameters are provided in the separate supplementary materials. 
+
+C.5 Omitted Visualization 
+
+In Figure 3, we have visualized the return curve of the META stock. In this subsection, we include the visualization of the other two assets. 
+
+Figure 5: Performance comparison of trading strategies on the MSFT stock and SPY ETF. 
+
+C.6 Other Implementation Details 
+
+In this subsection, we discuss the practical implementation considerations and provide the details for reproducing our experiments. The source codes are also provided in the supplementary material. 
+
+RL Algorithm and Value Function Approximations We use the standard Robust Actor-Critic algorithm [ 43 ] to train the RL agent with replacing its IPM uncertainty set or doubly-sampling uncertainty set with the ℓp-ellipse uncertainty set and the ℓp-norm uncertainty set. We adopt an Actor-Critic architecture with a shared feature extractor and separate heads for the actor and critic. The shared backbone consists of three fully connected layers with ReLU activations, mapping the (flattened) input state to a high-level representation. The actor head outputs the vector with the same dimension as the action through a two-layer MLP followed by a sigmoid/tanh activation, depending 37 on the underlying task. The critic head predicts the state value using a similar two-layer MLP. All linear layers are orthogonally initialized to promote stable training. When updating the Actor network, we apply the classical PPO algorithm [83]. 
+
+Discretization of Execution Prices To apply the robust RL framework, we apply the discretization to the execution price. We introduce two additional hyper-parameter to control the discretization level: 2N ` 1 represents the number of total discretization in the execution prices and δ represents the strength of each level. Given the execution price p, we have 2N ` 1 potential execution prices 
+
+rp ´ N δ, . . . , p ´ δ, p, p ` δ, . . . , p ` N δ s in total. This discretization approach allows us to directly apply the closed-form solution to solve the optimal u˚.
+
+# D Limitations 
+
+Despite the promising results, this work has several limitations. First, the theoretical analysis largely relies on the assumption of finite state and action spaces for tractability, which is primarily due to the limited development of deep learning theory. Second, the market impact simulation during the evaluation stage, while based on trade-level data, remains an approximation and may lack accuracy for extreme volumes. In fact, when the volume is sufficiently high, it often triggers momentum-based strategies deployed by other institutions in the market, resulting in higher market impact than reflected VWAP. Third, although our experiments demonstrate the robustness of the ℓp-ellipse uncertainty set under increasing volumes, we do not test its robustness under increasing trading frequency. Designing experiments in this setting is more challenging, as the behavior of RL agents varies significantly across different time scales. 
+
+# E Additional Supplementary Materials 
+
+In this additional supplementary material 3, we provide several components omitted in our previous technical appendix. It includes: (1) The theoretical analysis of the robust TD-learning. (2) The further breakdown of the parameter setting and the grid-search strategy to optimize the optimal parameter. (3) The other implementation details that are related to our robust reinforcement learning setting. 
+
+E.1 Convergence of Robust TD-Learning Theorem (Convergence of Robust TD-Learning) . If the uncertainty set is defined as the ℓp-ellipse uncertainty set, then the worst-case transition probability P`p¨| s, a q can be represented as 
+
+P`p¨| s, a q “ P0p¨| s, a q ` u˚
+
+where β is the radius of the uncertainty set and u˚ is solved in Theorem 3.4 and Theorem 3.5. Remark. For non-robust policy evaluation, variance-reduction techniques are often employed to accelerate training [ 84 –86 ]. For robust policy evaluation, the most recent progress can be found in [87]. For simplicity, we only present a naive robust TD-learning approach. 
+
+Proof. We apply the following TD-learning update rule: 
+
+V psq Ð V psq ` η
+
+¨˚˝rps, a q ` γV ps1q ´ V psqloooooooooooooomoooooooooooooon  
+
+> stand. TD err. under P0
+
+`γV Ju˚
+
+˛‹‚. (13) 
+
+> 3This section was originally submitted as a separate supplementary material. We include it here for the reader’s convenience.
+
+38 It is easy to observe that this update rule is equivalent to the non-robust TD-learning over the worst-case transition probability: 
+
+Es1„P0ps1|s,a qrrps, a q ` γV ps1qs ` γxu˚, V y“rps, a q ` γ ÿ
+
+> s1,a
+
+P0ps1|s, a qπpa|sqV ps1q ` γ ÿ
+
+> s1
+
+u˚ps1qV ps1q“rps, a q ` γ ÿ
+
+> s1,a
+
+P0ps1|s, a qπpa|sqV ps1q ` γ ÿ
+
+> s1,a
+
+πpa|squ˚ps1qV ps1q“rps, a q ` γ ÿ
+
+> s1,a
+
+πpa|sqr P0ps1|s, a q ` u˚ps1qs V ps1q
+
+> piq
+
+“rps, a q ` γ ÿ
+
+> s1,a
+
+πpa|sqP`ps1|s, a qV ps1q“rps, a q ` γEs1„P`ps1|s,a qV ps1q,
+
+where (i) applies the worst-case transition probability we have derived. Therefore, by applying existing TD-learning convergence analysis, we obtain that the convergence rate is also 1?K .
+
+E.2 Parameter Setting and Grid-Search 
+
+We apply grid-search to select hyperparameters to balance learning performance, computational efficiency, and robustness to uncertainty. In this section, we detail the architectural and training hyperparameters used across our three model variants: standard RL, elliptic uncertainty robust RL, and ball-shaped uncertainty robust RL. 
+
+E.2.1 Model Architecture 
+
+All models share the same actor-critic network architecture, which consists of: • Feature Extractor : Three fully-connected layers with ReLU activation functions, each containing 256 neurons. • Actor Network : Two fully-connected layers (256 and 128 neurons) with the final layer using a tanh activation function to bound actions within r´ 1, 1s.• Critic Network : Two fully-connected layers (256 and 128 neurons) with a linear output layer. • Weight Initialization : Orthogonal initialization with a gain of ?2 for linear layers to improve training stability. This architeture is selected by default and we did not further tune the model architecture. 
+
+E.2.2 Training Parameters 
+
+We employ the Proximal Policy Optimization (PPO) algorithm with the following hyperparameters: Table 3: PPO Training Hyperparameters. The PPO clip parameter ϵ regulates the range of policy updates to ensure stability. Policy update epochs indicate how many times each batch is reused for learning. Batch size is the number of trajectories used per update. Parameter Standard RL Robust RL (Elliptic) Robust RL (Ball) Learning Rate 3 ˆ 10 ´4 3 ˆ 10 ´4 3 ˆ 10 ´4
+
+Discount Factor ( γ) 0.99 0.99 0.99 PPO Clip Parameter ( ϵ) 0.2 0.2 0.2 Policy Update Epochs 10 10 10 Batch Size 64 64 64 We apply the grid-search on the learning rate and the PPO clip parameter; however, the grid-search is not applied to improve the performance. Instead, we apply the grid-search to identify a default 39 parameter group to ensure the algorithm convergence. In the remaining experiments, we will use the same parameter in the robust RL method for fair comparison. 
+
+E.2.3 Robustness Parameters 
+
+For our robust RL implementations, we include another group of hyper-parameters. Table 4: Robustness Parameters. The robust type is the string used in our codes to determine the different types of uncertainty sets. The parameter β is used to determine the size of uncertainty set. Parameter Robust RL (Elliptic) Robust RL (Ball) Robust Type P1N2 P1 Uncertainty Set Parameter ( β) 1 ˆ 10 ´4 1 ˆ 10 ´4
+
+Uncertainty Dimension 3 3Epsilon 1 ˆ 10 ´3 1 ˆ 10 ´3
+
+We grid-search he parameter β from r0.1, 0.01 , 0.001 , 0.0001 , 0.00001 s and use the best result on the training period with adopting the early stopping. Then the best model is evaluated in the testing period to obtain the final performance. 
+
+E.3 Other Implementation Details 
+
+The learning rate scheduler employs a ReduceLROnPlateau strategy with a factor of 0.5 and patience of 5 episodes. This adaptive approach reduces the learning rate when performance plateaus. Addi-tionally, gradient clipping with a threshold of 0.5 is applied to prevent exploding gradients and ensure stable training. The choice of β “ 1ˆ10 ´4 for both robust methods represents a balance between model performance and robustness. Too large a value would overly emphasize worst-case scenarios, while too small a value would not provide sufficient robustness against uncertainty. Through empirical testing, this value demonstrated the best trade-off between trading performance and resilience to market fluctuations. Advantage normalization is applied prior to the policy update to stabilize training and improve convergence. The PPO clip parameter ϵ “ 0.2 prevents excessively large policy updates, maintaining proximity to the previous policy while allowing sufficient exploration. 
+
+Discretization of Execution Prices To apply the robust RL framework, we apply the discretization to the execution price. We introduce two additional hyper-parameter to control the discretization level: 2N ` 1 represents the number of total discretization in the execution prices and δ represents the strength of each level. Given the execution price p, we have 2N ` 1 potential execution prices 
+
+rp ´ N ϵ, . . . , p ´ ϵ, p, p ` ϵ, . . . , p ` N ϵ s in total. This discretization approach allows us to directly apply the closed-form solution to solve the optimal u˚. The uncertainty dimension and the epsilon in the robustness parameters are used to determine the discretization level of execution prices. For example, when the discretization level is given by 3, we have three potential execution prices 
+
+rp ` ϵ, p, p ´ ϵs, which also corresponds to the uncertainty dimension. In the nominal transition kernel, we assume the distribution over this discretized set as r0.25 , 0.5, 0.25 s, which provides sufficient flexibility for us to choose the uncertainty u.
+
+Uncertainty Restriction to Execution Prices Instead of perturbing the whole transition probability, we restrict the perturbation on the execution price. The formulation of restriction is given as follows: we denote the state st as two components ppt, f tq, and we hope perturb the transition on pt only. We re-write the transition probability using the conditional probability 
+
+Ppst`1 | st, a tq “ Pppt`1, f t`1 | st, a tq“ Pppt`1 | st, a tqPpft`1 | pt`1, s t, a tq.
+
+Then we set the uncertainty u as the perturbation on the kernel Pppt`1 | st, a tq instead of the whole transition kernel Ppst`1 | st, a tq. Given that the transition of the execution price pt`1 is discretized, the transition probability Pppt`1 | st, a tq is a discrete distribution. For example, when taking the uncertainty dimension as 3, we in fact obtain: Pppt`1 “ p ` ϵ | st, a tq “ 0.25 ` u1,40 Pppt`1 “ p | st, a tq “ 0.25 ` u2, and Pppt`1 “ p ´ ϵ | st, a tq “ 0.25 ` u3. By default, in the P1N2-type robust RL, we choose the shift parameter u1 “ r u1, u 2, u 3s “ r 0.1 ´ 1{3, ´1{3, ´1{3s if the action is buying a stock and u1 “ r u1, u 2, u 3s “ r´ 1{3, ´1{3, 0.1 ´ 1{3s if the action is selling a stock. 
+
+Solving the Worst-Case Uncertainty After restricting the domain to the discrete execution price, we turn the original worst-case Bellman equation into the following form: 
+
+V π psq “ rps, a q ` γ min 
+
+> u
+
+ÿ
+
+> s1
+
+ÿ
+
+> a
+
+V π ps1qπpa|sqPups1|s, a q“ rps, a q ` γ min 
+
+> u
+
+ÿ
+
+> s1
+
+ÿ
+
+> a
+
+V π ps1qπpa|sqPupp1 | s, a qPpf 1 | p1, s, a q“ rps, a q ` γ min 
+
+> u
+
+ÿ
+
+> s1
+
+ÿ
+
+> a
+
+V π ps1qπpa|sq “P0pp1 | s, a q ` us,a 
+
+‰ Ppf 1 | p1, s, a q“ rps, a q ` γ ÿ
+
+> s1
+
+ÿ
+
+> a
+
+V π ps1qπpa|sqP0ps1|s, a q ` γ min 
+
+> u
+
+ÿ
+
+> s1
+
+ÿ
+
+> a
+
+us,a V π ps1qπpa|sqPpf 1 | p1, s, a q.
+
+Moreover, we use Ppf 1 | p1, s, a q as a deterministic transition. It is common when training in the historical data, as (1) the observed feature f 1 comes from the existing dataset and the action a does not change its value (in our implementation, the action a will only affect the execution price), and (2) many features are directly calculated based on the current state, action, and the execution price such as the remaining cash. As the result, we obtain 
+
+V π psq “ rps, a q ` γ ÿ
+
+> s1
+
+ÿ
+
+> a
+
+V π ps1qπpa|sqP0ps1|s, a q ` γ min 
+
+> u
+
+ÿ 
+
+> p1,s 1“p p1,f 1q
+
+upp1qV π ps1q“ rps, a q ` γ ÿ
+
+> s1
+
+ÿ
+
+> a
+
+V π ps1qπpa|sqP0ps1|s, a q ` γ min  
+
+> u
+
+uJV π .
+
+Here we still write uJV π for convenience, while the value function V π represents the 2N ` 1
+
+dimensional vector with value taken on s1 “ p p1, f 1q, where p1 takes 2N ` 1 values and f 1 is deterministically determined by pp1, s, a q. After making this modification, we can solve min u uJV π
+
+using Theorem 3.4 and Theorem 3.5, or existing ℓp-norm formula [39, 40]. 41

@@ -1,0 +1,3757 @@
+Title: 12662_Sample_Efficient_Alignme.pdf
+
+URL Source: https://openreview.net/pdf?id=2g65iaYl69
+
+Number of Pages: 34
+
+Markdown Content:
+## Sample-Efficient Alignment for LLMs 
+
+Anonymous Author(s) 
+
+Affiliation Address 
+
+email 
+
+Abstract 
+
+We study methods for efficiently aligning large language models (LLMs) with 1
+
+human preferences given budgeted online feedback. We first formulate the LLM 2
+
+alignment problem in the frame of contextual dueling bandits. This formulation, 3
+
+subsuming recent paradigms such as online RLHF and online DPO, inherently 4
+
+quests for sample-efficient algorithms that incorporate online active exploration .5
+
+Leveraging insights from bandit theory, we introduce a unified algorithm based on 6
+
+Thompson sampling and highlight its applications in two distinct LLM alignment 7
+
+scenarios. The practical agent that efficiently implements this algorithm, named 8
+
+SEA (Sample-Efficient Alignment), is empirically validated through extensive 9
+
+experiments across three model scales (1B, 2.8B, 6.9B) and three preference 10 
+
+learning algorithms (DPO, IPO, SLiC). The results demonstrate that SEA achieves 11 
+
+highly sample-efficient alignment with oracle’s preferences, outperforming recent 12 
+
+active exploration methods for LLMs. We will release our codebase to hopefully 13 
+
+accelerate future research in this field. 14 1B 2.8B 6.9B      
+
+> Model size
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> 1.0
+> Win rate v.s. reference responses
+> +84%
+> +89%
+> +110%
+> +113%
+> +124%
+> +147%
+> +205%
+> +142%
+> +176%
+> SFT
+> Offline DPO
+> Online DPO
+> SEA DPO 010k 20k 30k 40k 50k
+> Queries required by alternatives
+> 0
+> 10k
+> 20k
+> 30k
+> 40k
+> 50k
+> Queries required by Passive  Fewer better
+> Passive
+> XPO
+> APL
+> SEA
+
+Figure 1: Win rate comparison of model responses against reference responses on the TL;DR task, judged by the preference oracle. All compared methods use the same optimization method (DPO). (Left) Performance improvements at convergence over SFT models achieved by offline (Offline DPO), passively online (Online DPO), and our active exploration (SEA DPO) methods. (Right) The number of queries required by the passively online method (Passive) versus that by different active exploration methods to attain various levels of win rates. 
+
+SEA achieves the best sample efficiency for online alignment compared to XPO and APL. 
+
+1 Introduction 15 
+
+Aligning LLMs with human preferences is a crucial step to elicit various desirable behaviors, e.g., 16 
+
+helpfulness and harmlessness [ 5]. Moreover, it holds the potential to create superhuman capabilities 17 
+
+with only human-level feedback, as verifying is believed to be easier than synthesizing novel 18 
+
+behaviors. By iteratively generating new candidates and asking for human feedback, LLMs could 19 
+
+learn to reinforce good behaviors and may eventually surpass human capabilities. 20 
+
+Existing methods, either via reinforcement learning from human feedback (RLHF) [ 65 , 50 ] or direct 21 
+
+alignment from preferences (DAP) [ 55 , 4], typically require a large amount of human annotations to 22 
+
+achieve effective alignment. As a result, the volume of human feedback becomes a major bottleneck 23 
+
+in practical alignment scenarios. This poses a challenging and under-explored research question: 24 
+
+Submitted to 39th Conference on Neural Information Processing Systems (NeurIPS 2025). Do not distribute. How to align LLMs sample-efficiently? 25 
+
+To seek answers, in Sec. 2, we formalize LLM alignment as a contextual dueling bandit (CDB) [ 85 ,26 
+
+20 ], where the agent (i.e., the learner and decision maker, in our case the LLM) interacts with the 27 
+
+environment (i.e., human) to collect experience for improving its policy. This formulation naturally 28 
+
+calls for two key properties for alignment algorithms to be sample-efficient: 29 
+
+Property 1 (Online interaction ). Interacting and learning online allows the agent to act with the 30 
+
+latest learned policy and then use that experience to immediately improve the policy. 31 
+
+Property 2 (Active exploration ). An actively exploring agent strategically selects actions such that 32 
+
+the collected experience leads to maximal policy improvement. 33 
+
+Since the CDB formulation is general and almost subsumes all existing LLM alignment methods, 34 
+
+it provides us a lens to scrutinize prior methods on the axes of Properties 1 and 2. In Sec. 3, we 35 
+
+thoroughly discuss prior alignment approaches, ranging from offline learning [ 55 , 4 ] and passive 36 
+
+learning with iterative [ 15 , 18 ] or online interaction [ 24 ], to active exploration for learning preference 37 
+
+models [ 21 ] or aligning LLMs [ 47 , 86 , 79 ]. As will be revealed, most prior methods (partially) 38 
+
+fail to satisfy the two properties, resulting in inferior sample efficiency. Moreover, through the 39 
+
+CDB formulation, we identify two LLM alignment scenarios, namely aligning from online users’ 40 
+
+feedback (e.g., ChatGPT [13] ) and aligning from crowdsourcing [ 15 , 50 ], and shed light on their 41 
+
+correspondences to two bandit settings (explore & exploit and best arm identification). Understanding 42 
+
+their differences is important for designing efficient alignment algorithms for respective scenarios. 43 
+
+We detail these two settings in Sec. 2 and discuss how prior works approach them in Sec. 3. 44 
+
+Leveraging algorithmic insights from bandit theory, our answer to the research question above is 45 
+
+a principled alignment algorithm based on Thompson sampling (TS) [ 71 ]. Our method fulfills 46 
+
+Properties 1 and 2 to enhance sample efficiency, and it solves either of the two settings depending on 47 
+
+practical scenarios (Sec. 4.1). We incorporate techniques including epistemic reward model , policy-48 
+
+guided search and mixed preference learning to implement the proposed TS algorithm (Sec. 4.2), 49 
+
+yielding a practical agent which we call SEA (Sample-Efficient Alignment). In addition, we develop 50 
+
+and will open source a highly efficient, distributed learning system for studying online LLM alignment 51 
+
+methods (Sec. 5), eliminating barriers to fair empirical comparisons of different alignment algorithms. 52 
+
+Through extensive experiments (Sec. 6), SEA shows strong empirical results (see Fig. 1), consistently 53 
+
+achieving higher win rates and improved sample efficiency compared to baseline approaches across 54 
+
+three model scales. We will open source the codebase to hopefully accelerate future research in this 55 
+
+field. 56 
+
+In summary, the contributions of this work are: 57 
+
+• Through the lens of contextual dueling bandits, we propose a principled Thompson sampling algo-58 
+
+rithm for LLM online exploration, addressing both explore & exploit and best arm identification 59 
+
+settings. 60 
+
+• We develop two novel techniques to approximate Thompson sampling in LLM’s large action 61 
+
+space: policy-guided search and mixed preference learning. Thompson sampling requires 62 
+
+sampling a reward function from the posterior distribution and generating the sequence that 63 
+
+maximizes the sampled reward function. For policy-guided search , we use an existing epistemic 64 
+
+reward model for approximating the posterior and propose an approximate maximization method 65 
+
+based on sampling a finite set of sequences from the LLM, and doing maximization on the 66 
+
+finite sample. However, maintaining and updating a separate LLM for each reward function as 67 
+
+suggested by Thompson sampling would be prohibitively expensive, thus mixed preference 68 
+
+learning is introduced to align the LLM with internal reward functions to better approximate the 69 
+
+maximization. 70 
+
+• To our knowledge, we are the first to study active exploration for LLM alignment with fully online 71 
+
+experimental verification. The online alignment codebase will be open sourced to accelerate 72 
+
+future studies. 73 
+
+2 LLM alignment as contextual dueling bandits 74 
+
+We first review the definitions and two typical objectives of Contextual Dueling Bandits (Sec. 2.1), 75 
+
+then translate them into the language of LLM alignment (Sec. 2.2). The tight connection between them, 76 
+
+as we will see, allows us to leverage insights from bandit algorithms to design efficient alignment 77 
+
+algorithms for LLMs. 78 
+
+22.1 Contextual dueling bandits 79 
+
+Contextual dueling bandits (CDB) [ 85 , 20 ] is proposed to study online learning problems where the 80 
+
+feedback consists of relative pairwise comparisons. A CDB problem can be characterized by a tuple 81 
+
+(C, A, P), where C is the context space, A is the action space, and P : A × A × C 7 → [0 , 1] denotes the 82 
+
+unknown preference oracle . An agent learns by iteratively interacting with the environment (i.e., the 83 
+
+preference oracle P) as follows. At each round t of the learning process, a context ct ∼ pC is presented 84 
+
+to the agent, who needs to take two actions at, a′ 
+
+> t
+
+∈ A for a “dueling” comparison. The agent then 85 
+
+receives stochastic feedback in the form of a comparison result zt ∼ Ber ( P (at ≻ a′
+
+> t
+
+|ct)) from the 86 
+
+environment, where Ber( ·) is the Bernoulli distribution and ≻ denotes that the first action is preferred. 87 
+
+Regret . The quality of the dueling actions selected by the agent is measured by the immediate regret :88 
+
+Rt = P(a⋆t ≻ at|ct)+ P(a⋆t ≻ a′
+
+> t
+
+|ct) − 1, where a⋆t is the best action 1 the agent would take at round 89 
+
+t if it had complete knowledge of P. Intuitively, if the agent has learned how to act optimally from 90 
+
+round t onwards, it would no longer suffer any regret since its actions would be indistinguishable 91 
+
+from the best action ( P(a⋆τ ≻ aτ |cτ ) = 12 hence Rτ = 0 for τ ≥ t). 92 
+
+Optimal policy . A policy π ∈ ∆CA2 associates each context c ∈ C with a probability distribution 93 
+
+π(·| c) ∈ ∆A over the action space. The total preference of policy π over policy μ given a context 94 
+
+sampling distribution pC ∈ ∆C and a preference oracle P is defined as 95 
+
+PpC ,P(π ≻ μ) = Ec∼pC
+
+Ea∼π(·| c)Ea′∼μ(·| c) [P(a ≻ a′|c)]  . (1) We adopt the von Neumann winner [ 20 ] as the solution concept, which requires the optimal policy π⋆
+
+> 96
+
+to satisfy that 97 
+
+∀π′ ∈ ∆CA, P pC ,P(π⋆ ≻ π′) ≥ 12 . (2) In words, the von Neumann winner policy should beat or tie with every policy (i.e., is zero-regret) on 98 
+
+average. 99 
+
+Learning objectives. The goal of bandit agents is to learn an optimal policy through interactions with 100 
+
+the environment. There are two subtypes of objectives that focus on different learning scenarios. The 101 
+
+first type considers the conventional explore and exploit (E&E) setting [ 59 , 3], where the agent learns 102 
+
+fully online and tries to minimize the cumulative regret over T rounds: PTt=1 Rt. The second type of 103 
+
+objective concerns the best arm identification (BAI) setting [9, 2], where the agent is only evaluated 104 
+
+offline on its average performance, possibly at any round (a.k.a., anytime regret), and tries to learn the 105 
+
+optimal policy with minimum interaction. Both settings call for effective online exploration strategies 106 
+
+that satisfy Properties 1 and 2. Their differences will be made clearer with real scenarios in Sec. 2.2. 107 
+
+2.2 Online alignment as CDB 108 
+
+Online LLM alignment can be framed as a CDB problem. Specifically, at time t a text prompt ( cf. 109 
+
+context) xt ∈ X is sampled from a prompt distribution pX . Then, two distinct responses ( cf. actions), 110 
+
+yt, y′ 
+
+> t
+
+∈ Y , are chosen by the agent, and presented to human annotators ( cf. the environment) for 111 
+
+preference ranking. The winning and losing responses are labeled as (y+ 
+
+> t
+
+, y− 
+
+> t
+
+) based on a binary 112 
+
+stochastic feedback zt ∼ Ber ( P (yt ≻ y′
+
+> t
+
+|xt)) . The agent is expected to produce good responses 113 
+
+satisfying either E&E or BAI objectives, with knowledge learned from the experience accumulated 114 
+
+so far: Dt = {(xτ , y+ 
+
+> τ
+
+, y− 
+
+> τ
+
+)}tτ =1 . A standard assumption is that human preferences follow the 115 
+
+Bradley-Terry (BT) model [8]: 116 
+
+P(yt ≻ y′
+
+> t
+
+|xt) = exp ( r⋆(xt, yt)) exp ( r⋆(xt, yt)) + exp ( r⋆(xt, y′
+
+> t
+
+)) = σ(r⋆(xt, yt) − r⋆(xt, y′
+
+> t
+
+)) , (3) where σ is the sigmoid function and r⋆ encodes human’s implicit reward. The immediate regret of 117 
+
+LLM alignment can be rewritten as Rt = r⋆(xt, y⋆t ) − (r⋆(xt, yt) + r⋆(xt, y′
+
+> t
+
+)) /2 with the BT 118 
+
+assumption [ 62 , 39 ], where y⋆t is the best response for prompt xt given human’s implicit reward, i.e., 119 
+
+r⋆(xt, y⋆t ) ≥ r⋆(xt, y), ∀y ∈ Y . The von Neumann winner policy is also redefined as 120 
+
+π⋆ ∈ arg max 
+
+> π∈∆XY
+
+J(π), where J(π) = Ex∼pX Ey∼π(·| x)[r⋆(x, y)] is the objective, (4) 
+
+> 1
+
+We assume that a best action a⋆ in the sense that P(a⋆ ≻ a|c) ≥ 12 , ∀a ∈ A exists for all context c ∈ C .
+
+> 2
+
+We denote by ∆CA the set of all mappings C 7 → ∆A, where ∆A denotes the set of all probability distributions over A.
+
+3(a) 
+
+Iterative RLHF 
+
+Human 
+
+<latexit sha1_base64="yFUmHDmU2ZEKS47zpXAXqjYVlBM=">AAACAHicZVBNSwMxEM3Wr1q/Vnv0Eiyih1J2pajHohePFewHdJeSTbNtaJJdkqywLL34R7zWk3j1hwj+G7PtHmw7EObxMvNm5gUxo0o7zq9V2tre2d0r71cODo+OT+zTs66KEolJB0cskv0AKcKoIB1NNSP9WBLEA0Z6wfQx/++9EqloJF50GhOfo7GgIcVIG2poV73MC3iWzupwma+82dCuOQ1nEXATuAWogSLaQ/vHG0U44URozJBSA9eJtZ8hqSlmZFbxEkVihKdoTAYGCsSJ8rPF8jN4aZgRDCNpntBwwf7vyBBXKuWBqeRIT9Sqmg7v/YyKONFE4KVYmDCoI5hfC0dUEqxZagDCkpp9IJ4gibA2nqxPyeXrJud7qHrAcyPc9bM3Qfem4d42ms/NWuuhsKQMzsEFuAYuuAMt8ATaoAMwSME7mIMP682aW5/W17K0ZBU9VbAS1vcf11CXCw==</latexit> 
+
+{y, y0}
+
+> <latexit  sha1_base64="+bETow5v7g5NkryvMkVCgGekHr4=">AAAB9nicZVDLSgMxFL3js9ZX1aWbYBFclDIjRV0W3bisYB/QDiWTZtrQZDIkGbUM/Qy3dSVu/RrBvzHTzsK2B0IOJ/fenHuCmDNtXPfX2djc2t7ZLewV9w8Oj45LJ6ctLRNFaJNILlUnwJpyFtGmYYbTTqwoFgGn7WD8kL23X6jSTEbPZhJTX+BhxEJGsLFSt6fYcGSwUvK1Xyq7VXcOtE68nJQhR6Nf+ukNJEkEjQzhWOuu58bGT7EyjHA6LfYSTWNMxnhIu5ZGWFDtp3PLU3RplQEKpbInMmiu/u9IsdB6IgJbKbAZ6eVpJrzzUxbFiaERWQwLE46MRNmOaMAUJYZPLMFEMesHkRFWmBibxOov2fiKvTMfuhKIqQ3CW117nbSuq95NtfZUK9fv80gKcA4XcAUe3EIdHqEBTSAg4R1m8OG8OTPn0/lalG44ec8ZLMH5/gPjVJPU</latexit>
+> !
+
+<latexit sha1_base64="HAtswF/KSMaNV4cJiQXSCaErllU=">AAAB7HicZVDLSgMxFL3js9ZX1aWbYBFclDIjRV0W3bhswT6gHUomzbShSWZIMkId+gVu60rc+kmCf2OmnYVtD4QcTu69OecGMWfauO6vs7W9s7u3XzgoHh4dn5yWzs7bOkoUoS0S8Uh1A6wpZ5K2DDOcdmNFsQg47QSTp+y980qVZpF8MdOY+gKPJAsZwcZKzbdBqexW3QXQJvFyUoYcjUHppz+MSCKoNIRjrXueGxs/xcowwums2E80jTGZ4BHtWSqxoNpPF0Zn6NoqQxRGyh5p0EL935FiofVUBLZSYDPWq9NM+OCnTMaJoZIsh4UJRyZCWTI0ZIoSw6eWYKKY9YPIGCtMjM2//ks2vmLvzIeuBGJmF+Gtx94k7duqd1etNWvl+mO+kgJcwhXcgAf3UIdnaEALCFB4hzl8ONKZO5/O17J0y8l7LmAFzvcf+QaPRQ==</latexit> 
+
+z
+
+<latexit sha1_base64="niAbtweNsr3gkZrpaMVy3/2K9mc=">AAAB9nicZVDLSgMxFL3js9ZX1aWbYBFclDIjRV0WdeGygn1AO5RMmmlDk8mQZMQy9DPc1pW49WsE/8ZMOwvbHgg5nNx7c+4JYs60cd1fZ2Nza3tnt7BX3D84PDounZy2tEwUoU0iuVSdAGvKWUSbhhlOO7GiWASctoPxQ/befqVKMxm9mElMfYGHEQsZwcZK3Z7AZkQwTx+n/VLZrbpzoHXi5aQMORr90k9vIEkiaGQIx1p3PTc2foqVYYTTabGXaBpjMsZD2rU0woJqP51bnqJLqwxQKJU9kUFz9X9HioXWExHYysyiXp5mwjs/ZVGcGBqRxbAw4chIlO2IBkxRYvjEEkwUs34QGWGFibFJrP6Sja/YO/OhK4HIgvBW114nreuqd1OtPdfK9fs8kgKcwwVcgQe3UIcnaEATCEh4hxl8OG/OzPl0vhalG07ecwZLcL7/AJSqk6E=</latexit> 
+
+D
+
+Iterative or Online DAP 
+
+(b) 
+
+Human 
+
+<latexit sha1_base64="yFUmHDmU2ZEKS47zpXAXqjYVlBM=">AAACAHicZVBNSwMxEM3Wr1q/Vnv0Eiyih1J2pajHohePFewHdJeSTbNtaJJdkqywLL34R7zWk3j1hwj+G7PtHmw7EObxMvNm5gUxo0o7zq9V2tre2d0r71cODo+OT+zTs66KEolJB0cskv0AKcKoIB1NNSP9WBLEA0Z6wfQx/++9EqloJF50GhOfo7GgIcVIG2poV73MC3iWzupwma+82dCuOQ1nEXATuAWogSLaQ/vHG0U44URozJBSA9eJtZ8hqSlmZFbxEkVihKdoTAYGCsSJ8rPF8jN4aZgRDCNpntBwwf7vyBBXKuWBqeRIT9Sqmg7v/YyKONFE4KVYmDCoI5hfC0dUEqxZagDCkpp9IJ4gibA2nqxPyeXrJud7qHrAcyPc9bM3Qfem4d42ms/NWuuhsKQMzsEFuAYuuAMt8ATaoAMwSME7mIMP682aW5/W17K0ZBU9VbAS1vcf11CXCw==</latexit> 
+
+{y, y0}
+
+> <latexit  sha1_base64="+bETow5v7g5NkryvMkVCgGekHr4=">AAAB9nicZVDLSgMxFL3js9ZX1aWbYBFclDIjRV0W3bisYB/QDiWTZtrQZDIkGbUM/Qy3dSVu/RrBvzHTzsK2B0IOJ/fenHuCmDNtXPfX2djc2t7ZLewV9w8Oj45LJ6ctLRNFaJNILlUnwJpyFtGmYYbTTqwoFgGn7WD8kL23X6jSTEbPZhJTX+BhxEJGsLFSt6fYcGSwUvK1Xyq7VXcOtE68nJQhR6Nf+ukNJEkEjQzhWOuu58bGT7EyjHA6LfYSTWNMxnhIu5ZGWFDtp3PLU3RplQEKpbInMmiu/u9IsdB6IgJbKbAZ6eVpJrzzUxbFiaERWQwLE46MRNmOaMAUJYZPLMFEMesHkRFWmBibxOov2fiKvTMfuhKIqQ3CW117nbSuq95NtfZUK9fv80gKcA4XcAUe3EIdHqEBTSAg4R1m8OG8OTPn0/lalG44ec8ZLMH5/gPjVJPU</latexit>
+> !
+
+<latexit sha1_base64="HAtswF/KSMaNV4cJiQXSCaErllU=">AAAB7HicZVDLSgMxFL3js9ZX1aWbYBFclDIjRV0W3bhswT6gHUomzbShSWZIMkId+gVu60rc+kmCf2OmnYVtD4QcTu69OecGMWfauO6vs7W9s7u3XzgoHh4dn5yWzs7bOkoUoS0S8Uh1A6wpZ5K2DDOcdmNFsQg47QSTp+y980qVZpF8MdOY+gKPJAsZwcZKzbdBqexW3QXQJvFyUoYcjUHppz+MSCKoNIRjrXueGxs/xcowwums2E80jTGZ4BHtWSqxoNpPF0Zn6NoqQxRGyh5p0EL935FiofVUBLZSYDPWq9NM+OCnTMaJoZIsh4UJRyZCWTI0ZIoSw6eWYKKY9YPIGCtMjM2//ks2vmLvzIeuBGJmF+Gtx94k7duqd1etNWvl+mO+kgJcwhXcgAf3UIdnaEALCFB4hzl8ONKZO5/O17J0y8l7LmAFzvcf+QaPRQ==</latexit> 
+
+z
+
+<latexit sha1_base64="niAbtweNsr3gkZrpaMVy3/2K9mc=">AAAB9nicZVDLSgMxFL3js9ZX1aWbYBFclDIjRV0WdeGygn1AO5RMmmlDk8mQZMQy9DPc1pW49WsE/8ZMOwvbHgg5nNx7c+4JYs60cd1fZ2Nza3tnt7BX3D84PDounZy2tEwUoU0iuVSdAGvKWUSbhhlOO7GiWASctoPxQ/befqVKMxm9mElMfYGHEQsZwcZK3Z7AZkQwTx+n/VLZrbpzoHXi5aQMORr90k9vIEkiaGQIx1p3PTc2foqVYYTTabGXaBpjMsZD2rU0woJqP51bnqJLqwxQKJU9kUFz9X9HioXWExHYysyiXp5mwjs/ZVGcGBqRxbAw4chIlO2IBkxRYvjEEkwUs34QGWGFibFJrP6Sja/YO/OhK4HIgvBW114nreuqd1OtPdfK9fs8kgKcwwVcgQe3UIcnaEATCEh4hxl8OG/OzPl0vhalG07ecwZLcL7/AJSqk6E=</latexit> 
+
+D
+
+Exploration with RMs 
+
+(c) 
+
+Human 
+
+> <latexit  sha1_base64="+bETow5v7g5NkryvMkVCgGekHr4=">AAAB9nicZVDLSgMxFL3js9ZX1aWbYBFclDIjRV0W3bisYB/QDiWTZtrQZDIkGbUM/Qy3dSVu/RrBvzHTzsK2B0IOJ/fenHuCmDNtXPfX2djc2t7ZLewV9w8Oj45LJ6ctLRNFaJNILlUnwJpyFtGmYYbTTqwoFgGn7WD8kL23X6jSTEbPZhJTX+BhxEJGsLFSt6fYcGSwUvK1Xyq7VXcOtE68nJQhR6Nf+ukNJEkEjQzhWOuu58bGT7EyjHA6LfYSTWNMxnhIu5ZGWFDtp3PLU3RplQEKpbInMmiu/u9IsdB6IgJbKbAZ6eVpJrzzUxbFiaERWQwLE46MRNmOaMAUJYZPLMFEMesHkRFWmBibxOov2fiKvTMfuhKIqQ3CW117nbSuq95NtfZUK9fv80gKcA4XcAUe3EIdHqEBTSAg4R1m8OG8OTPn0/lalG44ec8ZLMH5/gPjVJPU</latexit>
+> !
+
+<latexit sha1_base64="HAtswF/KSMaNV4cJiQXSCaErllU=">AAAB7HicZVDLSgMxFL3js9ZX1aWbYBFclDIjRV0W3bhswT6gHUomzbShSWZIMkId+gVu60rc+kmCf2OmnYVtD4QcTu69OecGMWfauO6vs7W9s7u3XzgoHh4dn5yWzs7bOkoUoS0S8Uh1A6wpZ5K2DDOcdmNFsQg47QSTp+y980qVZpF8MdOY+gKPJAsZwcZKzbdBqexW3QXQJvFyUoYcjUHppz+MSCKoNIRjrXueGxs/xcowwums2E80jTGZ4BHtWSqxoNpPF0Zn6NoqQxRGyh5p0EL935FiofVUBLZSYDPWq9NM+OCnTMaJoZIsh4UJRyZCWTI0ZIoSw6eWYKKY9YPIGCtMjM2//ks2vmLvzIeuBGJmF+Gtx94k7duqd1etNWvl+mO+kgJcwhXcgAf3UIdnaEALCFB4hzl8ONKZO5/O17J0y8l7LmAFzvcf+QaPRQ==</latexit> 
+
+z
+
+<latexit sha1_base64="niAbtweNsr3gkZrpaMVy3/2K9mc=">AAAB9nicZVDLSgMxFL3js9ZX1aWbYBFclDIjRV0WdeGygn1AO5RMmmlDk8mQZMQy9DPc1pW49WsE/8ZMOwvbHgg5nNx7c+4JYs60cd1fZ2Nza3tnt7BX3D84PDounZy2tEwUoU0iuVSdAGvKWUSbhhlOO7GiWASctoPxQ/befqVKMxm9mElMfYGHEQsZwcZK3Z7AZkQwTx+n/VLZrbpzoHXi5aQMORr90k9vIEkiaGQIx1p3PTc2foqVYYTTabGXaBpjMsZD2rU0woJqP51bnqJLqwxQKJU9kUFz9X9HioXWExHYysyiXp5mwjs/ZVGcGBqRxbAw4chIlO2IBkxRYvjEEkwUs34QGWGFibFJrP6Sja/YO/OhK4HIgvBW114nreuqd1OtPdfK9fs8kgKcwwVcgQe3UIcnaEATCEh4hxl8OG/OzPl0vhalG07ecwZLcL7/AJSqk6E=</latexit> 
+
+D
+
+<latexit sha1_base64="26s2VwAxvcEukD8lQVGDyWaepVc=">AAAB9XicZVDLSgMxFL3js9ZX1aWbYBFclDIjRV0W3bisYB/SGUomzbShSWZIMkop/Qq3didu/Rzxb8y0s7DtgZDDyb03554w4Uwb1/11Nja3tnd2C3vF/YPDo+PSyWlLx6kitEliHqtOiDXlTNKmYYbTTqIoFiGn7XD0kL23X6nSLJbPZpzQQOCBZBEj2FjpxU9Yzw+pwb1S2a26c6B14uWkDDkavdKP349JKqg0hGOtu56bmGCClWGE02nRTzVNMBnhAe1aKrGgOpjMDU/RpVX6KIqVPdKgufq/Y4KF1mMR2kqBzVAvTzPRXTBhMkkNlWQxLEo5MjHKNkR9pigxfGwJJopZP4gMscLE2BxWf8nGV+yd+dCVUEyLNglvde910rquejfV2lOtXL/PMynAOVzAFXhwC3V4hAY0gYCAd/iAmfPmzJxP52tRuuHkPWewBOf7D2q4krc=</latexit> 
+
+⇡ 
+
+Sample -Efficient Alignment 
+
+(d) 
+
+Human 
+
+> <latexit  sha1_base64="+bETow5v7g5NkryvMkVCgGekHr4=">AAAB9nicZVDLSgMxFL3js9ZX1aWbYBFclDIjRV0W3bisYB/QDiWTZtrQZDIkGbUM/Qy3dSVu/RrBvzHTzsK2B0IOJ/fenHuCmDNtXPfX2djc2t7ZLewV9w8Oj45LJ6ctLRNFaJNILlUnwJpyFtGmYYbTTqwoFgGn7WD8kL23X6jSTEbPZhJTX+BhxEJGsLFSt6fYcGSwUvK1Xyq7VXcOtE68nJQhR6Nf+ukNJEkEjQzhWOuu58bGT7EyjHA6LfYSTWNMxnhIu5ZGWFDtp3PLU3RplQEKpbInMmiu/u9IsdB6IgJbKbAZ6eVpJrzzUxbFiaERWQwLE46MRNmOaMAUJYZPLMFEMesHkRFWmBibxOov2fiKvTMfuhKIqQ3CW117nbSuq95NtfZUK9fv80gKcA4XcAUe3EIdHqEBTSAg4R1m8OG8OTPn0/lalG44ec8ZLMH5/gPjVJPU</latexit>
+> !
+
+<latexit sha1_base64="HAtswF/KSMaNV4cJiQXSCaErllU=">AAAB7HicZVDLSgMxFL3js9ZX1aWbYBFclDIjRV0W3bhswT6gHUomzbShSWZIMkId+gVu60rc+kmCf2OmnYVtD4QcTu69OecGMWfauO6vs7W9s7u3XzgoHh4dn5yWzs7bOkoUoS0S8Uh1A6wpZ5K2DDOcdmNFsQg47QSTp+y980qVZpF8MdOY+gKPJAsZwcZKzbdBqexW3QXQJvFyUoYcjUHppz+MSCKoNIRjrXueGxs/xcowwums2E80jTGZ4BHtWSqxoNpPF0Zn6NoqQxRGyh5p0EL935FiofVUBLZSYDPWq9NM+OCnTMaJoZIsh4UJRyZCWTI0ZIoSw6eWYKKY9YPIGCtMjM2//ks2vmLvzIeuBGJmF+Gtx94k7duqd1etNWvl+mO+kgJcwhXcgAf3UIdnaEALCFB4hzl8ONKZO5/O17J0y8l7LmAFzvcf+QaPRQ==</latexit> 
+
+z
+
+<latexit sha1_base64="niAbtweNsr3gkZrpaMVy3/2K9mc=">AAAB9nicZVDLSgMxFL3js9ZX1aWbYBFclDIjRV0WdeGygn1AO5RMmmlDk8mQZMQy9DPc1pW49WsE/8ZMOwvbHgg5nNx7c+4JYs60cd1fZ2Nza3tnt7BX3D84PDounZy2tEwUoU0iuVSdAGvKWUSbhhlOO7GiWASctoPxQ/befqVKMxm9mElMfYGHEQsZwcZK3Z7AZkQwTx+n/VLZrbpzoHXi5aQMORr90k9vIEkiaGQIx1p3PTc2foqVYYTTabGXaBpjMsZD2rU0woJqP51bnqJLqwxQKJU9kUFz9X9HioXWExHYysyiXp5mwjs/ZVGcGBqRxbAw4chIlO2IBkxRYvjEEkwUs34QGWGFibFJrP6Sja/YO/OhK4HIgvBW114nreuqd1OtPdfK9fs8kgKcwwVcgQe3UIcnaEATCEh4hxl8OG/OzPl0vhalG07ecwZLcL7/AJSqk6E=</latexit> 
+
+DFigure 2: Different paradigms to solve online LLM alignment in the CDB interface. The CDB agent is shaded in gray. We use colors to denote learnable components, RL optimizer, direct optimizer, and active exploration. 
+
+rϕ denotes a point estimate of human’s implicit reward, while RΦ refers to an uncertainty-aware reward model. Please see Sec. 3 for detailed comparisons with references to prior works. [fdaL: updated fig.3 to highlight the differences between (b) and (d).] 
+
+by substituting Eq. (3) into Eq. (1) and maximizing PpX ,P(π ≻ π⋆) towards 1/2.121 
+
+The two settings in bandits have their respective applications in LLM alignment. (1) The E&E 122 
+
+setting applies to the scenario of serving an LLM-based application online and aligning it continually 123 
+
+with users’ preferences. In this setting, the agent needs to balance exploration with exploitation, thus 124 
+
+the cumulative regret is of interest because the quality of every response matters. In fact, commercial 125 
+
+systems like ChatGPT would strategically ask users to make a dueling comparison, while upholding 126 
+
+the quality of both responses. Please see Fig. 11 in App. I for an example. (2) The BAI setting 127 
+
+corresponds to the other scenario where annotators are paid to provide human feedback [ 15 , 50 ]. The 128 
+
+desideratum in this scenario is to align the LLM at the minimum labeling cost, while the quality of 129 
+
+the dueling responses is not important as long as the experience helps sample-efficiently learn the 130 
+
+von Neumann winner policy. 131 
+
+After formalizing LLM alignment in the framework of CDB and uncovering their tight connections, 132 
+
+we next thoroughly discuss existing alignment methods in the CDB framework and reveal the sources 133 
+
+of their sample inefficiencies. 134 
+
+3 How prior works (partially) solve LLM alignment as CDB 135 
+
+We first align the notations and terminology used in CDB with commonly referred ones in the LLM 136 
+
+community. Previously, we used the term “agent” to denote the learner and decision maker, and 137 
+
+referred to its overall behavior as the “policy” π (as in Eq. (4)), following the standard abstraction in 138 
+
+RL [ 67 , 68 ]. However, in the LLM literature, “policy” typically refers to the generative language 139 
+
+model alone, excluding components like reward models (RMs) that the agent might additionally build. 140 
+
+To avoid confusion, from now on we use πθt to denote the generative language model (policy) and 141 
+
+rϕt to denote the (optional) RM at time t, both of which are learned from preference data Dt collected 142 
+
+up to time t. We will omit t when the time-indexing is not applicable (i.e., no online interaction) or 143 
+
+not important in the context. 144 
+
+RLHF and DAP . Commonly adopted RLHF pipelines [ 15 , 65 , 5 , 50 ] first learn a proxy RM with 145 
+
+a negative log-likelihood loss: 146 
+
+Lr (ϕ|D ) = −E(x,y+,y−)∼pD
+
+log σ  rϕ
+
+ x, y+ − rϕ
+
+ x, y− , (5) where D is collected by querying human annotators using a behavior policy πref (typically the 147 
+
+supervised fine-tuned policy πsft ). Afterwards, offline RL 3 [ 36 , 37 ] is conducted to learn πθ with 148 
+
+respect to the learned reward rϕ internally within the agent (Fig. 2a). However, the learned model πθ149 
+
+might be inaccurate at regions out of the distribution (o.o.d.) of πref because little training data can 150 
+
+be collected. An effective remedy is to incorporate a pessimistic term to combat the distributional 151 
+
+shift, leading to a reformulation of the von Neumann winner policy objective in Eq. (4) as 152 
+
+J(πθ ) = E
+
+x∼pX
+
+E
+
+y∼πθ (·| x)
+
+"
+
+rϕ(x, y)
+
+| {z }
+
+estimated r⋆
+
+− β log πθ (y|x)
+
+πref (y|x)
+
+| {z }
+
+o.o.d. reward penalty 
+
+#
+
+(6) 
+
+= E
+
+x∼pX
+
+
+
+E
+
+y∼πθ (·| x) [rϕ(x, y)] − βD KL (πθ (·| x)|| πref (·| x)) 
+
+
+
+, (7) which converts an online objective regarding the human’s implicit reward r⋆ to an offline objective 153 
+
+regarding the proxy reward rϕ. The KL penalty in Eq. (15) is widely used for language model 154 
+
+3Offline in the sense that πθ is not directly learned from online human feedback. See App. C for details. 
+
+4fine-tuning [ 29 , 80 ], and PPO [ 64 ] has become a default RL optimizer to maximize the KL-regularized 155 
+
+reward. However, the performance of RLHF is guaranteed only if the preference data D induced 156 
+
+by πref adequately covers π⋆ [ 90 ], which is often approximated by updating πref with the latest 157 
+
+(improved) πθ for re-sampling a batch of online experience and repeating Eq. (13) and (15). Prior 158 
+
+works typically focus on offline or iterative online (with only a few iterations) settings [ 80 , 18 ], 159 
+
+which may compromise sample efficiency (Property 1). 160 
+
+True online RLHF is difficult due to the complexity and instability of RL optimizers. For example, 161 
+
+Huang et al. [27] openly reproduces offline RLHF scaling behaviors but requires many implementation 162 
+
+tricks for training, highlighting the difficulties of an online counterpart. Fortunately, the introduction 163 
+
+of DAP (or direct optimizers ) largely simplifies and stabilizes fine-tuning by conducting contrastive 164 
+
+supervised learning directly on D (Fig. 2b). While most DAP works focus on learning from a fixed 165 
+
+offline preference dataset, including Zhao et al. [88] , Rafailov et al. [55] , Azar et al. [4] , Meng 166 
+
+et al. [46] , Zhang et al. [87] ), iterative DPO [ 81 ] observes improved results when allowing iterative 167 
+
+online interaction. Guo et al. [24] further propose OAIF to make DAP faithfully online, satisfying 168 
+
+Property 1, and demonstrate that online learning prevents over-fitting and yields continual performance 169 
+
+improvement. Nevertheless, it still employs passive exploration strategies (using y, y′ ∼ πθ ), 170 
+
+hindering sample efficiency (Property 2). 171 
+
+Online exploration in LLMs . A line of recent works [ 44 , 17 , 45 , 21 ] adopts the fully online 172 
+
+bandit formulation and incorporates active exploration with uncertainty-aware RMs for response 173 
+
+selection (Fig. 2c). In particular, Mehta et al. [44] consider the E&E setting and develop a UCB-174 
+
+style [ 3 ] algorithm; Das et al. [17] instead select the dueling responses with the most uncertain 175 
+
+preference estimate, targeting the BAI setting in a pure exploration way; unlike the above, Melo et al. 176 
+
+[45] view the problem from the angle of pool-based active learning and propose an acquisition function 177 
+
+based on both entropy and epistemic uncertainty; finally, the work by Dwaracherla et al. [21] is the 178 
+
+closest to ours in the sense that they apply double Thompson sampling (DTS) [ 78 ] for exploration, 179 
+
+but DTS is designed for the E&E setting while they evaluate anytime average performance as in the 180 
+
+BAI setting. We will show in App. G.1 that pure exploration by Das et al. [17] is not the best choice 181 
+
+for BAI, and the objective mismatch in Dwaracherla et al. [21] could lead to suboptimal performance 182 
+
+in respective settings. Meanwhile, all these works primarily focus on learning uncertainty-aware RMs 183 
+
+online without updating LLM policies. Therefore, all responses are sampled from a fixed proposal 184 
+
+policy πβ (or even a fixed dataset), making the data coverage a critical concern. 185 
+
+Another line of research updates LLMs online while incorporating exploration. Zhang et al. [86] 186 
+
+and Xie et al. [79] independently propose to learn an optimistic RM to encourage exploration. They 187 
+
+leverage the property of DPO [ 55 ] to reparameterize RM with policy and conclude with an extra 188 
+
+optimistic term in the DPO loss function. Thus, their learning processes are like Fig. 2b but with an 189 
+
+optimistic direct optimizer. Muldrew et al. [47] adopt the vanilla DPO loss but utilize the implicit 190 
+
+reward margin to actively select dueling responses. Yet, these methods are tightly coupled with DPO 191 
+
+and not compatible to other direct optimizers. Their experiments are also limited to a few online 192 
+
+iterations, possibly due to the implementation difficulty of a faithfully online learning system. Given 193 
+
+their relevance to our approach, we will reproduce them in a fully online manner for fair comparisons 194 
+
+in Sec. 6.1. We summarize prior works in Table 2 in App. I. 195 
+
+4 SEA: sample-efficient alignment for LLMs 196 
+
+In this section we present our online exploration agent SEA (Fig. 2d). We first introduce a principled 197 
+
+Thompson sampling algorithm inspired by bandit theory (Sec. 4.1), and then derive SEA as its practi-198 
+
+cally efficient implementation (Sec. 4.2). Interestingly, SEA can also be viewed as an instantiation of a 199 
+
+classical model-based RL architecture called Dyna [ 66 ], for which we defer the discussion to App. C. 200 
+
+4.1 Thompson sampling for LLM alignment 201 
+
+Thompson sampling (TS) [ 71 ] is widely adopted for solving bandit problems at scale due to its 202 
+
+efficiency and strong empirical performance in general online learning problems [ 12 , 61 ]. A bandit 203 
+
+agent using Thompson sampling typically maintains and incrementally updates a posterior distribution 204 
+
+of the oracle reward p(r|D ). Meanwhile, the agent takes actions following a greedy policy with 205 
+
+respect to a sampled RM: at = arg max a r(a) with r ∼ pr (·|D ). This simple yet effective algorithm 206 
+
+naturally balances exploration and exploitation: when the agent has limited knowledge about the 207 
+
+environment, the posterior estimate exhibits high uncertainty so that the sampled RM could guide the 208 
+
+5Algorithm 1 Thompson sampling for LLM alignment (intractable). 
+
+Input: Prompt distribution pX , unknown but queryable preference oracle P.
+
+1: Initialize experience D0 ← ∅.
+
+2: for t = 1 , . . . , T do 
+
+3: Receive a prompt xt ∼ pX .
+
+4: Sample r ∼ pr (·|D t−1) and set yt ← arg max b∈Y r(xt, b). // Select 1st response y.// E&E objective: aligning an online system. 
+
+5: repeat 
+
+Sample r ∼ pr (·|D t−1) and set y′ 
+
+> t
+
+← arg max b∈Y r(xt, b). // Select 2nd response y′.
+
+until y′
+
+> t
+
+̸ = yt
+
+> // BAI objective: labeling via crowdsourcing.
+
+6: Set y′ 
+
+> t
+
+← arg max b∈Y V [σ (r(xt, yt) − r(xt, b))] , // OR select 2nd response y′.
+
+where V [·] computes variance over the posterior pr (·|D t−1).
+
+7: Query P to label {yt, y′
+
+> t
+
+}, and update experience Dt ← D t−1
+
+S {(xt, y+ 
+
+> t
+
+, y− 
+
+> t
+
+)}.
+
+8: end for 
+
+> // See Algorithm 2 for a practical version.
+
+greedy policy to explore; after sufficient experience is gathered, the sampled RM approximates the 209 
+
+oracle more closely, allowing the agent to exploit near-optimal policies. 210 
+
+In the context of LLM alignment, we leverage the BT assumption (Eq. (3)) to replace the preference 211 
+
+oracle P with human’s implicit reward r⋆. This substitution enables us to model the reward posterior 212 
+
+p(r|D ) in the standard TS framework, preserving the probabilistic structure necessary for effective 213 
+
+posterior sampling. Inspired by prior works [ 78 , 23 ] on non-contextual K-arm bandits and preferential 214 
+
+Bayesian optimization problems, we generalize them for LLM alignment and develop a unified algo-215 
+
+rithm as shown in Algorithm 1. Note that we assume for now the LLM agent can be fully described 216 
+
+by the posterior p(r|D ), and we defer practical reward ( rϕ) and policy ( πθ ) learning to Sec. 4.2. 217 
+
+As Algorithm 1 presents, the first response of the duel is always selected via standard TS (Line 4). 218 
+
+The selection of the second response varies across different settings. Line 5 will be used for scenarios 219 
+
+where preference feedback is collected from online users (the E&E setting). The dueling responses 220 
+
+selected in this case will both try to maximize a sampled RM, so that the online user experience is 221 
+
+warranted with best effort. However, such algorithm can have poor asymptotic performance for BAI 222 
+
+problems [ 60 ], because sub-optimal responses with confidently high rewards might be tried for a 223 
+
+long time at the expense of not exploring other potentially better choices. In light of this, Line 6 224 
+
+provides an alternative for scenarios where we could hire annotators for feedback and low-quality but 225 
+
+exploratory responses are safe to try. Specifically, Line 6 selects the second response as the one that 226 
+
+maximizes the variance of the preference (Eq. (3)) over the first response yt. This variance quantifies 227 
+
+the epistemic uncertainty of the RM, pointing the agent to the maximally informative direction to 228 
+
+explore for better sample efficiency. 229 
+
+However, Algorithm 1 is yet to be practical for LLM alignment for three main reasons. First, 230 
+
+computing and sampling from a reward posterior is intractable for nearly all RMs at LLM scale, 231 
+
+which are mostly based on large transformers [ 35 ]. Second, even if we managed to approximate the 232 
+
+reward posterior, the arg max operations for response selection are still intractable since the search 233 
+
+space Y is discrete and massive for token sequences of arbitrary length. Last but not least, an LLM 234 
+
+agent [ 1, 72 ] typically consists in a generative model πθ (e.g., a transformer [ 73 ]), while the algorithm 235 
+
+above is centered around a reward posterior p(r|D ) that cannot be easily converted into a generative 236 
+
+model. We next detail how SEA practically addresses the three aforementioned issues. 237 
+
+4.2 Practical implementation 238 
+
+4.2.1 Epistemic reward model for posterior sampling 239 
+
+To implement active exploration with TS, we seek an efficient way to maintain and incrementally 240 
+
+update the reward posterior p(r|D ). We consider deep ensemble for our purpose, due to its capability 241 
+
+to model epistemic uncertainty [ 34 ] and provable results when applied to TS in linear bandits [ 54 ]. 242 
+
+Specifically, we update a set of plausible RMs independently and online, using the preference data 243 
+
+6and a regularized negative log-likelihood loss: 244 
+
+LR(Φ t|D t) = 
+
+> K
+
+X
+
+> k=1
+
+ Lr (ϕtk|D t) − λ|| ϕtk − ϕ0
+
+> k
+
+||  , (8) where Lr is defined in Eq. (13), Φt = {ϕtk}Kk=1 contains the weights of the ensemble of size K,245 
+
+and λ controls the regularization towards individual initial weights ϕ0
+
+> k
+
+. Each ensemble member is 246 
+
+initialized independently with random weights, and then trained with regularization to maintain the 247 
+
+diversity across ensemble members [ 21 ]. Randomly picking a ϕtk from Φt would approximate the 248 
+
+posterior sampling ( r ∼ pr (·|D t)) for the RM [ 43 , 25 ]. In practice, we train K MLP heads on top of 249 
+
+a pretrained and frozen transformer. We refer to the ensemble as the Epistemic Reward Model (ERM, 250 
+
+denoted as RΦ). 251 
+
+4.2.2 Policy-guided search to approximate arg max 252 
+
+With the ERM approximating the reward posterior, we need to further approximate the response 253 
+
+selection steps (Lines 4 to 6) which generally take the form of arg max b∈Y U (b), where U absorbs the 254 
+
+sampled prompt, the sampled RM, and optionally the selected first response (for BAI, Line 6). To ob-255 
+
+tain the maximum, bandit algorithms for large action spaces typically resort to an action optimization 256 
+
+oracle [ 31 , 91 ], but they assume a linear structure of U with respect to b, which might be impractical 257 
+
+for LLMs. Therefore, we instead replace the optimization over Y with sampling from a policy-guided 258 
+
+distribution conditioned on U , πprior (·| x) exp ( U (·)/η ), which is appropriate since it favors responses 259 
+
+y that approximately maximize U (y). In practice, for a given prompt xt, we sample M candidate 260 
+
+responses from the prior policy πprior (·| xt) to construct a proposal set St = {yit}Mi=1 . We then con-261 
+
+duct a greedy search in St (taking η → 0) to identify the response yt (or y′
+
+> t
+
+) that locally maximizes 262 
+
+the utility function U , which is subsequently used in the duel. We also reuse the same St for different 263 
+
+U functions at time t to save computation. The choice of πprior will be discussed in the next section. 264 
+
+4.2.3 Online policy learning from mixed preferences 265 
+
+We finally resolve two remaining questions: (Q1) how to choose a sensible πprior at each time t266 
+
+and (Q2) how to get a good generative policy online. To this end, we propose a simple approach to 267 
+
+approximately address both questions simultaneously. That is, we can utilize any direct optimizer to 268 
+
+learn the policy πθt online with the following loss and use the latest online policy as πprior :269 
+
+Lπ (θt|B t, π ref , F ) = E(x,y+,y−)∼pBt
+
+Fθt (x, y+, y−, π ref ) , (9) where Bt is a batch of preference data labeled by the oracle wherein the responses are proposed by 270 
+
+πprior and selected by RΦt , F could be any DAP loss (see App. A for some examples), and πref is 271 
+
+chosen to be πsft . Note that we use πθt as πprior at any time t, thus Bt is a batch of on-policy data. 272 
+
+By contrastive training on these on-policy data, we leverage their orthogonal benefits to achieve 273 
+
+maximal policy improvement [69, 70]. 274 
+
+Now that optimizing Eq. (9) yields a good online policy πθt (answering Q2), we need to assess 275 
+
+whether πθt can serve as a suitable πprior for approximating the arg max in TS (Q1). If we optimize 276 
+
+πθt with oracle preference data, St will be biased towards responses with high oracle reward r⋆.277 
+
+Bias towards high-r⋆ region is generally helpful because it aligns with arg max b∈Y r(x, b) that 278 
+
+seeks high-reward responses. However, optimizing πθt only with oracle data can average out the 279 
+
+epistemic uncertainty of R, hindering the exploration efficiency. To mitigate this issue, we further 280 
+
+align πθt with RΦt using the same direct optimizer to encourage πθt to propose high-rϕtk responses 281 
+
+for individual rϕtk , leading to better approximation of arg max b∈Y r(x, b) for any sampled r. To 282 
+
+implement, we optimize Eq. (9) over a batch of data mixture pBmix  
+
+> t
+
+= γp Bt + (1 − γ)pBERM  
+
+> t
+
+, where 283 
+
+γ ∈ [0 , 1] controls the mixture ratio and BERM  
+
+> t
+
+= {(xi, ˜y+ 
+
+> i
+
+, ˜y− 
+
+> i
+
+)}bi=1 consists of preference data 284 
+
+labeled by randomly sampled individual ensemble members rϕtk . Interestingly, learning from mixed 285 
+
+preferences further boosts sample efficiency because it utilizes the internal ERM to get pseudo labels 286 
+
+instead of querying humans. This relates closely to model-based RL, for which we discuss further in 287 
+
+App. C. We summarize our practical algorithm (Algorithm 2) in App. A. 288 
+
+5 Experimental setup 289 
+
+Software . To facilitate our empirical studies, we develop a distributed learning framework for 290 
+
+online LLM alignment. The framework is based on an Actor-Learner-Oracle architecture, drawing 291 
+
+70.5                 
+
+> 0.6
+> 0.7
+> 0.8
+> 0.9
+> Win rate
+> Pythia 1B
+> Offline
+> Online
+> SEA
+> XPO
+> APL
+> 0.5
+> 0.6
+> 0.7
+> 0.8
+> 0.9 Pythia 2.8B
+> Offline
+> Online
+> SEA
+> XPO
+> APL
+> 0.5
+> 0.6
+> 0.7
+> 0.8
+> 0.9
+> DPO
+> Pythia 6.9B
+> Offline
+> Online
+> SEA
+> XPO
+> APL
+> 0.5
+> 0.6
+> 0.7
+> 0.8
+> 0.9
+> Win rate
+> Offline
+> Online
+> SEA
+> 0.5
+> 0.6
+> 0.7
+> 0.8
+> 0.9
+> Offline
+> Online
+> SEA
+> 0.5
+> 0.6
+> 0.7
+> 0.8
+> 0.9
+> IPO
+> Offline
+> Online
+> SEA
+> 010k 20k 30k 40k 50k
+> Query step
+> 0.5
+> 0.6
+> 0.7
+> 0.8
+> 0.9
+> Win rate
+> Offline
+> Online
+> SEA
+> 010k 20k 30k 40k 50k
+> Query step
+> 0.5
+> 0.6
+> 0.7
+> 0.8
+> 0.9
+> Offline
+> Online
+> SEA
+> 010k 20k 30k 40k 50k
+> Query step
+> 0.5
+> 0.6
+> 0.7
+> 0.8
+> 0.9
+> SLiC
+> Offline
+> Online
+> SEA
+
+Figure 3: Win rate comparison of different algorithms against their initial SFT models across three scales and three direct optimizers. 
+
+inspiration from Espeholt et al. [22] . We incorporate various optimizations for each component: 292 
+
+vLLM [ 33 ] for actors, DeepSpeed [ 58 ] for learners, and Mosec [ 83 ] for oracles. Detailed descriptions 293 
+
+of the framework and its efficiency benchmarks are provided in App. D & H. 294 
+
+Settings . We adopt SFT models tuned on TL;DR [ 65 ] from Huang et al. [27] , which cover three 295 
+
+scales (1B, 2.8B, 6.9B) of the Pythia family [ 7], as starting points for our experiments. We use a 296 
+
+strong scalar RM [ 40 ]4 to simulate the preference oracle. To verify the effectiveness of SEA , we 297 
+
+employ three direct optimizers: DPO [ 55 ], IPO [ 4 ], and SLiC [ 88 ] to serve as F in Eq. (9). Besides, 298 
+
+two LLM exploration methods built on DPO, APL [ 47 ] and XPO [ 79 ], are fairly compared when 299 
+
+using DPO as the optimizer. Our experiments primarily focus on the BAI setting (crowdsourcing 300 
+
+labeling), where we report the win rate of learned models against initial SFT models. All experiments 301 
+
+are repeated three times to ensure statistical significance. Please see App. F for more details. 302 
+
+6 Empirical studies 303 
+
+We next present our empirical studies highlighting five results: (1) Comparisons with baselines across 304 
+
+various direct optimizers and model scales demonstrate SEA ’s superior sample efficiency (Sec. 6.1). 305 
+
+(2) Ablations confirm that both online policy learning and active exploration contribute to sample-306 
+
+efficient alignment, and using the learned ERM for Best-of-N sampling further improves the perfor-307 
+
+mance (Sec. 6.2). (3) Different exploration strategies (Line 5 or Line 6 in Algorithm 1) are verified to 308 
+
+work best in respective settings. (4) SEA robustly outperforms baselines when GPT4o-mini is used as 309 
+
+a judge to simulate human feedback. (5) Beyond the summarization task, SEA can effectively enhance 310 
+
+general capabilities of LLMs. Results for (3-5) are deferred to App. G due to space constraints. 311 
+
+6.1 Overall comparison 312 
+
+We first compare SEA with all baselines across three model scales and three direct optimizers. APL 313 
+
+and XPO are only compared when DPO is used as the direct optimizer, because they are incompatible 314 
+
+with IPO or SLiC. Fig. 3 shows the win rate curves versus the number of query steps. Across 315 
+
+all settings, Online agents consistently improve sample efficiency over their Offline counterparts, 316 
+
+validating the necessity of Property 1 for alignment algorithms. Focusing on the first row, we observe 317 
+
+that among prior active exploration methods, XPO gives a small improvement in final performance 318 
+
+over Online (passive) at the 1B scale, but falls short for larger scales. On the other hand, APL shows a 319 
+
+significant sample efficiency boost at the 1B scale, but this advantage diminishes when scaling up and 320 
+
+it performs almost the same as Online at 6.9B scale. Our method, SEA , outperforms both offline and 321 
+
+online passive methods across all scales and all direct optimizers, confirming the critical role that Prop-322 
+
+erty 2 plays for sample-efficient alignment. Meanwhile, in the special case of using DPO as the direct 323 
+
+> 4
+
+https://huggingface.co/Skywork/Skywork-Reward-Llama-3.1-8B .
+
+8Table 1: Decomposition of different driving factors of online active alignment algorithms. Variant Inference (Test) Exploration Learn Remark 1 πθ passive πθ Online DAP [24] 2 πθ active (πθ , RΦ) SEA without ERM sync (Sec. 4.2.3) 3 πθ active (πθ ↔ R Φ) SEA 
+
+4 BoN( πθ , RΦ) passive (πθ , RΦ) -5 BoN( πθ , RΦ) active (πθ , RΦ) -6 BoN( πθ , RΦ) active (πθ ↔ R Φ) SEA with Best-of-N sampling 7 BoN( πref , RΦ) active RΦ Not learn policy [21] 
+
+optimizer, SEA also shows superior performance to prior online active exploration methods including 324 
+
+APL and XPO. We invite readers to revisit Fig. 1, where we show that SEA not only attains signif-325 
+
+icantly improved final performance (Top) but also achieves 2-5× better sample efficiency (Bottom). 326 
+
+Additionally, we note that the choice of direct optimizer is crucial for both online learning and active 327 
+
+exploration. When comparing different optimizers at the 1B scale (the first column), all Offline 328 
+
+agents demonstrate comparable learning efficiency and reach the same level of final performance 329 
+
+(around 70% win rate), but SLiC Online agent deliver slightly less improvement than DPO and IPO 330 
+
+Online agents. Besides, when incorporating active exploration, the SEA agent using DPO shows 331 
+
+much larger improvement than the other two. This suggests that selecting the most suitable policy 332 
+
+optimizer coupled with active exploration would yield the best agent. 333 
+
+6.2 Ablation analysis 334 
+
+We decompose SEA into distinct components to evaluate their individual contributions. Table 1 335 
+
+shows the three axes we dissect SEA on, including inference methods, exploration strategies, and 336 
+
+learning components. We construct seven agent variants from different combinations, which cover 337 
+
+two closely related baselines [ 21 , 24 ]. We show in Fig. 4 the performance curves of each variant, all 338 
+
+trained with DPO on 1B scale. 339 0.6           
+
+> 0.8
+> Policy
+> Win rate learning curves
+> 123
+> 010k 20k 30k 40k 50k
+> Query step
+> 0.6
+> 0.8
+> BoN
+> 4567
+
+Figure 4: Win rate comparison of dif-ferent agent variants when using (Left) 
+
+policy and (Right) Best-of-N sampling for inference. 
+
+The top plot compares variants that directly use the policy for 340 
+
+inference. Comparing with the vanilla online method (Variant-341 
+
+1), we observe learning ERM for active exploration (Variant-2) 342 
+
+is beneficial, and aligning πθt with RΦt (Variant-3) further 343 
+
+improves sample efficiency, which validate our algorithm. Ad-344 
+
+ditionally, since a reward model is learned within the agent, we 345 
+
+can incorporate inference-time alignment via Best-of-N (BoN) 346 
+
+sampling [ 48 , 72 ]. This also facilitates a direct comparison be-347 
+
+tween SEA and Dwaracherla et al. [21] , which learns a similar 348 
+
+ERM for both exploration and BoN but does not align the LLM 349 
+
+policy. Results in the bottom plot of Fig. 4 suggest a similar 350 
+
+trend that Variant-6 ≻ Variant-5 ≻ Variant-4. The Variant-351 
+
+7 [ 21 ], however, ceases to improve after ERM converges due 352 
+
+to the limited capability of its fixed policy. 353 
+
+7 Conclusion 354 
+
+In this paper, we study the problem of LLM alignment through the lens of contextual dueling bandits 355 
+
+and propose a Thompson sampling-based algorithm to achieve sample-efficient alignment. We 356 
+
+incorporate three techniques, including epistemic reward model, policy-guided search and mixed 357 
+
+preference learning to yield a practically efficient online alignment method. Extensive empirical 358 
+
+evaluation demonstrates the superior sample efficiency of our method compared to existing baselines. 359 
+
+To our knowledge, this is the first work to study active exploration for online LLM alignment with 360 
+
+fully online experimental verification. We hope our positive empirical results, along with the open-361 
+
+sourced codebase, will encourage future research in this direction, ultimately enabling LLMs to 362 
+
+achieve superhuman intelligence with an affordable amount of human feedback. 363 
+
+9References 364 
+
+[1] Josh Achiam, Steven Adler, Sandhini Agarwal, Lama Ahmad, Ilge Akkaya, Florencia Leoni 365 
+
+Aleman, Diogo Almeida, Janko Altenschmidt, Sam Altman, Shyamal Anadkat, et al. Gpt-4 366 
+
+technical report. arXiv preprint arXiv:2303.08774 , 2023. 367 
+
+[2] Jean-Yves Audibert and Sébastien Bubeck. Best arm identification in multi-armed bandits. In 368 
+
+Conference on learning theory , pages 41–53, 2010. 369 
+
+[3] Peter Auer, Nicolò Cesa-Bianchi, and Paul Fischer. Finite-time analysis of the multiarmed 370 
+
+bandit problem. Machine Learning , 47:235–256, 2002. 371 
+
+[4] Mohammad Gheshlaghi Azar, Zhaohan Daniel Guo, Bilal Piot, Remi Munos, Mark Rowland, 372 
+
+Michal Valko, and Daniele Calandriello. A general theoretical paradigm to understand learning 373 
+
+from human preferences. In International Conference on Artificial Intelligence and Statistics ,374 
+
+pages 4447–4455. PMLR, 2024. 375 
+
+[5] Yuntao Bai, Andy Jones, Kamal Ndousse, Amanda Askell, Anna Chen, Nova DasSarma, Dawn 376 
+
+Drain, Stanislav Fort, Deep Ganguli, Tom Henighan, et al. Training a helpful and harmless 377 
+
+assistant with reinforcement learning from human feedback. arXiv preprint arXiv:2204.05862 ,378 
+
+2022. 379 
+
+[6] Christopher Berner, Greg Brockman, Brooke Chan, Vicki Cheung, Przemysław D˛ ebiak, Christy 380 
+
+Dennison, David Farhi, Quirin Fischer, Shariq Hashme, Chris Hesse, et al. Dota 2 with large 381 
+
+scale deep reinforcement learning. arXiv preprint arXiv:1912.06680 , 2019. 382 
+
+[7] Stella Biderman, Hailey Schoelkopf, Quentin Gregory Anthony, Herbie Bradley, Kyle O’Brien, 383 
+
+Eric Hallahan, Mohammad Aflah Khan, Shivanshu Purohit, USVSN Sai Prashanth, Edward 384 
+
+Raff, et al. Pythia: A suite for analyzing large language models across training and scaling. In 385 
+
+International Conference on Machine Learning , pages 2397–2430. PMLR, 2023. 386 
+
+[8] Ralph Allan Bradley and Milton E. Terry. Rank analysis of incomplete block designs: I. the 387 
+
+method of paired comparisons. Biometrika , 39(3/4):324–345, 1952. 388 
+
+[9] Sébastien Bubeck, Rémi Munos, and Gilles Stoltz. Pure exploration in multi-armed bandits 389 
+
+problems. In Algorithmic Learning Theory: 20th International Conference, ALT 2009, Porto, 390 
+
+Portugal, October 3-5, 2009. Proceedings 20 , pages 23–37. Springer, 2009. 391 
+
+[10] Sébastien Bubeck, Varun Chandrasekaran, Ronen Eldan, Johannes Gehrke, Eric Horvitz, Ece 392 
+
+Kamar, Peter Lee, Yin Tat Lee, Yuanzhi Li, Scott Lundberg, et al. Sparks of artificial general 393 
+
+intelligence: Early experiments with gpt-4. arXiv preprint arXiv:2303.12712 , 2023. 394 
+
+[11] Róbert Busa-Fekete, Balázs Szörényi, Paul Weng, Weiwei Cheng, and Eyke Hüllermeier. 395 
+
+Preference-based reinforcement learning: evolutionary direct policy search using a preference-396 
+
+based racing algorithm. Machine learning , 97:327–351, 2014. 397 
+
+[12] Olivier Chapelle and Lihong Li. An empirical evaluation of thompson sampling. Advances in 398 
+
+neural information processing systems , 24, 2011. 399 
+
+[13] OpenAI ChatGPT. ChatGPT. https://chatgpt.com/ , 2024. Accessed: 2024-09-30. 400 
+
+[14] Changyu Chen, Zichen Liu, Chao Du, Tianyu Pang, Qian Liu, Arunesh Sinha, Pradeep Varakan-401 
+
+tham, and Min Lin. Bootstrapping language models with dpo implicit rewards. arXiv preprint 402 
+
+arXiv:2406.09760 , 2024. 403 
+
+[15] Paul F Christiano, Jan Leike, Tom Brown, Miljan Martic, Shane Legg, and Dario Amodei. Deep 404 
+
+reinforcement learning from human preferences. Advances in neural information processing 405 
+
+systems , 30, 2017. 406 
+
+[16] Ganqu Cui, Lifan Yuan, Ning Ding, Guanming Yao, Wei Zhu, Yuan Ni, Guotong Xie, Zhiyuan 407 
+
+Liu, and Maosong Sun. Ultrafeedback: Boosting language models with high-quality feedback, 408 
+
+2023. 409 
+
+10 [17] Nirjhar Das, Souradip Chakraborty, Aldo Pacchiano, and Sayak Ray Chowdhury. Provably 410 
+
+sample efficient rlhf via active preference optimization. arXiv preprint arXiv:2402.10500 , 2024. 411 
+
+[18] Hanze Dong, Wei Xiong, Bo Pang, Haoxiang Wang, Han Zhao, Yingbo Zhou, Nan Jiang, Doyen 412 
+
+Sahoo, Caiming Xiong, and Tong Zhang. Rlhf workflow: From reward modeling to online rlhf. 413 
+
+arXiv preprint arXiv:2405.07863 , 2024. 414 
+
+[19] Yann Dubois, Balázs Galambosi, Percy Liang, and Tatsunori B Hashimoto. Length-controlled 415 
+
+alpacaeval: A simple way to debias automatic evaluators. arXiv preprint arXiv:2404.04475 ,416 
+
+2024. 417 
+
+[20] Miroslav Dudík, Katja Hofmann, Robert E Schapire, Aleksandrs Slivkins, and Masrour Zoghi. 418 
+
+Contextual dueling bandits. In Conference on Learning Theory , pages 563–587. PMLR, 2015. 419 
+
+[21] Vikranth Dwaracherla, Seyed Mohammad Asghari, Botao Hao, and Benjamin Van Roy. Efficient 420 
+
+exploration for llms. In International Conference on Machine Learning , 2024. 421 
+
+[22] Lasse Espeholt, Hubert Soyer, Remi Munos, Karen Simonyan, Vlad Mnih, Tom Ward, Yotam 422 
+
+Doron, Vlad Firoiu, Tim Harley, Iain Dunning, et al. Impala: Scalable distributed deep-rl 423 
+
+with importance weighted actor-learner architectures. In International conference on machine 424 
+
+learning , pages 1407–1416. PMLR, 2018. 425 
+
+[23] Javier González, Zhenwen Dai, Andreas Damianou, and Neil D Lawrence. Preferential bayesian 426 
+
+optimization. In International Conference on Machine Learning , pages 1282–1291. PMLR, 427 
+
+2017. 428 
+
+[24] Shangmin Guo, Biao Zhang, Tianlin Liu, Tianqi Liu, Misha Khalman, Felipe Llinares, Alexan-429 
+
+dre Rame, Thomas Mesnard, Yao Zhao, Bilal Piot, et al. Direct language model alignment from 430 
+
+online ai feedback. arXiv preprint arXiv:2402.04792 , 2024. 431 
+
+[25] Fredrik K Gustafsson, Martin Danelljan, and Thomas B Schon. Evaluating scalable bayesian 432 
+
+deep learning methods for robust computer vision. In Proceedings of the IEEE/CVF conference 433 
+
+on computer vision and pattern recognition workshops , pages 318–319, 2020. 434 
+
+[26] Jian Hu, Xibin Wu, Weixun Wang, Dehao Zhang, Yu Cao, et al. Openrlhf: An easy-to-use, 435 
+
+scalable and high-performance rlhf framework. arXiv preprint arXiv:2405.11143 , 2024. 436 
+
+[27] Shengyi Huang, Michael Noukhovitch, Arian Hosseini, Kashif Rasul, Weixun Wang, and Lewis 437 
+
+Tunstall. The n+ implementation details of rlhf with ppo: A case study on tl; dr summarization. 438 
+
+arXiv preprint arXiv:2403.17031 , 2024. 439 
+
+[28] Michael Janner, Justin Fu, Marvin Zhang, and Sergey Levine. When to trust your model: 440 
+
+Model-based policy optimization. Advances in neural information processing systems , 32, 441 
+
+2019. 442 
+
+[29] Natasha Jaques, Judy Hanwen Shen, Asma Ghandeharioun, Craig Ferguson, Agata Lapedriza, 443 
+
+Noah Jones, Shixiang Shane Gu, and Rosalind Picard. Human-centric dialog training via offline 444 
+
+reinforcement learning. arXiv preprint arXiv:2010.05848 , 2020. 445 
+
+[30] Dongfu Jiang, Xiang Ren, and Bill Yuchen Lin. Llm-blender: Ensembling large language 446 
+
+models with pairwise comparison and generative fusion. In Proceedings of the 61th Annual 447 
+
+Meeting of the Association for Computational Linguistics (ACL 2023) , 2023. 448 
+
+[31] Julian Katz-Samuels, Lalit Jain, Kevin G Jamieson, et al. An empirical process approach to the 449 
+
+union bound: Practical algorithms for combinatorial and linear bandits. Advances in Neural 450 
+
+Information Processing Systems , 33:10371–10382, 2020. 451 
+
+[32] Rahul Kidambi, Aravind Rajeswaran, Praneeth Netrapalli, and Thorsten Joachims. Morel: 452 
+
+Model-based offline reinforcement learning. Advances in neural information processing systems ,453 
+
+33:21810–21823, 2020. 454 
+
+[33] Woosuk Kwon, Zhuohan Li, Siyuan Zhuang, Ying Sheng, Lianmin Zheng, Cody Hao Yu, 455 
+
+Joseph E. Gonzalez, Hao Zhang, and Ion Stoica. Efficient memory management for large lan-456 
+
+guage model serving with pagedattention. In Proceedings of the ACM SIGOPS 29th Symposium 457 
+
+on Operating Systems Principles , 2023. 458 
+
+11 [34] Balaji Lakshminarayanan, Alexander Pritzel, and Charles Blundell. Simple and scalable 459 
+
+predictive uncertainty estimation using deep ensembles. Advances in neural information 460 
+
+processing systems , 30, 2017. 461 
+
+[35] Nathan Lambert, Valentina Pyatkin, Jacob Morrison, LJ Miranda, Bill Yuchen Lin, Khyathi 462 
+
+Chandu, Nouha Dziri, Sachin Kumar, Tom Zick, Yejin Choi, Noah A. Smith, and Hannaneh 463 
+
+Hajishirzi. Rewardbench: Evaluating reward models for language modeling, 2024. 464 
+
+[36] Sascha Lange, Thomas Gabel, and Martin Riedmiller. Batch reinforcement learning. In 465 
+
+Reinforcement learning: State-of-the-art , pages 45–73. Springer, 2012. 466 
+
+[37] Sergey Levine, Aviral Kumar, George Tucker, and Justin Fu. Offline reinforcement learning: 467 
+
+Tutorial, review, and perspectives on open problems. arXiv preprint arXiv:2005.01643 , 2020. 468 
+
+[38] Xuechen Li, Tianyi Zhang, Yann Dubois, Rohan Taori, Ishaan Gulrajani, Carlos Guestrin, Percy 469 
+
+Liang, and Tatsunori B. Hashimoto. Alpacaeval: An automatic evaluator of instruction-following 470 
+
+models. https://github.com/tatsu-lab/alpaca_eval , 5 2023. 471 
+
+[39] Xuheng Li, Heyang Zhao, and Quanquan Gu. Feel-good thompson sampling for contextual 472 
+
+dueling bandits. arXiv preprint arXiv:2404.06013 , 2024. 473 
+
+[40] Chris Yuhao Liu, Liang Zeng, Liu Jiacai, Rui Yan, Jujie He, Chaojie Wang, Shuicheng Yan, 474 
+
+Yang Liu, and Yahui Zhou. Skywork reward model series. arXiv preprint arXiv:2410.18451 ,475 
+
+2024. 476 
+
+[41] Zichen Liu, Siyi Li, Wee Sun Lee, Shuicheng Yan, and Zhongwen Xu. Efficient offline policy 477 
+
+optimization with a learned model. In International Conference on Learning Representations ,478 
+
+2023. 479 
+
+[42] Zichen Liu, Chao Du, Wee Sun Lee, and Min Lin. Locality sensitive sparse encoding for 480 
+
+learning world models online. In International Conference on Learning Representations , 2024. 481 
+
+[43] Xiuyuan Lu and Benjamin Van Roy. Ensemble sampling. Advances in neural information 482 
+
+processing systems , 30, 2017. 483 
+
+[44] Viraj Mehta, Vikramjeet Das, Ojash Neopane, Yijia Dai, Ilija Bogunovic, Jeff Schneider, and 484 
+
+Willie Neiswanger. Sample efficient reinforcement learning from human feedback via active 485 
+
+exploration. arXiv preprint arxiv:2312.00267 , 2023. 486 
+
+[45] Luckeciano C Melo, Panagiotis Tigas, Alessandro Abate, and Yarin Gal. Deep bayesian active 487 
+
+learning for preference modeling in large language models. arXiv preprint arXiv:2406.10023 ,488 
+
+2024. 489 
+
+[46] Yu Meng, Mengzhou Xia, and Danqi Chen. Simpo: Simple preference optimization with a 490 
+
+reference-free reward. arXiv preprint arXiv:2405.14734 , 2024. 491 
+
+[47] William Muldrew, Peter Hayes, Mingtian Zhang, and David Barber. Active preference learning 492 
+
+for large language models. In International Conference on Machine Learning , 2024. 493 
+
+[48] Reiichiro Nakano, Jacob Hilton, Suchir Balaji, Jeff Wu, Long Ouyang, Christina Kim, Christo-494 
+
+pher Hesse, Shantanu Jain, Vineet Kosaraju, William Saunders, et al. Webgpt: Browser-assisted 495 
+
+question-answering with human feedback. arXiv preprint arXiv:2112.09332 , 2021. 496 
+
+[49] Andrew Y Ng and Stuart Russell. Algorithms for inverse reinforcement learning. In Interna-497 
+
+tional Conference on Machine Learning , volume 1, page 2, 2000. 498 
+
+[50] Long Ouyang, Jeffrey Wu, Xu Jiang, Diogo Almeida, Carroll Wainwright, Pamela Mishkin, 499 
+
+Chong Zhang, Sandhini Agarwal, Katarina Slama, Alex Ray, et al. Training language models to 500 
+
+follow instructions with human feedback. Advances in neural information processing systems ,501 
+
+35:27730–27744, 2022. 502 
+
+[51] Xue Bin Peng, Aviral Kumar, Grace Zhang, and Sergey Levine. Advantage-weighted regression: 503 
+
+Simple and scalable off-policy reinforcement learning. arXiv preprint arXiv:1910.00177 , 2019. 504 
+
+12 [52] Jan Peters and Stefan Schaal. Reinforcement learning by reward-weighted regression for 505 
+
+operational space control. In International Conference on Machine Learning , pages 745–750, 506 
+
+2007. 507 
+
+[53] Moritz Philipp and Nishihara Robert. Plasma: A high-performance shared-508 
+
+memory object store, 2017. URL https://arrow.apache.org/blog/2017/08/08/ 509 
+
+plasma-in-memory-object-store/ .510 
+
+[54] Chao Qin, Zheng Wen, Xiuyuan Lu, and Benjamin Van Roy. An analysis of ensemble sampling. 511 
+
+Advances in Neural Information Processing Systems , 35:21602–21614, 2022. 512 
+
+[55] Rafael Rafailov, Archit Sharma, Eric Mitchell, Christopher D Manning, Stefano Ermon, and 513 
+
+Chelsea Finn. Direct preference optimization: Your language model is secretly a reward model. 514 
+
+Advances in Neural Information Processing Systems , 37, 2023. 515 
+
+[56] Rafael Rafailov, Joey Hejna, Ryan Park, and Chelsea Finn. From r to q*: Your language model 516 
+
+is secretly a q-function. In Conference on Language Modeling , 2024. 517 
+
+[57] Samyam Rajbhandari, Jeff Rasley, Olatunji Ruwase, and Yuxiong He. Zero: Memory optimiza-518 
+
+tions toward training trillion parameter models. In SC20: International Conference for High 519 
+
+Performance Computing, Networking, Storage and Analysis , pages 1–16. IEEE, 2020. 520 
+
+[58] Jeff Rasley, Samyam Rajbhandari, Olatunji Ruwase, and Yuxiong He. Deepspeed: System 521 
+
+optimizations enable training deep learning models with over 100 billion parameters. In 522 
+
+Proceedings of the 26th ACM SIGKDD International Conference on Knowledge Discovery & 523 
+
+Data Mining , pages 3505–3506, 2020. 524 
+
+[59] Herbert Robbins. Some aspects of the sequential design of experiments. Bulletin of the American 525 
+
+Mathematics Society , 58:527–535, 1952. 526 
+
+[60] Daniel Russo. Simple bayesian algorithms for best arm identification. In Conference on 527 
+
+Learning Theory , pages 1417–1418. PMLR, 2016. 528 
+
+[61] Daniel J Russo, Benjamin Van Roy, Abbas Kazerouni, Ian Osband, Zheng Wen, et al. A tutorial 529 
+
+on thompson sampling. Foundations and Trends® in Machine Learning , 11(1):1–96, 2018. 530 
+
+[62] Aadirupa Saha. Optimal algorithms for stochastic contextual preference bandits. Advances in 531 
+
+Neural Information Processing Systems , 34:30050–30062, 2021. 532 
+
+[63] Julian Schrittwieser, Thomas Hubert, Amol Mandhane, Mohammadamin Barekatain, Ioannis 533 
+
+Antonoglou, and David Silver. Online and offline reinforcement learning by planning with a 534 
+
+learned model. Advances in Neural Information Processing Systems , 34:27580–27591, 2021. 535 
+
+[64] John Schulman, Filip Wolski, Prafulla Dhariwal, Alec Radford, and Oleg Klimov. Proximal 536 
+
+policy optimization algorithms. arXiv preprint arXiv:1707.06347 , 2017. 537 
+
+[65] Nisan Stiennon, Long Ouyang, Jeffrey Wu, Daniel Ziegler, Ryan Lowe, Chelsea Voss, Alec 538 
+
+Radford, Dario Amodei, and Paul F Christiano. Learning to summarize with human feedback. 539 
+
+Advances in Neural Information Processing Systems , 33:3008–3021, 2020. 540 
+
+[66] Richard S. Sutton. Integrated architectures for learning, planning, and reacting based on 541 
+
+approximating dynamic programming. In Machine Learning Proceedings , pages 216–224. 542 
+
+Morgan Kaufmann, 1990. 543 
+
+[67] Richard S. Sutton and Andrew G. Barto. Reinforcement Learning: An Introduction . The MIT 544 
+
+Press, second edition, 2018. 545 
+
+[68] Richard S Sutton, Michael Bowling, and Patrick M Pilarski. The alberta plan for ai research. 546 
+
+arXiv preprint arXiv:2208.11173 , 2022. 547 
+
+[69] Fahim Tajwar, Anikait Singh, Archit Sharma, Rafael Rafailov, Jeff Schneider, Tengyang Xie, 548 
+
+Stefano Ermon, Chelsea Finn, and Aviral Kumar. Preference fine-tuning of llms should leverage 549 
+
+suboptimal, on-policy data. arXiv preprint arXiv:2404.14367 , 2024. 550 
+
+13 [70] Yunhao Tang, Daniel Zhaohan Guo, Zeyu Zheng, Daniele Calandriello, Yuan Cao, Eugene 551 
+
+Tarassov, Rémi Munos, Bernardo Ávila Pires, Michal Valko, Yong Cheng, et al. Understand-552 
+
+ing the performance gap between online and offline alignment algorithms. arXiv preprint 553 
+
+arXiv:2405.08448 , 2024. 554 
+
+[71] William R Thompson. On the likelihood that one unknown probability exceeds another in view 555 
+
+of the evidence of two samples. Biometrika , 25(3-4):285–294, 1933. 556 
+
+[72] Hugo Touvron, Louis Martin, Kevin Stone, Peter Albert, Amjad Almahairi, Yasmine Babaei, 557 
+
+Nikolay Bashlykov, Soumya Batra, Prajjwal Bhargava, Shruti Bhosale, et al. Llama 2: Open 558 
+
+foundation and fine-tuned chat models. arXiv preprint arXiv:2307.09288 , 2023. 559 
+
+[73] Ashish Vaswani, Noam Shazeer, Niki Parmar, Jakob Uszkoreit, Llion Jones, Aidan N Gomez, 560 
+
+Ł ukasz Kaiser, and Illia Polosukhin. Attention is all you need. In Advances in Neural 561 
+
+Information Processing Systems , volume 30, 2017. 562 
+
+[74] Haoxiang Wang, Wei Xiong, Tengyang Xie, Han Zhao, and Tong Zhang. Interpretable 563 
+
+preferences via multi-objective reward modeling and mixture-of-experts. arXiv preprint 564 
+
+arXiv:2406.12845 , 2024. 565 
+
+[75] Jiayi Weng, Min Lin, Shengyi Huang, Bo Liu, Denys Makoviichuk, Viktor Makoviychuk, 566 
+
+Zichen Liu, Yufan Song, Ting Luo, Yukun Jiang, Zhongwen Xu, and Shuicheng Yan. EnvPool: 567 
+
+A highly parallel reinforcement learning environment execution engine. In Advances in Neural 568 
+
+Information Processing Systems , volume 35, pages 22409–22421, 2022. 569 
+
+[76] Ronald J Williams. Simple statistical gradient-following algorithms for connectionist reinforce-570 
+
+ment learning. Machine learning , 8:229–256, 1992. 571 
+
+[77] Christian Wirth, Riad Akrour, Gerhard Neumann, and Johannes Fürnkranz. A survey of 572 
+
+preference-based reinforcement learning methods. Journal of Machine Learning Research , 18 573 
+
+(136):1–46, 2017. 574 
+
+[78] Huasen Wu and Xin Liu. Double thompson sampling for dueling bandits. Advances in neural 575 
+
+information processing systems , 29, 2016. 576 
+
+[79] Tengyang Xie, Dylan J Foster, Akshay Krishnamurthy, Corby Rosset, Ahmed Awadallah, and 577 
+
+Alexander Rakhlin. Exploratory preference optimization: Harnessing implicit q*-approximation 578 
+
+for sample-efficient rlhf. arXiv preprint arXiv:2405.21046 , 2024. 579 
+
+[80] Wei Xiong, Hanze Dong, Chenlu Ye, Ziqi Wang, Han Zhong, Heng Ji, Nan Jiang, and Tong 580 
+
+Zhang. Iterative preference learning from human feedback: Bridging theory and practice for 581 
+
+rlhf under kl-constraint. In Forty-first International Conference on Machine Learning , 2024. 582 
+
+[81] Jing Xu, Andrew Lee, Sainbayar Sukhbaatar, and Jason Weston. Some things are more 583 
+
+cringe than others: Preference optimization with the pairwise cringe loss. arXiv preprint 584 
+
+arXiv:2312.16682 , 2023. 585 
+
+[82] Fan Yang, Gabriel Barth-Maron, Piotr Sta´ nczyk, Matthew Hoffman, Siqi Liu, Manuel Kroiss, 586 
+
+Aedan Pope, and Alban Rrustemi. Launchpad: A programming model for distributed machine 587 
+
+learning research. arXiv preprint arXiv:2106.04516 , 2021. 588 
+
+[83] Keming Yang, Zichen Liu, and Philip Cheng. MOSEC: Model Serving made Efficient in the 589 
+
+Cloud. https://github.com/mosecorg/mosec , 2021. 590 
+
+[84] Tianhe Yu, Aviral Kumar, Rafael Rafailov, Aravind Rajeswaran, Sergey Levine, and Chelsea 591 
+
+Finn. Combo: Conservative offline model-based policy optimization. Advances in neural 592 
+
+information processing systems , 34:28954–28967, 2021. 593 
+
+[85] Yisong Yue, Josef Broder, Robert Kleinberg, and Thorsten Joachims. The k-armed dueling 594 
+
+bandits problem. Journal of Computer and System Sciences , 78(5):1538–1556, 2012. 595 
+
+[86] Shenao Zhang, Donghan Yu, Hiteshi Sharma, Ziyi Yang, Shuohang Wang, Hany Hassan, 596 
+
+and Zhaoran Wang. Self-exploring language models: Active preference elicitation for online 597 
+
+alignment. arXiv preprint arXiv:2405.19332 , 2024. 598 
+
+14 [87] Xuan Zhang, Chao Du, Tianyu Pang, Qian Liu, Wei Gao, and Min Lin. Chain of preference 599 
+
+optimization: Improving chain-of-thought reasoning in llms. Advances in Neural Information 600 
+
+Processing Systems , 38, 2024. 601 
+
+[88] Yao Zhao, Rishabh Joshi, Tianqi Liu, Misha Khalman, Mohammad Saleh, and Peter J Liu. Slic-602 
+
+hf: Sequence likelihood calibration with human feedback. arXiv preprint arXiv:2305.10425 ,603 
+
+2023. 604 
+
+[89] Lianmin Zheng, Wei-Lin Chiang, Ying Sheng, Siyuan Zhuang, Zhanghao Wu, Yonghao Zhuang, 605 
+
+Zi Lin, Zhuohan Li, Dacheng Li, Eric Xing, et al. Judging llm-as-a-judge with mt-bench and 606 
+
+chatbot arena. Advances in Neural Information Processing Systems , 36:46595–46623, 2023. 607 
+
+[90] Banghua Zhu, Michael Jordan, and Jiantao Jiao. Principled reinforcement learning with human 608 
+
+feedback from pairwise or k-wise comparisons. In Proceedings of the 40th International 609 
+
+Conference on Machine Learning , pages 43037–43067. PMLR, 2023. 610 
+
+[91] Yinglun Zhu, Dylan J Foster, John Langford, and Paul Mineiro. Contextual bandits with 611 
+
+large action spaces: Made practical. In International Conference on Machine Learning , pages 612 
+
+27428–27453. PMLR, 2022. 613 
+
+15 A Algorithm details 614 
+
+While Algorithm 1 presents our Thompson sampling algorithm for LLM alignment, it is intractable 615 
+
+and centered around the reward posterior modeling. We next present a practical sample-efficient 616 
+
+alignment agent that learns both an LLM policy and an epistemic reward model (ERM) online. 617 
+
+Algorithm 2 Sample-efficient alignment ( SEA ) for LLMs 
+
+Input: Reference policy πref , DAP loss function F , prompt distribution pX , unknown but queryable preference oracle P, mixture ratio γ.1: Initialize experience D0 ← ∅, policy πθ0 ← πref , and ERM weights Φ0 = {ϕ0 
+
+> k
+
+}Kk=1 randomly. 2: for t = 1 , . . . , T do 
+
+3: Receive a prompt xt ∼ pX .4: Sample M responses yit ∼ πθt−1 (·| xt) to construct St = {yit }Mi=1 .5: Sample ϕ ∼ Uniform(Φ t−1) and set yt ← arg max b∈S t rϕ(xt, b). // Select 1st response y.// E&E objective: aligning an online system. 
+
+6: repeat 
+
+Sample ϕ ∼ Uniform(Φ t−1) and set y′ 
+
+> t
+
+← arg max b∈S t rϕ(xt, b). // Select 2nd response y′.
+
+until y′
+
+> t
+
+̸ = yt
+
+> // BAI objective: labeling via crowdsourcing.
+
+7: Set y′ 
+
+> t
+
+← arg max b∈S t Vϕ [σ (rϕ(xt, yt) − rϕ(xt, b))] , // OR select 2nd response y′.
+
+where Vϕ [·] computes variance across ensemble members of Φt−1.8: if g < γ for g ∼ Uniform(0 , 1) then 
+
+Label {yt, y′
+
+> t
+
+} with P to obtain Bt = {(xt, y+ 
+
+> t
+
+, y− 
+
+> t
+
+)} and update experience Dt ← D t−1
+
+S Bt.
+
+else 
+
+Use RΦt−1 to get synthetic labels and obtain Bt = {(xi, ˜y+ 
+
+> i
+
+, ˜y− 
+
+> i
+
+)}.
+
+end if 
+
+9: Update ERM with the regularized NLL loss (Eq. (8)): 
+
+Φt ← Φt−1 − αR∇ΦLR(Φ t−1|D t).
+
+> // Reward learning.
+
+10: Update policy with the direct optimizer (Eq. (9)): 
+
+θt ← θt−1 − απ ∇θ Lπ (θt−1|B t, π ref , F ).
+
+> // Policy learning.
+
+11: end for 
+
+In Algorithm 2, we describe an online setting where a single example is processed at each time t618 
+
+(batch size b = 1 ). This is mainly for notational convenience, while in implementation we set b to 619 
+
+be the training batch size (e.g., 128 ). We instantiate the reward posterior with an epistemic reward 620 
+
+model, which allows for efficient incremental update and sampling. We also replace the global 621 
+
+optimization ( arg max b∈Y ) with a policy-guided local search among proposals sampled from the 622 
+
+latest online policy πθt−1 . At each time t, we update ERM weights Φ with m gradient steps with 623 
+
+randomly sampled batches from the experience Dt. We find setting m = 5 suffices to achieve a 624 
+
+reasonable accuracy. The policy parameters θ are updated using mixed preference data, with a 625 
+
+γ proportion being the real environment experience and the remaining (1 − γ) from the ERM’s 626 
+
+synthetic experience. Note that the synthetic experience is not added into Dt to ensure reward 627 
+
+learning always uses ground truth environment data. 628 
+
+We consider the following three direct optimizers in our experiments: 629 
+
+• DPO [55]: 630 
+
+Fθ (x, y+, y−, π ref ) = − log σ
+
+
+
+β log πθ (y+|x) πref (y−|x)
+
+πref (y+|x) πθ (y−|x)
+
+
+
+(10) • IPO [4]: 631 
+
+Fθ (x, y+, y−, π ref ) = 
+
+
+
+log 
+
+ πθ (y+|x) πref (y−|x)
+
+πref (y+|x) πθ (y−|x)
+
+
+
+− 12β
+
+2
+
+(11) • SLiC [88]: 632 
+
+Fθ (x, y+, y−, π ref ) = max 
+
+
+
+0, 1 − β log πθ (y+|x) πref (y−|x)
+
+πref (y+|x) πθ (y−|x)
+
+
+
+(12) 16 where β controls the rate of deviation of πθ from πref .633 
+
+B Full related works 634 
+
+RLHF and DAP . Commonly adopted RLHF pipelines [ 15 , 65 , 5 , 50 ] first learn a proxy RM with 635 
+
+a negative log-likelihood loss: 636 
+
+Lr (ϕ|D ) = −E(x,y+,y−)∼pD
+
+log σ  rϕ
+
+ x, y+ − rϕ
+
+ x, y− , (13) where D is collected by querying human annotators using a behavior policy πref (typically the 637 
+
+supervised fine-tuned policy πsft ). Afterwards, offline RL 5 [ 36 , 37 ] is conducted to learn πθ with 638 
+
+respect to the learned reward rϕ internally within the agent (Fig. 2a). However, the learned model πθ639 
+
+might be inaccurate at regions out of the distribution (o.o.d.) of πref because little training data can 640 
+
+be collected. An effective remedy is to incorporate a pessimistic term to combat the distributional 641 
+
+shift, leading to a reformulation of the von Neumann winner policy objective in Eq. (4) as 642 
+
+J(πθ ) = E
+
+> x∼pX
+
+E 
+
+> y∼πθ(·| x)
+
+"
+
+rϕ(x, y)
+
+| {z } 
+
+> estimated r⋆
+
+− β log πθ (y|x)
+
+πref (y|x)
+
+| {z }
+
+> o.o.d. reward penalty
+
+#
+
+(14) 
+
+= E
+
+> x∼pX
+
+
+
+E  
+
+> y∼πθ(·| x)
+
+[rϕ(x, y)] − βD KL (πθ (·| x)|| πref (·| x)) 
+
+
+
+(15) which converts an online objective regarding the human’s implicit reward r⋆ to an offline objective 643 
+
+regarding the proxy reward rϕ. The KL penalty in Eq. (15) is widely used for language model 644 
+
+fine-tuning [ 29 , 80 ], and PPO [ 64 ] has become a default RL optimizer to maximize the KL-regularized 645 
+
+reward. However, the performance of RLHF is guaranteed only if the preference data D induced 646 
+
+by πref adequately covers π⋆ [ 90 ], which is often approximated by updating πref with the latest 647 
+
+(improved) πθ for re-sampling a batch of online experience and repeating Eq. (13) and (15). Prior 648 
+
+works typically focus on offline or iterative online (with only a few iterations) settings [ 80 , 18 ], 649 
+
+which may compromise sample efficiency (Property 1). 650 
+
+True online RLHF is difficult due to the complexity and instability of RL optimizers. For example, 651 
+
+Huang et al. [27] openly reproduces offline RLHF scaling behaviors but requires many implementation 652 
+
+tricks for training, highlighting the difficulties of an online counterpart. Fortunately, the introduction 653 
+
+of DAP (or direct optimizers ) largely simplifies and stabilizes fine-tuning by conducting contrastive 654 
+
+supervised learning directly on D (Fig. 2b). While most DAP works focus on learning from a fixed 655 
+
+offline preference dataset (, including Zhao et al. [88] , Rafailov et al. [55] , Azar et al. [4] , Meng 656 
+
+et al. [46] , Zhang et al. [87] ), iterative DPO [ 81 ] observes improved results when allowing iterative 657 
+
+online interaction. Guo et al. [24] further propose OAIF to make DAP faithfully online, satisfying 658 
+
+Property 1, and demonstrate that online learning prevents over-fitting and yields continual performance 659 
+
+improvement. Nevertheless, it still employs passive exploration strategies (using y, y′ ∼ πθ ), 660 
+
+hindering sample efficiency (Property 2). 661 
+
+Online exploration in LLMs . A line of recent works [ 44 , 17 , 45 , 21 ] adopts the fully online 662 
+
+bandit formulation and incorporates active exploration with uncertainty-aware RMs for response 663 
+
+selection (Fig. 2c). In particular, Mehta et al. [44] consider the E&E setting and develop a UCB-664 
+
+style [ 3 ] algorithm; Das et al. [17] instead select the dueling responses with the most uncertain 665 
+
+preference estimate, targeting the BAI setting in a pure exploration way; unlike the above, Melo et al. 666 
+
+[45] view the problem from the angle of pool-based active learning and propose an acquisition function 667 
+
+based on both entropy and epistemic uncertainty; finally, the work by Dwaracherla et al. [21] is the 668 
+
+closest to ours in the sense that they apply double Thompson sampling (DTS) [ 78 ] for exploration, 669 
+
+but DTS is designed for the E&E setting while they evaluate anytime average performance as in the 670 
+
+BAI setting. We will show in App. G.1 that pure exploration by Das et al. [17] is not the best choice 671 
+
+for BAI, and the objective mismatch in Dwaracherla et al. [21] could lead to suboptimal performance 672 
+
+in respective settings. Meanwhile, all these works primarily focus on learning uncertainty-aware RMs 673 
+
+online without updating LLM policies. Therefore, all responses are sampled from a fixed proposal 674 
+
+policy πβ (or even a fixed dataset), making the data coverage a critical concern. 675 
+
+Another line of research updates LLMs online while incorporating exploration. Zhang et al. [86] 676 
+
+and Xie et al. [79] independently propose to learn an optimistic RM to encourage exploration. They 677 
+
+> 5
+
+Offline in the sense that πθ is not directly learned from online human feedback. See App. C for details. 
+
+17 leverage the property of DPO [ 55 ] to reparameterize RM with policy and conclude with an extra 678 
+
+optimistic term in the DPO loss function. Thus, their learning processes are like Fig. 2b but with an 679 
+
+optimistic direct optimizer. Muldrew et al. [47] adopt the vanilla DPO loss but utilize the implicit 680 
+
+reward margin to actively select dueling responses. Yet, these methods are tightly coupled with DPO 681 
+
+and not compatible to other direct optimizers. Their experiments are also limited to a few online 682 
+
+iterations, possibly due to the implementation difficulty of a faithfully online learning system. Given 683 
+
+their relevance to our approach, we reproduce them in a fully online manner for fair comparisons in 684 
+
+Sec. 6.1. We summarize prior works in Table 2. 685                                                                 
+
+> Method Exploration Interaction Proposal Policy Active Passive Online Iterative Offline πθπβ
+> RL Optimizer [15] ✓✓✓✓
+> [65] ✓✓✓✓
+> [5] ✓✓✓✓
+> [50] ✓✓✓✓
+> Direct Optimizer [88] ✓✓✓
+> [55] ✓✓✓
+> [4] ✓✓✓
+> [46] ✓✓✓
+> [81] ✓✓✓
+> [24] ✓✓✓
+> [44] ✓✓✓
+> [17] ✓✓✓
+> [45] ✓✓✓
+> [21] ✓✓✓
+> [86] ✓✓✓
+> [79] ✓✓✓
+> [47] ✓✓✓
+
+Table 2: A summary of prior work. πθ denotes the proposal policy that is continuously updated based on newly collected preference data, while πβ denotes a fixed proposal policy. Algorithms that encompass online interaction (Property 1), active exploration (Property 2), and learnable πθ offer the best sample efficiency. Notably, only three methods (listed at the bottom of the table) satisfy these characteristics, and we include them for comparisons in our experiments. 
+
+C On connections with single-step RL 686 
+
+By viewing contextual dueling bandits as single-step preference-based RL (PbRL) [ 11 , 77 ] problems, 687 
+
+we can interpret paradigms shown in Fig. 2 from the RL perspective. 688 
+
+RLHF approaches (Fig. 2a) are instances of offline model-based RL [32 , 84 , 63 , 41 , 69 ], where 689 
+
+they learn a reward model (no need for a transition model since the prompt-response interaction 690 
+
+is single-step) of the environment from a batch of offline collected data, and train a policy (i.e., LLM) 691 
+
+to maximize the return (i.e., expected one-step reward) with respect to the learned reward. 692 
+
+In contrast, DAP methods (Fig. 2b) are similar to policy-based model-free RL algorithms, e.g., 693 
+
+REINFORCE [76] which conducts policy gradient update: 694 
+
+Ex∼X Ey∼πθ (·| x) [R(x, y)∇θ log πθ (y|x)] , (16) where R(x, y) is the return (i.e., cumulative reward) of the trajectory. To connect with DAP, we 695 
+
+could set R as arbitrary scalar values based on the binary preference outcomes, e.g., R(x, y+) = ζ696 
+
+and R(x, y−) = −ζ for preference triplet {x, y+, y−}. In this way we could rewrite Eq. (16) as 697 
+
+Ex∼X Ey,y′∼πθ (·| x)E(y+≻y−)∼P
+
+ζ  ∇θ log πθ (y+|x) − ∇ θ log πθ (y−|x) , (17) by repeating action sampling twice and querying the oracle for preference labeling. This matches the 698 
+
+gradient direction of contrastive DAP losses (e.g., see Section 4 of DPO [ 55 ]) if we optimize them 699 
+
+online [24]. 700 
+
+Additionally, active reward learning from behavior policy’s data distribution (Fig. 2c) can be regarded 701 
+
+as inverse RL [49 ], which tries to recover environment’s reward function given expert trajectories. In 702 
+
+the context of LLM alignment, the preference data {x, y+, y−}Ni=1 directly encodes human’s implicit 703 
+
+reward r⋆, which can be inversely learned with assumptions such as the BT model [ 8]. However, 704 
+
+existing methods belonging to this paradigm mostly rely on a fixed (and suboptimal) behavior policy 705 
+
+for response sampling, whose coverage inherently limits the quality of the recovered reward function. 706 
+
+18 Last but not least, SEA depicted in Fig. 2d resembles a class of online model-based RL algorithms, 707 
+
+known as Dyna [ 66 , 28 ], that learns a world model from environment experience and trains a base 708 
+
+agent (consisting of reactive policies and value functions) from both environment experience and 709 
+
+model experience. Compared to model-free methods, Dyna naturally enables more sample-efficient 710 
+
+learning by planning with the learned world model to update the base agent. In SEA , we learn the 711 
+
+reward model online and update the LLM (i.e., the reactive policy) with model-planing experience 712 
+
+by mixed preference learning (Sec. 4.2.3). Online model-based RL algorithms could suffer from 713 
+
+catastrophic forgetting in the face of nonstationary data [ 42 ], and we leave it for future work. Overall, 714 
+
+this model-based RL formulation is powerful and explains popular LLM techniques, e.g., Best-of-N 715 
+
+sampling [ 72 ] can be viewed as planning for acting, which trades compute for performance. We 716 
+
+believe it is a promising path leading us to unlock superhuman capabilities of LLMs. 717 
+
+D Distributed learning framework 718 
+
+The interactive nature of LLM alignment necessitates an integrated online learning system that 719 
+
+simulates the interface. The absence of a performant open-source online alignment system has 720 
+
+restricted many existing works to only a few iterations of batch learning [ 47 , 18 , 14 , 86 , 79 ], which 721 
+
+creates a mismatch with their theories that typically require a large number of online interaction 722 
+
+rounds. Even worse, such absence also makes the comparison between different LLM exploration 723 
+
+methods difficult, often restricting evaluations to the simplest iterative DAP baselines [86, 79]. 724 Learner 
+
+> Workers
+> Learner
+> Master
+> DeepSpeed
+> Actors
+> vLLM
+> Oracle
+> RM
+> Mosec
+> Parameters
+> Query
+> Experience
+> Experience
+
+Figure 5: The learning system for experimenting online LLM align-ment algorithms. 
+
+To fill this gap, we build a highly efficient learning system for exper-725 
+
+imenting with online LLM alignment algorithms. We notice that the 726 
+
+computational bottleneck lies in online response sampling (i.e., au-727 
+
+toregressive generation) and preference labeling (e.g., human, large 728 
+
+RMs, or large LLMs), which mirrors the slow actor-environment 729 
+
+interaction seen in RL systems. Inspired by distributed deep RL sys-730 
+
+tems which spawn many actors or environments in parallel [ 22 , 75 ], 731 
+
+we design an Actor-Learner-Oracle architecture for online LLM 732 
+
+alignment, which is depicted in Fig. 5. The three types of work-733 
+
+loads (i.e., actor, learner and oracle) are heterogeneous and require 734 
+
+different optimization. In particular, we adopt vLLM [ 33 ] for the 735 
+
+actor to accelerate the autoregressive response generation. We also 736 
+
+use DeepSpeed’s ZeRO [ 58 , 57 ] strategies to enhance the memory 737 
+
+efficiency of the learner. The updated model weights are broad-738 
+
+casted from the learner master to all actors after every optimizer 739 
+
+step efficiently via NCCL, similar to Hu et al. [26] . Furthermore, to improve the scalability, we 740 
+
+wrap the oracle RM as a service using Mosec [ 83 ], which supports dynamic batching and parallel 741 
+
+processing, to minimize preference query latency. Finally, we leverage DeepMind Launchpad [ 82 ] to 742 
+
+compose all workloads into a distributed program and adopt Plasma [ 53 ] to efficiently transfer data 743 
+
+across process boundaries. 744 
+
+We benchmark our system’s efficiency against a concurrent implementation of online DPO by 745 
+
+HuggingFace 6, which utilizes only DeepSpeed for memory optimization. Our system achieves up 746 
+
+to 2.5 × latency reduction compared to this counterpart, demonstrating its computational efficiency. 747 
+
+Due to space constraints, detailed benchmarking methods and results are presented in App. H. 748 
+
+E Baseline methods 749 
+
+We review four baseline methods that are relevant to this work and used for comparisons in our 750 
+
+experiments. 751 
+
+Offline DAP . We review DPO [ 55 ], which is a representative work in the direction of Direct 752 
+
+Alignment from Preferences (DAP). It simplifies the two-stage pipeline of offline RLHF as a single 753 
+
+step of supervised learning by leveraging the closed-form solution [ 52 , 51 ] of the RL objective in 754 
+
+Eq. (15): 755 
+
+πr (y|x) = 1
+
+Z(x) πref (y|x) exp( 1
+
+β r(x, y)) , (18) 
+
+> 6
+
+https://huggingface.co/docs/trl/main/en/online_dpo_trainer .
+
+19 where Z(x) normalizes such that Σy πr (y|x) = 1 , to reparametrize r as a function of π:756 
+
+r(x, y) = β log πr (y|x)
+
+πref (y|x) + β log Z(x). (19) Consequently, plugging Eq. (19) into the reward model loss (Eq. (13)) yields a contrastive loss that 757 
+
+directly optimizes the policy: 758 
+
+min 
+
+> πθ
+
+E(x,y+,y−)∼pD
+
+
+
+− log σ
+
+
+
+β log πθ (y+|x) πref (y−|x)
+
+πref (y+|x) πθ (y−|x)
+
+ 
+
+, (20) where D is a pre-collected offline preference dataset. 759 
+
+We also experiment different DAP methods 7 besides DPO, such as IPO [ 4] and SLiC [ 88 ], whose 760 
+
+loss functions are shown in Eq. (11) and (12). 761 
+
+Online DAP [ 24 ]. In contrast to the conventional DAP methods that learn a policy from a fixed 762 
+
+dataset D, online DAP proposes to collect on-policy preference data to update the policy online. It 763 
+
+first samples responses from the current policy (y, y′) ∼ πθt , then acquires preference labels to form 764 
+
+a batch Bt = {(x, y+, y−)}bi=1 . One gradient step minimizing the DAP loss over this data batch 765 
+
+to get πθt+1 , which is used for the next iteration. Such approach not only mitigates the over-fitting 766 
+
+issue faced by offline DAP methods [ 24 ], but also facilitates online interaction (Property 1) with the 767 
+
+environment, falling into the second paradigm of CDB solution algorithms (Fig. 2b). 768 
+
+Active Preference Learning (APL) [ 47 ]. APL follows the online DAP paradigm, but is restricted to 769 
+
+DPO due to its reliance on DPO implicit rewards. Two techniques are proposed by APL to actively 770 
+
+select both prompts and dueling responses for querying the preference oracle: 771 
+
+1. Predictive entropy (PE) for selecting prompts. In this step APL computes a Monte-Carlo 772 
+
+estimate of PE for each prompt as Hπθ (y|x) ≈ − ΣNn=1 log πθ (yn|x)/N , where yn ∼773 
+
+πθ (·| x) and log πθ (yn|x) is the summation of log probabilities of each token. Then, APL 774 
+
+filters a subset of prompts with high PE to form XS .775 
+
+2. Preference model certainty for selecting dueling responses. For prompts in XS , APL 776 
+
+generates many responses for each prompt, then selects the pair with largest reward mar-777 
+
+gin measured as |ˆr(xi, yi) − ˆr(xi, y′
+
+> i
+
+)|, where ˆr is the DPO implicit reward ˆr(x, y) = 778 
+
+β(log πθ (y|x) − log πref (y|x)) .779 
+
+By above two steps, APL actively explores more uncertain prompts and responses in an online DPO 780 
+
+paradigm, satisfying both Properties 1 and 2. 781 
+
+Exploratory Preference Optimization (XPO) [79 ]. XPO studies LLM alignment in the framework 782 
+
+of token-level MDP, and leverages the property that DPO conducts implicit Q⋆-approximation [ 56 ], 783 
+
+so that 784 
+
+β log π⋆(y|x)
+
+πref (y|x) = r⋆(x, y) − V ⋆(x) ∀y, (21) where V ⋆ is the optimal value function depending only on the prompt x. XPO incorporates the implicit 785 
+
+(global) optimism for exploration by overestimating the value Vπθ (x) = r⋆(x, y) − β log πθ (y|x)  
+
+> πref (y|x)
+
+.786 
+
+This is achieved by optimizing the policy with a modified DPO loss: 787 
+
+min 
+
+> πθ
+
+E(x,y+,y−,yref )∼pBt
+
+
+
+α log πθ (yref |x) − log σ
+
+
+
+β log πθ (y+|x) πref (y−|x)
+
+πref (y+|x) πθ (y−|x)
+
+ 
+
+, (22) where yref ∼ πref (·| x) and Bt is an on-policy data batch in the same vein as online DPO. Intuitively, 788 
+
+the first term in Eq. (22) biases the policy toward a large value estimation such that Vπθ ≳ V ⋆,789 
+
+implementing the optimism in the face of uncertainty (OFU) for exploration. Theoretically, Xie et al. 790 
+
+[79] also prove the sample complexity bound of XPO, making it a promising algorithm for online 791 
+
+LLM alignment. 792 
+
+Self-exploring language model (SELM) [ 86 ] is a concurrent work of Xie et al. [79] that proposes 793 
+
+nearly the same theoretic algorithm to achieve OFU. However, the practical implementation of SELM 794 
+
+involves offline preference dataset for training, making it hard to benchmark in an online alignment 795 
+
+setting like ours. Therefore, we will keep XPO as our baseline for comparison. 796 
+
+> 7
+
+We use “DAP method” and “direct optimizer” interchangeably. 
+
+20 F Full experimental details 797 
+
+In the main text we focus on the task of summarization using the TL;DR dataset. This provides 798 
+
+a lightweight and clean setting to extensively study different algorithmic designs with affordable 799 
+
+computational resources. App. F.1 provides the full details of this setting. 800 
+
+To further validate the sample efficiency of SEA in aligning LLMs to perform general tasks, we adopt 801 
+
+the UltraFeedback dataset [ 16 ] and evaluate trained LLMs on AlpacaEval 2.0 [ 38 ]. App. F.2 provides 802 
+
+more details of this setting. 803 
+
+F.1 Details of TL;DR task 804 
+
+Models . We experiment three model scales (1B, 2.8B, 6.9B) from the Pythia family [ 7 ]. We take 805 
+
+pretrained SFT models from [ 27 ] as πref for the starting model in all experiments. Except in Sec. 6.1, 806 
+
+we use 1B model for other experiments to save computation. 807 
+
+Preference oracle . We simulate the process of human feedback with a strong scalar RM and refer 808 
+
+it as preference oracle. We choose Skywork-Reward-Llama-3.1-8B 8 [ 40 ], which is top-ranked in 809 
+
+RewardBench leaderboard [35], as the preference oracle. 810 
+
+Epistemic reward model . We build ERM on top of a pretrained 0.4B transformer [ 30 ], by removing 811 
+
+its head and adding an ensemble of MLPs. The size of ensemble is set to K = 20 , and all MLPs 812 
+
+contain 2 hidden layers of 128 nodes. Note that the ERM is chosen to be much smaller than the 813 
+
+preference oracle following Dwaracherla et al. [21] , which reflects the fact that human preferences 814 
+
+can be more complex than what the agent can model. The regularization coefficient λ is fixed to 815 
+
+be 0.5 after a coarse hyperparameter search. 816 
+
+Data . We employ the widely adopted TL;DR dataset [ 65 ] for our experiments. It consists of Reddit 817 
+
+posts as prompts, and the agent is required to give summaries that align with human preferences. We 818 
+
+fix 50 k prompts for training and limit the query budget to 50 k as well. 819 
+
+DAP methods . We adopt three DAP methods (direct optimizers) to thoroughly validate our algorithm, 820 
+
+including DPO [ 55 ], IPO [ 4 ] and SLiC [ 88 ]. Except in Sec. 6.1, all experiments are done with DPO 821 
+
+as the direct optimizer. 822 
+
+Baselines . Similar to Guo et al. [24] , we include the offline and online variants of different DAP 823 
+
+methods as baselines. Additionally, we compare with two active exploration baselines built on online 824 
+
+DPO: APL [47] and XPO [79]. A detailed review of all baselines can be found in App. E. 825 
+
+Metrics . We use the win rate of agent’s responses against reference responses judged by the preference 826 
+
+oracle as the performance metric. This metric can reflect both the agent’s cumulative regret and 827 
+
+anytime regret (i.e., average performance). In the E&E setting, we measure the “online” win rate of the 828 
+
+agent’s dueling responses that are executed during experience collection and take the average. In the 829 
+
+BAI setting, we measure the “offline” win rate by evaluating the latest agent’s responses given a fixed 830 
+
+set of 1000 holdout prompts periodically. We mainly focus on the BAI setting because crowdsourcing 831 
+
+seems a major scenario for most practitioners, and present one set of experiments for comparing 832 
+
+different exploration strategies in both settings. When the comparison is only made within a model 833 
+
+scale, we report the relative win rate against the initial STF models. When the comparison is across 834 
+
+scales (Fig. 1 Left), we report the absolute win rate against the ground truth responses in the dataset. 835 
+
+Hyperparameters . We set β = 0 .1 for DPO and β = 0 .2 for SLiC and find they are robust for 836 
+
+all scales. We tune β from {0.2, 0.3, 0.5, 1.0} for IPO across scales and report the best performing 837 
+
+results. We sample M = 20 on-policy responses with a temperature η = 0 .7 during training, and use 838 
+
+greedy decoding for offline evaluation (BAI’s metric). We use the Adam optimizer with learning rate 839 
+
+of 5 × 10 −7 and cosine scheduling, and set the batch size to be 128 . We initialize the mixture ratio γ840 
+
+of SEA to be 1 and adjust it to 0.7 after a burn-in period of 1k samples. 841 
+
+All hyperparameters are kept the same for offline and online baselines, except that online methods 842 
+
+update the sampling policy after every gradient step as the latest πθt . For APL and XPO, we keep the 843 
+
+learning rate and DPO’s β the same for apple-to-apple comparisons. Specifically for APL, we initially 844 
+
+sample 1024 prompts per batch and use the predictive entropy to filter a subset of 128 prompts. Then, 845 
+
+we sample 8 responses per prompt and use the preference model certainty to finalize two responses 846 
+
+> 8https://huggingface.co/Skywork/Skywork-Reward-Llama-3.1-8B.
+
+21 for the duel. Specifically for XPO, we follow the their recommended optimism coefficient to set 847 
+
+α = 5 × 10 −6.848 
+
+Statistical significance . There are various factors to introduce randomness during online learning. 849 
+
+We thus launch 3 independent runs for every experiment with different random seeds. All the results 850 
+
+are reported with mean and standard error to indicate their statistical significance. 851 
+
+Computational resources . Experiments at all scales are conducted on a single machine with 8 852 
+
+A100 GPUs to run the learner and actors. We additionally host a separate remote server with workers 853 
+
+spawned on 16 A100 GPUs for the oracle RM 9, so that it can be queried by all concurrently running 854 
+
+experiments. All experiments conducted for this research consume about 2 A100 GPU years. 855 
+
+F.2 Details of general tasks 856 
+
+Model . Following Meng et al. [46] , Zhang et al. [86] , we employ Llama3-8B-Instruct 10 as our 857 
+
+initial model πref .858 
+
+Preference oracle . We follow Meng et al. [46] to adopt ArmoRM-Llama3-8B-v0.1 11 [ 74 ] as the 859 
+
+preference oracle to provide online preference feedback. 860 
+
+Data . We take the UltraFeedback dataset [ 16 ], which is widely used for LLM alignment in the 861 
+
+literature. We filter out samples whose prompt is longer than 1800 tokens and result in 61k samples. 862 
+
+We extract prompts from the filtered dataset while excluding the responses. The prompt set are 863 
+
+collected from multiple sources and cover diverse domains, making it suitable to improve LLM’s 864 
+
+capability on general tasks. 865 
+
+DAP method and baselines . We employ the state-of-the-art DAP method, SimPO [ 46 ], as our direct 866 
+
+optimizer. Since SimPO is originally an offline algorithm, we extend it to Online SimPO and take 867 
+
+both offline and online variants as baselines. 868 
+
+Evaluation . We evaluate SEA and baselines using AlpacaEval 2.0 [ 38 ]. It consists of 805 test 869 
+
+prompts, and uses GPT4-Turbo to judge the quality of model responses against reference responses 870 
+
+generated by GPT-4-Turbo . We follow the standard protocol to report both the win rate (WR) and 871 
+
+the Length-Controlled win rate (LC) [19]. 872 
+
+Hyperparameters . We follow SimPO’s recommended hyperparameters to set β = 10 and γ/β = 0 .3.873 
+
+We use a learning rate of 8 × 10 −7 and batch size of 128 . The decoding temperature is set to be 0.9874 
+
+for generating evaluation outputs. The same hyperparameters apply to baselines and our method. 875 
+
+Configurations of SEA are kept the same as those in the TL;DR task (App. F.1). 876 
+
+G Extended empirical studies 877 
+
+We present additional empirical studies in this section, including investigation on different exploration 878 
+
+strategies (App. G.1) and preference oracles (App. G.2) on the TL;DR task, as well as the performance 879 
+
+comparison on AlpacaEval 2.0 for general tasks (App. G.3). 880 
+
+G.1 Choice of exploration strategies 881 
+
+Recalling that different LLM alignment scenarios (online system or crowdsourcing) require different 882 
+
+exploration strategies to meet their respective learning objectives (Sec. 2.2). We investigate three strate-883 
+
+gies based on posterior sampling and compare them on both online and offline performance. The first 884 
+
+strategy (Uncertainty) focuses on pure exploration with information maximization. It seeks the pair of 885 
+
+dueling responses that exhibits the largest epistemic uncertainty, which is implemented by selecting 886 
+
+the pair whose logits difference has the largest variance across ensemble members. The second (E&E-887 
+
+TS) and the third (BAI-TS) strategies follow the principles in Algorithm 1, and their differences are 888 
+
+between Line 5 and Line 6. The comparison results are shown in Fig. 6 (Left and Middle). Focusing on 889 
+
+the left plot, we observe that E&E-TS strategy achieves the best online performance, which is within 890 
+
+our expectation. In contrast, Uncertainty shows the worst online performance because it tries to maxi-891 
+
+mize the information gain but does not prioritize reward maximization. On the other hand, conclusions 892 
+
+are interestingly different when taking the offline performance as the metric. In this case, BAI-TS and 893 
+
+> 9We utilize the Kubernetes service for routing requests to multiple Mosec [83] instances.
+> 10 https://huggingface.co/meta-llama/Meta-Llama-3-8B-Instruct .
+> 11 https://huggingface.co/RLHFlow/ArmoRM-Llama3-8B-v0.1 .
+
+22 0 10k 20k 30k 40k 50k 
+
+> Query step
+> 0.5
+> 0.6
+> 0.7
+> 0.8
+> 0.9
+> Win rate
+
+Online performance (E&E)      
+
+> Uncertainty
+> E&E TS
+> BAI TS
+> 010k 20k 30k 40k 50k
+> Query step
+
+Offline performace (BAI)      
+
+> Uncertainty
+> E&E TS
+> BAI TS
+> 010k 20k 30k 40k 50k
+> Query step
+
+GPT4o-mini-as-a-judge 
+
+> Offline
+> Online
+> XPO
+> APL
+> SEA
+
+Figure 6: (Left and Middle) Win rate comparison of different exploration strategies measured in E&E and BAI settings. (Right) Win rate comparison of different agents when using GPT4o-mini to simulate human feedback via LLM-as-a-judge. 0 20k 40k 60k   
+
+> Query step
+> 25
+> 30
+> 35
+> 40
+> 45
+> AlpacaEval 2.0 LC
+> Offline
+> Online
+> SEA
+> 0200 400
+> Gradient step
+> Offline
+> Online
+> SEA
+
+Figure 7: LC win rates on AlpacaEval 2.0 with respect to query budget and gradient update budget. 
+
+Table 3: AlpacaEval 2.0 results. LLM ex-ploration methods are highlighted in blue. Model LC WR GPT-4 Omni (05/13) 57.5 51.3 GPT-4 Turbo (04/09) 55.0 46.1 Yi-Large Preview 51.9 57.5 
+
+SEA +SimPO 47.4 41.1 
+
+Claude 3 Opus (02/29) 40.5 26.1 SELM 34.7 34.8 XPO 29.4 -Llama 3 8B Instruct 22.9 22.6 
+
+Uncertainty both exhibit more efficient offline performance improvement than E&E-TS. This can be at-894 
+
+tributed to that exploration for uncertainty minimizing helps to identify more informative responses to 895 
+
+train the LLM policy. Moreover, BAI-TS ≻ Uncertainty indicates exploration with both reward and in-896 
+
+formation maximization is better than exploration with only information maximization. E&E-TS, how-897 
+
+ever, always chooses two responses with similarly high quality to exploit. This can not only lead to less 898 
+
+efficient exploration, but also result in less efficient policy learning due to smaller DAP loss gradients. 899 
+
+G.2 Aligning LLMs with a human simulator 900 
+
+Results presented so far are based on experimenting LLM alignment with the preference oracle being 901 
+
+a scalar reward model, which is deterministic and does not capture the potential randomness of the 902 
+
+choice by real humans. To test different agents in a more realistic setting, we use generative models 903 
+
+as human simulator in an LLM-as-a-judge [ 10 , 89 ] manner. In particular, we directly query the 904 
+
+OpenAI API and use gpt-4o-mini-2024-07-18 as the judge to provide preference feedback. We 905 
+
+use a similar prompt template to Li et al. [38]’s, which is shown in Fig. 10. We also randomly swap 906 
+
+the order of two responses to mitigate the known position bias of LLM judges. The results are shown 907 
+
+in Fig. 6 (Right). We can observe the performance curves generally exhibit higher variance, possibly 908 
+
+due to the randomness introduced in the feedback process, which puts more stringent requirements 909 
+
+for learning algorithms. The two active exploration methods demonstrate opposite results to those 910 
+
+in Sec. 6.1—APL learns fast initially but is eventually outperformed by Online, while XPO improves 911 
+
+over Online after stabilizing its training and delivers a better final performance. Our agent, SEA ,912 
+
+is shown to offer the best sample efficiency as well as asymptotic performance, further validating 913 
+
+the importance of online learning and well-designed active exploration mechanism. 914 
+
+G.3 Performance on general tasks 915 
+
+We investigate the generalizability of SEA by training with the prompt set from UltraFeedback [ 16 ]916 
+
+and evaluating the model performance on AlpacaEval 2.0 [ 38 ]. Fig. 7 shows the Length-Controlled 917 
+
+(LC) win rate of different models against GPT-4-Turbo . The left plot compares the sample efficiency 918 
+
+(in terms of the number of queries) of offline, online and SEA SimPO. The results suggest that 919 
+
+enabling online interaction does not improve the sample efficiency over the offline counterpart. Such 920 
+
+observation is in stark contrast to what we have seen in the TL;DR task, where the online agent always 921 
+
+improves over the offline ones. We hypothesize that this is due to the different coverage of πref in 922 
+
+23 these two tasks. For TL;DR , which is a much easier task, the initial SFT models already have good 923 
+
+coverage, permitting online DAP with only passive exploration to work reasonably well; however, for 924 
+
+more challenging tasks, the insufficient coverage of πref would lead to sample complexity exponential 925 
+
+in 1 
+
+> β
+
+[79 ], which necessitates deliberate exploration , such as Thompson sampling proposed in this 926 
+
+work. The above claim is justified by observing that SEA largely improves the sample efficiency over 927 
+
+the online and offline variants. 928 
+
+Attentive readers may have noticed that comparing query budget could be advantageous to SEA be-929 
+
+cause pseudo labels are used in mixed preference learning (Sec. 4.2.3), which results in more gradient 930 
+
+steps given the same query budget. In the right plot of Fig. 7, we show the performance versus 931 
+
+gradient step. We can observe SEA has the steepest learning curve, verifying that it explores more 932 
+
+informative samples to yield faster improvement. 933 
+
+Last but not least, in Table 3, we show the AlpacaEval 2.0 LC win rates of XPO and SELM (as 934 
+
+reported in their papers), along with ours and several cutting-edge LLMs. SEA is agnostic to direct 935 
+
+optimizers, thus it can leverage the state-of-the-art SimPO to achieve a high LC of 47 .4% . On the 936 
+
+other hand, XPO and SELM can only be applied to DPO, restricting their potential to incorporate 937 
+
+future advances in direct optimization algorithms. 938 
+
+H System benchmarking 939 
+
+We conduct a rigorous benchmarking comparison on the efficiency of online DPO training using our 940 
+
+learning system, alongside the trl ’s implementation 12 .941 
+
+Settings . In alignment with the examples provided by trl , we use the TL;DR [ 65 ] dataset and 942 
+
+evaluate training efficiency at three model scales: 1B, 2.8B and 6.9B parameters for both SFT-ed 943 
+
+LLMs 13 and exclusively trained RMs 14 . This is similar to the settings in our experiments (see App. F) 944 
+
+except that we fix the preference oracle to be a strong general-purpose RM. 945 
+
+Hardware & Software . All benchmarking experiments are conducted on a single machine with 946 
+
+eight A100-40G GPUs and 96 AMD EPYC 7352 CPUs. To ensure fair comparison, we align all key 947 
+
+hyperparameters for both our codebase and trl . The DeepSpeed ZeRO-2 strategy is employed by 948 
+
+default when GPU memory suffices; otherwise, ZeRO-3 or ZeRO-2-offload is utilized as applicable. 949 
+
+Notably, the distributed architecture of our implementation provides flexibility in system configuration, 950 
+
+enabling adjustments to accommodate memory and computational time constraints. Fig. 8 illustrates 951 
+
+two example configurations employed in our benchmarking experiments. We will provide all 952 
+
+benchmarking scripts in our codebase for reproducibility. 953 
+
+• Config 1 collocates all three workloads on each of the GPUs. Specifically, eight vLLM 954 
+
+instances (for actors) and eight Mosec workers (for oracle RMs) are spawned to run inde-955 
+
+pendently on each GPU. After a batch of responses is generated (by actors) and labeled (by 956 
+
+oracle RMs), it is sent to the learner, which runs on all eight GPUs coordinated through 957 
+
+ZeRO strategies for policy learning. The updated policy weights are then broadcasted to all 958 
+
+actors for on-policy response sampling on subsequent prompt batch. While this configura-959 
+
+tion maximizes GPU utilization, it requires substantial GPU memory to accommodate all 960 
+
+workloads and is thus employed only for 1B scale experiments. 961 
+
+• Config 2 only collocates actor and oracle workloads on half of the GPUs, reserving the 962 
+
+remaining four GPUs exclusively for the learner. This is suited for larger-scale experiments 963 
+
+(e.g., 2.8B or 6.9B), where additional GPU memory is allocated to the learner. However, 964 
+
+this setup incurs idle time on half of the GPUs due to data dependency, as the learner must 965 
+
+await new preference data, and the actor must await updated policies. An alternative is to 966 
+
+implement asynchronous data collection, where minor data staleness is allowed by using 967 
+
+θt−1 to generate data for updating θt. Although this data would not be strictly on-policy, 968 
+
+> 12
+
+https://github.com/huggingface/trl/blob/main/trl/trainer/online_dpo_trainer.py .
+
+> 13
+
+https://huggingface.co/trl-lib/pythia-1b-deduped-tldr-sft ;https://huggingface. co/trl-lib/pythia-2.8b-deduped-tldr-sft ;https://huggingface.co/trl-lib/pythia-6. 9b-deduped-tldr-sft 
+
+> 14
+
+https://huggingface.co/trl-lib/pythia-1b-deduped-tldr-rm ;https://huggingface. co/trl-lib/pythia-2.8b-deduped-tldr-rm ;https://huggingface.co/trl-lib/pythia-6. 9b-deduped-tldr-rm 
+
+24 Actor: vLLM inference 
+
+device:0 
+
+device:1 
+
+device:2 
+
+device:3 
+
+device:4 
+
+device:5 
+
+device:6 
+
+device:7 
+
+Oracle: Mosec service Learner: DeepSpeed 
+
+device:0 
+
+device:1 
+
+device:2 
+
+device:3 
+
+device:4 
+
+device:5 
+
+device:6 
+
+device:7 
+
+time 
+
+Weights synchronization 
+
+time 
+
+<latexit sha1_base64="GK3cpPJ0jsv+oH0AR7yF0kKDqZ0=">AAAB9nicZVDLSgMxFM34rPVVdekmWAQXpcxIUZdFNy4r2Ae2Q8mkmTY0yQzJHbEM8xdu7U7c+jfi35i2s7DtgZDDyb03554gFtyA6/46G5tb2zu7hb3i/sHh0XHp5LRlokRT1qSRiHQnIIYJrlgTOAjWiTUjMhCsHYwfZu/tV6YNj9QzTGLmSzJUPOSUgJVeejBiQPqpm/VLZbfqzoHXiZeTMsrR6Jd+eoOIJpIpoIIY0/XcGPyUaOBUsKzYSwyLCR2TIetaqohkxk/njjN8aZUBDiNtjwI8V/93pEQaM5GBrZQERmZ5GoR3fspVnABTdDEsTASGCM9WxAOuGQUxsYRQza0fTEdEEwo2iNVfZuMr9p75MJVAZkWbhLe69zppXVe9m2rtqVau3+eZFNA5ukBXyEO3qI4eUQM1EUUKvaMPNHXenKnz6XwtSjecvOcMLcH5/gM7HZMu</latexit> 
+
+✓0
+
+<latexit sha1_base64="GK3cpPJ0jsv+oH0AR7yF0kKDqZ0=">AAAB9nicZVDLSgMxFM34rPVVdekmWAQXpcxIUZdFNy4r2Ae2Q8mkmTY0yQzJHbEM8xdu7U7c+jfi35i2s7DtgZDDyb03554gFtyA6/46G5tb2zu7hb3i/sHh0XHp5LRlokRT1qSRiHQnIIYJrlgTOAjWiTUjMhCsHYwfZu/tV6YNj9QzTGLmSzJUPOSUgJVeejBiQPqpm/VLZbfqzoHXiZeTMsrR6Jd+eoOIJpIpoIIY0/XcGPyUaOBUsKzYSwyLCR2TIetaqohkxk/njjN8aZUBDiNtjwI8V/93pEQaM5GBrZQERmZ5GoR3fspVnABTdDEsTASGCM9WxAOuGQUxsYRQza0fTEdEEwo2iNVfZuMr9p75MJVAZkWbhLe69zppXVe9m2rtqVau3+eZFNA5ukBXyEO3qI4eUQM1EUUKvaMPNHXenKnz6XwtSjecvOcMLcH5/gM7HZMu</latexit> 
+
+✓0
+
+<latexit sha1_base64="GK3cpPJ0jsv+oH0AR7yF0kKDqZ0=">AAAB9nicZVDLSgMxFM34rPVVdekmWAQXpcxIUZdFNy4r2Ae2Q8mkmTY0yQzJHbEM8xdu7U7c+jfi35i2s7DtgZDDyb03554gFtyA6/46G5tb2zu7hb3i/sHh0XHp5LRlokRT1qSRiHQnIIYJrlgTOAjWiTUjMhCsHYwfZu/tV6YNj9QzTGLmSzJUPOSUgJVeejBiQPqpm/VLZbfqzoHXiZeTMsrR6Jd+eoOIJpIpoIIY0/XcGPyUaOBUsKzYSwyLCR2TIetaqohkxk/njjN8aZUBDiNtjwI8V/93pEQaM5GBrZQERmZ5GoR3fspVnABTdDEsTASGCM9WxAOuGQUxsYRQza0fTEdEEwo2iNVfZuMr9p75MJVAZkWbhLe69zppXVe9m2rtqVau3+eZFNA5ukBXyEO3qI4eUQM1EUUKvaMPNHXenKnz6XwtSjecvOcMLcH5/gM7HZMu</latexit> 
+
+✓0
+
+<latexit sha1_base64="GK3cpPJ0jsv+oH0AR7yF0kKDqZ0=">AAAB9nicZVDLSgMxFM34rPVVdekmWAQXpcxIUZdFNy4r2Ae2Q8mkmTY0yQzJHbEM8xdu7U7c+jfi35i2s7DtgZDDyb03554gFtyA6/46G5tb2zu7hb3i/sHh0XHp5LRlokRT1qSRiHQnIIYJrlgTOAjWiTUjMhCsHYwfZu/tV6YNj9QzTGLmSzJUPOSUgJVeejBiQPqpm/VLZbfqzoHXiZeTMsrR6Jd+eoOIJpIpoIIY0/XcGPyUaOBUsKzYSwyLCR2TIetaqohkxk/njjN8aZUBDiNtjwI8V/93pEQaM5GBrZQERmZ5GoR3fspVnABTdDEsTASGCM9WxAOuGQUxsYRQza0fTEdEEwo2iNVfZuMr9p75MJVAZkWbhLe69zppXVe9m2rtqVau3+eZFNA5ukBXyEO3qI4eUQM1EUUKvaMPNHXenKnz6XwtSjecvOcMLcH5/gM7HZMu</latexit> 
+
+✓0
+
+<latexit sha1_base64="GK3cpPJ0jsv+oH0AR7yF0kKDqZ0=">AAAB9nicZVDLSgMxFM34rPVVdekmWAQXpcxIUZdFNy4r2Ae2Q8mkmTY0yQzJHbEM8xdu7U7c+jfi35i2s7DtgZDDyb03554gFtyA6/46G5tb2zu7hb3i/sHh0XHp5LRlokRT1qSRiHQnIIYJrlgTOAjWiTUjMhCsHYwfZu/tV6YNj9QzTGLmSzJUPOSUgJVeejBiQPqpm/VLZbfqzoHXiZeTMsrR6Jd+eoOIJpIpoIIY0/XcGPyUaOBUsKzYSwyLCR2TIetaqohkxk/njjN8aZUBDiNtjwI8V/93pEQaM5GBrZQERmZ5GoR3fspVnABTdDEsTASGCM9WxAOuGQUxsYRQza0fTEdEEwo2iNVfZuMr9p75MJVAZkWbhLe69zppXVe9m2rtqVau3+eZFNA5ukBXyEO3qI4eUQM1EUUKvaMPNHXenKnz6XwtSjecvOcMLcH5/gM7HZMu</latexit> 
+
+✓0
+
+<latexit sha1_base64="GK3cpPJ0jsv+oH0AR7yF0kKDqZ0=">AAAB9nicZVDLSgMxFM34rPVVdekmWAQXpcxIUZdFNy4r2Ae2Q8mkmTY0yQzJHbEM8xdu7U7c+jfi35i2s7DtgZDDyb03554gFtyA6/46G5tb2zu7hb3i/sHh0XHp5LRlokRT1qSRiHQnIIYJrlgTOAjWiTUjMhCsHYwfZu/tV6YNj9QzTGLmSzJUPOSUgJVeejBiQPqpm/VLZbfqzoHXiZeTMsrR6Jd+eoOIJpIpoIIY0/XcGPyUaOBUsKzYSwyLCR2TIetaqohkxk/njjN8aZUBDiNtjwI8V/93pEQaM5GBrZQERmZ5GoR3fspVnABTdDEsTASGCM9WxAOuGQUxsYRQza0fTEdEEwo2iNVfZuMr9p75MJVAZkWbhLe69zppXVe9m2rtqVau3+eZFNA5ukBXyEO3qI4eUQM1EUUKvaMPNHXenKnz6XwtSjecvOcMLcH5/gM7HZMu</latexit> 
+
+✓0
+
+<latexit sha1_base64="GK3cpPJ0jsv+oH0AR7yF0kKDqZ0=">AAAB9nicZVDLSgMxFM34rPVVdekmWAQXpcxIUZdFNy4r2Ae2Q8mkmTY0yQzJHbEM8xdu7U7c+jfi35i2s7DtgZDDyb03554gFtyA6/46G5tb2zu7hb3i/sHh0XHp5LRlokRT1qSRiHQnIIYJrlgTOAjWiTUjMhCsHYwfZu/tV6YNj9QzTGLmSzJUPOSUgJVeejBiQPqpm/VLZbfqzoHXiZeTMsrR6Jd+eoOIJpIpoIIY0/XcGPyUaOBUsKzYSwyLCR2TIetaqohkxk/njjN8aZUBDiNtjwI8V/93pEQaM5GBrZQERmZ5GoR3fspVnABTdDEsTASGCM9WxAOuGQUxsYRQza0fTEdEEwo2iNVfZuMr9p75MJVAZkWbhLe69zppXVe9m2rtqVau3+eZFNA5ukBXyEO3qI4eUQM1EUUKvaMPNHXenKnz6XwtSjecvOcMLcH5/gM7HZMu</latexit> 
+
+✓0
+
+<latexit sha1_base64="GK3cpPJ0jsv+oH0AR7yF0kKDqZ0=">AAAB9nicZVDLSgMxFM34rPVVdekmWAQXpcxIUZdFNy4r2Ae2Q8mkmTY0yQzJHbEM8xdu7U7c+jfi35i2s7DtgZDDyb03554gFtyA6/46G5tb2zu7hb3i/sHh0XHp5LRlokRT1qSRiHQnIIYJrlgTOAjWiTUjMhCsHYwfZu/tV6YNj9QzTGLmSzJUPOSUgJVeejBiQPqpm/VLZbfqzoHXiZeTMsrR6Jd+eoOIJpIpoIIY0/XcGPyUaOBUsKzYSwyLCR2TIetaqohkxk/njjN8aZUBDiNtjwI8V/93pEQaM5GBrZQERmZ5GoR3fspVnABTdDEsTASGCM9WxAOuGQUxsYRQza0fTEdEEwo2iNVfZuMr9p75MJVAZkWbhLe69zppXVe9m2rtqVau3+eZFNA5ukBXyEO3qI4eUQM1EUUKvaMPNHXenKnz6XwtSjecvOcMLcH5/gM7HZMu</latexit> 
+
+✓0
+
+<latexit sha1_base64="GK3cpPJ0jsv+oH0AR7yF0kKDqZ0=">AAAB9nicZVDLSgMxFM34rPVVdekmWAQXpcxIUZdFNy4r2Ae2Q8mkmTY0yQzJHbEM8xdu7U7c+jfi35i2s7DtgZDDyb03554gFtyA6/46G5tb2zu7hb3i/sHh0XHp5LRlokRT1qSRiHQnIIYJrlgTOAjWiTUjMhCsHYwfZu/tV6YNj9QzTGLmSzJUPOSUgJVeejBiQPqpm/VLZbfqzoHXiZeTMsrR6Jd+eoOIJpIpoIIY0/XcGPyUaOBUsKzYSwyLCR2TIetaqohkxk/njjN8aZUBDiNtjwI8V/93pEQaM5GBrZQERmZ5GoR3fspVnABTdDEsTASGCM9WxAOuGQUxsYRQza0fTEdEEwo2iNVfZuMr9p75MJVAZkWbhLe69zppXVe9m2rtqVau3+eZFNA5ukBXyEO3qI4eUQM1EUUKvaMPNHXenKnz6XwtSjecvOcMLcH5/gM7HZMu</latexit> 
+
+✓0
+
+<latexit sha1_base64="BCm6u8VhZJJiYE2iZSVbQTfufg8=">AAAB9nicZVDLSgMxFM34rPVVdekmWAQXpcxIUZdFNy4r2Ae2Q8mkmTY0yQzJHbEM8xdu7U7c+jfi35i2s7DtgZDDyb03554gFtyA6/46G5tb2zu7hb3i/sHh0XHp5LRlokRT1qSRiHQnIIYJrlgTOAjWiTUjMhCsHYwfZu/tV6YNj9QzTGLmSzJUPOSUgJVeejBiQPqpl/VLZbfqzoHXiZeTMsrR6Jd+eoOIJpIpoIIY0/XcGPyUaOBUsKzYSwyLCR2TIetaqohkxk/njjN8aZUBDiNtjwI8V/93pEQaM5GBrZQERmZ5GoR3fspVnABTdDEsTASGCM9WxAOuGQUxsYRQza0fTEdEEwo2iNVfZuMr9p75MJVAZkWbhLe69zppXVe9m2rtqVau3+eZFNA5ukBXyEO3qI4eUQM1EUUKvaMPNHXenKnz6XwtSjecvOcMLcH5/gM8p5Mv</latexit> 
+
+✓1
+
+<latexit sha1_base64="BCm6u8VhZJJiYE2iZSVbQTfufg8=">AAAB9nicZVDLSgMxFM34rPVVdekmWAQXpcxIUZdFNy4r2Ae2Q8mkmTY0yQzJHbEM8xdu7U7c+jfi35i2s7DtgZDDyb03554gFtyA6/46G5tb2zu7hb3i/sHh0XHp5LRlokRT1qSRiHQnIIYJrlgTOAjWiTUjMhCsHYwfZu/tV6YNj9QzTGLmSzJUPOSUgJVeejBiQPqpl/VLZbfqzoHXiZeTMsrR6Jd+eoOIJpIpoIIY0/XcGPyUaOBUsKzYSwyLCR2TIetaqohkxk/njjN8aZUBDiNtjwI8V/93pEQaM5GBrZQERmZ5GoR3fspVnABTdDEsTASGCM9WxAOuGQUxsYRQza0fTEdEEwo2iNVfZuMr9p75MJVAZkWbhLe69zppXVe9m2rtqVau3+eZFNA5ukBXyEO3qI4eUQM1EUUKvaMPNHXenKnz6XwtSjecvOcMLcH5/gM8p5Mv</latexit> 
+
+✓1
+
+<latexit sha1_base64="BCm6u8VhZJJiYE2iZSVbQTfufg8=">AAAB9nicZVDLSgMxFM34rPVVdekmWAQXpcxIUZdFNy4r2Ae2Q8mkmTY0yQzJHbEM8xdu7U7c+jfi35i2s7DtgZDDyb03554gFtyA6/46G5tb2zu7hb3i/sHh0XHp5LRlokRT1qSRiHQnIIYJrlgTOAjWiTUjMhCsHYwfZu/tV6YNj9QzTGLmSzJUPOSUgJVeejBiQPqpl/VLZbfqzoHXiZeTMsrR6Jd+eoOIJpIpoIIY0/XcGPyUaOBUsKzYSwyLCR2TIetaqohkxk/njjN8aZUBDiNtjwI8V/93pEQaM5GBrZQERmZ5GoR3fspVnABTdDEsTASGCM9WxAOuGQUxsYRQza0fTEdEEwo2iNVfZuMr9p75MJVAZkWbhLe69zppXVe9m2rtqVau3+eZFNA5ukBXyEO3qI4eUQM1EUUKvaMPNHXenKnz6XwtSjecvOcMLcH5/gM8p5Mv</latexit> 
+
+✓1
+
+<latexit sha1_base64="BCm6u8VhZJJiYE2iZSVbQTfufg8=">AAAB9nicZVDLSgMxFM34rPVVdekmWAQXpcxIUZdFNy4r2Ae2Q8mkmTY0yQzJHbEM8xdu7U7c+jfi35i2s7DtgZDDyb03554gFtyA6/46G5tb2zu7hb3i/sHh0XHp5LRlokRT1qSRiHQnIIYJrlgTOAjWiTUjMhCsHYwfZu/tV6YNj9QzTGLmSzJUPOSUgJVeejBiQPqpl/VLZbfqzoHXiZeTMsrR6Jd+eoOIJpIpoIIY0/XcGPyUaOBUsKzYSwyLCR2TIetaqohkxk/njjN8aZUBDiNtjwI8V/93pEQaM5GBrZQERmZ5GoR3fspVnABTdDEsTASGCM9WxAOuGQUxsYRQza0fTEdEEwo2iNVfZuMr9p75MJVAZkWbhLe69zppXVe9m2rtqVau3+eZFNA5ukBXyEO3qI4eUQM1EUUKvaMPNHXenKnz6XwtSjecvOcMLcH5/gM8p5Mv</latexit> 
+
+✓1
+
+<latexit sha1_base64="BCm6u8VhZJJiYE2iZSVbQTfufg8=">AAAB9nicZVDLSgMxFM34rPVVdekmWAQXpcxIUZdFNy4r2Ae2Q8mkmTY0yQzJHbEM8xdu7U7c+jfi35i2s7DtgZDDyb03554gFtyA6/46G5tb2zu7hb3i/sHh0XHp5LRlokRT1qSRiHQnIIYJrlgTOAjWiTUjMhCsHYwfZu/tV6YNj9QzTGLmSzJUPOSUgJVeejBiQPqpl/VLZbfqzoHXiZeTMsrR6Jd+eoOIJpIpoIIY0/XcGPyUaOBUsKzYSwyLCR2TIetaqohkxk/njjN8aZUBDiNtjwI8V/93pEQaM5GBrZQERmZ5GoR3fspVnABTdDEsTASGCM9WxAOuGQUxsYRQza0fTEdEEwo2iNVfZuMr9p75MJVAZkWbhLe69zppXVe9m2rtqVau3+eZFNA5ukBXyEO3qI4eUQM1EUUKvaMPNHXenKnz6XwtSjecvOcMLcH5/gM8p5Mv</latexit> 
+
+✓1
+
+<latexit sha1_base64="BCm6u8VhZJJiYE2iZSVbQTfufg8=">AAAB9nicZVDLSgMxFM34rPVVdekmWAQXpcxIUZdFNy4r2Ae2Q8mkmTY0yQzJHbEM8xdu7U7c+jfi35i2s7DtgZDDyb03554gFtyA6/46G5tb2zu7hb3i/sHh0XHp5LRlokRT1qSRiHQnIIYJrlgTOAjWiTUjMhCsHYwfZu/tV6YNj9QzTGLmSzJUPOSUgJVeejBiQPqpl/VLZbfqzoHXiZeTMsrR6Jd+eoOIJpIpoIIY0/XcGPyUaOBUsKzYSwyLCR2TIetaqohkxk/njjN8aZUBDiNtjwI8V/93pEQaM5GBrZQERmZ5GoR3fspVnABTdDEsTASGCM9WxAOuGQUxsYRQza0fTEdEEwo2iNVfZuMr9p75MJVAZkWbhLe69zppXVe9m2rtqVau3+eZFNA5ukBXyEO3qI4eUQM1EUUKvaMPNHXenKnz6XwtSjecvOcMLcH5/gM8p5Mv</latexit> 
+
+✓1
+
+<latexit sha1_base64="BCm6u8VhZJJiYE2iZSVbQTfufg8=">AAAB9nicZVDLSgMxFM34rPVVdekmWAQXpcxIUZdFNy4r2Ae2Q8mkmTY0yQzJHbEM8xdu7U7c+jfi35i2s7DtgZDDyb03554gFtyA6/46G5tb2zu7hb3i/sHh0XHp5LRlokRT1qSRiHQnIIYJrlgTOAjWiTUjMhCsHYwfZu/tV6YNj9QzTGLmSzJUPOSUgJVeejBiQPqpl/VLZbfqzoHXiZeTMsrR6Jd+eoOIJpIpoIIY0/XcGPyUaOBUsKzYSwyLCR2TIetaqohkxk/njjN8aZUBDiNtjwI8V/93pEQaM5GBrZQERmZ5GoR3fspVnABTdDEsTASGCM9WxAOuGQUxsYRQza0fTEdEEwo2iNVfZuMr9p75MJVAZkWbhLe69zppXVe9m2rtqVau3+eZFNA5ukBXyEO3qI4eUQM1EUUKvaMPNHXenKnz6XwtSjecvOcMLcH5/gM8p5Mv</latexit> 
+
+✓1
+
+<latexit sha1_base64="BCm6u8VhZJJiYE2iZSVbQTfufg8=">AAAB9nicZVDLSgMxFM34rPVVdekmWAQXpcxIUZdFNy4r2Ae2Q8mkmTY0yQzJHbEM8xdu7U7c+jfi35i2s7DtgZDDyb03554gFtyA6/46G5tb2zu7hb3i/sHh0XHp5LRlokRT1qSRiHQnIIYJrlgTOAjWiTUjMhCsHYwfZu/tV6YNj9QzTGLmSzJUPOSUgJVeejBiQPqpl/VLZbfqzoHXiZeTMsrR6Jd+eoOIJpIpoIIY0/XcGPyUaOBUsKzYSwyLCR2TIetaqohkxk/njjN8aZUBDiNtjwI8V/93pEQaM5GBrZQERmZ5GoR3fspVnABTdDEsTASGCM9WxAOuGQUxsYRQza0fTEdEEwo2iNVfZuMr9p75MJVAZkWbhLe69zppXVe9m2rtqVau3+eZFNA5ukBXyEO3qI4eUQM1EUUKvaMPNHXenKnz6XwtSjecvOcMLcH5/gM8p5Mv</latexit> 
+
+✓1
+
+<latexit sha1_base64="BCm6u8VhZJJiYE2iZSVbQTfufg8=">AAAB9nicZVDLSgMxFM34rPVVdekmWAQXpcxIUZdFNy4r2Ae2Q8mkmTY0yQzJHbEM8xdu7U7c+jfi35i2s7DtgZDDyb03554gFtyA6/46G5tb2zu7hb3i/sHh0XHp5LRlokRT1qSRiHQnIIYJrlgTOAjWiTUjMhCsHYwfZu/tV6YNj9QzTGLmSzJUPOSUgJVeejBiQPqpl/VLZbfqzoHXiZeTMsrR6Jd+eoOIJpIpoIIY0/XcGPyUaOBUsKzYSwyLCR2TIetaqohkxk/njjN8aZUBDiNtjwI8V/93pEQaM5GBrZQERmZ5GoR3fspVnABTdDEsTASGCM9WxAOuGQUxsYRQza0fTEdEEwo2iNVfZuMr9p75MJVAZkWbhLe69zppXVe9m2rtqVau3+eZFNA5ukBXyEO3qI4eUQM1EUUKvaMPNHXenKnz6XwtSjecvOcMLcH5/gM8p5Mv</latexit> 
+
+✓1
+
+<latexit sha1_base64="UOa6mofgFsG6nF36th/hqh73I2c=">AAAB9nicZVDLTgIxFO3gC/GFunTTSExcEDJDiLokunGJiTwiTEindKCh05m0d4xkMn/hVnbGrX9j/Bs7MAuBkzQ9Ob339tzjRYJrsO1fq7C1vbO7V9wvHRweHZ+UT886OowVZW0ailD1PKKZ4JK1gYNgvUgxEniCdb3pQ/befWVK81A+wyxibkDGkvucEjDSywAmDMgwqafDcsWu2QvgTeLkpIJytIbln8EopHHAJFBBtO47dgRuQhRwKlhaGsSaRYROyZj1DZUkYNpNFo5TfGWUEfZDZY4EvFD/dyQk0HoWeKYyIDDRq9PAv3MTLqMYmKTLYX4sMIQ4WxGPuGIUxMwQQhU3fjCdEEUomCDWf8nGV82d+dBVL0hLJglnfe9N0qnXnJta46lRad7nmRTRBbpE18hBt6iJHlELtRFFEr2jDzS33qy59Wl9LUsLVt5zjlZgff8BPjGTMA==</latexit> 
+
+✓2
+
+<latexit sha1_base64="BCm6u8VhZJJiYE2iZSVbQTfufg8=">AAAB9nicZVDLSgMxFM34rPVVdekmWAQXpcxIUZdFNy4r2Ae2Q8mkmTY0yQzJHbEM8xdu7U7c+jfi35i2s7DtgZDDyb03554gFtyA6/46G5tb2zu7hb3i/sHh0XHp5LRlokRT1qSRiHQnIIYJrlgTOAjWiTUjMhCsHYwfZu/tV6YNj9QzTGLmSzJUPOSUgJVeejBiQPqpl/VLZbfqzoHXiZeTMsrR6Jd+eoOIJpIpoIIY0/XcGPyUaOBUsKzYSwyLCR2TIetaqohkxk/njjN8aZUBDiNtjwI8V/93pEQaM5GBrZQERmZ5GoR3fspVnABTdDEsTASGCM9WxAOuGQUxsYRQza0fTEdEEwo2iNVfZuMr9p75MJVAZkWbhLe69zppXVe9m2rtqVau3+eZFNA5ukBXyEO3qI4eUQM1EUUKvaMPNHXenKnz6XwtSjecvOcMLcH5/gM8p5Mv</latexit> 
+
+✓1
+
+<latexit sha1_base64="UOa6mofgFsG6nF36th/hqh73I2c=">AAAB9nicZVDLTgIxFO3gC/GFunTTSExcEDJDiLokunGJiTwiTEindKCh05m0d4xkMn/hVnbGrX9j/Bs7MAuBkzQ9Ob339tzjRYJrsO1fq7C1vbO7V9wvHRweHZ+UT886OowVZW0ailD1PKKZ4JK1gYNgvUgxEniCdb3pQ/befWVK81A+wyxibkDGkvucEjDSywAmDMgwqafDcsWu2QvgTeLkpIJytIbln8EopHHAJFBBtO47dgRuQhRwKlhaGsSaRYROyZj1DZUkYNpNFo5TfGWUEfZDZY4EvFD/dyQk0HoWeKYyIDDRq9PAv3MTLqMYmKTLYX4sMIQ4WxGPuGIUxMwQQhU3fjCdEEUomCDWf8nGV82d+dBVL0hLJglnfe9N0qnXnJta46lRad7nmRTRBbpE18hBt6iJHlELtRFFEr2jDzS33qy59Wl9LUsLVt5zjlZgff8BPjGTMA==</latexit> 
+
+✓2
+
+<latexit sha1_base64="UOa6mofgFsG6nF36th/hqh73I2c=">AAAB9nicZVDLTgIxFO3gC/GFunTTSExcEDJDiLokunGJiTwiTEindKCh05m0d4xkMn/hVnbGrX9j/Bs7MAuBkzQ9Ob339tzjRYJrsO1fq7C1vbO7V9wvHRweHZ+UT886OowVZW0ailD1PKKZ4JK1gYNgvUgxEniCdb3pQ/befWVK81A+wyxibkDGkvucEjDSywAmDMgwqafDcsWu2QvgTeLkpIJytIbln8EopHHAJFBBtO47dgRuQhRwKlhaGsSaRYROyZj1DZUkYNpNFo5TfGWUEfZDZY4EvFD/dyQk0HoWeKYyIDDRq9PAv3MTLqMYmKTLYX4sMIQ4WxGPuGIUxMwQQhU3fjCdEEUomCDWf8nGV82d+dBVL0hLJglnfe9N0qnXnJta46lRad7nmRTRBbpE18hBt6iJHlELtRFFEr2jDzS33qy59Wl9LUsLVt5zjlZgff8BPjGTMA==</latexit> 
+
+✓2
+
+<latexit sha1_base64="UOa6mofgFsG6nF36th/hqh73I2c=">AAAB9nicZVDLTgIxFO3gC/GFunTTSExcEDJDiLokunGJiTwiTEindKCh05m0d4xkMn/hVnbGrX9j/Bs7MAuBkzQ9Ob339tzjRYJrsO1fq7C1vbO7V9wvHRweHZ+UT886OowVZW0ailD1PKKZ4JK1gYNgvUgxEniCdb3pQ/befWVK81A+wyxibkDGkvucEjDSywAmDMgwqafDcsWu2QvgTeLkpIJytIbln8EopHHAJFBBtO47dgRuQhRwKlhaGsSaRYROyZj1DZUkYNpNFo5TfGWUEfZDZY4EvFD/dyQk0HoWeKYyIDDRq9PAv3MTLqMYmKTLYX4sMIQ4WxGPuGIUxMwQQhU3fjCdEEUomCDWf8nGV82d+dBVL0hLJglnfe9N0qnXnJta46lRad7nmRTRBbpE18hBt6iJHlELtRFFEr2jDzS33qy59Wl9LUsLVt5zjlZgff8BPjGTMA==</latexit> 
+
+✓2
+
+<latexit sha1_base64="UOa6mofgFsG6nF36th/hqh73I2c=">AAAB9nicZVDLTgIxFO3gC/GFunTTSExcEDJDiLokunGJiTwiTEindKCh05m0d4xkMn/hVnbGrX9j/Bs7MAuBkzQ9Ob339tzjRYJrsO1fq7C1vbO7V9wvHRweHZ+UT886OowVZW0ailD1PKKZ4JK1gYNgvUgxEniCdb3pQ/befWVK81A+wyxibkDGkvucEjDSywAmDMgwqafDcsWu2QvgTeLkpIJytIbln8EopHHAJFBBtO47dgRuQhRwKlhaGsSaRYROyZj1DZUkYNpNFo5TfGWUEfZDZY4EvFD/dyQk0HoWeKYyIDDRq9PAv3MTLqMYmKTLYX4sMIQ4WxGPuGIUxMwQQhU3fjCdEEUomCDWf8nGV82d+dBVL0hLJglnfe9N0qnXnJta46lRad7nmRTRBbpE18hBt6iJHlELtRFFEr2jDzS33qy59Wl9LUsLVt5zjlZgff8BPjGTMA==</latexit> 
+
+✓2
+
+<latexit sha1_base64="UOa6mofgFsG6nF36th/hqh73I2c=">AAAB9nicZVDLTgIxFO3gC/GFunTTSExcEDJDiLokunGJiTwiTEindKCh05m0d4xkMn/hVnbGrX9j/Bs7MAuBkzQ9Ob339tzjRYJrsO1fq7C1vbO7V9wvHRweHZ+UT886OowVZW0ailD1PKKZ4JK1gYNgvUgxEniCdb3pQ/befWVK81A+wyxibkDGkvucEjDSywAmDMgwqafDcsWu2QvgTeLkpIJytIbln8EopHHAJFBBtO47dgRuQhRwKlhaGsSaRYROyZj1DZUkYNpNFo5TfGWUEfZDZY4EvFD/dyQk0HoWeKYyIDDRq9PAv3MTLqMYmKTLYX4sMIQ4WxGPuGIUxMwQQhU3fjCdEEUomCDWf8nGV82d+dBVL0hLJglnfe9N0qnXnJta46lRad7nmRTRBbpE18hBt6iJHlELtRFFEr2jDzS33qy59Wl9LUsLVt5zjlZgff8BPjGTMA==</latexit> 
+
+✓2
+
+<latexit sha1_base64="UOa6mofgFsG6nF36th/hqh73I2c=">AAAB9nicZVDLTgIxFO3gC/GFunTTSExcEDJDiLokunGJiTwiTEindKCh05m0d4xkMn/hVnbGrX9j/Bs7MAuBkzQ9Ob339tzjRYJrsO1fq7C1vbO7V9wvHRweHZ+UT886OowVZW0ailD1PKKZ4JK1gYNgvUgxEniCdb3pQ/befWVK81A+wyxibkDGkvucEjDSywAmDMgwqafDcsWu2QvgTeLkpIJytIbln8EopHHAJFBBtO47dgRuQhRwKlhaGsSaRYROyZj1DZUkYNpNFo5TfGWUEfZDZY4EvFD/dyQk0HoWeKYyIDDRq9PAv3MTLqMYmKTLYX4sMIQ4WxGPuGIUxMwQQhU3fjCdEEUomCDWf8nGV82d+dBVL0hLJglnfe9N0qnXnJta46lRad7nmRTRBbpE18hBt6iJHlELtRFFEr2jDzS33qy59Wl9LUsLVt5zjlZgff8BPjGTMA==</latexit> 
+
+✓2
+
+<latexit sha1_base64="UOa6mofgFsG6nF36th/hqh73I2c=">AAAB9nicZVDLTgIxFO3gC/GFunTTSExcEDJDiLokunGJiTwiTEindKCh05m0d4xkMn/hVnbGrX9j/Bs7MAuBkzQ9Ob339tzjRYJrsO1fq7C1vbO7V9wvHRweHZ+UT886OowVZW0ailD1PKKZ4JK1gYNgvUgxEniCdb3pQ/befWVK81A+wyxibkDGkvucEjDSywAmDMgwqafDcsWu2QvgTeLkpIJytIbln8EopHHAJFBBtO47dgRuQhRwKlhaGsSaRYROyZj1DZUkYNpNFo5TfGWUEfZDZY4EvFD/dyQk0HoWeKYyIDDRq9PAv3MTLqMYmKTLYX4sMIQ4WxGPuGIUxMwQQhU3fjCdEEUomCDWf8nGV82d+dBVL0hLJglnfe9N0qnXnJta46lRad7nmRTRBbpE18hBt6iJHlELtRFFEr2jDzS33qy59Wl9LUsLVt5zjlZgff8BPjGTMA==</latexit> 
+
+✓2
+
+<latexit sha1_base64="UOa6mofgFsG6nF36th/hqh73I2c=">AAAB9nicZVDLTgIxFO3gC/GFunTTSExcEDJDiLokunGJiTwiTEindKCh05m0d4xkMn/hVnbGrX9j/Bs7MAuBkzQ9Ob339tzjRYJrsO1fq7C1vbO7V9wvHRweHZ+UT886OowVZW0ailD1PKKZ4JK1gYNgvUgxEniCdb3pQ/befWVK81A+wyxibkDGkvucEjDSywAmDMgwqafDcsWu2QvgTeLkpIJytIbln8EopHHAJFBBtO47dgRuQhRwKlhaGsSaRYROyZj1DZUkYNpNFo5TfGWUEfZDZY4EvFD/dyQk0HoWeKYyIDDRq9PAv3MTLqMYmKTLYX4sMIQ4WxGPuGIUxMwQQhU3fjCdEEUomCDWf8nGV82d+dBVL0hLJglnfe9N0qnXnJta46lRad7nmRTRBbpE18hBt6iJHlELtRFFEr2jDzS33qy59Wl9LUsLVt5zjlZgff8BPjGTMA==</latexit> 
+
+✓2
+
+<latexit sha1_base64="7rn9+LXdGl5moLzdVZOvGqCwxQk=">AAAB9nicZVDLTgIxFO3gC/GFunQzkZi4IGRGibokunGJiTwiTEindKCh7UzaO0Yymb9wKzvj1r8x/o0dmIXASZqenN57e+7xI840OM6vVdjY3NreKe6W9vYPDo/KxydtHcaK0BYJeai6PtaUM0lbwIDTbqQoFj6nHX/ykL13XqnSLJTPMI2oJ/BIsoARDEZ66cOYAh4k1+mgXHFqzhz2OnFzUkE5moPyT38YklhQCYRjrXuuE4GXYAWMcJqW+rGmESYTPKI9QyUWVHvJ3HFqXxhlaAehMkeCPVf/dyRYaD0VvqkUGMZ6eRoEd17CZBQDlWQxLIi5DaGdrWgPmaIE+NQQTBQzfmwyxgoTMEGs/pKNr5o786GrvkhLJgl3de910r6quTe1+lO90rjPMymiM3SOLpGLblEDPaImaiGCJHpHH2hmvVkz69P6WpQWrLznFC3B+v4DP7uTMQ==</latexit> 
+
+✓3
+
+<latexit sha1_base64="UOa6mofgFsG6nF36th/hqh73I2c=">AAAB9nicZVDLTgIxFO3gC/GFunTTSExcEDJDiLokunGJiTwiTEindKCh05m0d4xkMn/hVnbGrX9j/Bs7MAuBkzQ9Ob339tzjRYJrsO1fq7C1vbO7V9wvHRweHZ+UT886OowVZW0ailD1PKKZ4JK1gYNgvUgxEniCdb3pQ/befWVK81A+wyxibkDGkvucEjDSywAmDMgwqafDcsWu2QvgTeLkpIJytIbln8EopHHAJFBBtO47dgRuQhRwKlhaGsSaRYROyZj1DZUkYNpNFo5TfGWUEfZDZY4EvFD/dyQk0HoWeKYyIDDRq9PAv3MTLqMYmKTLYX4sMIQ4WxGPuGIUxMwQQhU3fjCdEEUomCDWf8nGV82d+dBVL0hLJglnfe9N0qnXnJta46lRad7nmRTRBbpE18hBt6iJHlELtRFFEr2jDzS33qy59Wl9LUsLVt5zjlZgff8BPjGTMA==</latexit> 
+
+✓2
+
+<latexit sha1_base64="GK3cpPJ0jsv+oH0AR7yF0kKDqZ0=">AAAB9nicZVDLSgMxFM34rPVVdekmWAQXpcxIUZdFNy4r2Ae2Q8mkmTY0yQzJHbEM8xdu7U7c+jfi35i2s7DtgZDDyb03554gFtyA6/46G5tb2zu7hb3i/sHh0XHp5LRlokRT1qSRiHQnIIYJrlgTOAjWiTUjMhCsHYwfZu/tV6YNj9QzTGLmSzJUPOSUgJVeejBiQPqpm/VLZbfqzoHXiZeTMsrR6Jd+eoOIJpIpoIIY0/XcGPyUaOBUsKzYSwyLCR2TIetaqohkxk/njjN8aZUBDiNtjwI8V/93pEQaM5GBrZQERmZ5GoR3fspVnABTdDEsTASGCM9WxAOuGQUxsYRQza0fTEdEEwo2iNVfZuMr9p75MJVAZkWbhLe69zppXVe9m2rtqVau3+eZFNA5ukBXyEO3qI4eUQM1EUUKvaMPNHXenKnz6XwtSjecvOcMLcH5/gM7HZMu</latexit> 
+
+✓0
+
+<latexit sha1_base64="GK3cpPJ0jsv+oH0AR7yF0kKDqZ0=">AAAB9nicZVDLSgMxFM34rPVVdekmWAQXpcxIUZdFNy4r2Ae2Q8mkmTY0yQzJHbEM8xdu7U7c+jfi35i2s7DtgZDDyb03554gFtyA6/46G5tb2zu7hb3i/sHh0XHp5LRlokRT1qSRiHQnIIYJrlgTOAjWiTUjMhCsHYwfZu/tV6YNj9QzTGLmSzJUPOSUgJVeejBiQPqpm/VLZbfqzoHXiZeTMsrR6Jd+eoOIJpIpoIIY0/XcGPyUaOBUsKzYSwyLCR2TIetaqohkxk/njjN8aZUBDiNtjwI8V/93pEQaM5GBrZQERmZ5GoR3fspVnABTdDEsTASGCM9WxAOuGQUxsYRQza0fTEdEEwo2iNVfZuMr9p75MJVAZkWbhLe69zppXVe9m2rtqVau3+eZFNA5ukBXyEO3qI4eUQM1EUUKvaMPNHXenKnz6XwtSjecvOcMLcH5/gM7HZMu</latexit> 
+
+✓0
+
+<latexit sha1_base64="GK3cpPJ0jsv+oH0AR7yF0kKDqZ0=">AAAB9nicZVDLSgMxFM34rPVVdekmWAQXpcxIUZdFNy4r2Ae2Q8mkmTY0yQzJHbEM8xdu7U7c+jfi35i2s7DtgZDDyb03554gFtyA6/46G5tb2zu7hb3i/sHh0XHp5LRlokRT1qSRiHQnIIYJrlgTOAjWiTUjMhCsHYwfZu/tV6YNj9QzTGLmSzJUPOSUgJVeejBiQPqpm/VLZbfqzoHXiZeTMsrR6Jd+eoOIJpIpoIIY0/XcGPyUaOBUsKzYSwyLCR2TIetaqohkxk/njjN8aZUBDiNtjwI8V/93pEQaM5GBrZQERmZ5GoR3fspVnABTdDEsTASGCM9WxAOuGQUxsYRQza0fTEdEEwo2iNVfZuMr9p75MJVAZkWbhLe69zppXVe9m2rtqVau3+eZFNA5ukBXyEO3qI4eUQM1EUUKvaMPNHXenKnz6XwtSjecvOcMLcH5/gM7HZMu</latexit> 
+
+✓0
+
+<latexit sha1_base64="GK3cpPJ0jsv+oH0AR7yF0kKDqZ0=">AAAB9nicZVDLSgMxFM34rPVVdekmWAQXpcxIUZdFNy4r2Ae2Q8mkmTY0yQzJHbEM8xdu7U7c+jfi35i2s7DtgZDDyb03554gFtyA6/46G5tb2zu7hb3i/sHh0XHp5LRlokRT1qSRiHQnIIYJrlgTOAjWiTUjMhCsHYwfZu/tV6YNj9QzTGLmSzJUPOSUgJVeejBiQPqpm/VLZbfqzoHXiZeTMsrR6Jd+eoOIJpIpoIIY0/XcGPyUaOBUsKzYSwyLCR2TIetaqohkxk/njjN8aZUBDiNtjwI8V/93pEQaM5GBrZQERmZ5GoR3fspVnABTdDEsTASGCM9WxAOuGQUxsYRQza0fTEdEEwo2iNVfZuMr9p75MJVAZkWbhLe69zppXVe9m2rtqVau3+eZFNA5ukBXyEO3qI4eUQM1EUUKvaMPNHXenKnz6XwtSjecvOcMLcH5/gM7HZMu</latexit> 
+
+✓0
+
+<latexit sha1_base64="GK3cpPJ0jsv+oH0AR7yF0kKDqZ0=">AAAB9nicZVDLSgMxFM34rPVVdekmWAQXpcxIUZdFNy4r2Ae2Q8mkmTY0yQzJHbEM8xdu7U7c+jfi35i2s7DtgZDDyb03554gFtyA6/46G5tb2zu7hb3i/sHh0XHp5LRlokRT1qSRiHQnIIYJrlgTOAjWiTUjMhCsHYwfZu/tV6YNj9QzTGLmSzJUPOSUgJVeejBiQPqpm/VLZbfqzoHXiZeTMsrR6Jd+eoOIJpIpoIIY0/XcGPyUaOBUsKzYSwyLCR2TIetaqohkxk/njjN8aZUBDiNtjwI8V/93pEQaM5GBrZQERmZ5GoR3fspVnABTdDEsTASGCM9WxAOuGQUxsYRQza0fTEdEEwo2iNVfZuMr9p75MJVAZkWbhLe69zppXVe9m2rtqVau3+eZFNA5ukBXyEO3qI4eUQM1EUUKvaMPNHXenKnz6XwtSjecvOcMLcH5/gM7HZMu</latexit> 
+
+✓0
+
+<latexit sha1_base64="BCm6u8VhZJJiYE2iZSVbQTfufg8=">AAAB9nicZVDLSgMxFM34rPVVdekmWAQXpcxIUZdFNy4r2Ae2Q8mkmTY0yQzJHbEM8xdu7U7c+jfi35i2s7DtgZDDyb03554gFtyA6/46G5tb2zu7hb3i/sHh0XHp5LRlokRT1qSRiHQnIIYJrlgTOAjWiTUjMhCsHYwfZu/tV6YNj9QzTGLmSzJUPOSUgJVeejBiQPqpl/VLZbfqzoHXiZeTMsrR6Jd+eoOIJpIpoIIY0/XcGPyUaOBUsKzYSwyLCR2TIetaqohkxk/njjN8aZUBDiNtjwI8V/93pEQaM5GBrZQERmZ5GoR3fspVnABTdDEsTASGCM9WxAOuGQUxsYRQza0fTEdEEwo2iNVfZuMr9p75MJVAZkWbhLe69zppXVe9m2rtqVau3+eZFNA5ukBXyEO3qI4eUQM1EUUKvaMPNHXenKnz6XwtSjecvOcMLcH5/gM8p5Mv</latexit> 
+
+✓1
+
+<latexit sha1_base64="BCm6u8VhZJJiYE2iZSVbQTfufg8=">AAAB9nicZVDLSgMxFM34rPVVdekmWAQXpcxIUZdFNy4r2Ae2Q8mkmTY0yQzJHbEM8xdu7U7c+jfi35i2s7DtgZDDyb03554gFtyA6/46G5tb2zu7hb3i/sHh0XHp5LRlokRT1qSRiHQnIIYJrlgTOAjWiTUjMhCsHYwfZu/tV6YNj9QzTGLmSzJUPOSUgJVeejBiQPqpl/VLZbfqzoHXiZeTMsrR6Jd+eoOIJpIpoIIY0/XcGPyUaOBUsKzYSwyLCR2TIetaqohkxk/njjN8aZUBDiNtjwI8V/93pEQaM5GBrZQERmZ5GoR3fspVnABTdDEsTASGCM9WxAOuGQUxsYRQza0fTEdEEwo2iNVfZuMr9p75MJVAZkWbhLe69zppXVe9m2rtqVau3+eZFNA5ukBXyEO3qI4eUQM1EUUKvaMPNHXenKnz6XwtSjecvOcMLcH5/gM8p5Mv</latexit> 
+
+✓1
+
+<latexit sha1_base64="BCm6u8VhZJJiYE2iZSVbQTfufg8=">AAAB9nicZVDLSgMxFM34rPVVdekmWAQXpcxIUZdFNy4r2Ae2Q8mkmTY0yQzJHbEM8xdu7U7c+jfi35i2s7DtgZDDyb03554gFtyA6/46G5tb2zu7hb3i/sHh0XHp5LRlokRT1qSRiHQnIIYJrlgTOAjWiTUjMhCsHYwfZu/tV6YNj9QzTGLmSzJUPOSUgJVeejBiQPqpl/VLZbfqzoHXiZeTMsrR6Jd+eoOIJpIpoIIY0/XcGPyUaOBUsKzYSwyLCR2TIetaqohkxk/njjN8aZUBDiNtjwI8V/93pEQaM5GBrZQERmZ5GoR3fspVnABTdDEsTASGCM9WxAOuGQUxsYRQza0fTEdEEwo2iNVfZuMr9p75MJVAZkWbhLe69zppXVe9m2rtqVau3+eZFNA5ukBXyEO3qI4eUQM1EUUKvaMPNHXenKnz6XwtSjecvOcMLcH5/gM8p5Mv</latexit> 
+
+✓1
+
+<latexit sha1_base64="BCm6u8VhZJJiYE2iZSVbQTfufg8=">AAAB9nicZVDLSgMxFM34rPVVdekmWAQXpcxIUZdFNy4r2Ae2Q8mkmTY0yQzJHbEM8xdu7U7c+jfi35i2s7DtgZDDyb03554gFtyA6/46G5tb2zu7hb3i/sHh0XHp5LRlokRT1qSRiHQnIIYJrlgTOAjWiTUjMhCsHYwfZu/tV6YNj9QzTGLmSzJUPOSUgJVeejBiQPqpl/VLZbfqzoHXiZeTMsrR6Jd+eoOIJpIpoIIY0/XcGPyUaOBUsKzYSwyLCR2TIetaqohkxk/njjN8aZUBDiNtjwI8V/93pEQaM5GBrZQERmZ5GoR3fspVnABTdDEsTASGCM9WxAOuGQUxsYRQza0fTEdEEwo2iNVfZuMr9p75MJVAZkWbhLe69zppXVe9m2rtqVau3+eZFNA5ukBXyEO3qI4eUQM1EUUKvaMPNHXenKnz6XwtSjecvOcMLcH5/gM8p5Mv</latexit> 
+
+✓1
+
+<latexit sha1_base64="BCm6u8VhZJJiYE2iZSVbQTfufg8=">AAAB9nicZVDLSgMxFM34rPVVdekmWAQXpcxIUZdFNy4r2Ae2Q8mkmTY0yQzJHbEM8xdu7U7c+jfi35i2s7DtgZDDyb03554gFtyA6/46G5tb2zu7hb3i/sHh0XHp5LRlokRT1qSRiHQnIIYJrlgTOAjWiTUjMhCsHYwfZu/tV6YNj9QzTGLmSzJUPOSUgJVeejBiQPqpl/VLZbfqzoHXiZeTMsrR6Jd+eoOIJpIpoIIY0/XcGPyUaOBUsKzYSwyLCR2TIetaqohkxk/njjN8aZUBDiNtjwI8V/93pEQaM5GBrZQERmZ5GoR3fspVnABTdDEsTASGCM9WxAOuGQUxsYRQza0fTEdEEwo2iNVfZuMr9p75MJVAZkWbhLe69zppXVe9m2rtqVau3+eZFNA5ukBXyEO3qI4eUQM1EUUKvaMPNHXenKnz6XwtSjecvOcMLcH5/gM8p5Mv</latexit> 
+
+✓1
+
+<latexit sha1_base64="UOa6mofgFsG6nF36th/hqh73I2c=">AAAB9nicZVDLTgIxFO3gC/GFunTTSExcEDJDiLokunGJiTwiTEindKCh05m0d4xkMn/hVnbGrX9j/Bs7MAuBkzQ9Ob339tzjRYJrsO1fq7C1vbO7V9wvHRweHZ+UT886OowVZW0ailD1PKKZ4JK1gYNgvUgxEniCdb3pQ/befWVK81A+wyxibkDGkvucEjDSywAmDMgwqafDcsWu2QvgTeLkpIJytIbln8EopHHAJFBBtO47dgRuQhRwKlhaGsSaRYROyZj1DZUkYNpNFo5TfGWUEfZDZY4EvFD/dyQk0HoWeKYyIDDRq9PAv3MTLqMYmKTLYX4sMIQ4WxGPuGIUxMwQQhU3fjCdEEUomCDWf8nGV82d+dBVL0hLJglnfe9N0qnXnJta46lRad7nmRTRBbpE18hBt6iJHlELtRFFEr2jDzS33qy59Wl9LUsLVt5zjlZgff8BPjGTMA==</latexit> 
+
+✓2
+
+<latexit sha1_base64="BCm6u8VhZJJiYE2iZSVbQTfufg8=">AAAB9nicZVDLSgMxFM34rPVVdekmWAQXpcxIUZdFNy4r2Ae2Q8mkmTY0yQzJHbEM8xdu7U7c+jfi35i2s7DtgZDDyb03554gFtyA6/46G5tb2zu7hb3i/sHh0XHp5LRlokRT1qSRiHQnIIYJrlgTOAjWiTUjMhCsHYwfZu/tV6YNj9QzTGLmSzJUPOSUgJVeejBiQPqpl/VLZbfqzoHXiZeTMsrR6Jd+eoOIJpIpoIIY0/XcGPyUaOBUsKzYSwyLCR2TIetaqohkxk/njjN8aZUBDiNtjwI8V/93pEQaM5GBrZQERmZ5GoR3fspVnABTdDEsTASGCM9WxAOuGQUxsYRQza0fTEdEEwo2iNVfZuMr9p75MJVAZkWbhLe69zppXVe9m2rtqVau3+eZFNA5ukBXyEO3qI4eUQM1EUUKvaMPNHXenKnz6XwtSjecvOcMLcH5/gM8p5Mv</latexit> 
+
+✓1
+
+<latexit sha1_base64="UOa6mofgFsG6nF36th/hqh73I2c=">AAAB9nicZVDLTgIxFO3gC/GFunTTSExcEDJDiLokunGJiTwiTEindKCh05m0d4xkMn/hVnbGrX9j/Bs7MAuBkzQ9Ob339tzjRYJrsO1fq7C1vbO7V9wvHRweHZ+UT886OowVZW0ailD1PKKZ4JK1gYNgvUgxEniCdb3pQ/befWVK81A+wyxibkDGkvucEjDSywAmDMgwqafDcsWu2QvgTeLkpIJytIbln8EopHHAJFBBtO47dgRuQhRwKlhaGsSaRYROyZj1DZUkYNpNFo5TfGWUEfZDZY4EvFD/dyQk0HoWeKYyIDDRq9PAv3MTLqMYmKTLYX4sMIQ4WxGPuGIUxMwQQhU3fjCdEEUomCDWf8nGV82d+dBVL0hLJglnfe9N0qnXnJta46lRad7nmRTRBbpE18hBt6iJHlELtRFFEr2jDzS33qy59Wl9LUsLVt5zjlZgff8BPjGTMA==</latexit> 
+
+✓2
+
+<latexit sha1_base64="UOa6mofgFsG6nF36th/hqh73I2c=">AAAB9nicZVDLTgIxFO3gC/GFunTTSExcEDJDiLokunGJiTwiTEindKCh05m0d4xkMn/hVnbGrX9j/Bs7MAuBkzQ9Ob339tzjRYJrsO1fq7C1vbO7V9wvHRweHZ+UT886OowVZW0ailD1PKKZ4JK1gYNgvUgxEniCdb3pQ/befWVK81A+wyxibkDGkvucEjDSywAmDMgwqafDcsWu2QvgTeLkpIJytIbln8EopHHAJFBBtO47dgRuQhRwKlhaGsSaRYROyZj1DZUkYNpNFo5TfGWUEfZDZY4EvFD/dyQk0HoWeKYyIDDRq9PAv3MTLqMYmKTLYX4sMIQ4WxGPuGIUxMwQQhU3fjCdEEUomCDWf8nGV82d+dBVL0hLJglnfe9N0qnXnJta46lRad7nmRTRBbpE18hBt6iJHlELtRFFEr2jDzS33qy59Wl9LUsLVt5zjlZgff8BPjGTMA==</latexit> 
+
+✓2
+
+<latexit sha1_base64="UOa6mofgFsG6nF36th/hqh73I2c=">AAAB9nicZVDLTgIxFO3gC/GFunTTSExcEDJDiLokunGJiTwiTEindKCh05m0d4xkMn/hVnbGrX9j/Bs7MAuBkzQ9Ob339tzjRYJrsO1fq7C1vbO7V9wvHRweHZ+UT886OowVZW0ailD1PKKZ4JK1gYNgvUgxEniCdb3pQ/befWVK81A+wyxibkDGkvucEjDSywAmDMgwqafDcsWu2QvgTeLkpIJytIbln8EopHHAJFBBtO47dgRuQhRwKlhaGsSaRYROyZj1DZUkYNpNFo5TfGWUEfZDZY4EvFD/dyQk0HoWeKYyIDDRq9PAv3MTLqMYmKTLYX4sMIQ4WxGPuGIUxMwQQhU3fjCdEEUomCDWf8nGV82d+dBVL0hLJglnfe9N0qnXnJta46lRad7nmRTRBbpE18hBt6iJHlELtRFFEr2jDzS33qy59Wl9LUsLVt5zjlZgff8BPjGTMA==</latexit> 
+
+✓2
+
+<latexit sha1_base64="UOa6mofgFsG6nF36th/hqh73I2c=">AAAB9nicZVDLTgIxFO3gC/GFunTTSExcEDJDiLokunGJiTwiTEindKCh05m0d4xkMn/hVnbGrX9j/Bs7MAuBkzQ9Ob339tzjRYJrsO1fq7C1vbO7V9wvHRweHZ+UT886OowVZW0ailD1PKKZ4JK1gYNgvUgxEniCdb3pQ/befWVK81A+wyxibkDGkvucEjDSywAmDMgwqafDcsWu2QvgTeLkpIJytIbln8EopHHAJFBBtO47dgRuQhRwKlhaGsSaRYROyZj1DZUkYNpNFo5TfGWUEfZDZY4EvFD/dyQk0HoWeKYyIDDRq9PAv3MTLqMYmKTLYX4sMIQ4WxGPuGIUxMwQQhU3fjCdEEUomCDWf8nGV82d+dBVL0hLJglnfe9N0qnXnJta46lRad7nmRTRBbpE18hBt6iJHlELtRFFEr2jDzS33qy59Wl9LUsLVt5zjlZgff8BPjGTMA==</latexit> 
+
+✓2
+
+<latexit sha1_base64="7rn9+LXdGl5moLzdVZOvGqCwxQk=">AAAB9nicZVDLTgIxFO3gC/GFunQzkZi4IGRGibokunGJiTwiTEindKCh7UzaO0Yymb9wKzvj1r8x/o0dmIXASZqenN57e+7xI840OM6vVdjY3NreKe6W9vYPDo/KxydtHcaK0BYJeai6PtaUM0lbwIDTbqQoFj6nHX/ykL13XqnSLJTPMI2oJ/BIsoARDEZ66cOYAh4k1+mgXHFqzhz2OnFzUkE5moPyT38YklhQCYRjrXuuE4GXYAWMcJqW+rGmESYTPKI9QyUWVHvJ3HFqXxhlaAehMkeCPVf/dyRYaD0VvqkUGMZ6eRoEd17CZBQDlWQxLIi5DaGdrWgPmaIE+NQQTBQzfmwyxgoTMEGs/pKNr5o786GrvkhLJgl3de910r6quTe1+lO90rjPMymiM3SOLpGLblEDPaImaiGCJHpHH2hmvVkz69P6WpQWrLznFC3B+v4DP7uTMQ==</latexit> 
+
+✓3
+
+<latexit sha1_base64="UOa6mofgFsG6nF36th/hqh73I2c=">AAAB9nicZVDLTgIxFO3gC/GFunTTSExcEDJDiLokunGJiTwiTEindKCh05m0d4xkMn/hVnbGrX9j/Bs7MAuBkzQ9Ob339tzjRYJrsO1fq7C1vbO7V9wvHRweHZ+UT886OowVZW0ailD1PKKZ4JK1gYNgvUgxEniCdb3pQ/befWVK81A+wyxibkDGkvucEjDSywAmDMgwqafDcsWu2QvgTeLkpIJytIbln8EopHHAJFBBtO47dgRuQhRwKlhaGsSaRYROyZj1DZUkYNpNFo5TfGWUEfZDZY4EvFD/dyQk0HoWeKYyIDDRq9PAv3MTLqMYmKTLYX4sMIQ4WxGPuGIUxMwQQhU3fjCdEEUomCDWf8nGV82d+dBVL0hLJglnfe9N0qnXnJta46lRad7nmRTRBbpE18hBt6iJHlELtRFFEr2jDzS33qy59Wl9LUsLVt5zjlZgff8BPjGTMA==</latexit> 
+
+✓2
+
+Config 1: full collocation Config 2: half collocation Figure 8: Two example configurations of our learning system used in benchmarking experiments. 
+
+asynchronous training could reduce idle time and enhance GPU utilization. This approach 969 
+
+has proven effective in large-scale RL systems [ 6], and we leave this optimization to future 970 
+
+work. 971 
+
+Results . Benchmarking results for the latency of training a batch of 128 samples are presented in 972 
+
+Fig. 9. Overall, training with the config 2 demonstrates consistently greater efficiency than trl ,973 
+
+achieving up to a 2.5 × reduction in latency at the 2.8B scale. 974 0
+
+20 
+
+40 
+
+60 
+
+> Batch latency (second)
+
+config 1 
+
+gloo config 2 
+
+nccl config 2 
+
+gloo config 2 
+
+nccl config 2 
+
+gloo config 2 
+
+nccl 
+
+1B 2.8B 6.9B 
+
+4.21 4.67 3.50 
+
+23.56 
+
+13.77 9.25 
+
+65.39 
+
+48.83 
+
+34.43 
+
+Benchmarking ours against huggingface/trl 
+
+trl-learn 
+
+trl-oracle 
+
+trl-generate 
+
+trl-other 
+
+ours-learn 
+
+ours-oracle 
+
+ours-generate 
+
+ours-other 
+
+Figure 9: Averaged training latency (over 10 batches, equivalent to 1280 samples) comparing ours against 
+
+huggingface/trl .
+
+We next analyze the time costs for individual stages: generate, oracle and learn. Across all scales 975 
+
+and configurations, ours demonstrates significantly lower generate time than trl , due to distributed 976 
+
+actors utilizing vLLM. Additionally, at the 6.9B scale, ours requires substantially less oracle time 977 
+
+than trl , as trl employs ZeRO-3 to prevent GPU memory overflow, thereby slowing inference. 978 
+
+In contrast, ours config 2 allows for flexible collocation, enabling oracle RMs hosted via Mosec to 979 
+
+operate in parallel without sharding. However, ours config 2 incurs longer learn time compared to 980 
+
+trl due to the use of only half the available GPUs. This limitation also explains why, at the 1B scale, 981 
+
+config 2 has higher latency than config 1 across all stages. 982 
+
+The other category accounts for time costs associated with data loading, tokenization, and communi-983 
+
+cation. Here, inter-process communication is the primary cost, with trl showing minimal overhead 984 
+
+as all three stages operate within the same process on identical micro-batches, avoiding weight 985 
+
+synchronization. By contrast, ours requires considerable time to transfer updated policy weights 986 
+
+from the learner to all actors. While NCCL is recommended for synchronization over GLOO, it 987 
+
+requires older vLLM packages (prior to version 0.4.3), which may lack support for newer LLM 988 
+
+architectures. Moreover, NCCL is incompatible with config 1 due to its restriction on the learner 989 
+
+master process establishing two separate process groups (one for DeepSpeed, the other for weight 990 
+
+synchronization). In summary, we recommend future researchers prioritize the config 2 and employ 991 
+
+NCCL when feasible. 992 
+
+25 I Additional materials 993 
+
+In this section, we include a comparison of prior works (Table 2), the prompt template we use for 994 
+
+LLM-as-a-judge (Fig. 10), and an example showing ChatGPT actively explores (Fig. 6). 995 
+
+LLM-as-a-Judge Prompt Template 
+
+I require a leaderboard for various large language models. I’ll provide you with prompts given to these models and their corresponding outputs. Your task is to assess these responses, and select the model that produces the best output from a human perspective. ## Instruction {instruction} ## Model Outputs Here are the unordered outputs from the models. Each output is associated with a specific model, identified by a unique model identifier. {"model_identifier: "0", "output": {response0} }{"model_identifier: "1", "output": {response1} }## Task Evaluate the models on the basis of the quality and relevance of their results, and select the model that generated the best result. Reply with the identifier of the best model. Our evaluation will only take into account the first character of your answer, so make sure it contains only one of the identifiers and nothing else (no quotation marks, no spaces, no new lines, ...).  
+
+> Figure 10: We provide the prompt with two responses and ask GPT to choose the preferred one. We parse the first token’s logits of “0” and “1” and apply the BT model to obtain the relative preference.
+
+26 Figure 11: ChatGPT system asks for users’ preference feedback to strategically explore better answers. In this case, algorithms should be designed around the objective of minimizing cumulative regret (i.e., the E&E setting), because the quality of both responses generated by the system affects user experience. 
+
+27 NeurIPS Paper Checklist 996 
+
+1. Claims 997 
+
+Question: Do the main claims made in the abstract and introduction accurately reflect the 998 
+
+paper’s contributions and scope? 999 
+
+Answer: [Yes] 1000 
+
+Justification: We include the paper’s contributions and scope in the abstract and introduction. 1001 
+
+Guidelines: 1002 
+
+• The answer NA means that the abstract and introduction do not include the claims 1003 
+
+made in the paper. 1004 
+
+• The abstract and/or introduction should clearly state the claims made, including the 1005 
+
+contributions made in the paper and important assumptions and limitations. A No or 1006 
+
+NA answer to this question will not be perceived well by the reviewers. 1007 
+
+• The claims made should match theoretical and experimental results, and reflect how 1008 
+
+much the results can be expected to generalize to other settings. 1009 
+
+• It is fine to include aspirational goals as motivation as long as it is clear that these goals 1010 
+
+are not attained by the paper. 1011 
+
+2. Limitations 1012 
+
+Question: Does the paper discuss the limitations of the work performed by the authors? 1013 
+
+Answer: [NA] 1014 
+
+Justification: There is no obvious limitation. 1015 
+
+Guidelines: 1016 
+
+• The answer NA means that the paper has no limitation while the answer No means that 1017 
+
+the paper has limitations, but those are not discussed in the paper. 1018 
+
+• The authors are encouraged to create a separate "Limitations" section in their paper. 1019 
+
+• The paper should point out any strong assumptions and how robust the results are to 1020 
+
+violations of these assumptions (e.g., independence assumptions, noiseless settings, 1021 
+
+model well-specification, asymptotic approximations only holding locally). The authors 1022 
+
+should reflect on how these assumptions might be violated in practice and what the 1023 
+
+implications would be. 1024 
+
+• The authors should reflect on the scope of the claims made, e.g., if the approach was 1025 
+
+only tested on a few datasets or with a few runs. In general, empirical results often 1026 
+
+depend on implicit assumptions, which should be articulated. 1027 
+
+• The authors should reflect on the factors that influence the performance of the approach. 1028 
+
+For example, a facial recognition algorithm may perform poorly when image resolution 1029 
+
+is low or images are taken in low lighting. Or a speech-to-text system might not be 1030 
+
+used reliably to provide closed captions for online lectures because it fails to handle 1031 
+
+technical jargon. 1032 
+
+• The authors should discuss the computational efficiency of the proposed algorithms 1033 
+
+and how they scale with dataset size. 1034 
+
+• If applicable, the authors should discuss possible limitations of their approach to 1035 
+
+address problems of privacy and fairness. 1036 
+
+• While the authors might fear that complete honesty about limitations might be used by 1037 
+
+reviewers as grounds for rejection, a worse outcome might be that reviewers discover 1038 
+
+limitations that aren’t acknowledged in the paper. The authors should use their best 1039 
+
+judgment and recognize that individual actions in favor of transparency play an impor-1040 
+
+tant role in developing norms that preserve the integrity of the community. Reviewers 1041 
+
+will be specifically instructed to not penalize honesty concerning limitations. 1042 
+
+3. Theory assumptions and proofs 1043 
+
+Question: For each theoretical result, does the paper provide the full set of assumptions and 1044 
+
+a complete (and correct) proof? 1045 
+
+Answer: [NA] 1046 
+
+28 Justification: We do not have theorems. 1047 
+
+Guidelines: 1048 
+
+• The answer NA means that the paper does not include theoretical results. 1049 
+
+• All the theorems, formulas, and proofs in the paper should be numbered and cross-1050 
+
+referenced. 1051 
+
+• All assumptions should be clearly stated or referenced in the statement of any theorems. 1052 
+
+• The proofs can either appear in the main paper or the supplemental material, but if 1053 
+
+they appear in the supplemental material, the authors are encouraged to provide a short 1054 
+
+proof sketch to provide intuition. 1055 
+
+• Inversely, any informal proof provided in the core of the paper should be complemented 1056 
+
+by formal proofs provided in appendix or supplemental material. 1057 
+
+• Theorems and Lemmas that the proof relies upon should be properly referenced. 1058 
+
+4. Experimental result reproducibility 1059 
+
+Question: Does the paper fully disclose all the information needed to reproduce the main ex-1060 
+
+perimental results of the paper to the extent that it affects the main claims and/or conclusions 1061 
+
+of the paper (regardless of whether the code and data are provided or not)? 1062 
+
+Answer: [Yes] 1063 
+
+Justification: We have explained our implementation details in Sec. 5. 1064 
+
+Guidelines: 1065 
+
+• The answer NA means that the paper does not include experiments. 1066 
+
+• If the paper includes experiments, a No answer to this question will not be perceived 1067 
+
+well by the reviewers: Making the paper reproducible is important, regardless of 1068 
+
+whether the code and data are provided or not. 1069 
+
+• If the contribution is a dataset and/or model, the authors should describe the steps taken 1070 
+
+to make their results reproducible or verifiable. 1071 
+
+• Depending on the contribution, reproducibility can be accomplished in various ways. 1072 
+
+For example, if the contribution is a novel architecture, describing the architecture fully 1073 
+
+might suffice, or if the contribution is a specific model and empirical evaluation, it may 1074 
+
+be necessary to either make it possible for others to replicate the model with the same 1075 
+
+dataset, or provide access to the model. In general. releasing code and data is often 1076 
+
+one good way to accomplish this, but reproducibility can also be provided via detailed 1077 
+
+instructions for how to replicate the results, access to a hosted model (e.g., in the case 1078 
+
+of a large language model), releasing of a model checkpoint, or other means that are 1079 
+
+appropriate to the research performed. 1080 
+
+• While NeurIPS does not require releasing code, the conference does require all submis-1081 
+
+sions to provide some reasonable avenue for reproducibility, which may depend on the 1082 
+
+nature of the contribution. For example 1083 
+
+(a) If the contribution is primarily a new algorithm, the paper should make it clear how 1084 
+
+to reproduce that algorithm. 1085 
+
+(b) If the contribution is primarily a new model architecture, the paper should describe 1086 
+
+the architecture clearly and fully. 1087 
+
+(c) If the contribution is a new model (e.g., a large language model), then there should 1088 
+
+either be a way to access this model for reproducing the results or a way to reproduce 1089 
+
+the model (e.g., with an open-source dataset or instructions for how to construct 1090 
+
+the dataset). 1091 
+
+(d) We recognize that reproducibility may be tricky in some cases, in which case 1092 
+
+authors are welcome to describe the particular way they provide for reproducibility. 1093 
+
+In the case of closed-source models, it may be that access to the model is limited in 1094 
+
+some way (e.g., to registered users), but it should be possible for other researchers 1095 
+
+to have some path to reproducing or verifying the results. 1096 
+
+5. Open access to data and code 1097 
+
+Question: Does the paper provide open access to the data and code, with sufficient instruc-1098 
+
+tions to faithfully reproduce the main experimental results, as described in supplemental 1099 
+
+material? 1100 
+
+29 Answer: [No] 1101 
+
+Justification: We haven’t include the code in the submission but we will fully open source 1102 
+
+the codes after the reviewing process. 1103 
+
+Guidelines: 1104 
+
+• The answer NA means that paper does not include experiments requiring code. 1105 
+
+• Please see the NeurIPS code and data submission guidelines ( https://nips.cc/ 1106 
+
+public/guides/CodeSubmissionPolicy ) for more details. 1107 
+
+• While we encourage the release of code and data, we understand that this might not be 1108 
+
+possible, so “No” is an acceptable answer. Papers cannot be rejected simply for not 1109 
+
+including code, unless this is central to the contribution (e.g., for a new open-source 1110 
+
+benchmark). 1111 
+
+• The instructions should contain the exact command and environment needed to run to 1112 
+
+reproduce the results. See the NeurIPS code and data submission guidelines ( https: 1113 
+
+//nips.cc/public/guides/CodeSubmissionPolicy ) for more details. 1114 
+
+• The authors should provide instructions on data access and preparation, including how 1115 
+
+to access the raw data, preprocessed data, intermediate data, and generated data, etc. 1116 
+
+• The authors should provide scripts to reproduce all experimental results for the new 1117 
+
+proposed method and baselines. If only a subset of experiments are reproducible, they 1118 
+
+should state which ones are omitted from the script and why. 1119 
+
+• At submission time, to preserve anonymity, the authors should release anonymized 1120 
+
+versions (if applicable). 1121 
+
+• Providing as much information as possible in supplemental material (appended to the 1122 
+
+paper) is recommended, but including URLs to data and code is permitted. 1123 
+
+6. Experimental setting/details 1124 
+
+Question: Does the paper specify all the training and test details (e.g., data splits, hyper-1125 
+
+parameters, how they were chosen, type of optimizer, etc.) necessary to understand the 1126 
+
+results? 1127 
+
+Answer: [Yes] 1128 
+
+Justification: We have presented all the details in App. F. 1129 
+
+Guidelines: 1130 
+
+• The answer NA means that the paper does not include experiments. 1131 
+
+• The experimental setting should be presented in the core of the paper to a level of detail 1132 
+
+that is necessary to appreciate the results and make sense of them. 1133 
+
+• The full details can be provided either with the code, in appendix, or as supplemental 1134 
+
+material. 1135 
+
+7. Experiment statistical significance 1136 
+
+Question: Does the paper report error bars suitably and correctly defined or other appropriate 1137 
+
+information about the statistical significance of the experiments? 1138 
+
+Answer: [Yes] 1139 
+
+Justification: All experiments are repeated for 3 times with different seeds for statistical 1140 
+
+significance. 1141 
+
+Guidelines: 1142 
+
+• The answer NA means that the paper does not include experiments. 1143 
+
+• The authors should answer "Yes" if the results are accompanied by error bars, confi-1144 
+
+dence intervals, or statistical significance tests, at least for the experiments that support 1145 
+
+the main claims of the paper. 1146 
+
+• The factors of variability that the error bars are capturing should be clearly stated (for 1147 
+
+example, train/test split, initialization, random drawing of some parameter, or overall 1148 
+
+run with given experimental conditions). 1149 
+
+• The method for calculating the error bars should be explained (closed form formula, 1150 
+
+call to a library function, bootstrap, etc.) 1151 
+
+• The assumptions made should be given (e.g., Normally distributed errors). 1152 
+
+30 • It should be clear whether the error bar is the standard deviation or the standard error 1153 
+
+of the mean. 1154 
+
+• It is OK to report 1-sigma error bars, but one should state it. The authors should 1155 
+
+preferably report a 2-sigma error bar than state that they have a 96% CI, if the hypothesis 1156 
+
+of Normality of errors is not verified. 1157 
+
+• For asymmetric distributions, the authors should be careful not to show in tables or 1158 
+
+figures symmetric error bars that would yield results that are out of range (e.g. negative 1159 
+
+error rates). 1160 
+
+• If error bars are reported in tables or plots, The authors should explain in the text how 1161 
+
+they were calculated and reference the corresponding figures or tables in the text. 1162 
+
+8. Experiments compute resources 1163 
+
+Question: For each experiment, does the paper provide sufficient information on the com-1164 
+
+puter resources (type of compute workers, memory, time of execution) needed to reproduce 1165 
+
+the experiments? 1166 
+
+Answer: [Yes] 1167 
+
+Justification: We have included the description about computational resources at line 857. 1168 
+
+Guidelines: 1169 
+
+• The answer NA means that the paper does not include experiments. 1170 
+
+• The paper should indicate the type of compute workers CPU or GPU, internal cluster, 1171 
+
+or cloud provider, including relevant memory and storage. 1172 
+
+• The paper should provide the amount of compute required for each of the individual 1173 
+
+experimental runs as well as estimate the total compute. 1174 
+
+• The paper should disclose whether the full research project required more compute 1175 
+
+than the experiments reported in the paper (e.g., preliminary or failed experiments that 1176 
+
+didn’t make it into the paper). 1177 
+
+9. Code of ethics 1178 
+
+Question: Does the research conducted in the paper conform, in every respect, with the 1179 
+
+NeurIPS Code of Ethics https://neurips.cc/public/EthicsGuidelines ?1180 
+
+Answer: [Yes] 1181 
+
+Justification: We conform with the NeurIPS Code of Ethics. 1182 
+
+Guidelines: 1183 
+
+• The answer NA means that the authors have not reviewed the NeurIPS Code of Ethics. 1184 
+
+• If the authors answer No, they should explain the special circumstances that require a 1185 
+
+deviation from the Code of Ethics. 1186 
+
+• The authors should make sure to preserve anonymity (e.g., if there is a special consid-1187 
+
+eration due to laws or regulations in their jurisdiction). 1188 
+
+10. Broader impacts 1189 
+
+Question: Does the paper discuss both potential positive societal impacts and negative 1190 
+
+societal impacts of the work performed? 1191 
+
+Answer: [NA] 1192 
+
+Justification: Our work studies the sample efficiency of LLM fine-tuning from a research 1193 
+
+point of view, which should not directly lead to harmful societal impact. 1194 
+
+Guidelines: 1195 
+
+• The answer NA means that there is no societal impact of the work performed. 1196 
+
+• If the authors answer NA or No, they should explain why their work has no societal 1197 
+
+impact or why the paper does not address societal impact. 1198 
+
+• Examples of negative societal impacts include potential malicious or unintended uses 1199 
+
+(e.g., disinformation, generating fake profiles, surveillance), fairness considerations 1200 
+
+(e.g., deployment of technologies that could make decisions that unfairly impact specific 1201 
+
+groups), privacy considerations, and security considerations. 1202 
+
+31 • The conference expects that many papers will be foundational research and not tied 1203 
+
+to particular applications, let alone deployments. However, if there is a direct path to 1204 
+
+any negative applications, the authors should point it out. For example, it is legitimate 1205 
+
+to point out that an improvement in the quality of generative models could be used to 1206 
+
+generate deepfakes for disinformation. On the other hand, it is not needed to point out 1207 
+
+that a generic algorithm for optimizing neural networks could enable people to train 1208 
+
+models that generate Deepfakes faster. 1209 
+
+• The authors should consider possible harms that could arise when the technology is 1210 
+
+being used as intended and functioning correctly, harms that could arise when the 1211 
+
+technology is being used as intended but gives incorrect results, and harms following 1212 
+
+from (intentional or unintentional) misuse of the technology. 1213 
+
+• If there are negative societal impacts, the authors could also discuss possible mitigation 1214 
+
+strategies (e.g., gated release of models, providing defenses in addition to attacks, 1215 
+
+mechanisms for monitoring misuse, mechanisms to monitor how a system learns from 1216 
+
+feedback over time, improving the efficiency and accessibility of ML). 1217 
+
+11. Safeguards 1218 
+
+Question: Does the paper describe safeguards that have been put in place for responsible 1219 
+
+release of data or models that have a high risk for misuse (e.g., pretrained language models, 1220 
+
+image generators, or scraped datasets)? 1221 
+
+Answer: [NA] 1222 
+
+Justification: No such risks. 1223 
+
+Guidelines: 1224 
+
+• The answer NA means that the paper poses no such risks. 1225 
+
+• Released models that have a high risk for misuse or dual-use should be released with 1226 
+
+necessary safeguards to allow for controlled use of the model, for example by requiring 1227 
+
+that users adhere to usage guidelines or restrictions to access the model or implementing 1228 
+
+safety filters. 1229 
+
+• Datasets that have been scraped from the Internet could pose safety risks. The authors 1230 
+
+should describe how they avoided releasing unsafe images. 1231 
+
+• We recognize that providing effective safeguards is challenging, and many papers do 1232 
+
+not require this, but we encourage authors to take this into account and make a best 1233 
+
+faith effort. 1234 
+
+12. Licenses for existing assets 1235 
+
+Question: Are the creators or original owners of assets (e.g., code, data, models), used in 1236 
+
+the paper, properly credited and are the license and terms of use explicitly mentioned and 1237 
+
+properly respected? 1238 
+
+Answer: [Yes] 1239 
+
+Justification: We properly cited all the existing resources that we used in this research. 1240 
+
+Guidelines: 1241 
+
+• The answer NA means that the paper does not use existing assets. 1242 
+
+• The authors should cite the original paper that produced the code package or dataset. 1243 
+
+• The authors should state which version of the asset is used and, if possible, include a 1244 
+
+URL. 1245 
+
+• The name of the license (e.g., CC-BY 4.0) should be included for each asset. 1246 
+
+• For scraped data from a particular source (e.g., website), the copyright and terms of 1247 
+
+service of that source should be provided. 1248 
+
+• If assets are released, the license, copyright information, and terms of use in the 1249 
+
+package should be provided. For popular datasets, paperswithcode.com/datasets 1250 
+
+has curated licenses for some datasets. Their licensing guide can help determine the 1251 
+
+license of a dataset. 1252 
+
+• For existing datasets that are re-packaged, both the original license and the license of 1253 
+
+the derived asset (if it has changed) should be provided. 1254 
+
+32 • If this information is not available online, the authors are encouraged to reach out to 1255 
+
+the asset’s creators. 1256 
+
+13. New assets 1257 
+
+Question: Are new assets introduced in the paper well documented and is the documentation 1258 
+
+provided alongside the assets? 1259 
+
+Answer: [NA] 1260 
+
+Justification: We do not release new assets as of the paper itself. We will open source our 1261 
+
+code for reproducibility with documents. 1262 
+
+Guidelines: 1263 
+
+• The answer NA means that the paper does not release new assets. 1264 
+
+• Researchers should communicate the details of the dataset/code/model as part of their 1265 
+
+submissions via structured templates. This includes details about training, license, 1266 
+
+limitations, etc. 1267 
+
+• The paper should discuss whether and how consent was obtained from people whose 1268 
+
+asset is used. 1269 
+
+• At submission time, remember to anonymize your assets (if applicable). You can either 1270 
+
+create an anonymized URL or include an anonymized zip file. 1271 
+
+14. Crowdsourcing and research with human subjects 1272 
+
+Question: For crowdsourcing experiments and research with human subjects, does the paper 1273 
+
+include the full text of instructions given to participants and screenshots, if applicable, as 1274 
+
+well as details about compensation (if any)? 1275 
+
+Answer: [NA] 1276 
+
+Justification: We do not involve crowdsourcing nor research with human subjects. 1277 
+
+Guidelines: 1278 
+
+• The answer NA means that the paper does not involve crowdsourcing nor research with 1279 
+
+human subjects. 1280 
+
+• Including this information in the supplemental material is fine, but if the main contribu-1281 
+
+tion of the paper involves human subjects, then as much detail as possible should be 1282 
+
+included in the main paper. 1283 
+
+• According to the NeurIPS Code of Ethics, workers involved in data collection, curation, 1284 
+
+or other labor should be paid at least the minimum wage in the country of the data 1285 
+
+collector. 1286 
+
+15. Institutional review board (IRB) approvals or equivalent for research with human 1287 
+
+subjects 1288 
+
+Question: Does the paper describe potential risks incurred by study participants, whether 1289 
+
+such risks were disclosed to the subjects, and whether Institutional Review Board (IRB) 1290 
+
+approvals (or an equivalent approval/review based on the requirements of your country or 1291 
+
+institution) were obtained? 1292 
+
+Answer: [NA] 1293 
+
+Justification: We do not involve crowdsourcing nor research with human subjects. 1294 
+
+Guidelines: 1295 
+
+• The answer NA means that the paper does not involve crowdsourcing nor research with 1296 
+
+human subjects. 1297 
+
+• Depending on the country in which research is conducted, IRB approval (or equivalent) 1298 
+
+may be required for any human subjects research. If you obtained IRB approval, you 1299 
+
+should clearly state this in the paper. 1300 
+
+• We recognize that the procedures for this may vary significantly between institutions 1301 
+
+and locations, and we expect authors to adhere to the NeurIPS Code of Ethics and the 1302 
+
+guidelines for their institution. 1303 
+
+• For initial submissions, do not include any information that would break anonymity (if 1304 
+
+applicable), such as the institution conducting the review. 1305 
+
+33 16. Declaration of LLM usage 1306 
+
+Question: Does the paper describe the usage of LLMs if it is an important, original, or 1307 
+
+non-standard component of the core methods in this research? Note that if the LLM is used 1308 
+
+only for writing, editing, or formatting purposes and does not impact the core methodology, 1309 
+
+scientific rigorousness, or originality of the research, declaration is not required. 1310 
+
+Answer: [Yes] 1311 
+
+Justification: We used LLMs for editing (e.g., checking grammar errors). 1312 
+
+Guidelines: 1313 
+
+• The answer NA means that the core method development in this research does not 1314 
+
+involve LLMs as any important, original, or non-standard components. 1315 
+
+• Please refer to our LLM policy ( https://neurips.cc/Conferences/2025/LLM ) for 1316 
+
+what should or should not be described. 1317 
+
+34

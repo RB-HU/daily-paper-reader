@@ -1,0 +1,1316 @@
+Title: 21064_Evolutionary_Distributed.pdf
+
+URL Source: https://openreview.net/pdf?id=tESKKiKhVp
+
+Number of Pages: 16
+
+Markdown Content:
+# Evolutionary Distributed Training 
+
+Anonymous Author(s) 
+
+Affiliation Address 
+
+email 
+
+## Abstract 
+
+We introduce Evolutionary Distributed Training (EDT), a nature-inspired approach 1
+
+to distributed model training. EDT replaces centralized gradient synchronization 2
+
+with evaluation, pairwise model crossover, and mutation, enabling communication-3
+
+efficient training across loosely connected devices. While early investigations show 4
+
+limited effectiveness in language model pretraining, EDT demonstrates strong 5
+
+potential in reinforcement learning (RL). In complex multi-agent environments, 6
+
+EDT facilitates diverse reward exploration and emergent strategies by evolving 7
+
+both policy and reward functions, outperforming traditional training in adaptability 8
+
+and strategic diversity. We also hypothesize EDT as a promising framework for 9
+
+post-training and alignment, offering optimization towards multi-objective, non-10 
+
+differentiable goals. This work positions EDT as a scalable, evolutionary recipe 11 
+
+for distributed learning, offering early insights into where it may best fit within the 12 
+
+deep learning landscape. 13 
+
+## 1 Introduction 14 
+
+The last decade of machine learning has been defined by scale. Transformer-based language models 15 
+
+have demonstrated remarkable emergent capabilities when scaled to billions or even trillions of 16 
+
+parameters, prompting discussions of “Sparks of Artificial General Intelligence” [ 2]. Recent success 17 
+
+with Reinforcement Learning via Verifiable Reward (RLVR) brings us a step closer to human-level 18 
+
+general intelligence [ 18 ][ 22 ]. Towards that goal, we ponder a more fundamental question — How 19 
+
+did intelligence come to be in the first place? A simple answer would be — natural evolution. From 20 
+
+the collective mind of an ant colony to the all-powerful human brain, intelligence emerges from an 21 
+
+evolutionary algorithm. In this work, we intend to investigate how evolutionary algorithms may fit 22 
+
+into the current landscape of deep learning. More specifically, we make two observations about nature: 23 
+
+1. Natural evolution is highly parallelized and decentralized. 2. Most complex organisms in nature 24 
+
+perform pairwise reproduction. From this, we propose Evolutionary Distributed Training (EDT), a 25 
+
+nature-inspired recipe for applying evolutionary algorithms as an outer layer to distributed training. 26 
+
+Models are evaluated locally, selected based on fitness, and recombined via pairwise crossover 27 
+
+and mutation to produce offspring. This process repeats iteratively, without requiring centralized 28 
+
+synchronization of gradients. In the following sections we will conduct some early exploration of 29 
+
+EDT on Large Language Model (LLM) Pre-training, Post-training, and Reinforcement Learning 30 
+
+(RL). 31 
+
+## 2 Language Model Pretraining 32 
+
+2.1 Motivation 33 
+
+Recent work on distributed language model training has introduced new ways to scale model training 34 
+
+beyond traditional data-parallelism. In particular, DiLoCo [ 5], a variant of federated averaging [ 11 ]35 
+
+Submitted to 39th Conference on Neural Information Processing Systems (NeurIPS 2025). Do not distribute. presents a promising distributed optimization algorithm that matches the performance of data-parallel 36 
+
+while communicating 500 times less [ 5]. DiLoCo works by periodically synchronizing model deltas 37 
+
+with a central aggregator using SGD with momentum and Nesterov acceleration. Inspired by the 38 
+
+biological process of pairwise reproduction, we propose a decentralized alternative to DiLoCo using 39 
+
+our Evolutionary Distributed Training (EDT) recipe. Rather than averaging deltas across all workers, 40 
+
+we perform pairwise averaging, producing offspring that inherit characteristics from two parent 41 
+
+models. Our hope is that the momentum accumulated over an ancestry might act as a larger batch, 42 
+
+while the evolutionary algorithm optimizes for better-performing ancestries that carry the right 43 
+
+momentum. 44 
+
+2.2 Method and Experimental Setup 45 
+
+We initialize a 6-million parameter language model based on the LLaMA architecture [ 21 ] and GPT-2 46 
+
+tokenizer [15]. The training dataset is derived from TinyStories [6]. 47 
+
+To adapt the DiLoCo algorithm, we replace global averaging with pairwise model crossover. The 48 
+
+training loop proceeds as follows: 49 
+
+1. Fitness Evaluation: Each model is evaluated on a fixed and shared validation set consisting 50 
+
+of 400 examples .51 
+
+2. Selection: We perform rank-based selection , where models with higher fitness scores are 52 
+
+more likely to be selected as parents. 53 
+
+3. Crossover: For each pair of parent models (A, B ):54 
+
+- Compute the base model as a linear interpolation of their pre-update checkpoints. 55 
+
+- Average their training deltas to form a gradient. 56 
+
+- Average the velocity buffers. 57 
+
+- Apply the gradient to the base model using SGD with momentum and Nesterov acceleration. 58 
+
+- Carry over the resulting model to the next generation. 59 
+
+4. Local Training: Each worker performs 400 inner steps using the AdamW optimizer .60 
+
+We compare the following configurations: 61 
+
+1. DiLoCo Baseline: Running on 8 workers with a per-device batch size of 1 .62 
+
+2. EDT with Rank-Based Pairwise Selection: Running on 8 workers with a per-device 63 
+
+batch size of 1 .64 
+
+3. EDT with Random Pairwise Selection: Running on 8 workers with a per-device batch 65 
+
+size of 1 .66 
+
+4. EDT with Increased Update Frequency: Using 4 × more frequent updates (100 inner 67 
+
+steps) on 8 workers with a per-device batch size of 1 .68 
+
+2.3 Results 69 
+
+Figure 1 presents the validation perplexity across 32 outer steps. We observe that DiLoCo outperforms 70 
+
+EDT significantly over the course of training. While DiLoCo baseline shows signs of continuing 71 
+
+to decline in perplexity, our pairwise method appears to be slowing down to a stop. Furthermore, 72 
+
+rank-based and random pairwise selection yield nearly identical learning curves, indicating that the 73 
+
+evolutionary selection mechanism does not significantly influence model learning in this setting. 74 
+
+Increasing the update frequency in EDT (4x the updates) leads to faster initial perplexity reduction. 75 
+
+However, all configurations converge to similar perplexity values after equivalent total training 76 
+
+steps. This suggests that more frequent mixing may improve short-term convergence but does not 77 
+
+overcome EDT’s inherent limitations in aggregating knowledge or carrying gradient information 78 
+
+across generations. 79 
+
+Given initial exploration results, we conclude that EDT does not seem to fit directly in pre-training 80 
+
+settings. 81 
+
+2Figure 1: Comparing perplexity over training steps for random selection, evolutionary selection and DiLoCo baseline 
+
+Figure 2: 4x updates shows no improvement in overall perplexity score 
+
+## 3 Reinforcement Learning 82 
+
+3.1 Motivation 83 
+
+Reinforcement Learning (RL) has achieved remarkable success across domains, but remains funda-84 
+
+mentally constrained by its reliance on well-shaped reward functions. Sparse or deceptive reward 85 
+
+landscapes often result in agents that fail to learn meaningful behaviors. If you use a simple reward 86 
+
+function for a complex or long-horizon problem, the model likely will have a hard time learning 87 
+
+anything meaningful due to having too much space to explore. While if you manually create a 88 
+
+complex reward function, you risk the model overfitting and gaming the reward. In the end we are 89 
+
+stuck in an exploration-exploitation dilemma. One solution to this is by scaling up batch size with 90 
+
+massively parallel environments [ 1 ]. Such a method requires a substantial number of rollout workers 91 
+
+[13], which poses significant infrastructural challenges. 92 
+
+3We propose that Evolutionary Distributed Training (EDT) offers a natural mechanism to encourage 93 
+
+exploration without requiring handcrafted rewards or dense feedback. 94 
+
+To this end, we extend EDT to reinforcement learning by treating combinations of reward functions 95 
+
+as mutable DNA sequences . Each worker trains a local policy model using its own reward configu-96 
+
+ration, allowing a population of agents to explore diverse behaviors. Models are selected based on 97 
+
+performance (e.g., Elo rating in self-play), and offspring inherit both policy parameters and modified 98 
+
+reward functions through crossover and mutation. This introduces structured randomness into the 99 
+
+optimization landscape, promoting a balance between exploitation of high-performing strategies and 100 
+
+exploration of novel ones. 101 
+
+Unlike the LLM pretraining setting, where averaging gradients is key, RL is inherently noisy and 102 
+
+local. The decentralized and diverse nature of EDT aligns naturally with RL’s challenges. 103 
+
+Furthermore, consider the following analogy : Say you want to find a treasure. You decided to make 104 
+
+a thousand clones of yourself to do the searching. However, since these are your clones, they behave 105 
+
+similarly, they all have the same habits, same ways of thinking. Maybe you will be able to find the 106 
+
+treasure one day, but in the process you are doing a lot of repeated exploration, looking under the 107 
+
+same rock multiple times. Your search space is confined by your function space [ 12 ]. What if instead 108 
+
+of a thousand you, we have a thousand different people, each with their own quirks and behaviors, 109 
+
+we expand the search space – EDT could promote a more efficient random search for solutions. 110 
+
+3.2 Method and Experimental Setup 111 
+
+We experiment with EDT-RL in a Smash Bros style platform fighting game gym environment [ 10 ]. 112 
+
+Agents control characters that can move, jump, and perform light or heavy attacks in 8 directions, etc, 113 
+
+with the objective of knocking their opponent off the platform. 114 
+
+Model: Each agent is a 64k-parameter transformer-based policy model, trained via Proximal Policy 115 
+
+Optimization (PPO) [17]. 116 
+
+Fitness: We use an Elo rating system based on double-elimination tournaments to evaluate model 117 
+
+performance via self-play matches within the population. 118 
+
+Reward DNA: There are 18 different reward functions, including noop. Each agent is assigned a 119 
+
+“DNA sequence” of size 6 encoding the combination of reward functions. 120 
+
+Training Procedure: 121 
+
+1. Each worker trains a local policy guided by its reward DNA for one generation. 122 
+
+2. After evaluation, agents are selected based on Elo score (fitness). 123 
+
+3. Pairs of parents are chosen to produce offspring: 124 
+
+• Policy crossover : Spherical linear Interpolate weights of parent models. 125 
+
+• DNA crossover : Uniformly mix reward shaping terms from both parents. 126 
+
+4. A mutation step applies to a subset of the offspring, randomly altering components of the 127 
+
+DNA (e.g., replacing and introducing new reward functions). 128 
+
+We compare EDT-RL to a standard Population-Based Training (PBT) setup with fixed, manually 129 
+
+defined reward shapings and identical PPO hyperparameters. 130 
+
+3.3 Results 131 
+
+In the 8-worker setting, EDT-RL produces competitive performance relative to PBT. 132 
+
+Scaling to 32 workers over 40 generations reveals striking emergent behavior. Certain reward 133 
+
+functions, while harmful in isolation, led to novel strategies when combined and refined across 134 
+
+generations. One such mutation was the Floor is Lava penalty, which forces the model to keep 135 
+
+jumping. Another penalized the use of light attacks. While suboptimal at first, these mutations 136 
+
+encouraged exploration of aerial tactics. By generation 20, a new strategy emerged— “ground 137 
+
+slamming” — where an agent jumped above their opponent and executed heavy vertical attacks 138 
+
+repeatedly. This tactic gained dominance after agents discovered that stacking enough damage 139 
+
+enabled a physics engine exploit: slamming opponents through the stage floor, bypassing typical 140 
+
+4Figure 3: EDT@8workers vs PBT@8workers win rate at each generation. (Tie is considered a loss.) knockback mechanics. By generation 40, this strategy dominates the population. However, the 141 
+
+"floor is lava" gene that led to this strategy became scarce over the generations as agents that are not 142 
+
+confined by this restriction were able to combine grounded strategies with "ground slam", achieving 143 
+
+greater performance. 144 
+
+3.4 Discussion 145 
+
+These results highlight the unique strengths of EDT-RL: 146 
+
+• Exploration via Mutation: Introducing stochastic reward variation enabled the population 147 
+
+to discover creative, high-impact strategies that were not explicitly encoded in the reward 148 
+
+design. 149 
+
+• Pairwise Crossover: Pairwise crossover encourages diversity while maintaining the ability 150 
+
+to propagate knowledge across the population, allowing efficient use of compute. 151 
+
+• Scalability: Larger populations enabled deeper exploration and more effective recom-152 
+
+bination, supporting rapid behavioral innovation. O(1) communication overhead allows 153 
+
+decentralized and potentially asynchronous training over poorly connected devices. 154 
+
+## 4 Language Model Post-Training - Concept 155 
+
+4.1 Motivation 156 
+
+While pretraining focuses on fitting to large-scale data distributions, post-training aims to steer 157 
+
+pretrained language models toward helpful, safe, and capable behavior—often using only a small 158 
+
+amount of data. At this stage, we are not optimizing for maximum likelihood, but for alignment 159 
+
+with specific goals and constraints. This makes post-training a natural candidate for Evolutionary 160 
+
+Distributed Training (EDT) .161 
+
+Post-training often involves multi-objective tradeoffs (e.g., helpfulness vs. harmlessness), non-162 
+
+differentiable goals (e.g., model judged quality), and the risk of overfitting to narrow supervision 163 
+
+signals. Evolutionary algorithms are well-suited for such settings due to their ability to optimize: 164 
+
+• Multi-objective functions without requiring scalar reward collapse. 165 
+
+• Non-differentiable objectives , such as evaluations from LLM-as-a-judge or task-specific 166 
+
+win-rates. 167 
+
+5Figure 4: EDT post-training framework concept • Policy-space exploration , encouraging behavioral diversity and robustness. 168 
+
+We propose EDT as a flexible wrapper around post-training. Models can be evaluated using any 169 
+
+mix of automated metrics, benchmarks, or preference judgments. Pairwise crossover and mutation 170 
+
+allow exploration across behavioral variants, while decentralized evaluation prevents synchronization 171 
+
+bottlenecks. The goal is not to fine-tune for narrow targets, but to stabilize training, prevent overfitting, 172 
+
+and encourage emergent capabilities through a process of natural evolution. 173 
+
+Due to computational constraints, we are able to conduct experiments at the moment. This direction 174 
+
+could be explored in future work. 175 
+
+## 5 Related Work 176 
+
+5.1 Evolutionary Algorithms and Genetic Optimization 177 
+
+Evolutionary algorithms (EAs) have long been used to solve optimization problems through principles 178 
+
+inspired by natural selection. Early work in this domain includes Genetic Algorithms (GAs) [ 7] which 179 
+
+use crossover and mutation to evolve solutions over generations. In the context of neural networks, 180 
+
+Neuroevolution techniques like NEAT (NeuroEvolution of Augmenting Topologies) [ 20 ] explore 181 
+
+ways to evolve both architectures and weights. More recent large-scale efforts such as OpenAI’s 182 
+
+Evolution Strategies [ 16 ] demonstrated scalability of black-box optimization for deep reinforcement 183 
+
+learning, rivaling traditional policy gradients in some tasks. 184 
+
+While these methods are powerful, they are rarely used in the era of large-scale language models due 185 
+
+to their sample inefficiency and communication overhead. Our proposed Evolutionary Distributed 186 
+
+Training (EDT) differs in that it applies EA concepts specifically to decentralized training settings — 187 
+
+targeting communication-constrained environments and non-differentiable objectives. 188 
+
+5.2 Federated Learning and Distributed LLM Training 189 
+
+Federated learning [ 11 ] enables decentralized optimization by allowing clients to train local models 190 
+
+and periodically synchronize updates with a central server. While originally proposed for privacy-191 
+
+preserving applications, its communication efficiency has inspired variants in large-scale language 192 
+
+model training. 193 
+
+Recent work such as DiLoCo (Distributed Low-Communication) [ 5], shows extremely competitive 194 
+
+performance in Large Language Model training compared to data-parallel, while supported by scaling 195 
+
+laws [3] and open source reproduction [8]. 196 
+
+65.3 Reinforcement Learning and Exploration 197 
+
+Exploration remains a central challenge in reinforcement learning, particularly in environments with 198 
+
+sparse or deceptive rewards. Classical techniques include ϵ-greedy exploration, entropy regularization, 199 
+
+etc. More recently, large-scale self-play has proven effective in discovering complex strategies, as in 200 
+
+AlphaZero [19] and OpenAI Five [13]. 201 
+
+Evolutionary approaches have also been used in RL to promote exploration. Novelty Search [ 9] and 202 
+
+Quality-Diversity algorithms [ 4] evolve agents to encourage behavioral diversity, often outperforming 203 
+
+reward-based methods in hard-exploration domains. Population-Based Training (PBT) [ ? ] introduced 204 
+
+hybrid training-evolution schemes, combining gradient descent with hyperparameter evolution. Our 205 
+
+EDT-RL builds on these ideas, extending the concept to evolve both policy weights and reward 206 
+
+functions in a decentralized fashion. 207 
+
+5.4 Post-Training and Model Steering 208 
+
+Post-training — the phase following large-scale pretraining — is where language models are adapted 209 
+
+to specific behaviors and goals. Typical methods include supervised fine-tuning on curated instruc-210 
+
+tions [ 14 ], Reinforcement Learning from Human Feedback (RLHF) [ ? 14 ], and more recently, 211 
+
+Reinforcement Learning via Verifiable Rewards (RLVR) [18]. 212 
+
+## 6 Limitations 213 
+
+Most of the initial experiments were done on a single laptop RTX4070 by simulating having multiple 214 
+
+workers in a loop. Later, we found a way to scale up to 32 RTX4080s, and was able to complete 215 
+
+most experiments in the RL section. However, when we started experimenting with post-training, 216 
+
+we were noticed by the university and informed that personal research is not allowed on university 217 
+
+infrastructure. Due to limitation in compute, our experimental results are limited. 218 
+
+## 7 Conclusion 219 
+
+We introduced Evolutionary Distributed Training (EDT), a nature-inspired recipe for decentralized 220 
+
+and parallelized model training grounded in the principles of natural evolution — local evaluation, 221 
+
+pairwise reproduction, and mutation. While our initial experiments show that EDT does not offer 222 
+
+significant advantages in language model pertaining, it shows strong promise in reinforcement 223 
+
+learning. In particular, EDT-RL enabled the emergence of novel strategies through reward function 224 
+
+mutation and policy recombination, demonstrating its potential as a tool for structured exploration in 225 
+
+sparse or deceptive environments. 226 
+
+This work represents an early investigation into the possible roles evolutionary algorithms can play 227 
+
+in distributed training systems. We intend to use this paper as a stepping stone towards collecting 228 
+
+feedback and finding potential collaborators. 229 
+
+## References 230 
+
+[1] Bowen Baker, Ingmar Kanitscheider, Todor Markov, Yi Wu, Glenn Powell, Bob McGrew, and 231 
+
+Igor Mordatch. Emergent tool use from multi-agent autocurricula, 2020. 232 
+
+[2] Sébastien Bubeck, Varun Chandrasekaran, Ronen Eldan, Johannes Gehrke, Eric Horvitz, Ece 233 
+
+Kamar, Peter Lee, Yin Tat Lee, Yuanzhi Li, Scott Lundberg, Harsha Nori, Hamid Palangi, 234 
+
+Marco Tulio Ribeiro, and Yi Zhang. Sparks of artificial general intelligence: Early experiments 235 
+
+with gpt-4, 2023. 236 
+
+[3] Zachary Charles, Gabriel Teston, Lucio Dery, Keith Rush, Nova Fallen, Zachary Garrett, Arthur 237 
+
+Szlam, and Arthur Douillard. Communication-efficient language model training scales reliably 238 
+
+and robustly: Scaling laws for diloco, 2025. 239 
+
+[4] Antoine Cully and Yiannis Demiris. Quality and diversity optimization: A unifying modular 240 
+
+framework. IEEE Transactions on Evolutionary Computation , 22(2):245–259, 2018. 241 
+
+7[5] Arthur Douillard, Qixuan Feng, Andrei A. Rusu, Rachita Chhaparia, Yani Donchev, Adhiguna 242 
+
+Kuncoro, Marc’Aurelio Ranzato, Arthur Szlam, and Jiajun Shen. Diloco: Distributed low-243 
+
+communication training of language models, 2024. 244 
+
+[6] Ronen Eldan and Yuanzhi Li. Tinystories: How small can language models be and still speak 245 
+
+coherent english?, 2023. 246 
+
+[7] John H. Holland. Adaptation in Natural and Artificial Systems . University of Michigan Press, 247 
+
+Ann Arbor, 1st edition, 1975. 2nd Edition, MIT Press, 1992. 248 
+
+[8] Sami Jaghouar, Jack Min Ong, and Johannes Hagemann. Opendiloco: An open-source frame-249 
+
+work for globally distributed low-communication training, 2024. 250 
+
+[9] Joel Lehman and Kenneth Stanley. Abandoning objectives: Evolution through the search for 251 
+
+novelty alone. Evolutionary computation , 19:189–223, 06 2011. 252 
+
+[10] Andrew Magnuson. Utmist ai2 2025. https://github.com/ajwm8103/UTMIST-AI2-2025 ,253 
+
+2025. 254 
+
+[11] H. Brendan McMahan, Eider Moore, Daniel Ramage, Seth Hampson, and Blaise Agüera 255 
+
+y Arcas. Communication-efficient learning of deep networks from decentralized data, 2023. 256 
+
+[12] D. E. Moriarty, A. C. Schultz, and J. J. Grefenstette. Evolutionary algorithms for reinforcement 257 
+
+learning. Journal of Artificial Intelligence Research , 11:241–276, September 1999. 258 
+
+[13] OpenAI, :, Christopher Berner, Greg Brockman, Brooke Chan, Vicki Cheung, Przemysław 259 
+
+D˛ ebiak, Christy Dennison, David Farhi, Quirin Fischer, Shariq Hashme, Chris Hesse, Rafal Józe-260 
+
+fowicz, Scott Gray, Catherine Olsson, Jakub Pachocki, Michael Petrov, Henrique P. d. O. Pinto, 261 
+
+Jonathan Raiman, Tim Salimans, Jeremy Schlatter, Jonas Schneider, Szymon Sidor, Ilya 262 
+
+Sutskever, Jie Tang, Filip Wolski, and Susan Zhang. Dota 2 with large scale deep reinforcement 263 
+
+learning, 2019. 264 
+
+[14] Long Ouyang, Jeff Wu, Xu Jiang, Diogo Almeida, Carroll L. Wainwright, Pamela Mishkin, 265 
+
+Chong Zhang, Sandhini Agarwal, Katarina Slama, Alex Ray, John Schulman, Jacob Hilton, 266 
+
+Fraser Kelton, Luke Miller, Maddie Simens, Amanda Askell, Peter Welinder, Paul Christiano, 267 
+
+Jan Leike, and Ryan Lowe. Training language models to follow instructions with human 268 
+
+feedback, 2022. 269 
+
+[15] Alec Radford, Jeff Wu, Rewon Child, David Luan, Dario Amodei, and Ilya Sutskever. Language 270 
+
+models are unsupervised multitask learners. 2019. 271 
+
+[16] Tim Salimans, Jonathan Ho, Xi Chen, Szymon Sidor, and Ilya Sutskever. Evolution strategies 272 
+
+as a scalable alternative to reinforcement learning, 2017. 273 
+
+[17] John Schulman, Filip Wolski, Prafulla Dhariwal, Alec Radford, and Oleg Klimov. Proximal 274 
+
+policy optimization algorithms, 2017. 275 
+
+[18] Zhihong Shao, Peiyi Wang, Qihao Zhu, Runxin Xu, Junxiao Song, Xiao Bi, Haowei Zhang, 276 
+
+Mingchuan Zhang, Y. K. Li, Y. Wu, and Daya Guo. Deepseekmath: Pushing the limits of 277 
+
+mathematical reasoning in open language models, 2024. 278 
+
+[19] David Silver, Thomas Hubert, Julian Schrittwieser, Ioannis Antonoglou, Matthew Lai, Arthur 279 
+
+Guez, Marc Lanctot, Laurent Sifre, Dharshan Kumaran, Thore Graepel, Timothy Lillicrap, 280 
+
+Karen Simonyan, and Demis Hassabis. Mastering chess and shogi by self-play with a general 281 
+
+reinforcement learning algorithm, 2017. 282 
+
+[20] Kenneth O. Stanley and Risto Miikkulainen. Evolving neural networks through augmenting 283 
+
+topologies. Evolutionary Computation , 10(2):99–127, 2002. 284 
+
+[21] Hugo Touvron, Louis Martin, Kevin Stone, Peter Albert, Amjad Almahairi, Yasmine Babaei, 285 
+
+Nikolay Bashlykov, Soumya Batra, Prajjwal Bhargava, Shruti Bhosale, Dan Bikel, Lukas 286 
+
+Blecher, Cristian Canton Ferrer, Moya Chen, Guillem Cucurull, David Esiobu, Jude Fernandes, 287 
+
+Jeremy Fu, Wenyin Fu, Brian Fuller, Cynthia Gao, Vedanuj Goswami, Naman Goyal, Anthony 288 
+
+Hartshorn, Saghar Hosseini, Rui Hou, Hakan Inan, Marcin Kardas, Viktor Kerkez, Madian 289 
+
+8Khabsa, Isabel Kloumann, Artem Korenev, Punit Singh Koura, Marie-Anne Lachaux, Thibaut 290 
+
+Lavril, Jenya Lee, Diana Liskovich, Yinghai Lu, Yuning Mao, Xavier Martinet, Todor Mihaylov, 291 
+
+Pushkar Mishra, Igor Molybog, Yixin Nie, Andrew Poulton, Jeremy Reizenstein, Rashi Rungta, 292 
+
+Kalyan Saladi, Alan Schelten, Ruan Silva, Eric Michael Smith, Ranjan Subramanian, Xiao-293 
+
+qing Ellen Tan, Binh Tang, Ross Taylor, Adina Williams, Jian Xiang Kuan, Puxin Xu, Zheng 294 
+
+Yan, Iliyan Zarov, Yuchen Zhang, Angela Fan, Melanie Kambadur, Sharan Narang, Aurelien 295 
+
+Rodriguez, Robert Stojnic, Sergey Edunov, and Thomas Scialom. Llama 2: Open foundation 296 
+
+and fine-tuned chat models, 2023. 297 
+
+[22] Yiping Wang, Qing Yang, Zhiyuan Zeng, Liliang Ren, Lucas Liu, Baolin Peng, Hao Cheng, 298 
+
+Xuehai He, Kuan Wang, Jianfeng Gao, Weizhu Chen, Shuohang Wang, Simon Shaolei Du, and 299 
+
+Yelong Shen. Reinforcement learning for reasoning in large language models with one training 300 
+
+example, 2025. 301 
+
+9NeurIPS Paper Checklist 302 
+
+1. Claims 303 
+
+Question: Do the main claims made in the abstract and introduction accurately reflect the 304 
+
+paper’s contributions and scope? 305 
+
+Answer: [Yes] 306 
+
+Justification: The abstract and introduction clearly state that EDT is a nature-inspired decen-307 
+
+tralized training framework drawing from evolutionary principles such as mutation, local 308 
+
+evaluation, and recombination. They correctly frame the approach as exploratory, with the 309 
+
+strongest results demonstrated in reinforcement learning rather than pretraining. Limita-310 
+
+tions—such as the underperformance in language model pretraining—are acknowledged up 311 
+
+front, and the scope is appropriately set as an early investigation into the use of evolutionary 312 
+
+strategies for distributed training. 313 
+
+Guidelines: 314 
+
+• The answer NA means that the abstract and introduction do not include the claims 315 
+
+made in the paper. 316 
+
+• The abstract and/or introduction should clearly state the claims made, including the 317 
+
+contributions made in the paper and important assumptions and limitations. A No or 318 
+
+NA answer to this question will not be perceived well by the reviewers. 319 
+
+• The claims made should match theoretical and experimental results, and reflect how 320 
+
+much the results can be expected to generalize to other settings. 321 
+
+• It is fine to include aspirational goals as motivation as long as it is clear that these goals 322 
+
+are not attained by the paper. 323 
+
+2. Limitations 324 
+
+Question: Does the paper discuss the limitations of the work performed by the authors? 325 
+
+Answer: [Yes] 326 
+
+Justification: The paper includes a dedicated section discussing limitations, particularly high-327 
+
+lighting the gap between EDT and traditional SGD-based methods in large-scale pretraining. 328 
+
+It acknowledges the sensitivity of EDT to hyperparameter choices, the difficulty in tuning 329 
+
+mutation operations, and the scalability concerns for very large model sizes. The authors 330 
+
+also mention the open question of how well EDT generalizes beyond the tasks explored, 331 
+
+especially in highly synchronized or gradient-sensitive settings. 332 
+
+Guidelines: 333 
+
+• The answer NA means that the paper has no limitation while the answer No means that 334 
+
+the paper has limitations, but those are not discussed in the paper. 335 
+
+• The authors are encouraged to create a separate "Limitations" section in their paper. 336 
+
+• The paper should point out any strong assumptions and how robust the results are to 337 
+
+violations of these assumptions (e.g., independence assumptions, noiseless settings, 338 
+
+model well-specification, asymptotic approximations only holding locally). The authors 339 
+
+should reflect on how these assumptions might be violated in practice and what the 340 
+
+implications would be. 341 
+
+• The authors should reflect on the scope of the claims made, e.g., if the approach was 342 
+
+only tested on a few datasets or with a few runs. In general, empirical results often 343 
+
+depend on implicit assumptions, which should be articulated. 344 
+
+• The authors should reflect on the factors that influence the performance of the approach. 345 
+
+For example, a facial recognition algorithm may perform poorly when image resolution 346 
+
+is low or images are taken in low lighting. Or a speech-to-text system might not be 347 
+
+used reliably to provide closed captions for online lectures because it fails to handle 348 
+
+technical jargon. 349 
+
+• The authors should discuss the computational efficiency of the proposed algorithms 350 
+
+and how they scale with dataset size. 351 
+
+• If applicable, the authors should discuss possible limitations of their approach to 352 
+
+address problems of privacy and fairness. 353 
+
+10 • While the authors might fear that complete honesty about limitations might be used by 354 
+
+reviewers as grounds for rejection, a worse outcome might be that reviewers discover 355 
+
+limitations that aren’t acknowledged in the paper. The authors should use their best 356 
+
+judgment and recognize that individual actions in favor of transparency play an impor-357 
+
+tant role in developing norms that preserve the integrity of the community. Reviewers 358 
+
+will be specifically instructed to not penalize honesty concerning limitations. 359 
+
+3. Theory assumptions and proofs 360 
+
+Question: For each theoretical result, does the paper provide the full set of assumptions and 361 
+
+a complete (and correct) proof? 362 
+
+Answer: [NA] 363 
+
+Justification: The paper does not present new theoretical results or formal proofs. Its 364 
+
+contributions are empirical and algorithmic in nature, focusing on the design and evaluation 365 
+
+of EDT across various tasks. 366 
+
+Guidelines: 367 
+
+• The answer NA means that the paper does not include theoretical results. 368 
+
+• All the theorems, formulas, and proofs in the paper should be numbered and cross-369 
+
+referenced. 370 
+
+• All assumptions should be clearly stated or referenced in the statement of any theorems. 371 
+
+• The proofs can either appear in the main paper or the supplemental material, but if 372 
+
+they appear in the supplemental material, the authors are encouraged to provide a short 373 
+
+proof sketch to provide intuition. 374 
+
+• Inversely, any informal proof provided in the core of the paper should be complemented 375 
+
+by formal proofs provided in appendix or supplemental material. 376 
+
+• Theorems and Lemmas that the proof relies upon should be properly referenced. 377 
+
+4. Experimental result reproducibility 378 
+
+Question: Does the paper fully disclose all the information needed to reproduce the main ex-379 
+
+perimental results of the paper to the extent that it affects the main claims and/or conclusions 380 
+
+of the paper (regardless of whether the code and data are provided or not)? 381 
+
+Answer: [Yes] 382 
+
+Justification: The paper includes detailed descriptions of the experimental setup, including 383 
+
+pseudocode for EDT, environment configurations for RL tasks, architectural details of the 384 
+
+models used, and descriptions of the reward mutation mechanisms. Evaluation metrics, and 385 
+
+infrastructure used are clearly reported. The algorithm itself should be reproducable as all 386 
+
+implementation details are given. 387 
+
+Guidelines: 388 
+
+• The answer NA means that the paper does not include experiments. 389 
+
+• If the paper includes experiments, a No answer to this question will not be perceived 390 
+
+well by the reviewers: Making the paper reproducible is important, regardless of 391 
+
+whether the code and data are provided or not. 392 
+
+• If the contribution is a dataset and/or model, the authors should describe the steps taken 393 
+
+to make their results reproducible or verifiable. 394 
+
+• Depending on the contribution, reproducibility can be accomplished in various ways. 395 
+
+For example, if the contribution is a novel architecture, describing the architecture fully 396 
+
+might suffice, or if the contribution is a specific model and empirical evaluation, it may 397 
+
+be necessary to either make it possible for others to replicate the model with the same 398 
+
+dataset, or provide access to the model. In general. releasing code and data is often 399 
+
+one good way to accomplish this, but reproducibility can also be provided via detailed 400 
+
+instructions for how to replicate the results, access to a hosted model (e.g., in the case 401 
+
+of a large language model), releasing of a model checkpoint, or other means that are 402 
+
+appropriate to the research performed. 403 
+
+• While NeurIPS does not require releasing code, the conference does require all submis-404 
+
+sions to provide some reasonable avenue for reproducibility, which may depend on the 405 
+
+nature of the contribution. For example 406 
+
+11 (a) If the contribution is primarily a new algorithm, the paper should make it clear how 407 
+
+to reproduce that algorithm. 408 
+
+(b) If the contribution is primarily a new model architecture, the paper should describe 409 
+
+the architecture clearly and fully. 410 
+
+(c) If the contribution is a new model (e.g., a large language model), then there should 411 
+
+either be a way to access this model for reproducing the results or a way to reproduce 412 
+
+the model (e.g., with an open-source dataset or instructions for how to construct 413 
+
+the dataset). 414 
+
+(d) We recognize that reproducibility may be tricky in some cases, in which case 415 
+
+authors are welcome to describe the particular way they provide for reproducibility. 416 
+
+In the case of closed-source models, it may be that access to the model is limited in 417 
+
+some way (e.g., to registered users), but it should be possible for other researchers 418 
+
+to have some path to reproducing or verifying the results. 419 
+
+5. Open access to data and code 420 
+
+Question: Does the paper provide open access to the data and code, with sufficient instruc-421 
+
+tions to faithfully reproduce the main experimental results, as described in supplemental 422 
+
+material? 423 
+
+Answer: [Yes] 424 
+
+Justification: The authors have not released code so far due to time constraints. However, 425 
+
+code may be released in the short future as supplemental material. 426 
+
+Guidelines: 427 
+
+• The answer NA means that paper does not include experiments requiring code. 428 
+
+• Please see the NeurIPS code and data submission guidelines ( https://nips.cc/ 429 
+
+public/guides/CodeSubmissionPolicy ) for more details. 430 
+
+• While we encourage the release of code and data, we understand that this might not be 431 
+
+possible, so “No” is an acceptable answer. Papers cannot be rejected simply for not 432 
+
+including code, unless this is central to the contribution (e.g., for a new open-source 433 
+
+benchmark). 434 
+
+• The instructions should contain the exact command and environment needed to run to 435 
+
+reproduce the results. See the NeurIPS code and data submission guidelines ( https: 436 
+
+//nips.cc/public/guides/CodeSubmissionPolicy ) for more details. 437 
+
+• The authors should provide instructions on data access and preparation, including how 438 
+
+to access the raw data, preprocessed data, intermediate data, and generated data, etc. 439 
+
+• The authors should provide scripts to reproduce all experimental results for the new 440 
+
+proposed method and baselines. If only a subset of experiments are reproducible, they 441 
+
+should state which ones are omitted from the script and why. 442 
+
+• At submission time, to preserve anonymity, the authors should release anonymized 443 
+
+versions (if applicable). 444 
+
+• Providing as much information as possible in supplemental material (appended to the 445 
+
+paper) is recommended, but including URLs to data and code is permitted. 446 
+
+6. Experimental setting/details 447 
+
+Question: Does the paper specify all the training and test details (e.g., data splits, hyper-448 
+
+parameters, how they were chosen, type of optimizer, etc.) necessary to understand the 449 
+
+results? 450 
+
+Answer: [Yes] 451 
+
+Justification: Full details may be submitted through supplemental material. 452 
+
+Guidelines: 453 
+
+• The answer NA means that the paper does not include experiments. 454 
+
+• The experimental setting should be presented in the core of the paper to a level of detail 455 
+
+that is necessary to appreciate the results and make sense of them. 456 
+
+• The full details can be provided either with the code, in appendix, or as supplemental 457 
+
+material. 458 
+
+7. Experiment statistical significance 459 
+
+12 Question: Does the paper report error bars suitably and correctly defined or other appropriate 460 
+
+information about the statistical significance of the experiments? 461 
+
+Answer: [No] 462 
+
+Justification: We were compute constrained and unable to run experiments multiple times. 463 
+
+Guidelines: 464 
+
+• The answer NA means that the paper does not include experiments. 465 
+
+• The authors should answer "Yes" if the results are accompanied by error bars, confi-466 
+
+dence intervals, or statistical significance tests, at least for the experiments that support 467 
+
+the main claims of the paper. 468 
+
+• The factors of variability that the error bars are capturing should be clearly stated (for 469 
+
+example, train/test split, initialization, random drawing of some parameter, or overall 470 
+
+run with given experimental conditions). 471 
+
+• The method for calculating the error bars should be explained (closed form formula, 472 
+
+call to a library function, bootstrap, etc.) 473 
+
+• The assumptions made should be given (e.g., Normally distributed errors). 474 
+
+• It should be clear whether the error bar is the standard deviation or the standard error 475 
+
+of the mean. 476 
+
+• It is OK to report 1-sigma error bars, but one should state it. The authors should 477 
+
+preferably report a 2-sigma error bar than state that they have a 96% CI, if the hypothesis 478 
+
+of Normality of errors is not verified. 479 
+
+• For asymmetric distributions, the authors should be careful not to show in tables or 480 
+
+figures symmetric error bars that would yield results that are out of range (e.g. negative 481 
+
+error rates). 482 
+
+• If error bars are reported in tables or plots, The authors should explain in the text how 483 
+
+they were calculated and reference the corresponding figures or tables in the text. 484 
+
+8. Experiments compute resources 485 
+
+Question: For each experiment, does the paper provide sufficient information on the com-486 
+
+puter resources (type of compute workers, memory, time of execution) needed to reproduce 487 
+
+the experiments? 488 
+
+Answer: [Yes] 489 
+
+Justification: The paper discloses compute details for the experiments in the limitations 490 
+
+section 491 
+
+Guidelines: 492 
+
+• The answer NA means that the paper does not include experiments. 493 
+
+• The paper should indicate the type of compute workers CPU or GPU, internal cluster, 494 
+
+or cloud provider, including relevant memory and storage. 495 
+
+• The paper should provide the amount of compute required for each of the individual 496 
+
+experimental runs as well as estimate the total compute. 497 
+
+• The paper should disclose whether the full research project required more compute 498 
+
+than the experiments reported in the paper (e.g., preliminary or failed experiments that 499 
+
+didn’t make it into the paper). 500 
+
+9. Code of ethics 501 
+
+Question: Does the research conducted in the paper conform, in every respect, with the 502 
+
+NeurIPS Code of Ethics https://neurips.cc/public/EthicsGuidelines ?503 
+
+Answer: [Yes] 504 
+
+Justification: The research adheres to the NeurIPS Code of Ethics. It uses publicly available 505 
+
+datasets and environments with no personally identifiable data or sensitive information. No 506 
+
+human subjects or high-risk applications were involved. Environmental impact and compute 507 
+
+use are transparently disclosed, and reproducibility is prioritized through open-sourcing. 508 
+
+Guidelines: 509 
+
+• The answer NA means that the authors have not reviewed the NeurIPS Code of Ethics. 510 
+
+13 • If the authors answer No, they should explain the special circumstances that require a 511 
+
+deviation from the Code of Ethics. 512 
+
+• The authors should make sure to preserve anonymity (e.g., if there is a special consid-513 
+
+eration due to laws or regulations in their jurisdiction). 514 
+
+10. Broader impacts 515 
+
+Question: Does the paper discuss both potential positive societal impacts and negative 516 
+
+societal impacts of the work performed? 517 
+
+Answer: [Yes] 518 
+
+Justification: The paper discusses how EDT can democratize large-scale training by reducing 519 
+
+reliance on centralized orchestration and allowing training across heterogeneous, fault-prone 520 
+
+resources, potentially making cutting-edge AI more accessible. 521 
+
+Guidelines: 522 
+
+• The answer NA means that there is no societal impact of the work performed. 523 
+
+• If the authors answer NA or No, they should explain why their work has no societal 524 
+
+impact or why the paper does not address societal impact. 525 
+
+• Examples of negative societal impacts include potential malicious or unintended uses 526 
+
+(e.g., disinformation, generating fake profiles, surveillance), fairness considerations 527 
+
+(e.g., deployment of technologies that could make decisions that unfairly impact specific 528 
+
+groups), privacy considerations, and security considerations. 529 
+
+• The conference expects that many papers will be foundational research and not tied 530 
+
+to particular applications, let alone deployments. However, if there is a direct path to 531 
+
+any negative applications, the authors should point it out. For example, it is legitimate 532 
+
+to point out that an improvement in the quality of generative models could be used to 533 
+
+generate deepfakes for disinformation. On the other hand, it is not needed to point out 534 
+
+that a generic algorithm for optimizing neural networks could enable people to train 535 
+
+models that generate Deepfakes faster. 536 
+
+• The authors should consider possible harms that could arise when the technology is 537 
+
+being used as intended and functioning correctly, harms that could arise when the 538 
+
+technology is being used as intended but gives incorrect results, and harms following 539 
+
+from (intentional or unintentional) misuse of the technology. 540 
+
+• If there are negative societal impacts, the authors could also discuss possible mitigation 541 
+
+strategies (e.g., gated release of models, providing defenses in addition to attacks, 542 
+
+mechanisms for monitoring misuse, mechanisms to monitor how a system learns from 543 
+
+feedback over time, improving the efficiency and accessibility of ML). 544 
+
+11. Safeguards 545 
+
+Question: Does the paper describe safeguards that have been put in place for responsible 546 
+
+release of data or models that have a high risk for misuse (e.g., pretrained language models, 547 
+
+image generators, or scraped datasets)? 548 
+
+Answer: [NA] 549 
+
+Justification: The paper does not release any pretrained models or datasets with high risk for 550 
+
+misuse. The proposed methodology is architectural and experimental in nature, evaluated 551 
+
+on standard, publicly available benchmarks. 552 
+
+Guidelines: 553 
+
+• The answer NA means that the paper poses no such risks. 554 
+
+• Released models that have a high risk for misuse or dual-use should be released with 555 
+
+necessary safeguards to allow for controlled use of the model, for example by requiring 556 
+
+that users adhere to usage guidelines or restrictions to access the model or implementing 557 
+
+safety filters. 558 
+
+• Datasets that have been scraped from the Internet could pose safety risks. The authors 559 
+
+should describe how they avoided releasing unsafe images. 560 
+
+• We recognize that providing effective safeguards is challenging, and many papers do 561 
+
+not require this, but we encourage authors to take this into account and make a best 562 
+
+faith effort. 563 
+
+14 12. Licenses for existing assets 564 
+
+Question: Are the creators or original owners of assets (e.g., code, data, models), used in 565 
+
+the paper, properly credited and are the license and terms of use explicitly mentioned and 566 
+
+properly respected? 567 
+
+Answer: [Yes] 568 
+
+Justification: All datasets and existing baselines are properly cited. 569 
+
+Guidelines: 570 
+
+• The answer NA means that the paper does not use existing assets. 571 
+
+• The authors should cite the original paper that produced the code package or dataset. 572 
+
+• The authors should state which version of the asset is used and, if possible, include a 573 
+
+URL. 574 
+
+• The name of the license (e.g., CC-BY 4.0) should be included for each asset. 575 
+
+• For scraped data from a particular source (e.g., website), the copyright and terms of 576 
+
+service of that source should be provided. 577 
+
+• If assets are released, the license, copyright information, and terms of use in the 578 
+
+package should be provided. For popular datasets, paperswithcode.com/datasets 579 
+
+has curated licenses for some datasets. Their licensing guide can help determine the 580 
+
+license of a dataset. 581 
+
+• For existing datasets that are re-packaged, both the original license and the license of 582 
+
+the derived asset (if it has changed) should be provided. 583 
+
+• If this information is not available online, the authors are encouraged to reach out to 584 
+
+the asset’s creators. 585 
+
+13. New assets 586 
+
+Question: Are new assets introduced in the paper well documented and is the documentation 587 
+
+provided alongside the assets? 588 
+
+Answer: [NA] 589 
+
+Justification: No assets are used in the paper. 590 
+
+Guidelines: 591 
+
+• The answer NA means that the paper does not release new assets. 592 
+
+• Researchers should communicate the details of the dataset/code/model as part of their 593 
+
+submissions via structured templates. This includes details about training, license, 594 
+
+limitations, etc. 595 
+
+• The paper should discuss whether and how consent was obtained from people whose 596 
+
+asset is used. 597 
+
+• At submission time, remember to anonymize your assets (if applicable). You can either 598 
+
+create an anonymized URL or include an anonymized zip file. 599 
+
+14. Crowdsourcing and research with human subjects 600 
+
+Question: For crowdsourcing experiments and research with human subjects, does the paper 601 
+
+include the full text of instructions given to participants and screenshots, if applicable, as 602 
+
+well as details about compensation (if any)? 603 
+
+Answer: [NA] 604 
+
+Justification: The paper does not involve human subjects or crowdsourcing. 605 
+
+Guidelines: 606 
+
+• The answer NA means that the paper does not involve crowdsourcing nor research with 607 
+
+human subjects. 608 
+
+• Including this information in the supplemental material is fine, but if the main contribu-609 
+
+tion of the paper involves human subjects, then as much detail as possible should be 610 
+
+included in the main paper. 611 
+
+• According to the NeurIPS Code of Ethics, workers involved in data collection, curation, 612 
+
+or other labor should be paid at least the minimum wage in the country of the data 613 
+
+collector. 614 
+
+15 15. Institutional review board (IRB) approvals or equivalent for research with human 615 
+
+subjects 616 
+
+Question: Does the paper describe potential risks incurred by study participants, whether 617 
+
+such risks were disclosed to the subjects, and whether Institutional Review Board (IRB) 618 
+
+approvals (or an equivalent approval/review based on the requirements of your country or 619 
+
+institution) were obtained? 620 
+
+Answer: [NA] 621 
+
+Justification: The work does not involve research with human subjects, and therefore no 622 
+
+IRB approval is necessary. 623 
+
+Guidelines: 624 
+
+• The answer NA means that the paper does not involve crowdsourcing nor research with 625 
+
+human subjects. 626 
+
+• Depending on the country in which research is conducted, IRB approval (or equivalent) 627 
+
+may be required for any human subjects research. If you obtained IRB approval, you 628 
+
+should clearly state this in the paper. 629 
+
+• We recognize that the procedures for this may vary significantly between institutions 630 
+
+and locations, and we expect authors to adhere to the NeurIPS Code of Ethics and the 631 
+
+guidelines for their institution. 632 
+
+• For initial submissions, do not include any information that would break anonymity (if 633 
+
+applicable), such as the institution conducting the review. 634 
+
+16. Declaration of LLM usage 635 
+
+Question: Does the paper describe the usage of LLMs if it is an important, original, or 636 
+
+non-standard component of the core methods in this research? Note that if the LLM is used 637 
+
+only for writing, editing, or formatting purposes and does not impact the core methodology, 638 
+
+scientific rigorousness, or originality of the research, declaration is not required. 639 
+
+Answer: [NA] 640 
+
+Justification: LLMs are not used in a non-standard way or as a core component of the 641 
+
+methods described in the paper. 642 
+
+Guidelines: 643 
+
+• The answer NA means that the core method development in this research does not 644 
+
+involve LLMs as any important, original, or non-standard components. 645 
+
+• Please refer to our LLM policy ( https://neurips.cc/Conferences/2025/LLM )646 
+
+for what should or should not be described. 647 
+
+16
