@@ -1,0 +1,673 @@
+Title: BlueFin: Benchmarking LLM Agents on Financial Spreadsheets
+
+URL Source: https://arxiv.org/pdf/2605.30907v1
+
+Published Time: Mon, 01 Jun 2026 00:52:29 GMT
+
+Number of Pages: 26
+
+Markdown Content:
+# BLUE FIN :Benchmarking LLM Agents on Financial Spreadsheets 
+
+Srivatsa Kundurthy * 1,2 Clara Na * 3 Colton Moraine 1 Anoushka Mohta 1
+
+Case Winter 1 George Fang 1 John Ling 1 Emma Strubell 3
+
+Zach Kirshner 1
+
+> 1
+
+Longitude Labs Inc. 2Cornell University 3Carnegie Mellon University 
+
+Abstract 
+
+We present B LUE FIN , a benchmark that tasks large language model (LLM) agents with synthesis, manipulation, and comprehension tasks over spreadsheet workbooks in the professional finance domain. Though estimates of the global population of paying users of spreadsheet software range in the hundreds of millions – an order of magnitude more than the estimated global population of professional developers – comparatively fewer resources have been devoted to exploring and expanding LLM capabilities in the spreadsheet domain, with fewer still dedicated to mirroring real occupational tasks encountered by those in professional finance roles. In response, we curate a set of 131 challenging, complex tasks with real-world relevance in the domain, containing 3,225 granular rubric criteria; notably, our rubric criteria and LM judge evaluations are validated by a team of expert human annotators, resulting in high-quality, granular evaluations of complex tasks that are difficult to verify programmatically but can be reliably evaluated by an LM judge agent. Our judge achieves parity with expert consensus ( α = 0 .826 )with a macro-F1 score of 0.839. Frontier LLMs demonstrate poor performance on the challenging benchmark, with the strongest LLMs achieving less than 50% average scores across tasks – models exhibit particular weaknesses in dynamic correctness. Our contributions include a dataset of examples across three categories of spreadsheet tasks, an open source harness and agentic evaluation framework, and a characterization of existing frontier models’ performance on our benchmark. 
+
+1 Introduction 
+
+Professional finance is among the most spreadsheet-intensive areas of the knowledge economy. Ac-cording to the United States Bureau of Labor Statistics [ 1], there were nearly 2.5 million professional finance workers in the US in 2024 who performed labor representative of hundreds of billions of dollars in compensation, 1 with spreadsheets featuring heavily in their work; industry reports estimate that nearly all FP&A professionals use spreadsheets weekly, 2 and skilled financial analysts spend 10  
+
+> *Equal contribution. Correspondence to srivatsa@meridian.ai .
+> 1We arrive at our estimate of 2.5 million finance professionals by considering Accountants and auditors (1,448,290), Property appraisers and assessors (59,070), Budget analysts (47,170), Credit analysts (67,370), Financial and investment analysts (340,580), Personal financial advisors (270,480), Financial risk specialists (56,320), Financial examiners (62,830), and Financial specialists, all other (127,450).
+> 2https://www.financialprofessionals.org/training-resources/resources/articles/Details/useful-excel-functions-for-financial-planning-and-analysis Preprint.
+> arXiv:2605.30907v1 [cs.SE] 29 May 2026
+
+Three Task Families in BLUEFIN 
+
+Each task pairs a workbook context with a natural-language prompt; outputs are scored against expert-vetted rubrics or a deterministic answer. 
+
+Synthesis 
+
+Prompt → Workbook 
+
+P R O M P T 
+
+I’m trying to build a pitch for a stock pitch competition on Take Two Interactive Inc. I need your help building a model so I can value the company using a DCF. I would like 4 different tabs: Operating Model Cases, Operating Model, WACC, and DCF. Starting on the Operating Model Cases, I would like you to begin with a title in the top left that says Operating Model Cases. Underneath this title, put Take Two Interactive Inc. ... 
+
+LLM Agent 
+
+G E N E R A T E D W O R K B O O K Discounted Cash Flow Analysis 
+
+Take Two Interactive Inc 
+
+Assumptions 
+
+Active Case Base 
+
+Tax Rate 18.0% WACC 9% Comps Multiple 26.30x Precedents 20.70x PGR 2.5% 
+
+Discounted Cash Flow Fiscal Year 2026P 2027P 2028P 2029P 2030P 2031P Revenue 6,316 11,204 9,965 9,756 10,140 10,342 EBITDA 1,636 5,324 4,120 3,741 3,888 3,966 EBIT 57 2,635 1,927 1,985 2,367 2,724 NOPAT 47 2,161 1,580 1,627 1,940 2,234 ULFCF 1,565 3,851 3,371 3,021 3,095 3,071 PV ULFCF 1,442 3,270 2,639 2,179 2,057 1,881 
+
+Multiples Method (Comps) 
+
+PV of ULFCF 13,468.7 Terminal Value 104,293.7 Implied EV 77,354.9 Equity Value 74,729.4 
+
+Implied Share $380.88 Implied Upside 86% Multiples Method (Precedents) 
+
+PV of ULFCF 13,468.7 Terminal Value 82,086.7 Implied EV 63,751.8 Equity Value 61,126.3 
+
+Implied Share $311.55 Implied Upside 52% PGR Method 
+
+PV of ULFCF 13,468.7 PV Terminal 32,074.6 Implied EV 45,543.3 Equity Value 42,917.8 
+
+Implied Share $218.75 Implied Upside 7% 
+
+Graded by Evaluator 
+
+S A M P L E R U B R I C C R I T E R I A Formula Correctness 3 pts 
+
+Is each company's Unlevered Beta divided by [1 + (1 − tax rate) × D/E] on the WACC tab? 
+
+Output Validation 5 pts 
+
+Is the Implied Share Price (Comps) within ±2% of $380.88 ?
+
+Perturbation 5 pts 
+
+If the Active Case is switched Base → Bull, does Implied Upside recompute end-to-end? 
+
++ 27 more criteria across 5 rubric sections 
+
+Manipulation 
+
+Workbook + Prompt → Updated Workbook 
+
+E X I S T I N G W O R K B O O K Sources & Uses Schedule Sources of Funds $M x EBITDA Revolver – 0.0x Term Loan & Senior 9,500.0 6.2x Margin Loan 12,500.0 8.1x Unsecured Debt 3,000.0 1.9x Excess Cash 1,437.5 0.9x Investor Equity 19,385.6 12.6x 
+
+Total Sources 49,785.9 32.3x Uses of Funds $M Purchase Equity Value 45,230.4 Replace Existing Debt 4,290.0 Financing Fees 125.0 Transaction Fees 140.5 
+
+Total Uses 49,785.9 Debt and Cash Assumptions Tranche SOFR Floor Spread Amort Sweep% Maturity Max Draw Revolver 0.00% 4.25% – – N/A 500.0 Term Loan 0.50% 5.42% 1.0% 50.0% 7 –Margin Loan 0.00% 3.00% 5.0% 0.0% 7 –
+
+P R O M P T 
+
+Build a debt schedule section at the bottom of the uploaded worksheet. Treat the FY22 / deal-close column as an opening-balance column ... 
+
+LLM Agent 
+
+U P D A T E D W O R K B O O K Debt Schedule FY22 FY23 FY24 FY25 FY26 FY27 
+
+Interest Rates 
+
+Projected SOFR 2.50% 2.50% 2.50% 2.50% 2.50% 2.50% Term Loan 7.92% 7.92% 7.92% 7.92% 7.92% Margin Loan 5.50% 5.50% 5.50% 5.50% 5.50% 
+
+Cash Flow & Revolver Calculations 
+
+Cash – BoP 6,000 2,562 1,134 782 857 (+) FCF (755) (270) 187 428 729 
+
+Surplus/(Shortfall) 3,926 876 (182) (366) (57) 
+
+EoP Revolver – – – 181.6 548.1 604.9 
+
+Term Loans & Senior Secured Notes 
+
+BoP Balance 9,500 7,442 6,909 6,814 6,719 (−) Cash Sweep (1,963) (438) – – –
+
+EoP Balance 9,500 7,442 6,909 6,814 6,719 6,624 Margin Loan 
+
+BoP Balance 12,500 11,875 11,250 10,625 10,000 (−) Amortization (625) (625) (625) (625) (625) 
+
+EoP Balance 12,500 11,875 11,250 10,625 10,000 9,375 Key Metrics & Ratios 
+
+Total Debt / EBITDA 8.85x 7.68x 6.62x 5.85x 5.36x 
+
+EBITDA / Cash Interest 1.66x 1.79x 2.05x 2.27x 2.45x 
+
+Graded by Evaluator 
+
+S A M P L E R U B R I C C R I T E R I A Formula Correctness 2 pts 
+
+Is the Term Loan rate computed as SOFR Spread + MAX(SOFR, SOFR Floor)? 
+
+Output Validation 5 pts 
+
+Is the Total Debt Balance for FY27 within ±2% of $19,603.7M ?
+
+Perturbation 5 pts 
+
+If SOFR 2.5% → 3.5%, does Total Cash Interest Expense for FY23 hit −$2,065M ?
+
++ 37 more criteria across 6 rubric sections 
+
+Interrogation 
+
+Workbook + Question → Answer 
+
+S O U R C E W O R K B O O K + Q U E S T I O N Project Alpha — Borrowing Base & Advance Rate Assumptions 
+
+Crude Price ($/bbl) $92.50 Throughput (kbpd) 185.0 Advance Rate 85.0% Grace Period (wks) 4Total Payout Wks 26 Shutdown Days 7
+
+Weekly Borrowing Base ($MM) Week Inv. Adv. Max 
+
+14 156 85% 132.6 15 152 85% 129.2 …19 142 85% 120.7 
+
+20 147 85% 125.0 Scenario Controls 
+
+Δ Inventory Price +10% 
+
+Δ Advance Rate −1,000 bps Grace Period ÷ 2 
+
+Multi-step scenario propagates through borrowing-base formulas. 
+
+If the inventory for project alpha crude and alpha products get hit with a 10% price increase, the advance rate falls by 1000bps, and both the grace period and total payout weeks get slashed by half, what would be the maximum advance for week 20? 
+
+LLM Agent 
+
+A N S W E R $113.00 
+
+Maximum advance for week 20 
+
+{ value: 113.00, unit: "USD-MM", source_cell: "Borrowing!H42" } 
+
+Reference workbook computes the same value 
+
+Graded by Evaluator 
+
+A N S W E R V E R I F I C A T I O N Numeric Match 5 pts 
+
+Reported value within ±$0.05 of 
+
+$113.00 on the reference solution. 
+
+Source Trace pass / fail 
+
+Cited source cell lies on the dependency path from inputs to the answer. 
+
+Schema pass / fail 
+
+Answer parses as { value, unit, source_cell } with unit normalized to USD-MM. 
+
+Auto-graded • no expert rubric needed Figure 1: BlueFin is a challenging benchmark for characterizing LLM spreadsheet generation. hours a week on spreadsheet work. 3 Previous work has shown that professional spreadsheet work is error-prone, and errors have the potential for outsized consequences; Powell et al. [2] found 117 errors across an audit of 50 operational spreadsheets, constituting 0.8% to 1.8% of all formula cells and leading to error impacts of up to $100,000,000. Other documented incidents include a spreadsheet formula error contributing to JPMorgan’s $6B+ “London Whale” loss, and spreadsheet errors leading to Fannie Mae’s 2003 $1.1B restatement. Recent developments in spreadsheet capabilities by frontier labs (e.g. Claude for Excel, 4 ChatGPT for Excel 5) suggest ongoing investment in the space. Previous studies report that generative AI use for work tasks can facilitate greater quality and speed [ 3 , 4 ] in work tasks, with the greatest productivity benefits conferred to less experienced professionals. On the other hand, Dell’Acqua et al. [4] note that AI use impedes productivity when the task’s difficulty exceeds the AI tools’ capabilities. Thus, it is imperative that we have adequate infrastructure for evaluating AI system capabilities in this domain. However, to our knowledge, no existing benchmark is well-suited for reliable evaluation of multi-step spreadsheet tasks matching the multi-dimensional challenges of real-world professional finance tasks. The relatively sparse landscape of evaluations in this domain (compared to e.g. coding benchmarks for complex software engineering tasks [ 5 – 7]) reflects multiple inherent challenges. (1) Enterprise financial spreadsheets often contain corporate secrets or sensitive information on clients, complicating procurement of documents for an appropriate dataset. Moreover, (2) it is nontrivial to evaluate successful task completion in a setting where the output must not only be structurally and numerically correct but also satisfy user-centric usability and clarity criteria that are not programmatically verifiable. Prior benchmarks and evaluations of spreadsheet tasks tend to evaluate relatively shallow capabilities such as formula generation [ 8] or atomic operations on pre-existing workbooks [ 9 – 11 ], assume largely flat, CSV-like tables [ 8, 10 , 11 ], or limit scope to question-answering over fixed spreadsheets [ 12 ] that are programmatically verifiable, and/or compress evaluation of an inherently complex task into a digestible metric or score vector. Kundurthy et al. [13] report that human preference 
+
+3https://www.datarails.com/wp-content/uploads/2022/09/2022-CFO-Budgeting-and-Forecasting-Survey-Report.pdf 
+
+4https://claude.com/claude-for-excel 
+
+5https://chatgpt.com/apps/spreadsheets/ 
+
+2evaluations tend to reflect obvious deficits in utility or presentation, but do not reliably capture domain specific conventions for finance spreadsheets. Likewise, existing benchmarks of skills in the finance domain focus on entirely different types of finance tasks (e.g. not involving spreadsheets), include only a handful of relevant examples as part of a broader effort to benchmark multiple occupational capabilities, limit tasks to those that are programmatically verifiable, and/or feature relatively simplified rubric criteria [14–19, 12]. We address this gap by introducing B LUE FIN , a benchmark that tasks LLM agents with synthesis, comprehension, and manipulation tasks over spreadsheet workbooks in the professional finance domain. 6 BLUE FIN is distinguished by: (1) high-quality, pragmatic tasks that reflect the day-to-day responsibilities of finance professionals, e.g. building financial models from scratch, modifying existing models, and examining artifacts to inform decision-making, with a proportional emphasis on modification tasks; (2) focus on spreadsheets as salient artifacts across all tasks; (3) depth of coverage in a specialized domain requiring complex, multi-step workflows ; and (4) fine-grained, granular evaluation criteria vetted by domain experts. Creation of B LUE FIN entailed hundreds of domain expert hours across task creation, annotation, refinement, and review, despite AI assistance with rubric creation. B LUE FIN contains 3,225 granular rubric criteria over 10 end-to-end synthesis 
+
+tasks (spreadsheet creation given natural language prompts), 82 patch-based manipulation tasks (spreadsheet modification according to a natural language prompt, given an input spreadsheet), and 39 interrogation tasks (comprehension and question answering tasks given an input spreadsheet). Of these, we fully release 305 rubric criteria over 11 tasks with a proportional split across task types. Manipulation tasks are most heavily featured in the benchmark, mirroring the responsibilities of investment banking (IB) and private equity (PE) analysts – manipulation tasks in B LUE FIN require at least 45+ minutes of work for an analyst to complete from scratch. We characterize existing frontier models’ performance on our benchmark, finding that frontier models achieve below-50% average scores across diverse expert rubric criteria, with particular challenges in output validity and robust formula correctness (via perturbation). We open source a test harness and agentic evaluation framework for B LUE FIN (§3). Our hope is that B LUE FIN inspires further interest from the community in complex spreadsheet tasks with specialized domain relevance, and that our detailed methodological descriptions can inform future work on benchmarks in highly specialized domains that have traditionally been challenging to build high quality benchmarks for. 
+
+2 Related Work 
+
+There is a large and growing interest in exploring and developing AI systems’ capabilities in spe-cialized domains where satisfactory task completion must be grounded in structured artifacts and domain-specific conventions. In the finance domain, where B LUE FIN is situated, spreadsheet work-books are a prominent structured artifact that relevant tasks frequently interface with; domain-specific conventions [20] influence expected best practices around finance spreadsheets. Previous efforts and investment have focused heavily on the code domain; numerous benchmarks evaluate code generation and program synthesis capabilities in settings where candidate outputs are largely programmatically verifiable via code execution [ 21 ], even for increasingly complex tasks typically approached with agentic systems [ 5–7 ]. In general, code artifacts are well-represented in training corpora [ 22 , 23 ] such that frontier models are often specifically trained to perform well in the setting [21, 24, 25]. In the spreadsheet and professional finance domains, the existence and increasing complexity of tasks included in recent AI benchmarks reflect an ongoing investment in the space and/or general interest in the spreadsheet as a structured artifact that constitutes a compelling setting for evaluating AI systems’ reasoning and instruction following capabilities. Like code, spreadsheets can have dense, graph-structured dependencies, and errors can be syntactic or non-obvious [ 26 ]. However, professional finance tasks over spreadsheets present challenges that are distinct from code domains and arguably warrant further study: complex spreadsheet tasks require 2D spatial reasoning across cells that is less inherent to code settings. Visual stylistic and formatting concerns not applicable to code are featured heavily in spreadsheets (and are often salient factors in human preference evaluations of generated spreadsheets [ 13 ]), and standard financial modeling conventions [ 20 ] are less relevant to “general” spreadsheet tasks that more existing benchmarks have engaged with. Evaluation presents      
+
+> 6The name B LUE FIN is loosely inspired by the idea of bui lding, understanding, and editing fin ancial spreadsheets.
+
+3a challenge for complex professional finance tasks; evaluation criteria are nontrivial to express as programmatically verifiable tests that are often possible with complex, repository-level coding tasks. Additionally, professional finance spreadsheets are difficult to procure high-quality, realistic examples for, due to licensing and privacy concerns that are less prevalent in the software domain due to widespread open-sourcing and permissive licensing. BLUE FIN addresses a gap in the literature, constituting a high-quality collection of complex tasks that call for multi-step reasoning and manipulation over realistic financial workbooks. Many exist-ing spreadsheet benchmarks are limited to relatively simpler tasks that naturally lend themselves to programmatic verification such as spreadsheet formula generation [ 8] or atomic manipulation (e.g. “Please highlight Sales between 200 and 500” [ 9]) from detailed natural language instructions [ 9, 27 , 28 , 11 ] that tend to map cleanly to evaluation criteria . For instance, even SheetRM [ 11 ], which explicitly calls for long-horizon trajectories, modulates task difficulty by simply concatenating multiple relatively well-defined spreadsheet manipulation instructions. In contrast, a realistic spread-sheet benchmark in the professional finance domain should evaluate execution of complex end-to-end workflows that are expressed naturally (i.e. underspecified compared to existing spreadsheet bench-marks); a performant AI agent should be able to infer a viable plan and leverage appropriate tools to complete the task, satisfying both explicit specifications and implicit expectations relevant to the domain. Evaluation of such complex workflows is nontrivial as a result. More recent works have explored AI system capabilities on similarly complex end-to-end workflows in specialized domains. Similarly to B LUE FIN but in a different task setting that also does not easily lend itself to programmatic verification due to its complexity and subjectivity, Sharma et al. [29] curate a set of thousands of high quality, granular evaluation criteria on a relatively smaller set of Deep Research task instances. Multiple benchmarks such as GDPVal [ 15 ], OfficeBench [ 14 ], OfficeQA Pro [ 17 ], and APEX-Agents [ 19 ] also include a limited set of workflows relevant to finance professionals as parts of broader studies of AI capabilities on real-world end-to-end workflows – in contrast, B LUE FIN features a focus on complex professional finance tasks over spreadsheet artifacts. Kundurthy et al. [13] focus on end-to-end spreadsheet synthesis, noting that models often fail to produce satisfactory spreadsheets in the finance domain in particular; B LUE FIN includes spreadsheet synthesis tasks but additionally contains rich examples across manipulation and interrogation tasks, which more fully reflects the spreadsheet workflows of a finance professional. Fin-SheetBench [ 12 ] is a benchmark of 133 question answering tasks over 100 years of U.S. Treasury Bulletins, using synthetic spreadsheets. The benchmark includes a range of question difficulty levels, and the authors report degraded accuracy performance on larger, more complex files – notably, our closed frontier models (which outperform the open weight models we benchmark) achieve only 34.7%-50.0% accuracy performance on interrogation tasks, such that our upper end of accuracy performance just barely reaches the lower end of accuracy performance on Ravnik et al. [12] ’s tasks. We attribute the discrepancy to the complexity of our interrogation tasks: many tasks require agents to update spreadsheet assumptions, recompute multi-level dependencies, and interpret the resulting state to answer correctly. A concurrent work, BankerToolBench [ 18 ], is closely related in motivation and scope. Handshake AI et al. [18] create 100 tasks with even more (100+) rubric criteria per task, focusing on end-to-end workflows that faithfully represent workflows of real junior investment bankers. We view our work as highly complementary: empirical results on the benchmarks broadly support each other in that aggregate rubric scores span similar ranges (clustering in the 40-60% ranges), with Grok and open models lagging behind other frontier models, and performance varying across rubric item and task types. Whereas BankerToolBench includes tasks across the spectrum of investment banker work tasks, such as creating discounted cash flow (DCF) models (in scope for BLUE FIN ) and preparing pitch decks (outside B LUE FIN ’s scope), B LUE FIN prioritizes coverage of spreadsheet tasks in the domain over a similar number of task instances – facilitating in depth analysis of specific model capabilities over focused evaluation criteria. 
+
+3 BLUE FIN 
+
+We describe our benchmark creation process, which was used to develop both the public set and hidden set of tasks. We release public tasks at https://huggingface.co/datasets/Longitude-Labs/ bluefin-release .43.1 Dataset Construction 
+
+Tasks for B LUE FIN were constructed by vetted contributors with domain expertise, who were com-pensated for their work at substantially above prevailing market rates for annotation work, reflecting the level of domain expertise required. Contributors underwent screening and both asynchronous and synchronous training before being eligible to submit tasks. Tasks themselves were vetted for quality and complexity, with a floor of at least 45 minutes of estimated work for an investment banker or private equity analyst to complete from scratch, for generative tasks; extensive multi-tab synthesis tasks such as full debt builds and merger models were estimated to require multiple hours of analyst work. For manipulation tasks, the most prominent task category in our benchmark, annotators were provided a seed workbook to start with – seed spreadsheets ended up with an average of 1.5 tasks each. Given seed workbooks, contributors were asked to submit modified workbooks along with natural language instructions that would elicit the changes made – contributors were asked to provide instructions “as [they] would brief a capable analyst.” Candidate rubric criteria were generated by Claude Opus 4.6 for the task submitted, and reviewers were tasked with also validating and refining the proposed rubric items. Similarly, for synthesis tasks, annotators were provided with a seed workbook hand-created by finance experts and asked to conceptualize a partial or full build mapping to a real-world deliverable an analyst would be asked to construct from scratch, also providing a natural language prompt along with the task-complete workbook. Additionally, a portion of our synthesis tasks were sourced from pre-existing models collected from industry experts. Though the set of six rubric item categories are consistent between synthesis and manipulation tasks, rubrics for synthesis tasks tend to emphasize presentation more heavily than in other tasks categories where seed notebooks already contain many desired presentation elements. Interrogation tasks specified a correct answer and were not associated with rubrics. For interrogation tasks, we sourced a wide range of high-quality models reflecting professional use cases and standards and analyzed the dynamic flow of each model: what the main outputs were, how the supporting pieces contributed to those outputs, and where the underlying data was being pulled from. Given an understanding of model structure, we identified inputs that affected downstream outputs through multi-step calculation chains (vs. simple direct links), and we prioritized these examples to develop more difficult questions in our set. Validated manipulation and synthesis tasks were tagged, also by Opus 4.6, with labels for primary industry and task category . Figure 2 displays the number of held-out manipulation tasks over task categories and industries. 0 10 20 30 40      
+
+> Number of Tasks
+> Planning & Forecasting
+> Valuation & Deal Analysis
+> Financial Statements
+> Supporting Schedules
+> Reporting & Monitoring
+> 29 (39%)
+> 18 (24%)
+> 14 (19%)
+> 8 (11%)
+> 6 (8%)
+> Task Category Distribution
+> 0510 15 20 25
+> Number of Tasks
+> General
+> Real Estate
+> Technology
+> Consumer Services
+> Energy
+> Retail
+> Restaurant
+> Life Sciences
+> Financial Services
+> Healthcare
+> Transportation
+> Entertainment
+> Professional Services
+> Manufacturing
+> Infrastructure
+> 18 (24%)
+> 14 (19%)
+> 10 (13%)
+> 7 (9%)
+> 5 (7%)
+> 4 (5%)
+> 4 (5%)
+> 3 (4%)
+> 3 (4%)
+> 2 (3%)
+> 1 (1%)
+> 1 (1%)
+> 1 (1%)
+> 1 (1%)
+> 1 (1%)
+> Primary Industry Distribution
+
+Figure 2: Composition of the manipulation held-out set (n=75). Tasks span 5 primary financial-modeling categories (Planning & Forecasting at 39%, Valuation & Deal Analysis at 24%, Financial Statements at 19%, Supporting Schedules at 11%, Reporting & Monitoring at 8%) and 16 industries (Real Estate, Technology, Energy, Consumer Services, and Healthcare collectively 60%; the remaining 11 industries each ≤5%). 5Table 1 reports rubric criteria counts in 6 criterion categories across 10 synthesis (9 hold-out, 1 public) and 82 manipulation (75 hold-out, 7 public) tasks. See Appx. A for descriptions of rubric categories and examples of criteria over each of the categories. Table 1: Rubric Criteria Counts by Section                                         
+
+> Section Synth. (H) Manip. (P) Synth. (H) Manip. (P) Total Formula Correctness 869 87 112 14 1,082 Output Validation 628 65 62 10 765 Perturbation 378 45 39 6468 Model Integration 335 30 14 4383 Presentation 281 25 26 2334 Pitfalls 150 14 26 3193 Total 2,641 266 279 39 3,225
+
+We estimate approximately 5 hours of annotator labor total per task. We obtained consent from dataset contributors to publicly release submitted task examples via full IP assignment. We retain a private set primarily out of potential leakage concerns. In addition to general quality checks on submitted tasks, we carefully check tasks for personally identifiable information (PII) and potential IP or licensing violations in submitted spreadsheets. See Appx.B for additional details about contributor instructions and annotation tasks. 
+
+4 Evaluations 
+
+We describe infrastructure and methodology for task evaluation, and report results of existing models on B LUE FIN .We evaluate five frontier models ( Claude Opus 4.7 , Claude Sonnet 4.6 , GPT-5.5 , Gemini 3.1 Pro Preview , and Grok 4.20 ) on the held-out portion of B LUE FIN (120 tasks: 75 manipulation, 9 synthesis, 36 interrogation). All models are set to high reasoning via their respective provider APIs. See Appendix D for results on a publicly released set with an expanded set of models. Table 6 and Appendix F discuss total costs associated with evaluation. 
+
+Evaluation Harness. We expose an agentic harness of 20 tools organized into six categories that cover the full lifecycle of spreadsheet construction. The functional surface offers fine-grained structured access: read primitives that return ranges and full workbook state, batch write primitives that mutate cells and create or delete sheets, formatting primitives that operate on either single ranges or batched format-spec arrays, and an explicit recalculation tool that drives a LibreOffice-headless calculation pass with iterative-calc enabled so debt schedules and LBO-style circular references converge correctly. Alongside these, a sandboxed code execution tool exposes the workbook as an in-memory openpyxl object with restricted built-ins and a tight import whitelist (no file I/O, no network); models optimized for programmatic manipulation or batch verification can perform bulk edits in a single call. Following the design philosophy of HELM [ 30 ] and GAIA [ 31 ], we adopt a minimal-elicitation prompt (61 words; see Appx. E.1) with no workflow prescriptions, tool preferences, or domain conventions, isolating raw task-specific capability from instruction-following confounds [ 32 ]. Details of harness implementation are included in Appendix E. In general B LUE FIN 
+
+evaluates financial reasoning, tool use capabilities, and domain convention adherence, under a sufficiently expressive but relatively minimal harness, though we acknowledge that more complex scaffolding has the potential to extract stronger task performance. 
+
+Agentic Grading. The generative tasks (synthesis, manipulation) are graded by an agentic LLM judge that interacts with the output workbook through the same 20-tool spreadsheet environment used by the agent under evaluation. However, the System Instruction is strengthened to provide opinionated domain conventions and financial instructions that enable the judge to serve as a proxy expert human rater behavior (see appendix E.1). Given a model’s output.xlsx and the task rubric, the judge issues a sequence of tool calls and code execution commands to inspect both static structure (e.g. “does cell B19 contain a SUM formula?” “does the DCF tab exist?”) and dynamic behavior (e.g. “when input X is changed to Y, does output A update to B within tolerance?”), and emits a binary decision per criterion with mandatory short-form evidence pointing to the cells observed. Scores aggregate as the weighted ratio of points met to maximum points (0–100). For our LM judge, we use 6GPT-5.4 with reasoning_effort=high under an expanded, domain-specific SI. GPT-5.4 was selected and validated via comparison to expert labels established via an inter-annotator alignment study over 384 binary criteria where we observed a Krippendorff’s Alpha of 0.826. All three candidate judges aligned with expert consensus at comparable levels near the human IRR reliability ceiling, though GPT-5.4’s macro F1 score of 0.839 was higher than Gemini 3.1 Pro’s (0.803) and Sonnet 4.6’s (0.805). All code is released for reproduction of results (and surveying of configs and system prompts) at https://github.com/Longitude-Labs/bluefin. 
+
+4.1 Model Overall Performance 
+
+Table 3 reports the performance of five frontier models on the held-out set; Figure 3 visualizes the breakdown. See Table 5 in Appx D for results on the public set on an expanded set of models, including 2 open-source candidates, Kimi K2.6 [33] and Minimax M2.5 [34].                               
+
+> Set NOpus Sonnet GPT-5.5 Gemini Grok
+> Manipulation 75 49.4 43.0 48.2 46.1 27.8 Synthesis 966.7 53.2 59.9 50.3 46.9 Interrogation 36 44.4 40.3 50.0 44.4 34.7
+> Overall 120 49.2 42.9 49.6 45.9 31.3
+
+Table 2: Held-out performance (%, score is criteria-weighted percentage; non-completions count as zero). No frontier model exceeds 50% performance. Opus 4.7 GPT-5.5 Gemini 3.1 Sonnet 4.6 Grok 4.20 
+
+> 0
+> 10
+> 20
+> 30
+> 40
+> 50
+> 60
+> 70
+> 80
+> Score (%)
+> Synthesis (n=9)
+> Manipulation (n=75)
+> Interrogation (n=36)
+> Overall micro (n=120)
+
+Figure 3: Held-out performance per task type. Even the strongest frontier models remain below 50% on the benchmark overall, despite the same models rapidly saturating such frontier capability benchmarks as SWE-bench Pro [7]. Notably, we find that frontier closed-source models all struggle to clear the 50% threshold, with GPT-5.5 and Opus 4.7 at the forefront. We find this profile is distinct across different task types, as captured in Figure 3. Models pass the most rubric items on Synthesis tasks, which we believe may reflect the relative flexibility of building a model from scratch compared with modifying an existing workbook whose formulas, layouts, and references impose brittle integration constraints. However, manipulation tasks capture the bulk of spreadsheet work in the professional finance domain, and even top models demonstrate poorer ability to reason and manipulate in a manner that is well-integrated within the starting workbook. Interrogation tasks were observed to be challenging for models to answer perfectly. Generally, rubric scores correspond to a proportion of critical evaluation criteria passed. In particular, we view B LUE FIN scores as a weighted snapshot over dimensions IB and PE practitioners consider essential in real workflows – logic, integration, dynamic behavior, and errors – without prescribing 7a single canonical layout. Alongside our aggregated rubric scores, we additionally explore model-generated outputs’ utility to finance professionals in Appx. C. 
+
+4.2 Characterizing Failure Modes 
+
+Decomposing rubric judgments by rubric section reveals a model-agnostic failure pattern, summarized in Figure 4(a). Out of the categories of rubric criteria, models most commonly pass Formula Correctness criteria (50-68% across the five frontier models). However, they pass fewer Output Validation (20-48%) and Perturbation (15-37%) criteria. In general, we observe a roughly 30 point gap between performance on formula correctness criteria, which check surface forms of static cell logic, vs dynamic-behavior correctness criteria, which evaluate robustness of model builds. 
+
+Perturbation items expose weaknesses in dynamic behavior. A perturbation criterion specifies an input mutation (e.g., “change WACC from 8.5% to 10%”) and an expected output shift (e.g., “Enterprise Value moves from $3,820M to within ±2% of $4,205M”). The judge mutates the input, calls recalc_workbook , and reads the target output. Models that hardcode intermediate values, erroneously overwrite a formula cell with a constant, or build partial circular structures that fail to converge, would also fail the perturbation check. 
+
+Output Validation is an additional bottleneck. Even when formulas are structurally correct, the computed numeric values frequently miss the ±2% rubric tolerance. Manual inspection of low-scoring trajectories surfaces four recurring causes: sign errors on cash-outflow line items (adding where subtraction is required), date-axis misalignment (Q1-2024 vs. Q1-2025 reporting offsets), rate-vs-amount confusion (a 5% spread encoded as 5.0 instead of 0.05), and end-of-period vs. beginning-of-period discounting in DCFs. 
+
+Pitfalls is a penalty section, where a higher pass rate means fewer detected errors. Grok’s high pitfall rate reflects its tendency to produce less content overall, resulting in fewer potential triggers for pitfall criteria. Figure 4(b) presents aggregate scores on the distribution of 5-model-average task scores across the 75-task held-out manipulation set. The median task averages 46.2% ; only 33 of 75 tasks (44%) have a mean score of at least 50% , and all task scores are below 70% . At the left tail, 17 of 75 tasks (23%) sit below 30% .Opus 4.7 Sonnet 4.6 GPT-5.5 Gemini 3.1 Grok 4.20                                 
+
+> Formula Correctness
+> Model Integration
+> Output Validation
+> Perturbation
+> Presentation
+> Pitfalls
+> 59.5 60.8 62.7 68.2 48.6
+> 53.6 58.3 48.8 61.1 50.0
+> 48.1 43.2 43.3 42.9 20.3
+> 32.9 24.4 37.3 33.5 14.8
+> 64.6 61.5 66.9 54.8 38.1
+> 26.1 40.9 20.9 45.3 48.8
+> 010 20 30 40 50 60 70 80
+> Average Score Across 5 Frontier Models (%)
+> 0.0
+> 2.5
+> 5.0
+> 7.5
+> 10.0
+> 12.5
+> 15.0
+> 17.5
+> Number of Tasks
+> 17/75 tasks < 30%
+> Median: 46.2%
+> 20
+> 30
+> 40
+> 50
+> 60
+> 70
+> 80
+> Pass Rate (%)
+
+Figure 4: (a) Per-section criterion pass rate across the five frontier models on the 75-task held-out set of manipulation tasks. Models are most reliable at structural, syntactically-checkable sections (Formula Correctness, Presentation) and weakest at sections that test computed numeric values (Output Validation) and dynamic behavior under perturbation. (b) Distribution of per-task average scores across the same 75 tasks (averaged across five frontier models). The median task sits at 46.2%; only 44% of tasks clear 50% and not a single task clears 70%. The 17/75 tasks (23%) sitting below 30% are genuinely difficult construction and modification problems where the typical frontier model fails more than two-thirds of rubric criteria. 84.3 Cost-Performance Tradeoffs 
+
+Figure 5 contextualizes task scores on the held-out set against agent run costs. 0 10 20 30 40 50 
+
+> Agent Run Cost ($/task)
+> 30.0
+> 32.5
+> 35.0
+> 37.5
+> 40.0
+> 42.5
+> 45.0
+> 47.5
+> 50.0
+> Micro-Average Task Score
+> BlueFin Cost Performance Pareto Frontier
+> Opus 4.7
+> Sonnet 4.6
+> GPT-5.5
+> Gemini 3.1 Pro
+> Grok 4.20
+> Pareto frontier
+> Dominated by GPT-5.5
+> Dominated by Gemini 3.1 Pro
+
+Figure 5: We show average per-task agent run costs on the held-out set (judge cost is roughly constant across models and is excluded in the calculation) against micro-averaged task scores for each model. The Pareto frontier traces Grok 4.20 → Gemini 3.1 Pro → GPT-5.5 ; Opus is fully dominated –GPT-5.5 achieves a similar overall score range at 5.6 × lower cost ( $8 .85 vs $49 .21 per task). On the held-out set, the cost-quality frontier flattens at an average cost per task of around $10: Gemini 3.1 Pro at $5.78/task and GPT-5.5 at $8.85/task land within 6.8 pp of Opus’s macro score (53.5%) but at 8.5-5.6 × lower cost. The tradeoff between Gemini and GPT-5.5 hinges on rubric section: GPT-5.5 wins Formula Correctness (+9.9 pp), Model Integration (+6.4 pp), and Presentation (+24.4 pp); Gemini wins on Pitfalls (+18.1 pp, meaning fewer of its outputs trigger error-penalty criteria). 
+
+4.4 Behavior Profiles 
+
+We also observe qualitatively distinct behavioral profiles of different language models. 
+
+Opus is not uniformly cost-effective across task regimes. On a structurally large but routine balance-sheet construction task, Gemini 3.1 Pro scored 100% at $3.00, while Opus 4.7 scored 95% at $83.05. The trace suggests that Opus’s inefficiency came from cost-dense interactions: broad workbook reads, large formula-writing calls, and substantially more output tokens. Gemini instead used many narrow read_range probes, compact formula writes, programmatic formula copying, and recalculation checks to produce a better-scoring workbook at 27.7 × lower cost. This suggests that high-cost reasoning models are not always preferable for well-specified workbook-wiring tasks. 
+
+GPT-5.5 tends to use execute_python over structured tools. On 64% of manipulation tasks, GPT-5.5’s first action after get_workbook_state was execute_python to inspect or write multiple cells via openpyxl, vs <25% for Opus, Sonnet, and Gemini. This explains GPT-5.5’s lower turn count (24 vs 38 for Opus) but also its weaker performance on Output Validation criteria: code-driven writes require fewer turns but are harder to verify against the rubric’s expected values without explicit recalculation tool calls. 
+
+Sonnet trajectories include read-only actions on some tasks. On ∼8% of manipulation held-out tasks, Sonnet’s output workbook was identical to the input (zero writes), despite a non-trivial trajectory of get_cells and read_range calls. The agent explored, decided to call done , and returned no modifications. We did not observe this on Opus, GPT-5.5, or Gemini at meaningful rates (<1%). 9Weaker models fail to call recalc_workbook proactively. Opus calls recalc_workbook on 75% of tasks, GPT-5.5 on 100%, but Sonnet and Grok call it on <50%, consistent with their weaker Perturbation pass rates. Models that do not recalculate workbooks cannot self-verify whether their dynamically-computed values are correct. 
+
+4.4.1 Case Studies 
+
+We describe in Appx. G a detailed walkthrough of three examples of tasks with different failure mode profiles across models, including side-by-side trajectory excerpts and error attribution to specific rubric criteria. The first case study describes a task that all models performed similarly poorly on. The second example describes a differentiating task where models scored along a gradient. Finally, the third example highlights a case with a 27.7x difference in cost between two similarly high-scoring models on a task. 
+
+5 Limitations 
+
+Though tasks with multiple sheets per workbook are typical in our dataset, all tasks have a maximum of one spreadsheet workbook as context, with no additional artifacts as context (in contrast, other works have covered e.g. slide decks and retrieval of other documents as well). We acknowledge the complex considerations around developing and evaluating AI system perfor-mance on end-to-end workflows with potential real-world utility. Though we discuss in §1 the potential for AI systems to aid finance professionals’ productivity, truly scalable automation of major occupational responsibilities may have implications for job security and working conditions that are mixed or negative in effect. The initial release of B LUE FIN assumes a uniform harness designed to evaluate LLMs’ underlying reasoning and instruction following capabilities over realistic task prompts that a finance professional might provide to an AI system, while providing enough scaffolding via tool use to allow for well-formed task attempts by most models evaluated. That being said, we acknowledge that many modern frontier models are specifically trained to perform well with a particular harness, and we plan in a future release to include an additional leaderboard that allow providers to submit endpoints assuming custom harnesses, including ones adapted from our open sourced harness. We invite readers to interpret our existing results on the benchmark as a strong baseline that invites iteration and improvement. 
+
+6 Conclusion 
+
+We view our work as one piece of a larger effort to develop benchmarks for tasks aligned with real-world value; currently, representation in AI benchmarks is not in proportion with employment numbers [ 35 ], with coding and mathematical tasks heavily overrepresented compared to other highly digital sectors. The existing benchmark representation skew is arguably unsurprising given the relative difficulty of collecting high quality, realistic examples for tasks reflective of real business value, and the relative challenge that scalable verification of task completion often presents. That being said, beyond our artifact contributions we hope that our methodological descriptions provide useful scaffolding for other researchers who may be interested in creating their own benchmarks or understanding the resources needed to do so. 
+
+Acknowledgements 
+
+We thank Aidan Sheinberg, Filbert Presley, Daniel Fu, Ian Lee, Kasper Halevy, and Rishi Sethuraj for their contributions during the development of this work. 
+
+References   
+
+> [1] U.S. Bureau of Labor Statistics. Occupational employment and wage statistics: National employment and wage data, may 2024. https://www.bls.gov/news.release/ocwage.t01.htm , 2025. Accessed May 2026.
+
+10 [2] Stephen G. Powell, Barry Lawson, and Kenneth R. Baker. Impact of errors in operational spreadsheets, 2008. URL https://arxiv.org/abs/0801.0715 .[3] Shakked Noy and Whitney Zhang. Experimental evidence on the productivity effects of generative artificial intelligence. Science , 381(6654):187–192, 2023. doi: 10.1126/science.adh2586. URL https: //www.science.org/doi/abs/10.1126/science.adh2586 .[4] Fabrizio Dell’Acqua, Edward McFowland, Ethan Mollick, Hila Lifshitz, Katherine C. Kellogg, Saran Rajendran, Lisa Krayer, François Candelon, and Karim R. Lakhani. Navigating the jagged technological frontier: Field experimental evidence of the effects of artificial intelligence on knowledge worker pro-ductivity and quality. Organization Science , 37(2):403–423, 2026. doi: 10.1287/orsc.2025.21838. URL 
+
+https://doi.org/10.1287/orsc.2025.21838 .[5] Carlos E Jimenez, John Yang, Alexander Wettig, Shunyu Yao, Kexin Pei, Ofir Press, and Karthik Narasimhan. Swe-bench: Can language models resolve real-world github issues? In B. Kim, Y. Yue, S. Chaudhuri, K. Fragkiadaki, M. Khan, and Y. Sun, editors, International Conference on Learning Repre-sentations , volume 2024, pages 54107–54157, 2024. URL https://proceedings.iclr.cc/paper_ files/paper/2024/file/edac78c3e300629acfe6cbe9ca88fb84-Paper-Conference.pdf .[6] Neil Chowdhury, James Aung, Chan Jun Shern, Oliver Jaffe, Dane Sherburn, Giulio Starace, Evan Mays, Rachel Dias, Marwan Aljubeh, Mia Glaese, Carlos E. Jimenez, John Yang, Leyton Ho, Tejal Patwardhan, Kevin Liu, and Aleksander Madry. Introducing SWE-bench verified, 2024. URL https: //openai.com/index/introducing-swe-bench-verified/ .[7] Xiang Deng, Jeff Da, Edwin Pan, Yannis Yiming He, Charles Ide, Kanak Garg, Niklas Lauffer, Andrew Park, Nitin Pasari, Chetan Rane, et al. Swe-bench pro: Can ai agents solve long-horizon software engineering tasks? arXiv preprint arXiv:2509.16941 , 2025. [8] Wei Zhao, Zhitao Hou, Siyuan Wu, Yan Gao, Haoyu Dong, Yao Wan, Hongyu Zhang, Yulei Sui, and Haidong Zhang. NL2Formula: Generating spreadsheet formulas from natural language queries. In Yvette Graham and Matthew Purver, editors, Findings of the Association for Computational Linguistics: EACL 2024 , pages 2377–2388, St. Julian’s, Malta, March 2024. Association for Computational Linguistics. URL 
+
+https://aclanthology.org/2024.findings-eacl.158/ .[9] Hongxin Li, Jingran Su, Yuntao Chen, Qing Li, and ZHAO-XIANG ZHANG. SheetCopi-lot: Bringing Software Productivity to the Next Level through Large Language Models. In A. Oh, T. Neumann, A. Globerson, K. Saenko, M. Hardt, and S. Levine, editors, Ad-vances in Neural Information Processing Systems , volume 36, pages 4952–4984. Curran Asso-ciates, Inc., 2023. URL https://proceedings.neurips.cc/paper_files/paper/2023/file/ 0ff30c4bf31db0119a6219e0d250e037-Paper-Conference.pdf .[10] Xiaokang Zhang, Sijia Luo, Bohan Zhang, Zeyao Ma, Jing Zhang, Yang Li, Guanlin Li, Zijun Yao, Kangli Xu, Jinchang Zhou, Daniel Zhang-Li, Jifan Yu, Shu Zhao, Juanzi Li, and Jie Tang. TableLLM: Enabling tabular data manipulation by LLMs in real office usage scenarios. In Wanxiang Che, Joyce Nabende, Ekaterina Shutova, and Mohammad Taher Pilehvar, editors, Findings of the Association for Computational Linguistics: ACL 2025 , pages 10315–10344, Vienna, Austria, July 2025. Association for Computational Linguistics. ISBN 979-8-89176-256-5. doi: 10.18653/v1/2025.findings-acl.538. URL 
+
+https://aclanthology.org/2025.findings-acl.538/ .[11] Yibin Chen, Yifu Yuan, Zeyu Zhang, Yan Zheng, Jinyi Liu, Fei Ni, Jianye Hao, Hangyu Mao, and Fuzheng Zhang. Sheetagent: Towards a generalist agent for spreadsheet reasoning and manipulation via large language models. In Proceedings of the ACM on Web Conference 2025 , WWW ’25, page 158–177, New York, NY, USA, 2025. Association for Computing Machinery. ISBN 9798400712746. doi: 10.1145/3696410.3714962. URL https://doi.org/10.1145/3696410.3714962 .[12] Jan Ravnik, Matjaž Liˇ cen, Felix Bührmann, Bithiah Yuan, Felix Stinson, and Tanvi Singh. Finsheet-bench: From simple lookups to complex reasoning, where llms break on financial spreadsheets, 2026. URL 
+
+https://arxiv.org/abs/2603.07316 .[13] Srivatsa Kundurthy, Clara Na, Michael Handley, Zach Kirshner, Chen Bo Calvin Zhang, Manasi Sharma, Emma Strubell, and John Ling. Spreadsheetarena: Decomposing preference in llm generation of spread-sheet workbooks, 2026. URL https://arxiv.org/abs/2603.10002 .[14] Zilong Wang, Yuedong Cui, Li Zhong, Zimin Zhang, Da Yin, Bill Yuchen Lin, and Jingbo Shang. Officebench: Benchmarking language agents across multiple applications for office automation, 2024. URL https://arxiv.org/abs/2407.19056 .
+
+11 [15] Tejal Patwardhan, Rachel Dias, Elizabeth Proehl, Grace Kim, Michele Wang, Olivia Watkins, Simón Posada Fishman, Marwan Aljubeh, Phoebe Thacker, Laurance Fauconnet, Natalie S. Kim, Patrick Chao, Samuel Miserendino, Gildas Chabot, David Li, Michael Sharman, Alexandra Barr, Amelia Glaese, and Jerry Tworek. Gdpval: Evaluating ai model performance on real-world economically valuable tasks, 2025. URL 
+
+https://arxiv.org/abs/2510.04374 .[16] Haochen Luo, Ho Tin Ko, Jiandong Chen, David Sun, Yuan Zhang, and Chen Liu. Alphabench: Benchmark-ing large language models in formulaic alpha factor mining. In The Fourteenth International Conference on Learning Representations , 2026. URL https://openreview.net/forum?id=d97Q8r7ZKZ .[17] Krista Opsahl-Ong, Arnav Singhvi, Jasmine Collins, Ivan Zhou, Cindy Wang, Ashutosh Baheti, Owen Oertell, Jacob Portes, Sam Havens, Erich Elsen, Michael Bendersky, Matei Zaharia, and Xing Chen. Officeqa pro: An enterprise benchmark for end-to-end grounded reasoning, 2026. URL https://arxiv. org/abs/2603.08655 .[18] Handshake AI, Elaine Lau, Markus Dücker, Ronak Chaudhary, Hui Wen Goh, Rosemary Wei, Vaibhav Kumar, Saed Qunbar, Guram Gogia, Yi Liu, Scott Millslagle, Nasim Borazjanizadeh, Ulyana Tkachenko, Samuel Eshun Danquah, Collin Schweiker, Vijay Karumathil, Asrith Devalaraju, Varsha Sandadi, Haemi Nam, Punit Arani, Ray Epps, Abdullah Arif, Sahil Bhaiwala, Curtis Northcutt, Skyler Wang, Anish Athalye, Jonas Mueller, and Francisco Guzmán. BankerToolBench: Evaluating AI agents in end-to-end investment banking workflows, 2026. URL https://arxiv.org/abs/2604.11304 .[19] Bertie Vidgen, Austin Mann, Abby Fennelly, John Wright Stanly, Lucas Rothman, Marco Burstein, Julien Benchek, David Ostrofsky, Anirudh Ravichandran, Debnil Sur, Neel Venugopal, Alannah Hsia, Isaac Robinson, Calix Huang, Olivia Varones, Daniyal Khan, Michael Haines, Austin Bridges, Jesse Boyle, Koby Twist, Zach Richards, Chirag Mahapatra, Brendan Foody, and Osvald Nitski. Apex-agents, 2026. URL https://arxiv.org/abs/2601.14242 .[20] FAST Standard Organization. FAST Modeling Best Practice Handbook . FAST Standard Organization, London, 2015. Financial Modeling Standard. [21] Mark Chen, Jerry Tworek, Heewoo Jun, Qiming Yuan, Henrique Ponde de Oliveira Pinto, Jared Kaplan, Harri Edwards, Yuri Burda, Nicholas Joseph, Greg Brockman, Alex Ray, Raul Puri, Gretchen Krueger, Michael Petrov, Heidy Khlaaf, Girish Sastry, Pamela Mishkin, Brooke Chan, Scott Gray, Nick Ryder, Mikhail Pavlov, Alethea Power, Lukasz Kaiser, Mohammad Bavarian, Clemens Winter, Philippe Tillet, Felipe Petroski Such, Dave Cummings, Matthias Plappert, Fotios Chantzis, Elizabeth Barnes, Ariel Herbert-Voss, William Hebgen Guss, Alex Nichol, Alex Paino, Nikolas Tezak, Jie Tang, Igor Babuschkin, Suchir Balaji, Shantanu Jain, William Saunders, Christopher Hesse, Andrew N. Carr, Jan Leike, Josh Achiam, Vedant Misra, Evan Morikawa, Alec Radford, Matthew Knight, Miles Brundage, Mira Murati, Katie Mayer, Peter Welinder, Bob McGrew, Dario Amodei, Sam McCandlish, Ilya Sutskever, and Wojciech Zaremba. Evaluating large language models trained on code, 2021. URL https://arxiv.org/abs/2107.03374 .[22] Denis Kocetkov, Raymond Li, Loubna Ben Allal, Jia Li, Chenghao Mou, Carlos Muñoz Ferrandis, Yacine Jernite, Margaret Mitchell, Sean Hughes, Thomas Wolf, Dzmitry Bahdanau, Leandro von Werra, and Harm de Vries. The stack: 3 tb of permissively licensed source code, 2022. URL https://arxiv.org/abs/ 2211.15533 .[23] Zhiruo Wang, Grace Cuenca, Shuyan Zhou, Frank F. Xu, and Graham Neubig. MCoNaLa: A benchmark for code generation from multiple natural languages. In Andreas Vlachos and Isabelle Augenstein, editors, 
+
+Findings of the Association for Computational Linguistics: EACL 2023 , pages 265–273, Dubrovnik, Croatia, May 2023. Association for Computational Linguistics. doi: 10.18653/v1/2023.findings-eacl.20. URL https://aclanthology.org/2023.findings-eacl.20/ .[24] Yujia Li, David Choi, Junyoung Chung, Nate Kushman, Julian Schrittwieser, Rémi Leblond, Tom Ec-cles, James Keeling, Felix Gimeno, Agustin Dal Lago, Thomas Hubert, Peter Choy, Cyprien de Mas-son d’Autume, Igor Babuschkin, Xinyun Chen, Po-Sen Huang, Johannes Welbl, Sven Gowal, Alexey Cherepanov, James Molloy, Daniel J. Mankowitz, Esme Sutherland Robson, Pushmeet Kohli, Nando de Freitas, Koray Kavukcuoglu, and Oriol Vinyals. Competition-level code generation with alphacode. 
+
+Science , 378(6624):1092–1097, December 2022. ISSN 1095-9203. doi: 10.1126/science.abq1158. URL 
+
+http://dx.doi.org/10.1126/science.abq1158 .[25] Baptiste Roziere, Jonas Gehring, Fabian Gloeckle, Sten Sootla, Itai Gat, Xiaoqing Ellen Tan, Yossi Adi, Jingyu Liu, Romain Sauvestre, Tal Remez, Jérémy Rapin, Artyom Kozhevnikov, Ivan Evtimov, Joanna Bitton, Manish Bhatt, Cristian Canton Ferrer, Aaron Grattafiori, Wenhan Xiong, Alexandre Défossez, Jade Copet, Faisal Azhar, Hugo Touvron, Louis Martin, Nicolas Usunier, Thomas Scialom, and Gabriel Synnaeve. Code llama: Open foundation models for code, 2024. URL https://arxiv.org/abs/2308. 12950 .
+
+12 [26] Raymond R. Panko and Salvatore Aurigemma. Revising the panko-halverson taxonomy of spread-sheet errors. Decision Support Systems , 49(2):235–244, 2010. ISSN 0167-9236. doi: https://doi. org/10.1016/j.dss.2010.02.009. URL https://www.sciencedirect.com/science/article/pii/ S0167923610000461 .[27] Zeyao Ma, Bohan Zhang, Jing Zhang, Jifan Yu, Xiaokang Zhang, Xiaohan Zhang, Sijia Luo, Xi Wang, and Jie Tang. Spreadsheetbench: Towards challenging real world spreadsheet manipulation. In A. Globerson, L. Mackey, D. Belgrave, A. Fan, U. Paquet, J. Tomczak, and C. Zhang, editors, Advances in Neural Information Processing Systems , volume 37, pages 94871–94908. Curran Associates, Inc., 2024. doi: 10. 52202/079017-3007. URL https://proceedings.neurips.cc/paper_files/paper/2024/file/ ac840df270ac537dd74530a15c332684-Paper-Datasets_and_Benchmarks_Track.pdf .[28] Zheng Li, Yang Du, Mao Zheng, and Mingyang Song. MiMoTable: A multi-scale spreadsheet benchmark with meta operations for table reasoning. In Owen Rambow, Leo Wanner, Marianna Apidianaki, Hend Al-Khalifa, Barbara Di Eugenio, and Steven Schockaert, editors, Proceedings of the 31st International Conference on Computational Linguistics , pages 2548–2560, Abu Dhabi, UAE, January 2025. Association for Computational Linguistics. URL https://aclanthology.org/2025.coling-main.173/ .[29] Manasi Sharma, Chen Bo Calvin Zhang, Chaithanya Bandi, Clinton Wang, Ankit Aich, Huy Nghiem, Tahseen Rabbani, Ye Htet, Brian Jang, Sumana Basu, Aishwarya Balwani, Denis Peskoff, Marcos Ayestaran, Sean M. Hendryx, Brad Kenstler, and Bing Liu. Researchrubrics: A benchmark of prompts and rubrics for evaluating deep research agents, 2025. URL https://arxiv.org/abs/2511.07685 .[30] Percy Liang, Rishi Bommasani, Tony Lee, Dimitris Tsipras, Dilara Soylu, Michihiro Yasunaga, Yian Zhang, Deepak Narayanan, Yuhuai Wu, Ananya Kumar, Benjamin Newman, Binhang Yuan, Bobby Yan, Ce Zhang, Christian Cosgrove, Christopher D. Manning, Christopher Ré, Diana Acosta-Navas, Drew A. Hudson, Eric Zelikman, Esin Durmus, Faisal Ladhak, Frieda Rong, Hongyu Ren, Huaxiu Yao, Jue Wang, Keshav Santhanam, Laurel Orr, Lucia Zheng, Mert Yuksekgonul, Mirac Suzgun, Nathan Kim, Neel Guha, Niladri Chatterji, Omar Khattab, Peter Henderson, Qian Huang, Ryan Chi, Sang Michael Xie, Shibani Santurkar, Surya Ganguli, Tatsunori Hashimoto, Thomas Icard, Tianyi Zhang, Vishrav Chaudhary, William Wang, Xuechen Li, Yifan Mai, Yuhui Zhang, and Yuta Koreeda. Holistic evaluation of language models, 2023. URL https://arxiv.org/abs/2211.09110 .[31] Grégoire Mialon, Clémentine Fourrier, Craig Swift, Thomas Wolf, Yann LeCun, and Thomas Scialom. Gaia: a benchmark for general ai assistants, 2023. URL https://arxiv.org/abs/2311.12983 .[32] Fengbin Zhu, Wenqiang Lei, Youcheng Huang, Chao Wang, Shuo Zhang, Jiancheng Lv, Fuli Feng, and Tat-Seng Chua. Tat-qa: A question answering benchmark on a hybrid of tabular and textual content in finance, 2021. URL https://arxiv.org/abs/2105.07624 .[33] Kimi Team, Tongtong Bai, Yifan Bai, Yiping Bao, S. H. Cai, Yuan Cao, Y. Charles, H. S. Che, Cheng Chen, Guanduo Chen, Huarong Chen, Jia Chen, Jiahao Chen, Jianlong Chen, Jun Chen, Kefan Chen, Liang Chen, Ruijue Chen, Xinhao Chen, Yanru Chen, Yanxu Chen, Yicun Chen, Yimin Chen, Yingjiang Chen, Yuankun Chen, Yujie Chen, Yutian Chen, Zhirong Chen, Ziwei Chen, Dazhi Cheng, Minghan Chu, Jialei Cui, Jiaqi Deng, Muxi Diao, Hao Ding, Mengfan Dong, Mengnan Dong, Yuxin Dong, Yuhao Dong, Angang Du, Chenzhuang Du, Dikang Du, Lingxiao Du, Yulun Du, Yu Fan, Shengjun Fang, Qiulin Feng, Yichen Feng, Garimugai Fu, Kelin Fu, Hongcheng Gao, Tong Gao, Yuyao Ge, Shangyi Geng, Chengyang Gong, Xiaochen Gong, Zhuoma Gongque, Qizheng Gu, Xinran Gu, Yicheng Gu, Longyu Guan, Yuanying Guo, Xiaoru Hao, Weiran He, Wenyang He, Yunjia He, Chao Hong, Hao Hu, Jiaxi Hu, Yangyang Hu, Zhenxing Hu, Ke Huang, Ruiyuan Huang, Weixiao Huang, Zhiqi Huang, Tao Jiang, Zhejun Jiang, Xinyi Jin, Yu Jing, Guokun Lai, Aidi Li, C. Li, Cheng Li, Fang Li, Guanghe Li, Guanyu Li, Haitao Li, Haoyang Li, Jia Li, Jingwei Li, Junxiong Li, Lincan Li, Mo Li, Weihong Li, Wentao Li, Xinhang Li, Xinhao Li, Yang Li, Yanhao Li, Yiwei Li, Yuxiao Li, Zhaowei Li, Zheming Li, Weilong Liao, Jiawei Lin, Xiaohan Lin, Zhishan Lin, Zichao Lin, Cheng Liu, Chenyu Liu, Hongzhang Liu, Liang Liu, Shaowei Liu, Shudong Liu, Shuran Liu, Tianwei Liu, Tianyu Liu, Weizhou Liu, Xiangyan Liu, Yangyang Liu, Yanming Liu, Yibo Liu, Yuanxin Liu, Yue Liu, Zhengying Liu, Zhongnuo Liu, Enzhe Lu, Haoyu Lu, Zhiyuan Lu, Junyu Luo, Tongxu Luo, Yashuo Luo, Long Ma, Yingwei Ma, Shaoguang Mao, Yuan Mei, Xin Men, Fanqing Meng, Zhiyong Meng, Yibo Miao, Minqing Ni, Kun Ouyang, Siyuan Pan, Bo Pang, Yuchao Qian, Ruoyu Qin, Zeyu Qin, Jiezhong Qiu, Bowen Qu, Zeyu Shang, Youbo Shao, Tianxiao Shen, Zhennan Shen, Juanfeng Shi, Lidong Shi, Shengyuan Shi, Feifan Song, Pengwei Song, Tianhui Song, Xiaoxi Song, Hongjin Su, Jianlin Su, Zhaochen Su, Lin Sui, Jinsong Sun, Junyao Sun, Tongyu Sun, Flood Sung, Yunpeng Tai, Chuning Tang, Heyi Tang, Xiaojuan Tang, Zhengyang Tang, Jiawen Tao, Shiyuan Teng, Chaoran Tian, Pengfei Tian, Ao Wang, Bowen Wang, Chensi Wang, Chuang Wang, Congcong Wang, Dingkun Wang, Dinglu Wang, Dongliang Wang, Feng Wang, Hailong Wang, Haiming Wang, Hengzhi Wang, Huaqing Wang, Hui Wang, Jiahao Wang, Jinhong Wang, Jiuzheng Wang, Kaixin Wang, Linian Wang, Qibin Wang, Shengjie Wang, Shuyi Wang, Si Wang, Wei Wang, Xiaochen Wang, Xinyuan Wang, Yao Wang, Yejie 
+
+13 Wang, Yipu Wang, Yiqin Wang, Yucheng Wang, Yuzhi Wang, Zhaoji Wang, Zhaowei Wang, Zhengtao Wang, Zhexu Wang, Zihan Wang, Zizhe Wang, Chu Wei, Ming Wei, Chuan Wen, Zichen Wen, Chengjie Wu, Haoning Wu, Junyan Wu, Rucong Wu, Wenhao Wu, Yuefeng Wu, Yuhao Wu, Yuxin Wu, Zijian Wu, Chenjun Xiao, Jin Xie, Xiaotong Xie, Yuchong Xie, Yifei Xin, Bowei Xing, Boyu Xu, Jianfan Xu, Jing Xu, Jinjing Xu, L. H. Xu, Lin Xu, Suting Xu, Weixin Xu, Xinbo Xu, Xinran Xu, Yangchuan Xu, Yichang Xu, Yuemeng Xu, Zelai Xu, Ziyao Xu, Junjie Yan, Yuzi Yan, Guangyao Yang, Hao Yang, Junwei Yang, Kai Yang, Ningyuan Yang, Ruihan Yang, Xiaofei Yang, Xinlong Yang, Ying Yang, Yi Yang, Yi Yang, Zhen Yang, Zhilin Yang, Zonghan Yang, Haotian Yao, Dan Ye, Wenjie Ye, Zhuorui Ye, Bohong Yin, Chengzhen Yu, Longhui Yu, Tao Yu, Tianxiang Yu, Enming Yuan, Mengjie Yuan, Xiaokun Yuan, Yang Yue, Weihao Zeng, Dunyuan Zha, Haobing Zhan, Dehao Zhang, Hao Zhang, Jin Zhang, Puqi Zhang, Qiao Zhang, Rui Zhang, Xiaobin Zhang, Y. Zhang, Yadong Zhang, Yangkun Zhang, Yichi Zhang, Yizhi Zhang, Yongting Zhang, Yu Zhang, Yushun Zhang, Yutao Zhang, Yutong Zhang, Zheng Zhang, Chenguang Zhao, Feifan Zhao, Jinxiang Zhao, Shuai Zhao, Xiangyu Zhao, Yikai Zhao, Zijia Zhao, Huabin Zheng, Ruihan Zheng, Shaojie Zheng, Tengyang Zheng, Junfeng Zhong, Longguang Zhong, Weiming Zhong, M. Zhou, Runjie Zhou, Xinyu Zhou, Zaida Zhou, Jinguo Zhu, Liya Zhu, Xinhao Zhu, Yuxuan Zhu, Zhen Zhu, Jingze Zhuang, Weiyu Zhuang, Ying Zou, and Xinxing Zu. Kimi k2.5: Visual agentic intelligence, 2026. URL 
+
+https://arxiv.org/abs/2602.02276 .[34] MiniMax. MiniMax-M2.5: Built for real-world productivity. https://www.minimax.io/news/ minimax-m25 , February 2026. Model weights: https://huggingface.co/MiniMaxAI/MiniMax-M2. 5.[35] Zora Zhiruo Wang, Sanidhya Vijayvargiya, Aspen Chen, Hanmo Zhang, Venu Arvind Arangarajan, Jett Chen, Valerie Chen, Diyi Yang, Daniel Fried, and Graham Neubig. How well does agent development reflect real-world work?, 2026. URL https://arxiv.org/abs/2603.01203 .
+
+14 A BLUE FIN Rubric Descriptions 
+
+Synthesis and manipulation tasks in B LUE FIN are evaluated with binary rubric criteria across six categories of items. We provide descriptions of our rubric criteria categories and examples of criteria in Table 3. 
+
+Category Description Example criteria 
+
+Formula Correctness A formula implements the intended financial calculation, crediting any methodologically valid formulation. 
+
+(1 point) Are the fiscal years (2021 through 2031) calculated by adding one to the prior year’s column header (with only the first projected year hardcoded) on the Operating Model Cases tab? 
+
+(2 points) Is the LP ownership percentage for the first tier on the Waterfall tab calculated EITHER using both the LP equity contribution from the equity capital stack and the dilution from the promote OR as one minus the GP ownership percentage? Model Integration A value is referenced from its authoritative source tab rather than recomputed or hardcoded locally. 
+
+(5 points) Is the WACC value in the assumptions block on the DCF tab linked to the WACC calculation on the WACC tab (not recalculated locally)? 
+
+(2 points) Is levered free cash flow on the Waterfall tab linked to the Full Monthly CF tab? Output Validation A key output matches the reference answer within a stated tolerance. 
+
+(3 points) Is 2031 Revenue on the Operating Model tab within +/- 2% of $10,342 million? 
+
+(5 points) Is the Project Level IRR on the Waterfall tab within +/- 0.5 pp of 27.9%? Perturbation Changing a driving input causes the dependent output to recompute to the correct new value. 
+
+(5 points) If the Active Case selector on the Operating Model Cases tab is changed from Base to Bull, does the Implied Share Price under the PGR Method on the DCF tab update to within +/- 2% of $255.11? 
+
+(5 points) If the GP Equity Contribution on the Waterfall tab is changed from 5.0% to 10.0%, does the GP IRR on the Waterfall tab update to within +/- 5pp of 56.1%? Presentation The model follows formatting and labeling conventions without altering underlying numeric values. 
+
+(3 points) Are the historical fiscal year columns labeled with an A suffix and the projected fiscal year columns labeled with a P suffix using number formatting (so the underlying values remain numeric)? 
+
+(2 points) Are hardcoded assumption values on the Waterfall tab displayed in blue font? Pitfalls Penalty checks for defects that degrade a model. 
+
+(-5 points) Are there any error values across the Operating Model Cases, Operating Model, WACC, or DCF tabs (#REF!, #DIV/0!, #VALUE!, #NAME?, #N/A, #NUM!)? 
+
+(-2 points) Is any data or label text truncated due to insufficient column widths or row heights in the Waterfall tab? 
+
+Table 3: Rubric criteria categories with representative grading questions. Each criterion is a binary (yes/no) check worth a fixed point weight; weights vary with importance and difficulty. Pitfalls are scored as penalties (negative points); all other categories award positive points. Note that we deliberately do not include a separate ‘structural completeness’ section in our final rubric, though it was part of the initial design. Preliminary experimentation suggested that explicit structural -completeness and input - accuracy sections tend to over -reward models for copying a particular template and over -penalize valid alternative builds.Rather than explicitly considering ‘structure’ as its own rubric item category, we capture ‘structure’ as a combination of formula correctness, model integration, output validation, and perturbation. 
+
+B Details of Contributor Recruitment, Onboarding, and Annotation Tasks 
+
+Outreach and eligibility. Admission to the platform was not open. Contributors joined through targeted outreach from our team or through referrals from existing contributors. Outreach was directed primarily at experienced finance professionals with one to twenty years of professional experience, with a smaller cohort of senior-year undergraduates who had completed prior investment banking or private equity internships. Contributors were drawn predominantly from top-tier U.S. universities, with additional representation from institutions in the United Kingdom, Ireland, India, Hong Kong, and continental Europe; in total, 78 contributors spanning seven countries participated in benchmark 15 construction. Represented roles spanned investment banking (summer analyst through associate), private equity, hedge fund and asset management, management consulting, freelance and fractional finance, and senior positions including managing director, fractional CFO, and Chief AI Officer. Contributors were compensated at rates substantially above prevailing market rates for annotation work, reflecting the level of domain expertise required. 
+
+Application, screening, onboarding. Because admission was gated at the outreach stage, contribu-tors arriving at onboarding were largely pre-qualified for the work. Onboarding was structured to calibrate contributors to our task specification rather than to filter them, and combined asynchronous training material with a live calibration exercise with a member of our in-house finance team. 
+
+Figure 6: Sample module from the contributor onboarding sequence, which included training to calibrate understanding of common task-quality issues. 
+
+Task construction and submission. After completing onboarding, contributors were authorized to create tasks. Submissions were required to pass automated quality checks before entering the review pipeline; these checks evaluated tasks across several quality-relevant dimensions to prevent malformed submissions from reaching reviewers. 
+
+Review. We held every submission to a rigorous quality bar, and the typical task underwent multiple revisions to reach acceptance. Reviewers were drawn from our in-house finance team or from top-performing contributors promoted into a reviewer role on the basis of demonstrated submission quality and command of the task specification. Reviewers worked through each submission against a structured checklist, returning the task with detailed feedback or, where edits were small, applying them directly. Only tasks that cleared this review were admitted into the final benchmark. 
+
+B.1 Annotation Burden Across the Task Life Cycle Annotation burden and iterative quality refinement. For the creation of tasks submitted to the benchmark, our team estimates an average of 5 hours per task, approximately evenly distributed across three components: initial authoring time, reviewer time, and the send-back and quality-control loop. The first captures contributor effort spent constructing the seed-to-output transformation, drafting the prompt, and assembling the supporting rubric criteria. The second captures reviewer time, working through each submission and engaging directly with the original contributor to bring less-experienced submissions up to specification. The third was a substantial additional portion of total annotation effort - driven not by the volume of tasks but by the iterative evolution of our internal quality standards during production. Over the course of the project, we innovated on our task quality along several 16 ... The AI will receive your starting spreadsheet and your natural-language prompt, attempt to produce the finished spreadsheet, and then be scored against your rubric. The better your tasks, the better the AI learns—your work directly shapes model intelligence on financial workflows. What you’re making: an “assignment” for an AI spreadsheet analyst. • Input spreadsheet = The “before”—a starting workbook that needs work done to it. • Prompt = The natural-language request—what a real user would type to ask an AI to transform the input into the output. • Output spreadsheet = A strong example solution showing one correct way the task could be completed. • Grading Rubric = A set of binary yes/no criteria that allows automated scoring of how well the AI’s attempt matches the expected output. Think of it like school: the prompt is the question, the output is a sample solution, and the rubric is the grading sheet. The model can get full credit even if its spreadsheet doesn’t look identical, as long as it solves the problem and meets the rubric. 
+
+The Core Formula 
+
+Input Spreadsheet + Prompt = Output Spreadsheet → Scored with Grading Rubric 
+
+Step-by-Step Instructions 
+
+1. View task from the “Submit Workbooks and Prompt” category 2. . . . 
+
+Figure 7: Excerpt from the annotator instructions provided during onboarding. The full document covered task creation, rubric design, quality review, and calibration procedures. dimensions, and each shift triggered retroactive rework on tasks that had already cleared earlier rounds of review. Some examples: • Prompt design. Early task prompts were overly prescriptive. We revised our prompt conventions to describe the desired output and the analytical intent, leaving the contributor (and, at evaluation time, the model) responsible for determining the path. A second-order effect of this change was that stripping away the procedural scaffolding exposed a complexity-calibration problem in the existing task pool. • Task complexity floor. We tightened task complexity standards. Tasks falling below a certain threshold were either re-scoped or retired. • Rubric structure. Early rubric drafts sometimes placed too much weight on surface-level indicators of task completion rather than on whether the submitted artifact satisfied the intended analytical requirements. We revised the rubric format to emphasize outcome cor-rectness, robustness, and professional presentation, while preserving flexibility for multiple valid implementation approaches. • Workbook hygiene. We added an automated pre-release layer of checks targeting environ-ment artifacts (e.g., hidden sheets, stray named ranges). A non-trivial share of previously accepted tasks were returned for rework following each of these shifts, in some cases more than once. 17 Model Reviewer 1 Reviewer 2 Total 
+
+Total 55.56% 51.11% 53.33% Gemini 50.00% 62.50% 56.25% GPT 5.5 75.00% 62.50% 68.75% Grok 0.00% 0.00% 0.00% Opus 75.00% 75.00% 75.00% Sonnet 62.50% 50.00% 56.25% Table 4: “Yes” proportion by reviewer and model. 
+
+C Human Utility Study 
+
+Beyond rubric judgment, the usefulness of model outputs is itself worth measuring. To approach this task, we had two former finance professionals review outputs from our release set across both synthesis and manipulation tasks for Claude Opus 4.7, Claude Sonnet 4.6, GPT-5.5, Gemini 3.1 Pro Preview, and Grok 4.20. For each model output, reviewers were asked to answer a single question: “would this output substantially help in my build process, or would it require significant rework before I could continue?” The intent is not to test whether models produce finished deliverables, but whether or not they add value to a professional’s workflow. Structure, formulas, and formatting account for much of the manual effort in financial modeling, and even partial assistance in any of these areas saves real time. That being said, a model output that does not pass this check may reasonably be considered substantially flawed to the extent that a full retry or manual task completion might be warranted. Results are reported in Table 4. Opus 4.7 was strongest on structure and formulas, and was the model reviewers most often flagged as a usable starting point for further work. Alternatively, Grok frequently failed to generate a complete output, which drags its scores down across both task types. Formatting was a consistent weak point across the board. In particular, models struggle to adhere to the formatting conventions of the workbook they are operating in, often defaulting to their own styling rather than matching what is already on the sheet. 
+
+D Public Set Scoring 
+
+Table 5 reports performance of an expanded set of models on only the public set.                                         
+
+> Set NOpus Sonnet GPT-5.5 Gemini Grok Kimi MiniMax
+> Manipulation 759.4 48.6 57.1 45.9 10.4 45.0 6.0 Synthesis 177.0 45.0 45.0 44.0 34.0 0.0 38.0 Interrogation 350.0 50.0 50.0 50.0 50.0 50.0 50.0
+> Overall (micro) 11 58.4 48.7 54.1 46.8 23.3 42.3 20.9
+
+Table 5: Public set performance (%, micro-aggregate weighted by task count). Frontier models (Opus, Sonnet, GPT-5.5, Gemini, Grok) and OSS models (Kimi K2.6, MiniMax M2.5) on 11 public tasks released for reproducibility. 
+
+E Harness Implementation Details 
+
+In §4 we focus on motivating the design decisions underlying our open source harness. We detail our system design and implementation below. 
+
+E.1 System instructions 
+
+We share our harness’s minimal SI, which, like the harness itself, we designed to evaluate underlying reasoning abilities without a bias towards any specific approach that different models might take.                         
+
+> You are an expert finance professional . You will be given atask and aset of tools to work with aspreadsheet . When finished , call ’ done ’.
+
+18 All tool responses return JSON with a ’ status ’ field ( ’ ok ’ or ’ error ’) . Use Excel formulas to keep the spreadsheet dynamic and auditable . Do not hardcode computed values when a formula can produce the result . Large tool results may be truncated . Read specific ranges rather than entire sheets . 
+
+On the other hand, our evaluation agent’s system prompt is more prescriptive – however, we evaluate only the final output rather than also considering detailed agent trajectories. 
+
+You are an expert spreadsheet evaluation judge. You will be given an Excel workbook and a list of evaluation criteria. Your job is to carefully inspect the workbook -- its sheets, cell values, formulas, structure, formatting, and organization -- and determine whether each criterion is met. Guidelines: - Open and thoroughly inspect the workbook before answering. - For criteria about specific values, check the actual cell values (use data_only mode mentally -- report the computed value, not the formula text). - For criteria about formulas/references, inspect whether cells use formulas that reference the expected sources (vs hardcoded values). - For criteria about structure (tabs, sections, line items), check sheet names and scan for the described layout. - For criteria about dynamic behavior ("when X changes, does Y update"), check whether Y’s formula references X either directly or transitively. - For criteria about formatting or presentation (number formats, bold/italic, colors , borders, conditional formatting, data validation, column widths, hidden rows/ columns, merged cells, charts, or visual layout), actively inspect the relevant cell or range formatting properties. Do not assume formatting is correct without checking. - Be precise. If a criterion asks for a value within a tolerance, compute the actual deviation. - Every criterion is binary: met or not met. If the referenced sheet or cell does not exist, the criterion is NOT MET. If you cannot find the expected structure, the criterion is NOT MET. There is no middle ground -- make a judgment call. PITFALL AND ERROR DETECTION: - For penalty criteria (negative-weight questions about errors, hardcoded values, or broken references), you MUST actively search for the described problem rather than assuming the workbook is clean. - Specifically check for: spreadsheet errors (#REF!, #DIV/0!, #VALUE!, #NAME?, #N/A) , hardcoded numeric values where formulas are expected, broken or missing cross-sheet references, and circular reference errors that did not converge. - When checking whether a cell contains a formula or a hardcoded value, always use read_range to inspect BOTH the computed value AND the formula string. A cell displaying $100,000 could be the hardcoded number 100000 (bad) or the formula = SUM(B2:B5) (good). You must distinguish these. - When a criterion is a penalty question phrased as "Does the workbook contain errors/external links/hardcoded values?", answer true if the condition IS present (i.e., the penalty applies), false if it is NOT present (i.e., clean workbook). - Scan broadly for errors: do not limit your inspection to only the cells mentioned in the rubric. If a criterion asks about errors in a section, check all cells in that section. PERTURBATION TESTING: - For criteria that test dynamic behavior ("if input X changes, does output Y update correctly"), perform the following steps: 1. Read the current value of the target output cell. 2. Modify the specified input cell to the test value. 3. Call recalc_workbook to recompute all formulas. 4. Read the target output cell again and verify it changed as expected. 5. Restore the original input value and recalc to leave the workbook unchanged. - If the output does not change after the input modification, the criterion is NOT MET (the model likely hardcoded the value). 
+
+19 For each criterion, respond with: - criterion_id: the exact ID string provided - met: true if the criterion’s condition is satisfied, false otherwise - evidence: a brief (1-3 sentence) explanation citing specific sheets, cells, or values you observed. NEVER leave evidence empty -- always explain what you checked and what you found. CRITICAL OUTPUT INSTRUCTION: When you have finished inspecting the workbook and evaluated all criteria, you MUST call the "done" tool and pass your evaluations as the "answer" parameter. The answer MUST be a JSON object in this exact format: {"evaluations":[{"criterion_id":"...","met":true,"evidence":"..."},{"criterion_id ":"...","met":false,"evidence":"Sheet ’DCF’ not found in workbook"},...]} Do NOT call done() without an answer. Do NOT put the evaluations in your message text. The ONLY way to submit your evaluations is done(answer=’{"evaluations ":[...]}’). 
+
+Interrogation tasks are evaluated with a different SI: 
+
+You are grading a financial modeling answer. Your job is to compare the model’s answer to the expected answer at the component level. QUESTION: {question} EXPECTED ANSWER: {expected_answer} MODEL’S ANSWER: {model_answer} STEP 1 - Identify components. Break the expected answer into its distinct value components. Each independent value, quantity, date, or yes/no judgment is a separate component. Ignore parenthetical annotations, source notes, or commentary in the expected answer - only extract the actual answer values. Examples: "83 Months (Nov-27) and $35,804,564" -> two components: "83 Months (Nov-27)" and "$35 ,804,564" "$2.4mm" -> one component: "$2.4mm" "No, taxable losses would exceed taxable income" -> two components: "No" and "taxable losses would exceed taxable income" "274.8 (note difference in cash flow..." -> one component: "274.8" (the parenthetical is an annotation, not part of the answer) STEP 2 - Grade each component. For each component, determine whether the model’s answer contains a matching value. Apply these rules: FORMAT NORMALIZATION (allowed): - $35,804,564 = 35804564 = 35.8M = $35.8 million - 25.4% = 0.254 - 83 Months = 83 months - 2.4mm = $2,400,000 = 2.4 million - Week 12 = week 12 NUMERIC TOLERANCE: - Values must match to within 1% relative difference OR differ only in trailing decimal precision. Dates must be exact matches. - 13.79 matches 13.78. 42.1705 matches 42.17. - 108,061 does NOT match 965,000. - If the model gives extra decimal precision beyond the expected answer, that is fine (0.0758 matches 0.07581570869). 
+
+20 TEXT / QUALITATIVE: - Yes/No and directional answers (increase/decrease) must match exactly in meaning, including the positive / negative meaning of a number. - Minor phrasing differences are OK if the meaning is identical. EXTRACTION: - The model’s answer may contain extra text, explanation, or working. Extract the relevant value and compare. - If the model hedges ("approximately $35M") but the value is within tolerance, it matches. - If the model explicitly states it cannot compute the answer, that component does not match. STEP 3 - Return your assessment as a JSON object. Nothing else. {"components": [ {"expected": "<component 1>", "match": true/false, "reasoning": "brief explanation"}, {"expected": "<component 2>", "match": true/false, "reasoning": "brief explanation"} ], "score": <number of matching components / total components>, "reasoning": "one-sentence overall summary" }
+
+E.2 Tool catalog 
+
+• Read. get_cells (sheet preview, configurable row count); read_range (specific rectangu-lar range); get_sheets (sheet list with used ranges). • Write. set_cells (batch values or formulas; per-cell or per-range mode); create_sheet ,
+
+delete_sheet ; insert_rows , insert_columns , delete_rows , delete_columns .• Format. set_cell_format (bold, italic, font size/color, background, number for-mat, alignment, border; single-range or batch); merge_cells , unmerge_cells ;
+
+set_column_width , set_row_height .• Other. auto_filter ; create_chart (bar / line / pie / scatter); execute_python .• Virtual : get_workbook_state (sheet names, active sheet, per-sheet dimensions); done 
+
+(termination signal). Tool schemas are defined once in JSON Schema in a single registry ( TOOL_REGISTRY ). All adapters convert from this canonical form; none re-author tool semantics. 
+
+E.3 execute_python sandbox 
+
+Three layers of defense: 1. Builtin allow-list. A curated set of safe builtins (types, iteration, math, print , common exceptions) is exposed. open , exec , eval , compile , input , breakpoint , exit , quit ,
+
+help are replaced with stubs that raise PermissionError .2. Import allow-list. A wrapper around __import__ permits only math , datetime , decimal ,
+
+fractions , statistics , collections , itertools , functools , string , re , copy ,
+
+json , and openpyxl.* submodules. Imports of os , subprocess , sys , socket , etc., raise 
+
+ImportError .3. Wall-clock timeout. A 30-second SIGALRM kills runaway code. 
+
+E.4 Provider adapters 
+
+One adapter per provider, each implementing the same act(observation, tool_schemas) →
+
+ToolCall interface: Anthropic Messages, OpenAI Chat Completions, OpenAI Responses (the newer reasoning-model API), Google Gemini, and OpenAI-compatible endpoints (used for Fireworks-hosted GLM-5, MiniMax, Kimi). A vLLM stub is present for future use. Provider-specific notes that affect comparability: 21 • Anthropic adaptive thinking. When reasoning_effort is set, the API requires 
+
+temperature=1 ; the adapter silently overrides any configured temperature in this case. • OpenAI Responses reasoning summaries. Capturing reasoning output requires summary: "detailed" ; without it, the thinking field is always None .• Multiple tool calls. Anthropic models occasionally emit multiple tool_use blocks per response. The adapter keeps the first and strips the rest from history; the API would otherwise reject subsequent requests for missing tool_result matches. The OpenAI Responses adapter applies the analogous filter to function_call items. • Reasoning-effort scales are not cross-provider. Anthropic’s {low, medium, high, max} 
+
+and OpenAI’s {low, medium, high} share names but are not calibrated to each other. Results are reported per-model. • Rate-limit handling. Up to 8 retries with exponential backoff and best-effort parsing of provider-supplied retry hints. 
+
+E.5 Termination mechanism 
+
+If a model response contains no tool call, the adapter appends a single re-prompt (“Please take an action by calling one of the available tools, or call done if you have finished the task”) and re-issues the request. If the second response also lacks a tool call, the adapter returns ToolCall(name="done", arguments={}) and the run terminates. 
+
+E.6 Observation truncation 
+
+Tool results are capped at 30,000 characters. Strategy: 1. If under cap, untouched. 2. Otherwise, identify large array fields ( values , formulas , preview ); keep first 40% and last 20% of rows with an elision marker for the omitted middle. 3. If still oversized, hard-truncate the JSON string with a marker. Truncation sets _truncated: true on the observation. The character cap follows the precedent set by mini-swe-agent ’s 10K cap, relaxed for spreadsheet-shaped results. 
+
+E.7 Trajectory log format 
+
+One JSON-Lines file per run ( {task_id}_{model}_{timestamp}.jsonl ), flushed line-by-line. Entry types: system (turn 0; task prompt, prompt version and hash), action (per turn; tool, args, agent thinking, API latency, per-turn input/output tokens, per-turn and cumulative cost), 
+
+observation (per turn; tool result, execution time), summary (final totals). Schema is a single Pydantic model with all fields optional and exclude_none=True on serialization; field additions are backwards compatible. 
+
+E.8 Cloud execution 
+
+The Modal-based runner schedules one serverless container per ( task , model ) pair. Provider-pinned worker pools ( anthropic , openai , gemini ) carry only their own API key secret and have independent max_containers caps, so different providers’ rate limits cannot interfere. Sub-mission is asynchronous fan-out ( spawn for every job, then collect as results complete); per-task wall-clock timeout is 30 minutes with two retries. Results land in a Modal Volume packaged as 
+
+{study}/{model}_{task_id}/ with input/ and output/ subdirectories. Failures are persisted (partial trajectory, error type, traceback) rather than raised, so a batch is fault-tolerant. 
+
+E.9 Replay and inspection 
+
+Trajectories are sufficient to replay every workbook mutation offline. A standalone visualizer re-executes each tool call against a fresh openpyxl instance, snapshots state after every mutating call, and emits a self-contained HTML viewer (no JavaScript dependencies, no network) with a tool-call 22 timeline, before/after diff highlighting, and captured reasoning text per turn. This decouples post-hoc inspection from the live API and lets reviewers audit a run without re-incurring inference cost. 
+
+F Benchmarking Costs 
+
+Table 6 describes usage and cost metrics associated with model evaluations on B LUE FIN . The average cost per task instance attempt is roughly $24, and considering evaluation costs increases the per-task cost to nearly $34 – reflecting the medium to long horizon task instances in the benchmark.                                        
+
+> Model Agent Judge Total Input Output Cost Cost Cost Tokens (M) Tokens (M)
+> Opus 4.7 $8,070 $1,116 $9,186 513.2 4.96 Sonnet 4.6 $3,469 $1,189 $4,658 1,127.6 5.76 GPT-5.5 $1,451 $1,292 $2,743 274.1 2.69 Gemini 3.1 Pro $914 $1,072 $1,986 717.0 1.76 Grok 4.20 $614 $1,071 $1,685 304.7 0.78
+> Total $14,518 $5,740 $20,258 2,936.6 15.95
+
+Table 6: Total cost and token usage to evaluate all five frontier models on the B LUE FIN held-out set (120 tasks: 75 manipulation, 9 synthesis, 36 interrogation). Agent cost refers to the model under evaluation; judge costs are from the GPT-5.4 grader. Token counts reflect agent input/output across all task runs; Sonnet’s high input volume reflects shorter context but more turns per task, while Opus’s high output volume reflects extended thinking. 
+
+G Failure Modes Case Studies 
+
+In this section, we detail three case studies with varying comparative performance profiles in different models. 
+
+G.1 Case Study 1: Difficult task where all models fail to achieve satisfactory performance 
+
+We describe a task where every endpoint failed to generate useful spreadsheets (maximum score: 35%), with the failure mode bifurcating cleanly between the two dominant primary buckets ( B5 Workbook Integration Failure and B7 Conceptual Financial Logic Error ). This is a canonical “shared challenge with diverging mechanism” pattern. 
+
+Task Overview. The model was provided with an existing financial model containing populated 
+
+Inputs , Capitalization , and PPR (Production / Reserves) tabs and tasked with constructing a new Merger Model tab covering 2021E and 2022E. The structure required four column groups (EQT Status Quo , CHK Status Quo , Merger Adjustments , EQT Pro Forma ) populated with EBITDA, Interest Expense on Existing Debt, Interest Expense on New Debt, Taxes, and Other to produce Cash Flow from Operations; a Cash Flow section bridging CFO to Free Cash Flow; a Capitalization section computing total debt; Credit Statistics (Debt/EBITDA, Net Debt/EBITDA, Debt/Production); a Liquidity section bridging Revolver Size to Total Liquidity; a revolver build section reconciling Beginning Balance through Borrowings, Repayments, and Ending Balance; and a Cash Schedule reconciling beginning cash through Use of Cash and Accretion to ending cash. The critical structural requirement – the one that drove this task’s universal failure – was that line items shared with the existing model (Shares Outstanding, Senior Notes, Corp Adj., Interest Expense on Notes, Letters of Credit) be linked to the Capitalization and Inputs tabs via formulas that aggregate conditionally on the existing schedules’ roll/flag columns, rather than recalculated locally on the Merger Model tab from raw rate assumptions. 
+
+Sample 1: Gemini 3.1 Pro (Score: 22.2%). Top failed criterion: FAILS_UNDER_INPUT_CHANGE .EQT Status Quo EBITDA linked directly to hardcoded input values ( K44 ) in the Inputs tab. While this yielded the correct answer under the current acquirer configuration, the linkage failed to generalize dynamically if the acquirer changed. The model therefore required manual formula edits to maintain correctness. The intended implementation was to link to columns E and F on the Inputs tab, which 23 dynamically pull formulas based on the selected acquirer. The model thus failed not on arithmetic correctness but on integration robustness and workbook dynamism. 
+
+Sample 2: Claude Opus 4.7 (Score: 30%). Top failed criteria: • WRONG_DEBT_ROLLFORWARD . Revolver borrowings and repayments were driven off Change in Cash (C32 ) using: 
+
+’Merger Model’!C56 = MAX(0,-C32)’Merger Model’!C57 = -MAX(0,C32) 
+
+This formulation is partially circular because C32 already includes revolver activity. Bor-rowings and repayments should instead have been driven from free cash flow availability. The resulting revolver schedule therefore produced mechanically incorrect debt flows. • WRONG_CELL_REFERENCE . Cash Flow from Investing referenced row 47 of the Inputs 
+
+tab, which corresponds to 2021 Daily Production Volume rather than Capex. The correct implementation required linking to the Capex row highlighted in the workbook. 
+
+G.2 Case Study 2 (Differing performance across models) 
+
+We describe a task example where one defect class – off-by-one row references against the Inputs 
+
+tab – sorts five models into a clean four-tier outcome gradient, illustrating how referential discipline drives most differential scoring. 
+
+Task Overview. The model was provided with an existing operating model containing an Inputs 
+
+tab (with annual operating-expense line items in column D), a KPI Dashboard, and an Income Statement, and tasked with constructing a new Operating Expenses tab. The task required: 1. Building a monthly OpEx schedule from January 2024 through December 2028 by dividing each annual Inputs value by 12; 2. Computing annual subtotals as the sum of the 12 monthly cells; 3. Wiring the new tab back into the KPI Dashboard’s “other opex” placeholders and the Income Statement operating-expense block; and 4. Preserving dynamic flexibility under perturbation: if Office Lease Rental (Inputs 
+
+row 68) changes, the corresponding Income Statement period must update without manual intervention. The task is structurally simple – no novel financial logic is required – but stresses a specific capability: locating the correct row in a moderately deep input schedule and propagating it consistently through approximately 200 calculated cells across a five-year monthly horizon. 
+
+Sample 1: Gemini 3.1 Pro (Score: 32%). Top failed criteria: • WRONG_CELL_REFERENCE 
+
+• FAILS_UNDER_INPUT_CHANGE 
+
+The Office Lease Rental row on the Operating Expenses tab linked to a blank cell on the 
+
+Inputs tab rather than the correct line item, causing the value to resolve to zero. Every subsequent OpEx line item was then sourced from the wrong Inputs row by an offset of one row. Additionally, the formulas were not implemented dynamically with date-aware references, producing further integration fragility. This propagated into a downstream-output failure where both the Income Statement and KPI Dashboard inherited incorrect values from the malformed OpEx schedule. 
+
+Sample 2: Claude Opus 4.7 (Score: 64%). Top failed criteria: • WRONG_CELL_REFERENCE 
+
+• FAILS_UNDER_INPUT_CHANGE 
+
+• DOWNSTREAM_OUTPUT_FAILURE 
+
+24 Like Gemini, Opus linked OpEx line items to incorrect rows in the Inputs tab and implemented them using direct cell links rather than dynamically aggregated formulas.An additional failure category was: • PARTIAL_IMPLEMENTATION . The prompt required the Income Statement operating-expense block to source values from the newly created Operating Expenses tab. Eleven of thirteen lines did so correctly: 
+
+’Income Statement’!H17:H27 =’Operating Expenses’!H10:H20 
+
+However, two lines bypassed the new schedule entirely: 
+
+’Income Statement’!H16 = Payroll!J101 ’Income Statement’!H28 = ’Depreciation Schedule’!D40 
+
+Salaries therefore linked directly to Payroll, and Depreciation linked directly to the De-preciation Schedule, rather than routing through the new Operating Expenses tab as instructed. Even if the row references had been correct, the implementation still relied on direct hard-linked formulas rather than year-aware dynamic aggregation logic, reducing model flexibility and maintain-ability. 
+
+Sample 3: GPT-5.5 (Score: 88%). This was the cleanest of the three OpEx-tab implementations because it correctly mapped the Inputs rows – the single failure that both Gemini and Opus reproduced. The model maintained proper propagation into downstream statements and dashboards and preserved workbook dynamism under perturbation testing. 
+
+G.3 Case Study 3: Same score, different costs 
+
+We highlight the highest cost-ratio pair, where two endpoints produced functionally equivalent balance sheets at a 27.7 × cost differential. This example is evidence that average-quality scoreboards can substantially understate divergence in cost-per-correct-output across endpoints. 
+
+Task Overview. The model was provided with an existing operating model for Apex Technologies Ltd. and tasked with building a new Balance Sheet tab covering historical years F2017A–F2022A and forecast years F2023E–F2030E (14 years total). The task specified an exact line-item structure: • A Non-Current Assets section (12 rows including PP&E, intangibles, deferred tax, and three Trade Receivables splits); • A Current Assets section (10 rows); • An Equity & Liabilities section with Equity, Non-Current Liabilities, and Current Liabilities subsections; • Top-level subtotals rolling into Total Equity and Liabilities; and • A Check line equal to Total Assets minus Total Equity and Liabilities, which must equal zero across all 14 years. All values had to be dynamically linked from supporting schedules within the workbook: no hard-codes, full workbook integration, and exact balancing within tolerance. 
+
+Cost and Scores. 
+
+Model Cost Score Gemini 3.1 Pro $3.00 100% Claude Opus 4.7 $83.05 95% This produces a cost ratio of 27.7 ×. Both models generated structurally correct Balance Sheet tabs satisfying the core prompt requirements: historical F2017A-F2022A and forecast F2023E-F2030E columns, the full requested asset taxonomy (PP&E, CWIP, ROU, Goodwill, intangibles, 25 investments, billed/unbilled receivables, loans, other financial assets, income tax, deferred tax, and other assets), the requested Equity and Liabilities ordering, the three top-level subtotals, Total Equity and Liabilities, and a Check line. The cost-performance tradeoff strongly favors Gemini. Moreover, the Opus-generated balance sheet did not fully balance and contained one truncated column. This task is structurally large but algorithmically routine: it requires exhaustive, accurate workbook wiring rather than novel financial reasoning. That regime appears well matched to Gemini-class models. The evidence therefore suggests reserving high-cost reasoning models such as Opus for tasks where incremental quality reflects genuine reasoning depth – ambiguous prompts, novel financial structures, or multi-step debugging – rather than for high-specification pattern execution. 26
