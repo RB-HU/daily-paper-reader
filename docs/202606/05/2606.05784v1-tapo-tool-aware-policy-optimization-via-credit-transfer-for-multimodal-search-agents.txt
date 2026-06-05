@@ -1,0 +1,422 @@
+Title: TAPO: Tool-Aware Policy Optimization via Credit Transfer for Multimodal Search Agents
+
+URL Source: https://arxiv.org/pdf/2606.05784v1
+
+Published Time: Fri, 05 Jun 2026 00:54:13 GMT
+
+Number of Pages: 19
+
+Markdown Content:
+# TAPO: Tool-Aware Policy Optimization via Credit Transfer for Multimodal Search Agents 
+
+Chengqi Dong 1,2, Chuhuai Yue 2, Hang He 2, Yandong Liu 1, Fenghe Tang 1,S Kevin Zhou 1, Xiaohan Wang 2, Jiajun Chai 2, Guojun Yin 2 
+
+> 1University of Science and Technology of China 2Meituan
+
+Abstract 
+
+We identify and formally characterize credit misassignment as a systematic failure mode of GRPO in tool-augmented multimodal search agents: its uniform broadcast of trajectory-level advantages to all tokens causes valu-able tool-use steps in failing trajectories to be penalized no differently from valueless ones. We further empirically quantify the scale of this phenomenon. Over half of failing trajectories and failing tool-use ac-tions exhibit correctable credit misassignment, demonstrating that the wasted training sig-nal is both substantial and structurally ex-ploitable. Building on this insight, we pro-pose Tool-Aware Policy Optimization (TAPO), which exploits the parameter-determinism prop-erty of information-acquisition tools: similar call parameters define equivalent information-acquisition actions and should therefore share comparable action credit. TAPO constructs counterfactual witnesses within the current training batch and compensates misassigned negative credit via confidence-gated conser-vative advantage correction. It requires no additional annotation, models, or sampling, and introduces negligible computational over-head. Across multiple multimodal search benchmarks, TAPO delivers consistent, plug-and-play improvements over strong baselines for three mainstream RL algorithms (GRPO, GSPO, and SAPO). Our code and models will be publicly released upon acceptance. 
+
+1 Introduction 
+
+Agent-based reinforcement learning has emerged as the dominant paradigm for training tool-augmented multimodal agents, enabling models to iteratively invoke external tools—such as text search, image search, and code interpreters—and integrate tool outputs into coherent multi-step rea-soning chains (Zheng et al., 2025; Wu et al., 2025; Hong et al., 2025; Chng et al., 2025; Dong et al., 2025). Within this framework, Group Relative 
+
+Figure 1: A concrete example of credit misassignment in group-based RL algorithms. 
+
+Policy Optimization (GRPO) (Shao et al., 2024) has become the de facto training algorithm, ow-ing to its elimination of a separate value network and its strong empirical performance on outcome-supervised tasks. GRPO uniformly broadcasts the trajectory-level advantage to every token, implicitly assuming equal contribution from each generation step—an assumption that systematically breaks down in multi-step tool-use scenarios where different tool use contribute different informational value. 
+
+Credit Misassignment: A Concrete Example. 
+
+As illustrated in Figure 1, two trajectories share identical tool calls yet reach different final answers. Under GRPO, the same Actions 1 and 2 receive positive advantages in the successful trajectory but negative advantages in the failing one—identical parameters, opposite gradient signals, within the same training step, yielding contradictory and self-canceling optimization. We formalize this failure     
+
+> arXiv:2606.05784v1 [cs.AI] 4 Jun 2026 Figure 2: Prevalence and reliability of correctable credit misassignment in GRPO. A failing action is considered correctable if a parameter-equivalent action (similarity ≥θ) exists in at least one successful trajectory on the same question. (a) Fraction of failing trajectories containing at least one correctable tool-use action, as a function of similarity threshold θ. (b) Fraction of failing tool-use actions that are correctable. (c) Mean support ratio (sup /n success ) per similarity bin, showing that higher-similarity matches consistently correspond to greater coverage across successful trajectories, confirming their reliability as correction signals.
+
+mode as credit misassignment : GRPO ignores the actual informational value of tool-use steps and uniformly assigns a trajectory-level negative advan-tage to all steps in any failing trajectory. 
+
+Scale of Credit Misassignment: Empirical Quantification. Credit misassignment is not a rare edge case—at a moderate threshold ( θ ≈ 0.5), over half of failing trajectories and failing tool-use actions exhibit correctable credit misassignment (Figure 2(a)(b)). Moreover, parameter similarity and reference coverage are monotonically corre-lated (Figure 2(c)): higher-similarity matches con-sistently correspond to greater coverage across suc-cessful trajectories, constituting reliable correction signals that actively filter out incidental noise from low-confidence matches. These statistics confirm that the wasted training signal is both substantial and structurally exploitable. A natural remedy is fine-grained credit assign-ment, but existing methods are all prohibitively costly (Lightman et al., 2023; Wang et al., 2024; Luo et al., 2024; Zhang, 2026): manual annotation, dedicated PRM training, and Monte Carlo continu-ation sampling are expensive and none guarantees accurate credit assignment (Zhang, 2026). Criti-cally, all of them treat tool-use steps as ordinary generation steps, overlooking a structural property unique to tool calls that makes accurate credit as-signment possible without any additional cost .
+
+Key Insight: Parameter-Deterministic Tools. 
+
+We identify a key property of information-acquisition tools : parameter determinism . That is, the call parameters determine the underlying information-acquisition action, and similar param-eters correspond to similar information-acquisition intent. This property holds concretely for image search, region zoom-in, and text search, which respectively acquire search-image information, image-region information, and textual search in-formation. Crucially, it enables a conservative, batch-internal form of counterfactual reasoning: if a tool-use step in a failing trajectory is parameter-equivalent to steps in successful trajectories, those successes can serve as counterfactual witnesses ,showing that the same information-acquisition ac-tion is useful and that its assigned negative advan-tage is a credit misassignment worth partially cor-recting. 
+
+Our Method: TAPO. Building on this insight, we propose Tool-Aware Policy Optimization (TAPO) , which constructs a counterfactual refer-ence library from successful trajectories in the cur-rent batch, uses a confidence score (parameter sim-ilarity × coverage) to gate credit transfer, and ap-plies a conservative clamp ensuring no failing step is globally encouraged—requiring no additional models, annotation, or sampling, and integrating as a drop-in replacement for the advantage assign-ment step of any group-based RL algorithm. TAPO naturally achieves computational efficiency, diffi-culty adaptivity, and safe degradation to standard GRPO, and is instantiated on three tool types: im-age search, region zoom-in, and text search. Our main contributions are as follows: • We identify and formally characterize credit misassignment as a systematic failure mode of GRPO in tool-augmented reasoning, and empirically quantify its prevalence and scale. • We propose TAPO , a plug-and-play method that exploits parameter determinism to com-pensate misassigned negative credit at zero marginal cost, requiring no additional models, annotation, or sampling. • TAPO consistently improves performance across multiple multimodal search bench-marks and three RL algorithms with negligible computational overhead. 
+
+2 Related Work 
+
+Multimodal Search Agents. To mitigate the lim-itations of static knowledge bases, large language models have evolved from static retrieval mech-anisms into dynamic tool-augmented reasoning systems (Chng et al., 2025). In the multimodal search domain, MMSearch-R1 (Wu et al., 2025) and WebWatcher (Geng et al., 2025) build multi-modal search agents by designing image search and text search tools. DeepEyesV2 (Hong et al., 2025) and SenseNova-MARS (Chng et al., 2025) further introduce image processing tools to enable fine-grained multimodal search and understanding. Vision-DeepSearch (Zeng et al., 2026) and MTA-Agent (Peng et al., 2026) further advance agent performance through more sophisticated data con-struction and training pipelines. However, these multimodal search methods focus exclusively on improving overall performance, overlooking the in-trinsic credit assignment problem inherent in multi-step tool use. 
+
+Fine-Grained Credit Assignment in Agentic RL. PRM-based methods (Lightman et al., 2023; Wang et al., 2024) and step-level sampling ap-proaches (Luo et al., 2024; Yue et al., 2026) can provide step-wise reward signals, but at prohibitive cost and without guaranteeing accuracy. More re-cently, lighter-weight alternatives have emerged: GiGPO (Feng et al., 2025) constructs step-level re-wards via state grouping; HCAPO (Tan et al., 2026) and Belief-RL (Auzina et al., 2026) assess step quality through hindsight probability shifts and be-lief estimation, respectively. However, these meth-ods predominantly target tool-integrated reasoning in the text domain. Critically, all of these methods treat tool-use steps as ordinary generation steps, overlooking the parameter-determinism property of information-acquisition tools: similar call pa-rameters define equivalent information-acquisition actions, making it possible to compare action credit across successful and failing trajectories. 
+
+3 Method 
+
+3.1 Problem Formulation Tool-augmented reasoning trajectories. Let a multimodal tool-augmented reasoning trajectory be: 
+
+τ j =
+
+
+
+oj
+
+> 1
+
+, r j
+
+> 1
+
+, o j
+
+> 2
+
+, r j
+
+> 2
+
+, . . . , o jK , r jK , o j
+
+> ans
+
+
+
+where ojk denotes the k-th reasoning and tool-use token segment, rjk the corresponding tool-response segment, and oj 
+
+> ans
+
+the final answer seg-ment; args (ojk) and type (ojk) denote the call ar-guments and tool type of ojk, respectively. The outcome reward Rj is dominated by an accuracy component racc ∈ { 0, 1} that depends solely on the correctness of the final answer. GRPO computes group-normalized advantages ˆAj = ( Rj − μ)/(σ +
+
+ε), where μ and σ are the mean and standard devia-tion of rewards within the group, and broadcasts ˆAj
+
+to every response token in τ j ; the policy gradient objective follows the standard PPO-clip form. 
+
+3.2 Formal Analysis of Credit Misassignment Estimation bias of GRPO. For a failing trajec-tory τ j (racc = 0 , ˆAj < 0), the true action value of tool-use step ojk is: 
+
+Qπ(ojk) = Eτ ∼π
+
+h
+
+R | ojk
+
+i
+
+Decomposing by trajectory outcome (law of total expectation): 
+
+Qπ(ojk) = p+ 
+
+> k
+
+· E
+
+h ˆA | ojk, τ succeeds 
+
+i| {z }
+
+> (I): term omitted by GRPO
+
++ (1 − p+ 
+
+> k
+
+) · E
+
+h ˆA | ojk, τ fails 
+
+i| {z }
+
+> (II): term used by GRPO
+
+(1) where p+ 
+
+> k
+
+= P (τ succeeds | ojk). GRPO assigns a uniform ˆAj < 0 to every tool step in failing trajectories, effectively using only term (II) while systematically ignoring term (I). When p+ 
+
+> k
+
+> 0,the advantage estimation bias is: 
+
+εk ≜ Qπ(ojk) − ˆAj = p+ 
+
+> k
+
+· E
+
+h ˆA | ojk, τ +i
+
+> 0
+
+The objective of TAPO is to estimate and com-pensate the bias εk for each failing tool-use step, without introducing any annotation or model. Figure 3: Overview of TAPO. ➀ Standard GRPO broadcasts trajectory-level advantages uniformly to all tokens.      
+
+> ➁Tool-use steps from successful trajectories are clustered into reference groups. ➂Each failing tool-use step is matched to the most similar reference group, and advantage transfer is applied via a two-level gate ( θand αmin ).
+
+Definition 1 (Credit Misassignment). An opti-mization method exhibits credit misassignment if a tool-use step ojk in a failing trajectory has pos-itive informational value (i.e., p+ 
+
+> k
+
+> 0) yet is as-signed the same trajectory-level negative advantage as tool uses with no informational value ( p+ 
+
+> k
+
+≈ 0). Determining whether p+ 
+
+> k
+
+> 0 requires parameter-level equivalence judgments, not trajectory-level rewards—which is precisely what the counterfac-tual witness construction below provides. 
+
+3.3 Parameter-Deterministic Tools and Counterfactual Credit Transfer Assumption 1 (Parameter Determinism). For information-acquisition tools, if the parameters of two calls satisfy the similarity threshold sim (args (ojk), args (oik′ )) ≥ θ, the two calls cor-respond to equivalent information-acquisition ac-tions : even when the execution environment is noisy, they target the same evidence need and should therefore carry consistent action-level in-formational value. What parameter determinism requires is that the useful information sought by the action is primarily determined by the call pa-rameters, rather than by the surrounding trajec-tory context. This assumption naturally extends to tools where fixed parameters determine the un-derlying information-acquisition operation, and is concretely instantiated for the three tool types used in this work (see §B for details). 
+
+Counterfactual Witness. Under Assumption 1, if tool-use step ojk in failing trajectory τ j is parameter-equivalent to a step in successful tra-jectory τ i, then τ i constitutes a counterfactual witness , showing that this information-acquisition action can make a positive contribution to solving the question and therefore deserves positive credit. Accordingly, assigning the matched failing step the same uniform negative advantage as the rest of the failed trajectory constitutes credit misassignment warranting compensation. Parameter equivalence judgments rely solely on tool arguments from tra-jectories already in the current batch, requiring no additional sampling, models, or annotation, and thus achieving approximate process supervision at zero marginal cost. 
+
+3.4 Confidence-Gated Credit Transfer Reference library construction. For all success-ful trajectories on the same question, tool-use steps of the same tool type with equivalent parameters are clustered into reference groups C1, C 2, . . . , C k
+
+(Figure 3 ➁). The reference advantage of each group is: Adv (Cx) = 1
+
+|Cx|
+
+X 
+
+> oik′∈Cx
+
+ˆAi
+
+where GRPO-normalized advantages ˆA (rather than raw rewards R) are aggregated. 
+
+Best-match selection. For a failing step ojk, the best-matching reference group is selected by maxi-mum parameter similarity (Figure 3 ➂): 
+
+C∗ = arg max 
+
+> Cx
+
+sim. (ojk, C x)
+
+sim. (ojk, C x) = 1
+
+|Cx|
+
+X 
+
+> oik′∈Cx
+
+sim (ojk, o ik′ ) (2) where sim (ojk, o ik′ ) measures the semantic similar-ity between the tool-call parameters of steps ojk and 
+
+oik′ . If sim. (ojk, C ∗) < θ , no transfer is performed. 
+
+Credit transfer function. Given the selected C∗,the credit transfer function is: 
+
+F (ojk, C ∗) = sim. (ojk, C ∗)
+
+| {z }
+
+> param. match
+
+× sup. (C∗)
+
+| {z }
+
+> coverage
+
+×Adv (C∗)
+
+(3) where sup. (C∗) = n(C∗)/G +, with n(C∗) the number of successful trajectories containing a step in C∗ and G+ the total number of successful tra-jectories. The confidence score α = sim. × sup. jointly captures parameter match quality and sig-nal coverage: higher similarity indicates stronger action-credit equivalence, while higher support in-dicates a more robust reference signal with stronger positive credit; this design approximates the omit-ted term (I) in GRPO’s advantage estimation. If 
+
+α(ojk, C ∗) < α min , no credit transfer is applied, implementing a two-level gate: θ first filters by parameter similarity; αmin then gates on the joint confidence score, requiring both high match quality and sufficient coverage. 
+
+3.5 Conservative Advantage Compensation 
+
+For each failing tool-use step ojk with α(ojk, C ∗) ≥
+
+αmin , the compensated advantage is: 
+
+Ajk ← min 
+
+ ˆAj + β · F (ojk, C ∗), 0
+
+
+
+(4) where β > 0 is the transfer coefficient; otherwise 
+
+Ajk ← ˆAj . Clipping at 0 prevents any tool step in a failing trajectory from receiving positive ad-vantage, preserving the overall optimization direc-tion. TAPO therefore requires no modification to the optimizer or sampling procedure and serves as a drop-in replacement for GRPO’s advantage as-signment. It also provides two benefits: difficulty adaptivity, since on hard questions ( G+ ≪ G), rare successes yield larger normalized advantages and stronger credit transfer, while on easy questions ( ˆAsuccess ≈ 0), TAPO reduces to standard GRPO; and entropy preservation, since partially cancel-ing unwarranted negative gradients on tool calls that deserve positive credit sustains exploration and mitigates entropy collapse, explaining the entropy trends observed across all three RL algorithms (Fig-ure 4). 
+
+4 Experiments 
+
+4.1 Implementation Details Tool Setup. Following the setup of SenseNova-MARS (Chng et al., 2025), we instantiate three representative tool types: (1) Image search per-forms reverse image search and returns image cap-tions; (2) Text search executes a query-specified web search and returns a Qwen3-32B-generated summary; (3) Region zoom-in crops a specified bounding-box region and returns the patch. Pa-rameter similarity definitions for each tool type and a per-type training analysis are provided in Appendix B.3 and C.3. 
+
+Training. We train with the VeRL frame-work (Sheng et al., 2024) without any SFT warm-up, using a global batch size of 128, a learning rate of 1 × 10 −6, and G = 8 rollout trajectories per question on approximately 4K multimodal search samples. The reward function combines an accu-racy reward and a format reward (see Appendix B.2 for details). To reduce training cost, text search dur-ing training is implemented via a local Wikipedia-based RAG system; full training configuration is provided in Appendix B.1. 
+
+Evaluation. We evaluate on seven multimodal search benchmarks (MMSearch, HR-MMSearch, FVQA-test, InfoSeek, SimpleVQA, LiveVQA, MAT-Search) using the Serper API; benchmark details are in Appendix B.4. We compare against top closed-source models (GPT-5, Gemini 3, in both direct-answer and agentic modes), leading open-source models (Qwen3-VL), and competitive search agents (DeepEyesV2 (Hong et al., 2025), WebWatcher (Geng et al., 2025), SenseNova-MARS (Chng et al., 2025)). Type Model Average MMSearch HR-MMSearch FVQA-test InfoSeek SimpleVQA LiveVQA MAT-Search 
+
+Direct Answer 
+
+Open-source Qwen2.5-VL-7B-Instruct (Bai et al., 2025) 27.70 7.60 0.58 26.28 31.95 47.88 19.63 60.00 Qwen3-VL-8B-Instruct (Team, 2025) 29.24 11.70 12.13 24.22 23.15 42.94 23.18 67.33 Qwen2.5-VL-32B-Instruct (Bai et al., 2025) 32.01 11.70 3.93 30.50 36.65 48.57 21.40 71.33 Qwen3-VL-32B-Instruct (Team, 2025) 35.22 16.96 19.02 32.17 28.95 45.90 31.59 72.67 Proprietary GPT-4o-mini (Hurst et al., 2024) 33.08 15.79 1.31 36.83 35.95 44.42 24.63 72.66 Gemini-2.5-Flash (Comanici et al., 2025) 40.87 21.64 7.54 43.78 44.10 55.48 31.57 82.00 GPT-4o (Hurst et al., 2024) 42.38 23.39 13.11 48.00 52.90 51.73 28.18 79.33 GPT-5 (OpenAI, 2025) 50.24 35.09 22.62 54.39 54.15 61.70 44.39 79.33 GPT-5.2 (OpenAI, 2025) 50.92 43.27 24.92 50.94 50.40 59.92 47.00 80.00 Gemini-3-Flash (Google, 2025) 53.68 57.31 21.97 56.50 54.85 63.57 38.90 82.67 Gemini-3-Pro (DeepMind, 2025) 55.87 62.57 26.89 59.22 56.30 64.07 40.06 82.00 
+
+Agentic Model (zero-shot) 
+
+Open-source Qwen2.5-VL-7B-Instruct (Bai et al., 2025) 35.50 32.16 19.34 36.00 28.80 42.35 22.52 67.33 Qwen3-VL-8B-Instruct (Team, 2025) 51.33 47.37 27.87 53.61 46.15 62.29 39.37 82.67 Qwen2.5-VL-32B-Instruct (Bai et al., 2025) 53.45 49.71 33.44 52.22 50.10 65.15 42.17 81.33 Qwen3-VL-32B-Instruct (Team, 2025) 53.82 49.12 34.43 54.28 49.85 64.17 42.87 82.00 Proprietary GPT-4o-mini (Hurst et al., 2024) 45.65 38.60 26.23 50.00 42.35 50.84 31.54 80.00 GPT-4o (Hurst et al., 2024) 55.09 49.12 30.16 66.34 59.55 63.67 40.09 76.67 Gemini-2.5-Flash (Comanici et al., 2025) 58.05 59.06 40.00 61.72 53.70 68.81 47.75 75.33 GPT-5 (OpenAI, 2025) 60.12 52.63 38.36 62.61 55.95 70.58 56.02 84.67 Gemini-3-Flash (Google, 2025) 61.26 62.57 41.64 64.89 61.10 67.92 48.06 82.67 GPT-5.2 (OpenAI, 2025) 67.64 66.08 48.20 68.78 65.55 78.18 65.99 80.67 Gemini-3-Pro (DeepMind, 2025) 69.06 74.27 48.52 72.61 66.45 75.91 59.69 86.00 
+
+Agentic Model 
+
+Open-source Visual-ARFT (Liu et al., 2025) 40.13 34.50 24.92 41.72 37.95 42.45 25.40 74.00 DeepMMSearch-R1 (Narayan et al., 2025) – – – – 47.51 55.87 – –MMSearch-R1 (Wu et al., 2025) 52.49 53.80 20.33 58.40 55.10 57.40 48.40 74.00 DeepEyesV2 (Hong et al., 2025) – 63.70 – 60.60 51.10 59.40 – –SkyWork-R1V4 (Zhang et al., 2025) – 66.10 – 67.20 – – – –SenseNova-MARS (Chng et al., 2025) 63.65 66.67 40.33 67.11 61.70 70.19 56.22 83.33 
+
+Qwen3-VL-8B-Instruct+SAPO 62.48 64.33 38.69 65.61 59.55 70.38 56.86 82.00 TAPO (applied in SAPO) 65.21 67.21 40.66 69.89 62.70 73.64 59.71 82.67 
+
+Table 1: Performance on search-oriented benchmarks under Direct Answer and Agentic Model workflows. 
+
+Figure 4: Ablation on generality across RL algorithms. 
+
+4.2 Main Results 
+
+As shown in Table 1, TAPO achieves consistent improvements across all multimodal search bench-marks. We adopt SAPO as our RL backbone, as it represents the strongest group-based RL baseline, lifting the base model Qwen3-VL-8B from 51.33% to 62.64% average accuracy. TAPO further im-proves upon this strong baseline by 4.4% relatively, demonstrating the additional headroom unlocked by correcting credit misassignment as an orthogo-nal optimization atop RL training. Compared to the strong search agent baseline SenseNova-MARS, which shares the same data and tool configura-tion, TAPO further achieves a 2.5% relative im-provement. Notably, these gains stem entirely from TAPO’s training algorithm, requiring no higher-quality data, additional tools, or increased model capacity. Moreover, the computational overhead is minimal: building the reference library and prop-agating advantages accounts for only 0.06% of total training time (under 1 second per step). This highlights the effectiveness of correcting credit mis-assignment as an orthogonal, lightweight optimiza-tion that integrates seamlessly into any group-based RL algorithm. 
+
+4.3 Ablation Study Generalization across RL algorithms. To ver-ify that TAPO is algorithm-agnostic, we apply it to three representative RL algorithms: GRPO, GSPO, and SAPO. All experiments use Qwen3-VL-4B for Method MMSearch HR-MMSearch FVQA-test SimpleVQA LiveVQA MAT-Search InfoSeek AVG GRPO 53.22 29.51 62.17 67.11 51.42 78.00 52.45 56.27 +TAPO 54.97 33.11 65.56 68.31 54.05 82.00 58.85 59.55 
+
+∆ +3.30% +12.21% +5.46% +1.78% +5.12% +5.13% +12.20% +5.83% GSPO 53.22 31.15 66.50 68.21 53.55 80.67 56.40 58.53 +TAPO 60.82 31.48 66.61 70.98 56.14 83.33 59.40 61.25 
+
+∆ +14.28% +1.05% +0.17% +4.06% +4.82% +3.31% +5.32% +4.65% SAPO 53.97 30.16 64.50 67.52 51.75 81.33 55.10 57.76 +TAPO 56.73 31.48 67.17 71.27 55.36 81.33 59.95 60.47 
+
+∆ +5.10% +4.35% +4.13% +5.56% +6.97% +0.00% +8.80% +4.69% 
+
+Table 2: Ablation on the base algorithm for TAPO ( β=0.25). All values are accuracy (%) on seven multimodal search benchmarks. ∆ denotes the relative improvement (%) of TAPO over the corresponding base algorithm.                                                                                                                   
+
+> βMMSearch HR-MMSearch FVQA-test SimpleVQA LiveVQA MAT-Search InfoSeek AVG Qwen3-VL-4B 43.86 25.57 50.50 63.57 37.34 79.33 43.25 49.06 GRPO 53.22 29.51 62.17 67.11 51.42 78.00 52.45 56.27 TAPO β=0.1 54.97 30.49 66.00 69.79 53.66 78.67 60.05 59.09 TAPO β=0.25 54.97 33.11 65.56 68.31 54.05 82.00 58.85 59.55 TAPO β=0.4 58.48 33.44 64.83 69.89 54.47 84.00 59.05 60.59 TAPO β=0.6 54.97 34.10 68.28 71.17 55.89 80.00 61.70 60.87 TAPO β=0.8 61.41 33.11 66.44 69.10 56.30 84.67 57.25 61.18 TAPO β=1.0 57.31 30.49 66.00 69.79 53.66 80.67 60.05 59.71 TAPO β=1.0 w/o sup. 52.63 20.66 59.22 67.72 51.83 81.33 51.60 55.00 TAPO β=1.0 w/o clip. 56.73 29.84 65.00 69.10 54.50 80.00 58.30 59.07
+> ∆vs. Qwen3-VL-4B +40.01% +33.33% +35.20% +11.96% +50.78% +6.73% +42.66% +24.71%
+> ∆vs. GRPO +15.40% +15.56% +9.83% +6.05% +9.50% +8.55% +17.64% +8.74%
+
+Table 3: Ablation on the transfer coefficient β (TAPO applied to GRPO backbone). All values are accuracy (%) on seven multimodal search benchmarks. ∆ vs. Qwen3-VL-4B: improvement of the best-β result over the Qwen3-VL-4B base model; ∆ vs. GRPO: improvement over vanilla GRPO training. 
+
+one training epoch, with the transfer coefficient fixed at β = 0 .25 . Training curves and evalua-tion results are shown in Figure 4 and Table 2. As shown in the upper row of Figure 4, TAPO con-sistently improves training accuracy over the base-lines for all three algorithms. The lower row further shows that TAPO mitigates entropy collapse across all three algorithms, preserving exploration. Quan-titatively, TAPO improves average accuracy by 4–6 percentage points across the three algorithms (Ta-ble 2), confirming its generality as a plug-and-play component. 
+
+Robustness to the transfer coefficient β. We sweep β ∈ {0.1, 0.25 , 0.4, 0.6, 0.8, 1.0} to test TAPO’s sensitivity. Results are shown in Figure 5 and Table 3; detailed dynamics for β=0 .25 are deferred to Appendix C.2. At small β (e.g., 0.1), transfer is weak and performance is close to GRPO (+2.82% AVG). As β increases, TAPO improves and peaks at β = 0 .8. TAPO outperforms GRPO across all tested values, indicating robustness to β.We further ablate the two key components of TAPO at β = 1 .0: removing the support factor (w/o sup. ) and removing the conservative clamp (w/o clip. ). Removing support degrades AVG from 59.71% to 55.00% ( −4.71%), confirming that the support factor is essential for filtering unreliable signals from small reference groups. Removing the clamp causes notable entropy divergence dur-ing training (Figure 5, right), as some tool-use steps in failing trajectories receive positive advan-tages, destabilizing the policy update; the final AVG (59.07%) also falls below the full model, con-firming that the upper-bound constraint is necessary for both training stability and final performance. 
+
+4.4 Training Dynamics Analysis 
+
+The advantage compensation for credit misassign-ment not only improves final benchmark perfor-mance, but also induces observable behavioral dif-ferences throughout training (see Appendix C.1 for an analysis of why credit misassignment per-sists structurally throughout training). We compare the training dynamics of Vanilla GRPO and TAPO (β=0 .25 ) along four dimensions: training accuracy, Figure 5: Robustness of TAPO to the transfer coefficient β.
+
+policy entropy, response length, and number of tool calls per rollout (Figure 6). 
+
+Training accuracy and entropy. As shown in Figure 6(a), TAPO consistently achieves higher training accuracy than Vanilla GRPO throughout the entire training process. Figure 6(b) and Fig-ure 5(b) reveal the underlying mechanism: Vanilla GRPO suffers from progressive entropy collapse, with policy entropy declining steadily, reflecting a deteriorating exploration capacity. In contrast, by correcting the misassigned negative gradients on high-quality tool-use steps, TAPO provides more positive advantage encouragement compared to the vanilla algorithm, enhancing the model’s benefi-cial exploration behavior and preventing the policy from prematurely converging to a degenerate, low-diversity behavior. 
+
+> Figure 6: Training dynamics of Vanilla GRPO vs. TAPO (β=0 .25 ) on Qwen3-VL-4B.
+
+Response length and tool usage. Figures 6(c) and (d) reveal a consistent behavioral degradation under standard GRPO: both response length and tool call frequency decline progressively through-out training. This is a direct consequence of credit misassignment—the model learns to reduce tool invocations as a shortcut to avoid negative gradient signals, sacrificing information-gathering depth in favor of shorter, less exploratory responses. TAPO effectively reverses this degradation, with both response length and tool call frequency exhibit-ing more diverse and dynamic patterns throughout training. These dynamics collectively demonstrate that credit misassignment persistently suppresses tool-use behavior during training, and TAPO effec-tively mitigates this negative effect through advan-tage compensation. 
+
+5 Conclusion 
+
+We identify and quantify credit misassignment as a systematic failure mode of GRPO in multimodal search, and propose TAPO as a lightweight remedy. By exploiting the parameter-determinism property of information-acquisition tools, TAPO compen-sates misassigned advantages through confidence-gated credit transfer, requiring no additional an-notation, models, or sampling while introducing only negligible computational overhead. Across multiple multimodal search benchmarks, TAPO consistently improves over strong baselines, re-mains robust to β, is algorithm-agnostic, and ef-fectively mitigates entropy collapse and tool-use degradation during training. TAPO is orthogo-nal to existing multimodal search agent designs and can be seamlessly integrated into any group-based RL training pipeline built on parameter-deterministic information-acquisition tools. More broadly, the parameter-determinism assumption may extend beyond the three validated tools to other tool-augmented settings where fixed parame-ters determine information-acquisition actions. References 
+
+Ilze Amanda Auzina, Joschka Strüber, Sergio Hernández-Gutiérrez, Shashwat Goel, Ameya Prabhu, and Matthias Bethge. 2026. Intrinsic credit assignment for long horizon interaction. Preprint ,arXiv:2602.12342. Shuai Bai, Keqin Chen, Xuejing Liu, Jialin Wang, Wen-bin Ge, Sibo Song, Kai Dang, Peng Wang, Shijie Wang, Jun Tang, and 1 others. 2025. Qwen2. 5-vl technical report. arXiv preprint arXiv:2502.13923 .Jiajun Chai, Guojun Yin, Zekun Xu, Chuhuai Yue, Yi Jia, Siyu Xia, Xiaohan Wang, Jiwen Jiang, Xi-aoguang Li, Chengqi Dong, and 1 others. 2025. Rl-factory: A plug-and-play reinforcement learning post-training framework for llm multi-turn tool-use. arXiv preprint arXiv:2509.06980 .Yang Chen, Hexiang Hu, Yi Luan, Haitian Sun, Soravit Changpinyo, Alan Ritter, and Ming-Wei Chang. 2023. Can pre-trained vision and language models answer visual information-seeking questions? In Proceed-ings of the 2023 Conference on Empirical Methods in Natural Language Processing , pages 14948–14968. Xianfu Cheng, Wei Zhang, Shiwei Zhang, Jian Yang, Xiangyuan Guan, Xianjie Wu, Xiang Li, Ge Zhang, Jiaheng Liu, Yuying Mai, and 1 others. 2025. Sim-plevqa: Multimodal factuality evaluation for multi-modal large language models. In Proceedings of the IEEE/CVF International Conference on Computer Vision , pages 4637–4646. Yong Xien Chng, Tao Hu, Wenwen Tong, Xueheng Li, Jiandong Chen, Haojia Yu, Jiefan Lu, Hewei Guo, Hanming Deng, Chengjun Xie, and 1 others. 2025. Sensenova-mars: Empowering multimodal agentic reasoning and search via reinforcement learn-ing. arXiv preprint arXiv:2512.24330 .Gheorghe Comanici, Eric Bieber, Mike Schaekermann, Ice Pasupat, Noveen Sachdeva, Inderjit Dhillon, Mar-cel Blistein, Ori Ram, Dan Zhang, Evan Rosen, and 1 others. 2025. Gemini 2.5: Pushing the frontier with advanced reasoning, multimodality, long context, and next generation agentic capabilities. arXiv preprint arXiv:2507.06261 .Google DeepMind. 2025. Gemini-3-Pro. https:// deepmind.google/models/gemini/pro/ .Chengqi Dong, Chuhuai Yue, Hang He, Rongge Mao, Fenghe Tang, S Kevin Zhou, Zekun Xu, Xiaohan Wang, Jiajun Chai, and Guojun Yin. 2025. Training multi-image vision agents via end2end reinforcement learning. arXiv preprint arXiv:2512.08980 .Lang Feng, Zhenghai Xue, Tingcong Liu, and Bo An. 2025. Group-in-group policy optimization for llm agent training. Preprint , arXiv:2505.10978. Mingyang Fu, Yuyang Peng, Benlin Liu, Yao Wan, and Dongping Chen. 2025. Livevqa: Live visual knowl-edge seeking. arXiv e-prints , pages arXiv–2504. Xinyu Geng, Peng Xia, Zhen Zhang, Xinyu Wang, Qiuchen Wang, Ruixue Ding, Chenxi Wang, Jia-long Wu, Yida Zhao, Kuan Li, and 1 others. 2025. Webwatcher: Breaking new frontier of vision-language deep research agent. arXiv preprint arXiv:2508.05748 .Google. 2025. Gemini-3-Flash. https://blog. google/products/gemini/gemini-3-flash/ .Jack Hong, Chenxiao Zhao, ChengLin Zhu, Weiheng Lu, Guohai Xu, and Xing Yu. 2025. Deepeyesv2: Toward agentic multimodal model. arXiv preprint arXiv:2511.05271 .Aaron Hurst, Adam Lerer, Adam P Goucher, Adam Perelman, Aditya Ramesh, Aidan Clark, AJ Ostrow, Akila Welihinda, Alan Hayes, Alec Radford, and 1 others. 2024. Gpt-4o system card. arXiv preprint arXiv:2410.21276 .Dongzhi Jiang, Renrui Zhang, Ziyu Guo, Yanmin Wu, Jiayi Lei, Pengshuo Qiu, Pan Lu, Zehui Chen, Chaoyou Fu, Guanglu Song, and 1 others. 2024. Mm-search: Benchmarking the potential of large mod-els as multi-modal search engines. arXiv preprint arXiv:2409.12959 .Xue Jiang, Yihong Dong, Mengyang Liu, Hongyi Deng, Tian Wang, Yongding Tao, Rongyu Cao, Bin-hua Li, Zhi Jin, Wenpin Jiao, and 1 others. 2025. Coderl+: Improving code generation via reinforce-ment with execution semantics alignment. arXiv preprint arXiv:2510.18471 .Hunter Lightman, Vineet Kosaraju, Yuri Burda, Harri-son Edwards, Bowen Baker, Teddy Lee, Jan Leike, John Schulman, Ilya Sutskever, and Karl Cobbe. 2023. Let’s verify step by step. In The twelfth inter-national conference on learning representations .Ziyu Liu, Yuhang Zang, Yushan Zou, Zijian Liang, Xi-aoyi Dong, Yuhang Cao, Haodong Duan, Dahua Lin, and Jiaqi Wang. 2025. Visual agentic reinforcement fine-tuning. arXiv preprint arXiv:2505.14246 .Liangchen Luo, Yinxiao Liu, Rosanne Liu, Samrat Phatale, Meiqi Guo, Harsh Lara, Yunxuan Li, Lei Shu, Yun Zhu, Lei Meng, and 1 others. 2024. Im-prove mathematical reasoning in language models by automated process supervision. arXiv preprint arXiv:2406.06592 .Kartik Narayan, Yang Xu, Tian Cao, Kavya Nerella, Vishal M Patel, Navid Shiee, Peter Grasch, Chao Jia, Yinfei Yang, and Zhe Gan. 2025. Deepmmsearch-r1: Empowering multimodal llms in multimodal web search. arXiv preprint arXiv:2510.12801 .OpenAI. 2025. GPT-5. https://openai.com/gpt-5 .Xiangyu Peng, Can Qin, An Yan, Xinyi Yang, Zeyuan Chen, Ran Xu, and Chien-Sheng Wu. 2026. Mta-agent: An open recipe for multimodal deep search agents. Preprint , arXiv:2604.06376. Tuoshi Qi, Shenshen Bu, Yingfei Xiang, and Zhim-ing Dai. 2026. Eviagent: Evidence-driven agent for radiology report generation. arXiv preprint arXiv:2603.13956 .Zhihong Shao, Peiyi Wang, Qihao Zhu, Runxin Xu, Junxiao Song, Xiao Bi, Haowei Zhang, Mingchuan Zhang, YK Li, Yang Wu, and 1 others. 2024. Deepseekmath: Pushing the limits of mathematical reasoning in open language models. arXiv preprint arXiv:2402.03300 .Guangming Sheng, Chi Zhang, Zilingfeng Ye, Xibin Wu, Wang Zhang, Ru Zhang, Yanghua Peng, Haibin Lin, and Chuan Wu. 2024. Hybridflow: A flexible and efficient rlhf framework. arXiv preprint arXiv: 2409.19256 .Hui-Ze Tan, Xiao-Wen Yang, Hao Chen, Jie-Jing Shao, Yi Wen, Yuteng Shen, Weihong Luo, Xiku Du, Lan-Zhe Guo, and Yu-Feng Li. 2026. Hindsight credit as-signment for long-horizon llm agents. arXiv preprint arXiv:2603.08754 .Qwen Team. 2025. Qwen3-vl. Peiyi Wang, Lei Li, Zhihong Shao, Runxin Xu, Damai Dai, Yifei Li, Deli Chen, Yu Wu, and Zhifang Sui. 2024. Math-shepherd: Verify and reinforce llms step-by-step without human annotations. In Proceedings of the 62nd Annual Meeting of the Association for Computational Linguistics (Volume 1: Long Papers) ,pages 9426–9439. Zhepei Wei, Wenlin Yao, Yao Liu, Weizhi Zhang, Qin Lu, Liang Qiu, Changlong Yu, Puyang Xu, Chao Zhang, Bing Yin, and 1 others. 2025. Webagent-r1: Training web agents via end-to-end multi-turn reinforcement learning. In Proceedings of the 2025 Conference on Empirical Methods in Natural Lan-guage Processing , pages 7920–7939. Jinming Wu, Zihao Deng, Wei Li, Yiding Liu, Bo You, Bo Li, Zejun Ma, and Ziwei Liu. 2025. Mmsearch-r1: Incentivizing lmms to search. arXiv preprint arXiv:2506.20670 .Shunyu Yao, Jeffrey Zhao, Dian Yu, Nan Du, Izhak Shafran, Karthik Narasimhan, and Yuan Cao. 2022. React: Synergizing reasoning and acting in language models. arXiv preprint arXiv:2210.03629 .Chuhuai Yue, Chengqi Dong, Yinan Gao, Hang He, Jia-jun Chai, Wei Lin, and Guojun Yin. 2026. Promoting efficient reasoning with verifiable stepwise reward. In Proceedings of the AAAI Conference on Artificial Intelligence , 41, pages 34530–34538. Yu Zeng, Wenxuan Huang, Zhen Fang, Shuang Chen, Yufan Shen, Yishuo Cai, Xiaoman Wang, Zhenfei Yin, Lin Chen, Zehui Chen, Shiting Huang, Yiming Zhao, Xu Tang, Yao Hu, Philip Torr, Wanli Ouyang, and Shaosheng Cao. 2026. Vision-deepresearch benchmark: Rethinking visual and textual search for multimodal large language models. Preprint ,arXiv:2602.02185. Chenchen Zhang. 2026. From reasoning to agentic: Credit assignment in reinforcement learning for large language models. arXiv preprint arXiv:2604.09459 .Yifan Zhang, Liang Hu, Haofeng Sun, Peiyu Wang, Yichen Wei, Shukang Yin, Jiangbo Pei, Wei Shen, Peng Xia, Yi Peng, Tianyidan Xie, Eric Li, Yang Liu, Xuchen Song, and Yahui Zhou. 2025. Skywork-r1v4: Toward agentic multimodal intelligence through in-terleaved thinking with images and deepresearch. 
+
+Preprint , arXiv:2512.02395. Ziwei Zheng, Michael Yang, Jack Hong, Chenxiao Zhao, Guohai Xu, Le Yang, Chao Shen, and Xing Yu. 2025. Deepeyes: Incentivizing" thinking with images" via reinforcement learning. arXiv preprint arXiv:2505.14362 .
+
+A Multimodal Search Agents 
+
+Reinforcement learning has emerged as the dom-inant paradigm for training LLM-based agents, achieving significant advances across diverse do-mains including mathematical reasoning (Shao et al., 2024; Yue et al., 2026), code genera-tion (Jiang et al., 2025), and web navigation (Wei et al., 2025). In tool-augmented settings, agents follow a think–act–observe loop (Yao et al., 2022), progressively collecting information through multi-step interactions with external environments and achieving consistent performance gains across di-verse application scenarios (Dong et al., 2025; Qi et al., 2026; Wei et al., 2025). With outcome cor-rectness as the reward signal, Agentic RL paradigm enables efficient end-to-end training, supported by dedicated agentic RL frameworks (Sheng et al., 2024; Chai et al., 2025). Multimodal search is a representative scenario of tool-augmented rea-soning, requiring models to answer open-domain questions over mixed image–text inputs. In this set-ting, agents built on multimodal foundation models such as Qwen2.5-VL (Bai et al., 2025) invoke mul-tiple rounds of image search and text retrieval in coordination, progressively integrating multimodal tool outputs into the reasoning chain to produce the final answer, achieving substantial performance gains across multiple open-domain visual question answering benchmarks (Hong et al., 2025; Geng et al., 2025; Chng et al., 2025). In this work, we instantiate TAPO within the multimodal search set-ting using three tool types: image search , text search, and region zoom-in, serving visual entity grounding, background knowledge retrieval, and fine-grained visual understanding, respectively. B Implementation Details 
+
+B.1 Training Data 
+
+RL training uses the same training set as SenseNova-MARS (Chng et al., 2025), comprising approximately 3,859 samples across four subsets: All subsets are used exclusively for RL training. No supervised fine-tuning (SFT) warm-up stage is applied; we train directly from the instruction-tuned Qwen3-VL-8B-Instruct checkpoint. Train-ing uses the VeRL framework (Sheng et al., 2024) with a global batch size of 128, a learning rate of 
+
+1 × 10 −6, and G = 8 rollout trajectories per ques-tion. Each trajectory allows up to 10 interaction rounds, with a per-round token budget of 8,192 and a cumulative trajectory limit of 32,768 tokens. During training, text search is implemented via a local Wikipedia-based RAG system to reduce com-putational cost. 
+
+B.2 Reward Function 
+
+The outcome reward combines two components: 
+
+Accuracy reward. For non-MCQ samples, we use Qwen3-VL-32B-Instruct as an LLM-as-a-Judge (greedy decoding, temperature = 0): if the model’s final answer is judged semantically correct, 
+
+racc = 1 .0; otherwise racc = 0 .0. For MCQ sam-ples, rule-based exact match is applied, assigning 
+
+racc = 1 .0 for a correct choice and 0.0 otherwise. 
+
+Format reward. At each non-terminal turn, the response must contain a <thinking> block fol-lowed by a single valid <tool_call> in JSON Schema format. At the terminal turn, the response must contain a <thinking> block followed by an 
+
+<answer> tag. Full compliance yields rformat =0.5; any violation yields 0.0.The final outcome reward is R = racc +rformat ∈{0, 0.5, 1.0, 1.5}.
+
+B.3 Parameter Similarity Computation 
+
+TAPO defines parameter similarity separately for each tool type. All similarity functions are rule-based and require no embedding models or external LLMs. 
+
+Image search ( image_search_tool ). This tool takes no text parameters; all image search calls for a given question share the same input image. Parameter equivalence is therefore trivial: within each training batch, all image search calls for the same question are merged into a single reference group, and parameter similarity is identically 1.0.Since image search has no free parameters, the con-fidence score α is determined solely by the support factor. We set αmin ,isearch = 1 .0, meaning advan-tage transfer is triggered only when the reference group covers all successful trajectories in the batch (i.e., support factor = 1 .0). 
+
+Region zoom-in (image_zoom_in_tool ). Pa-rameter equivalence is measured by bounding-box IoU. During reference library construction (Phase 3), zoom-in calls with IoU ≥ θIoU = 0.7 are merged into the same reference group. During advantage transfer (Phase 4), the minimum confi-dence threshold is αmin ,zoom = 0 .5.
+
+Text search (text_search_tool ). Parameter equivalence is measured by query string similar-ity, computed as a weighted combination of three lexical metrics: sim (q1, q 2) = 0 .3 · J + 0 .5 · OC + 0 .2 · BG (5) where J is the Jaccard coefficient over stopword-filtered tokens, OC is the Overlap Coefficient (ro-bust to asymmetric query lengths), and BG is character-bigram Jaccard similarity (capturing mor-phological variants). Reference library construc-tion uses aggregation threshold θtext = 0 .8; Phase 4 matching uses αmin ,text = 0 .5.
+
+B.4 Evaluation Benchmarks 
+
+We evaluate on seven publicly available multimodal search benchmarks that collectively span a broad range of retrieval difficulty, temporal freshness, and image resolution requirements. 
+
+MMSearch (Jiang et al., 2024) contains 300 image-accompanied questions drawn from news events and domain knowledge published after Au-gust 2024, testing the model’s ability to ground vi-sual observations in up-to-date factual knowledge. We follow the standard split of 171 questions used for system-level evaluation. 
+
+HR-MMSearch (Chng et al., 2025) is aknowledge-intensive benchmark comprising 305 questions paired with high-resolution (4K) images sourced from international news agencies (2025 events), spanning eight topical domains. Approx-imately 60% of questions are classified as hard, requiring three or more tool invocations to answer correctly. 
+
+FVQA-test (Wu et al., 2025) is a curated 1,800-sample test set consisting of three equal-sized Dataset #Samples Reward         
+
+> FVQA-train 1,894 LLM-judge + format DeepEyes-4K (non-MCQ) 425 LLM-judge + format Visual-Probe-train 912 LLM-judge + format DeepEyes-4K (MCQ) 628 Exact match + format
+> Table 4: Composition of the RL training set.
+
+subsets: FVQA-auto-vc (600 samples with auto-matic validation), InfoSeek Human Split (600 sam-ples with manually corrected annotations), and an expert-annotated subset (600 samples). 
+
+InfoSeek (Chen et al., 2023) is a visual entity retrieval benchmark grounded in Wikidata, cover-ing fine-grained factual attributes that are unlikely to be memorized during pre-training. We sample 2,000 instances from the official test split. 
+
+SimpleVQA (Cheng et al., 2025) focuses on factual accuracy, combining post-2023 VQA in-stances with expert-curated image-question pairs across 1,013 English samples. 
+
+LiveVQA (Fu et al., 2025) aggregates 3,602 image-question pairs from major news outlets (CNN, BBC, etc.), spanning 14 thematic categories, and emphasizes temporal reasoning over recently published content. 
+
+MAT-Search (Liu et al., 2025) is a manually crafted and human-verified benchmark of 150 ex-amples designed to evaluate agentic multimodal reasoning, requiring models to handle composite multi-hop queries, retrieve external information, and invoke tools effectively across varying reason-ing depths. All benchmarks are evaluated with pass@1 accu-racy; web search is powered by the Serper API. For open-ended questions, Qwen3-VL-32B-Instruct serves as an LLM-as-a-Judge with greedy decoding (temperature = 0 ). For all benchmarks, we report the mean pass@1 accuracy over three independent runs. 
+
+B.5 Computational Overhead of TAPO 
+
+TAPO’s Phase 3 (reference library construction) and Phase 4 (advantage transfer) run entirely on CPU using vectorized NumPy operations and lightweight string matching—no neural network forward passes are required. Under our train-ing configuration (global batch size 128, G = 8 
+
+rollouts per question), these two phases together take under 1 second per training step, accounting for only 0.06% of total wall-clock training time, as illustrated in Figure 7. TAPO therefore intro- 
+
+> Figure 7: Wall-clock time breakdown per training step. TAPO (Phase 3+4) accounts for only 0.06% , negligible compared to the dominant components of token genera-tion (50.2%) and actor update (29.0%).
+> Figure 8: Training dynamics of TAPO ( β=0 .25 , Qwen3-VL-4B). Training accuracy increases steadily through-out training, while the fraction of correctable trajectories (Correctable Traj.) and correctable steps (Correctable Steps) remain structurally stable and exhibit a slow up-ward trend, indicating that credit misassignment persists across the entire training horizon.
+
+duces negligible computational overhead and can be seamlessly integrated into any group-based ad-vantage estimation algorithm. 
+
+C Detailed Analysis of TAPO 
+
+C.1 Persistence of Credit Misassignment During Training 
+
+As shown in Figure 8, TAPO training leads to a continuous improvement in training accuracy, yet the fractions of correctable trajectories and cor-rectable steps do not decline in tandem; instead, they remain structurally stable throughout training. This indicates that in multi-tool search tasks, the phenomenon of high-quality tool-use steps appear-ing within failing trajectories remains prevalent as training progresses. As the model learns more com-plex multi-step reasoning strategies, such “locally effective but globally failing” trajectories do not disappear naturally with improving model capa-bility. Consequently, TAPO’s advantage compen-sation mechanism consistently faces meaningful correction targets throughout the entire training cy-cle, rather than being effective only in the early stages. 
+
+C.2 Detailed Training Dynamics of TAPO 
+
+Figure 9 presents the complete training dynamics of TAPO at β=0 .25 . Training accuracy (panel a) exhibits a sustained upward trend; meanwhile, the correctable trajectory fraction (panel b) and cor-rectable step fraction (panel c) also grow slowly, consistent with the analysis in Section C.1 and fur-ther confirming that the demand for compensation does not diminish during training. The mean credit transfer magnitude ∆ (panel d) remains broadly stable throughout training with-out systematic decay, indicating that the advantage correction applied at each compensation step is con-sistently sized. Both the absolute advantage correc-tion (panel e) and the relative advantage correction (panel f) exhibit minimal drift, demonstrating that TAPO’s compensation strength adapts to maintain a stable level throughout training—neither growing excessively as training proceeds nor degrading as the success rate rises. 
+
+C.3 Per-Tool-Type Credit Transfer Analysis 
+
+Different tool types exhibit a pronounced and sta-ble stratification pattern under TAPO correction, which can be understood systematically along three dimensions. 
+
+Support factor stratification. As shown in the top row of Figure 10, image search achieves a me-dian support factor close to 1.0, with the P25–P75 band highly concentrated near the upper bound. This property stems from the consistency of image search call parameters: for a given question, all image search steps share identical inputs, so a refer-ence group covering all successful trajectories can almost always be found within the same training batch, maximally satisfying the support condition. By contrast, region zoom-in and text search ex-hibit much wider P25–P75 bands and lower mean values, reflecting higher diversity in call parame-ters across samples and correspondingly limited reference group coverage. 
+
+Stable stratification of confidence score α. The middle row shows that image search achieves a median α ≈ 0.94 , concentrated in the high-value range, while region zoom-in ( α ≈ 0.05 –0.15 ) and text search ( α ≈ 0.15 –0.35 ) are substantially lower with wider spread. This three-tier stratification re-mains stable across all 130 training steps, demon-strating that TAPO’s confidence estimation mecha-nism reliably discriminates between tool types and does not drift with training state. 
+
+Consistency between ∆ and confidence stratifi-cation. The bottom row reveals that image search has the highest median ∆ ≈ 1.5, while region zoom-in and text search are somewhat lower (ap-proximately 1.0–1.2), with all three remaining sta-ble throughout training. The inter-tool ranking of 
+
+∆ is entirely consistent with the stratification of α,indicating that TAPO’s correction magnitude adap-tively reflects signal quality rather than applying a uniform fixed correction to all tool steps: stronger corrections are applied to high-confidence image search steps, while more conservative compensa-tion is maintained for lower-confidence text search steps with lower query similarity. The consistency across all three metrics jointly validates the effectiveness of TAPO’s confidence-gated design: through the confidence gating mechanism, TAPO achieves differentiated advan-tage compensation across tool types, actively cor-recting high-quality signals while avoiding over-intervention on less reliable ones. 
+
+D Case Study: Reasoning Patterns of TAPO-Trained Model 
+
+To qualitatively illustrate the search strategies learned by TAPO, we present four representative cases from the evaluation set, covering different reasoning patterns exhibited by the trained model. Each case shows the input question, the ground-truth answer, the sequence of tool calls invoked, and the model’s reasoning trajectory. 
+
+Case 1: Entity Recognition + Knowledge Re-trieval. The question asks: “In which year did this park officially open?” (ground truth: 1996 ). The model performs a reverse image search that returns results including “Legoland Windsor could open golf course” and “LEGOLAND Windsor Re-sort”, enabling it to identify the park. It then Figure 9: Six-dimensional training dynamics of TAPO ( β=0 .25 , Qwen3-VL-4B). (a) Training accuracy; (b) Cor-rectable trajectory fraction; (c) Correctable step fraction; (d) Mean credit transfer magnitude ∆; (e) Absolute advantage correction; (f) Relative advantage correction. Dashed lines indicate linear trend fits. 
+
+queries text_search_tool with “Legoland Wind-sor opening year” , obtaining the precise opening date of 17 March 1996. This two-step pattern— visual entity identification followed by a single factual lookup—is the most common successful strategy on knowledge-intensive benchmarks such as InfoSeek. 
+
+Case 2: Multi-Hop Iterative Query Refine-ment. The question asks: “The founder of this company shown in the image was born in the same year as an Olympic Games. In which country were those Olympics held?” (ground truth: South Korea ). The model employs a four-tool chain spanning three reasoning hops: (1) image_search_tool returns CNBC headlines about Macroscope , identifying the company; (2) text_search_tool [“Macroscope company founder” ] confirms the CEO as Kayvon Beykpour ; (3) text_search_tool [“Kayvon Beykpour birth year” ] retrieves birth year 1988 ;(4) text_search_tool [“1988 Summer Olympics location” ] returns Seoul, South Korea . Each intermediate result directly seeds the next query, bridging visual entity recognition, biographical lookup, and historical knowledge into a coherent reasoning chain. 
+
+Case 3: Persistent Query Refinement for Precise Numerical Retrieval. The question asks: “What is the width (in metre) of this is-land?” (ground truth: 300 ). The model invokes 
+
+image_search_tool and identifies the island as 
+
+Frauenchiemsee from the Wikipedia result. Three successive text searches are then issued with in-creasing specificity: (1) “Frauenchiemsee island width” returns area (15.5 ha) and population, but no explicit width; (2) “Frauenchiemsee island di-mensions” similarly omits the metric width; (3) 
+
+“Frauenchiemsee island length and width” finally retrieves “approximately 620 m long and 300 m wide” . This adaptive reformulation—persisting through partial failures until the precise numerical fact is extracted—demonstrates the model’s ability to iteratively refine its information-seeking strategy rather than giving up prematurely. 
+
+Case 4: Visual Detail Extraction via Zoom + Text Confirmation. The question asks: “Based on the provided image, which company operates the ferry?” (ground truth: Manche Iles Express ). The model first calls image_search_tool , which returns ferry-related headlines (e.g. “Ferry firm to resume sailings between Channel Islands and France”) but no direct operator name. Recognising that the text painted on the hull may be legible at higher resolution, it invokes image_zoom_in_tool Figure 10: Per-tool-type training dynamics of TAPO ( β=0 .25 , Qwen3-VL-4B) across 130 training steps. Columns correspond to three tool types (Image Search / Region Zoom-in / Text Search). Rows show the support factor (top), confidence score α (middle), and credit transfer magnitude ∆ (bottom), each plotted as median, P25/P75 band, and mean. 
+
+on region [496, 513, 830, 604] , success-fully reading “www.manche-iles.com” . A final 
+
+text_search_tool [“manche-iles.com” ] confirms that this URL belongs to Manche Iles Express , a ferry service between Normandy and the Chan-nel Islands. This case exemplifies a coarse-to-fine 
+
+visual strategy: global image search for scene con-text, zoom for fine-grained textual evidence, and a confirmatory knowledge lookup. Figure 11: Case 1: Entity Recognition + Knowledge Retrieval. The model identifies Legoland Windsor via image search and retrieves its opening year with a single text query, correctly answering 1996 .Figure 12: Case 2: Multi-Hop Iterative Query Refinement. Starting from a group photo, the model chains four tool calls across three reasoning hops to arrive at South Korea .Figure 13: Case 3: Persistent Query Refinement for Numerical Retrieval. The model refines its text query three times after receiving non-specific results, ultimately extracting the exact island width of 300 m .Figure 14: Case 4: Visual Detail Extraction via Zoom + Text Confirmation. Unable to identify the operator from a global image search, the model zooms into the hull text, reads the URL, and confirms Manche Iles Express via a follow-up search.

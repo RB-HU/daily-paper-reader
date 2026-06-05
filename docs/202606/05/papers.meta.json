@@ -1,0 +1,69 @@
+{
+  "label": "2026-06-05",
+  "date": "2026-06-05",
+  "generated_at": "2026-06-05T22:01:30",
+  "count": 4,
+  "papers": [
+    {
+      "paper_id": "202606/05/2606.05559v1-claas-continual-learning-as-a-service-for-sample-efficient-online-learning",
+      "section": "deep",
+      "title_en": "CLaaS: Continual learning as a service for sample efficient online learning",
+      "authors": "Kion Fallah, Silen Naihin, Barak Widawsky, Qingqing Mao",
+      "date": "2026-06-04",
+      "pdf": "https://arxiv.org/pdf/2606.05559v1",
+      "score": "9.0",
+      "evidence": "使LLM智能体在线持续学习的系统",
+      "tldr": "在部署阶段，大语言模型代理必须适应动态环境的分布变化，但环境不可重置，只能基于流式场景在线学习，既要保留先前能力又要向前迁移。现有上下文学习方法样本效率低下，难以充分利用单次交互数据。为此，我们提出CLaaS，一种将持续学习封装为服务的方法，通过聊天API对外暴露，内部采用经验回放缓冲区存储完整交互轨迹，并在异步训练中重复利用梯度更新参数，从而大幅提高样本效率。在对抗性任务评估中，参数更新模式显著优于基于上下文的少样本学习，前向迁移能力更强且遗忘更少，经验回放被证实是样本高效的关键。CLaaS为在实际应用中进行高效在线持续学习提供了切实可行的框架。",
+      "tags": "query:fla",
+      "abstract_en": "Deployed large language model agents must adapt to distribution shift in dynamic environments. Ideally, adaptation can be performed from accumulated agent experiences and retain prior capabilities while transferring to future tasks. However, agent actions and environmental transitions can only be sampled once per scenario, as real-world environments cannot be trivially reset. To this end, we investigate an experiential and online continual learning setting in which agents learn from a stream of scenarios. We propose continual learning as-a-service (CLaaS), a system which enables agents to improve during deployment, abstracted behind a chat API. To increase sample efficiency, CLaaS stores rollouts in an experience replay buffer for gradient reuse during asynchronous training. We evaluate CLaaS on an adversarial task, demonstrating that parametric updates lead to superior forward transfer and less forgetting than in-context learning, with replay being a critical choice for sample efficiency.",
+      "source": "arxiv",
+      "selection_source": "fresh_fetch"
+    },
+    {
+      "paper_id": "202606/05/2606.05784v1-tapo-tool-aware-policy-optimization-via-credit-transfer-for-multimodal-search-agents",
+      "section": "deep",
+      "title_en": "TAPO: Tool-Aware Policy Optimization via Credit Transfer for Multimodal Search Agents",
+      "authors": "Chengqi Dong, Chuhuai Yue, Hang He, yandong liu, Fenghe Tang, S Kevin Zhou, Xiaohan Wang, Jiajun Chai, Guojun Yin",
+      "date": "2026-06-04",
+      "pdf": "https://arxiv.org/pdf/2606.05784v1",
+      "score": "9.0",
+      "evidence": "提出工具感知策略优化作为工具增强代理的策略梯度后训练修正方法。",
+      "tldr": "多模态搜索代理中，GRPO的轨迹级优势均匀广播导致信用错误分配：失败轨迹中有价值的工具使用步骤被无差别惩罚，实证显示超半数失败动作存在可纠正误分配，训练信号浪费严重。TAPO利用信息获取工具的参数确定性——相似调用参数对应等效信息获取动作，应共享相似信用——在批次内构建反事实见证，并以置信门控保守校正补偿误分配的负信用，方法无需额外标注、模型或采样，计算开销可忽略。在多个多模态搜索基准上，TAPO对GRPO、GSPO、SAPO三种主流RL算法均取得一致的即插即用改进，有效提升训练信号利用效率，为工具增强代理优化提供了高效的新方案。",
+      "tags": "query:fla",
+      "abstract_en": "We identify and formally characterize credit misassignment as a systematic failure mode of GRPO in tool-augmented multimodal search agents: its uniform broadcast of trajectory-level advantages to all tokens causes valuable tool-use steps in failing trajectories to be penalized no differently from valueless ones. We further empirically quantify the scale of this phenomenon. Over half of failing trajectories and failing tool-use actions exhibit correctable credit misassignment, demonstrating that the wasted training signal is both substantial and structurally exploitable. Building on this insight, we propose Tool-Aware Policy Optimization (TAPO), which exploits the parameter-determinism property of information-acquisition tools: similar call parameters define equivalent information-acquisition actions and should therefore share comparable action credit. TAPO constructs counterfactual witnesses within the current training batch and compensates misassigned negative credit via confidence-gated conservative advantage correction. It requires no additional annotation, models, or sampling, and introduces negligible computational overhead. Across multiple multimodal search benchmarks, TAPO delivers consistent, plug-and-play improvements over strong baselines for three mainstream RL algorithms (GRPO, GSPO, and SAPO). Our code and models will be publicly released upon acceptance.",
+      "source": "arxiv",
+      "selection_source": "fresh_fetch"
+    },
+    {
+      "paper_id": "202606/05/2606.05828v1-statistical-priors-for-implicit-preferences-decoupling-skill-selection-as-a-local-harness-in-personal-agents",
+      "section": "quick",
+      "title_en": "Statistical Priors for Implicit Preferences: Decoupling Skill Selection as a Local Harness in Personal Agents",
+      "authors": "Zeyu Gan, Huayi Tang, Yong Liu",
+      "date": "2026-06-04",
+      "pdf": "https://arxiv.org/pdf/2606.05828v1",
+      "score": "7.0",
+      "evidence": "用于个人智能体的轻量级统计偏好学习适配器",
+      "tldr": "随着大语言模型（LLM）能力持续突破，基于API远程模型和外部技能的本地个人代理成为新范式，但可用技能急剧膨胀，如何让代理学习并适应隐式用户偏好成为核心瓶颈。然而，本地部署环境资源受限，无法承载复杂的集中式选择算法，使得设计轻量级本地偏好控制机制迫在眉睫。本文为此提出一种新颖架构，严格将统计偏好学习与语义意图解析解耦，通过本地累积的统计结果来调制远程LLM的技能选择决策。大量实验证明，该解耦方案取得了最低的累积遗憾和最高的测试准确率，性能显著超越传统的记忆增强型代理。这一成果为资源受限环境下个人代理的本地化偏好学习提供了高效、可行的新路径。",
+      "tags": "query:fla",
+      "abstract_en": "As Large Language Model (LLM) capabilities advance, locally deployed personal agents relying on API-based remote models and external skills have emerged as a novel paradigm. With the rapid expansion of available skills, enabling personal agents to learn and adapt to implicit user preferences becomes a critical challenge. However, local deployment constraints preclude complex centralized selection algorithms, creating an urgent need for a lightweight local preference harness. This paper explores the implementation of such a harness through a novel architecture that strictly decouples statistical preference learning from semantic intent parsing. Specifically, we leverage localized statistical results to influence and modulate the selection decisions of the remote LLM. Extensive evaluations demonstrate that our decoupled approach achieves the lowest cumulative regret and highest test accuracy, significantly outperforming traditional memory-augmented agents.",
+      "source": "arxiv",
+      "selection_source": "fresh_fetch"
+    },
+    {
+      "paper_id": "202606/05/2606.03152v1-cost-aware-optimization-for-agentic-query-execution",
+      "section": "quick",
+      "title_en": "Cost-Aware Optimization for Agentic Query Execution",
+      "authors": "Lunyiu Nie, Yilin Xia, Yiren Liu, Christopher Jermaine, Swarat Chaudhuri",
+      "date": "2026-06-02",
+      "pdf": "https://arxiv.org/pdf/2606.03152v1",
+      "score": "6.0",
+      "evidence": "用强化学习（EnumGRPO）自提升智能体查询执行工作流的优化",
+      "tldr": "传统查询优化假设等价计划仅成本不同，但LLM操作符引入后，成本与质量受放置和粒度影响，最佳选择常需运行时决定。我们提出Agentic查询执行范式及EnumGRPO优化器，通过枚举计划和上下文强化学习提炼成本-质量启发性。在SWAN四个数据库上，EnumGRPO以$0.011/查询达35.4%准确率，成本降317倍、准确率提升18%，优于混合基线。该方法显著降低LLM查询成本并提升答案质量，为成本感知的代理工作流优化提供了有效途径。",
+      "tags": "query:fla",
+      "abstract_en": "Classical query optimization searches over algebraically equivalent plans that differ only in cost. This assumption breaks once LLM-backed operators enter the picture: their placement, ordering, and granularity jointly determine both dollar cost and answer quality, and the right choice among the alternatives is often revealed only at runtime. We formalize this setting as agentic query execution, a query execution paradigm in which agent-based planning is interleaved with execution, and agent workflow optimization becomes the analogue of classical query optimization. We then present EnumGRPO, a self-improving optimizer for this setting. During a learning stage, EnumGRPO enumerates query plans over decisions such as execution paradigm, operator type, operator placement, selectivity scope, and projection width, then distills quality-cost feedback into reusable planning heuristics via in-context reinforcement learning. Across four databases in SWAN, EnumGRPO achieves 35.4% execution accuracy at $0.011 per query in LLM-operator cost, a ~317x cost reduction over the hybrid query baseline with an 18% relative improvement in answer accuracy.",
+      "source": "arxiv",
+      "selection_source": "fresh_fetch"
+    }
+  ],
+  "errors": []
+}
