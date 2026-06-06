@@ -6,34 +6,28 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-06-05
-- 运行时间：2026-06-05 22:01:16 UTC
+- 最新运行日期：2026-06-06
+- 运行时间：2026-06-06 20:22:31 UTC
 - 运行状态：成功
-- 本次总论文数：4
-- 精读区：2
-- 速读区：2
+- 本次总论文数：2
+- 精读区：1
+- 速读区：1
 
 ### 今日简报（AI）
-今日精读两篇9分大作：服务化持续学习让模型边用边学，工具感知策略优化教会搜索智能体更聪明地调用工具。  
-最值得关注的是“将学习服务化以降低在线更新成本”和“通过信用转移让多模态搜索代理协同工具”两条路径，均指向更高效、实用的AI系统。  
-建议开发者重点阅读CLaaS的持续服务架构，其样本效率思路可直接用于需要快速适应新数据的生产环境。
-- 详情：[/202606/05/README](/202606/05/README)
+今日精读高分论文《Trust Region On-Policy Distillation》，速读长周期任务上下文管理研究。  
+值得关注：用信任域约束提升策略蒸馏的稳定性，以及智能体自适应截断上下文的思路。  
+建议将信赖域机制引入其他知识迁移场景，或动手测试上下文压缩对长期任务掉线率的改善。
+- 详情：[/202606/06/README](/202606/06/README)
 
 ### 精读区论文标签
-1. [CLaaS: Continual learning as a service for sample efficient online learning](/202606/05/2606.05559v1-claas-continual-learning-as-a-service-for-sample-efficient-online-learning)  
+1. [Trust Region On-Policy Distillation](/202606/06/2606.01249v2-trust-region-on-policy-distillation)  
    标签：评分：9.0/10、query:fla
-   evidence：使LLM智能体在线持续学习的系统
-2. [TAPO: Tool-Aware Policy Optimization via Credit Transfer for Multimodal Search Agents](/202606/05/2606.05784v1-tapo-tool-aware-policy-optimization-via-credit-transfer-for-multimodal-search-agents)  
-   标签：评分：9.0/10、query:fla
-   evidence：提出工具感知策略优化作为工具增强代理的策略梯度后训练修正方法。
+   evidence：信任域同策蒸馏是一种LLM后训练技术，适用于代理学习
 
 ### 速读区论文标签
-1. [Statistical Priors for Implicit Preferences: Decoupling Skill Selection as a Local Harness in Personal Agents](/202606/05/2606.05828v1-statistical-priors-for-implicit-preferences-decoupling-skill-selection-as-a-local-harness-in-personal-agents)  
+1. [Learning Agent-Compatible Context Management for Long-Horizon Tasks](/202606/06/2605.30785v1-learning-agent-compatible-context-management-for-long-horizon-tasks)  
    标签：评分：7.0/10、query:fla
-   evidence：用于个人智能体的轻量级统计偏好学习适配器
-2. [Cost-Aware Optimization for Agentic Query Execution](/202606/05/2606.03152v1-cost-aware-optimization-for-agentic-query-execution)  
-   标签：评分：6.0/10、query:fla
-   evidence：用强化学习（EnumGRPO）自提升智能体查询执行工作流的优化
+   evidence：AdaCoM 通过强化学习训练外部 LLM 管理冻结代理的上下文，为长时任务提供代理后训练增强技术。
 
 
 <div class="dpr-home-promo-card">
