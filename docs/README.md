@@ -6,28 +6,43 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-06-06
-- 运行时间：2026-06-06 20:22:31 UTC
+- 最新运行日期：2026-06-07
+- 运行时间：2026-06-07 20:39:37 UTC
 - 运行状态：成功
-- 本次总论文数：2
-- 精读区：1
+- 本次总论文数：7
+- 精读区：6
 - 速读区：1
 
 ### 今日简报（AI）
-今日精读高分论文《Trust Region On-Policy Distillation》，速读长周期任务上下文管理研究。  
-值得关注：用信任域约束提升策略蒸馏的稳定性，以及智能体自适应截断上下文的思路。  
-建议将信赖域机制引入其他知识迁移场景，或动手测试上下文压缩对长期任务掉线率的改善。
-- 详情：[/202606/06/README](/202606/06/README)
+今日精读两篇9分智能体前沿研究，速读一篇对齐方向工作。
+最值得关注的是：LLM智能体通过统一上下文演化实现长期记忆融合，以及用技能金字塔框架让Agent自我进化时稳步巩固能力。
+如果想动手实践，不妨从分层技能固化出发，先让Agent在一个窄领域学会稳步积累，再扩展到多步任务。
+- 详情：[/202606/07/README](/202606/07/README)
 
 ### 精读区论文标签
-1. [Trust Region On-Policy Distillation](/202606/06/2606.01249v2-trust-region-on-policy-distillation)  
+1. [Unified Context Evolution for LLM Agents](/202606/07/2606.02304v1-unified-context-evolution-for-llm-agents)  
    标签：评分：9.0/10、query:fla
-   evidence：信任域同策蒸馏是一种LLM后训练技术，适用于代理学习
+   evidence：无梯度框架，将智能体经验外部化为可进化的库，用于后训练改进
+2. [SkillPyramid: A Hierarchical Skill Consolidation Framework for Self-Evolving Agents](/202606/07/2606.03692v1-skillpyramid-a-hierarchical-skill-consolidation-framework-for-self-evolving-agents)  
+   标签：评分：9.0/10、query:fla
+   evidence：自进化智能体的分层技能整合
+3. [Learning While Acting: A Skill-Enhanced Test-Time Co-Evolution Framework for Online Lifelong Learning Agents](/202606/07/2606.04815v1-learning-while-acting-a-skill-enhanced-test-time-co-evolution-framework-for-online-lifelong-learning-agents)  
+   标签：评分：9.0/10、query:fla
+   evidence：两阶段强化学习框架，使代理提取技能并在测试时协同进化，是后训练技术。
+4. [Retrospective Harness Optimization: Improving LLM Agents via Self-Preference over Trajectory Rollouts](/202606/07/2606.05922v1-retrospective-harness-optimization-improving-llm-agents-via-self-preference-over-trajectory-rollouts)  
+   标签：评分：9.0/10、query:fla
+   evidence：自监督代理工具集优化基于历史轨迹
+5. [ARBOR: Online Process Rewards via a Reusable Rubric Buffer for Search Agents](/202606/07/2606.03239v1-arbor-online-process-rewards-via-a-reusable-rubric-buffer-for-search-agents)  
+   标签：评分：8.0/10、query:fla
+   evidence：提出可重用过程奖励框架，通过在线强化学习训练基于LLM的搜索智能体。
+6. [Can Generalist Agents Automate Data Curation?](/202606/07/2606.04261v1-can-generalist-agents-automate-data-curation)  
+   标签：评分：8.0/10、query:fla
+   evidence：评估通用智能体在视觉语言指令微调中自动化数据策管的能力
 
 ### 速读区论文标签
-1. [Learning Agent-Compatible Context Management for Long-Horizon Tasks](/202606/06/2605.30785v1-learning-agent-compatible-context-management-for-long-horizon-tasks)  
-   标签：评分：7.0/10、query:fla
-   evidence：AdaCoM 通过强化学习训练外部 LLM 管理冻结代理的上下文，为长时任务提供代理后训练增强技术。
+1. [Coherence Maximization Improves Pluralistic Alignment](/202606/07/2606.03110v2-coherence-maximization-improves-pluralistic-alignment)  
+   标签：评分：6.0/10、query:fla
+   evidence：无监督对齐示例生成，可应用于金融智能体对齐
 
 
 <div class="dpr-home-promo-card">
