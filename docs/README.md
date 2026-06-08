@@ -6,43 +6,49 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-06-07
-- 运行时间：2026-06-07 20:39:37 UTC
+- 最新运行日期：2026-06-08
+- 运行时间：2026-06-08 22:03:46 UTC
 - 运行状态：成功
-- 本次总论文数：7
-- 精读区：6
-- 速读区：1
+- 本次总论文数：9
+- 精读区：5
+- 速读区：4
 
 ### 今日简报（AI）
-今日精读两篇9分智能体前沿研究，速读一篇对齐方向工作。
-最值得关注的是：LLM智能体通过统一上下文演化实现长期记忆融合，以及用技能金字塔框架让Agent自我进化时稳步巩固能力。
-如果想动手实践，不妨从分层技能固化出发，先让Agent在一个窄领域学会稳步积累，再扩展到多步任务。
-- 详情：[/202606/07/README](/202606/07/README)
+今日精读两篇高分论文，聚焦神经符号AI在量化金融决策与自进化智能体经验管理的前沿实践。  
+最值得关注PandaAI的实用化金融决策框架（满分），以及Tree-of-Experience让智能体在低重复、隐式奖励场景下持续进化的结构化记忆方案。  
+建议金融科技从业者深入这两套思路，尤其把经验树机制引入自己的Agent系统，提升长期任务的自适应能力。
+- 详情：[/202606/08/README](/202606/08/README)
 
 ### 精读区论文标签
-1. [Unified Context Evolution for LLM Agents](/202606/07/2606.02304v1-unified-context-evolution-for-llm-agents)  
+1. [PandaAI: A Practical Agent CQ2 for Neuro-symbolic Data Analysis And Integrated Decision-Making in Quantitative Finance](/202606/08/2606.06823v1-pandaai-a-practical-agent-cq2-for-neuro-symbolic-data-analysis-and-integrated-decision-making-in-quantitative-finance)  
+   标签：评分：10.0/10、query:fla
+   evidence：为量化金融微调领域特定LLM并构建神经符号智能体，直接应用金融智能体的后训练
+2. [Tree-of-Experience: A Structured Experience-Management Solution for Self-Evolving Agents under Low-Repetition and Implicit-Reward Environments](/202606/08/2606.06960v1-tree-of-experience-a-structured-experience-management-solution-for-self-evolving-agents-under-low-repetition-and-implicit-reward-environments)  
    标签：评分：9.0/10、query:fla
-   evidence：无梯度框架，将智能体经验外部化为可进化的库，用于后训练改进
-2. [SkillPyramid: A Hierarchical Skill Consolidation Framework for Self-Evolving Agents](/202606/07/2606.03692v1-skillpyramid-a-hierarchical-skill-consolidation-framework-for-self-evolving-agents)  
+   evidence：在FinEvolveBench上为金融智能体提供结构化经验管理后训练
+3. [Self-evolving LLM agents with in-distribution Optimization](/202606/08/2606.07367v1-self-evolving-llm-agents-with-in-distribution-optimization)  
    标签：评分：9.0/10、query:fla
-   evidence：自进化智能体的分层技能整合
-3. [Learning While Acting: A Skill-Enhanced Test-Time Co-Evolution Framework for Online Lifelong Learning Agents](/202606/07/2606.04815v1-learning-while-acting-a-skill-enhanced-test-time-co-evolution-framework-for-online-lifelong-learning-agents)  
-   标签：评分：9.0/10、query:fla
-   evidence：两阶段强化学习框架，使代理提取技能并在测试时协同进化，是后训练技术。
-4. [Retrospective Harness Optimization: Improving LLM Agents via Self-Preference over Trajectory Rollouts](/202606/07/2606.05922v1-retrospective-harness-optimization-improving-llm-agents-via-self-preference-over-trajectory-rollouts)  
-   标签：评分：9.0/10、query:fla
-   evidence：自监督代理工具集优化基于历史轨迹
-5. [ARBOR: Online Process Rewards via a Reusable Rubric Buffer for Search Agents](/202606/07/2606.03239v1-arbor-online-process-rewards-via-a-reusable-rubric-buffer-for-search-agents)  
+   evidence：提出利用分布内强化学习训练LLM智能体的自进化框架，以解决长时间跨度任务
+4. [QueryAgent-R1: Bridging Query Generation and Product Retrieval for E-Commerce Query Recommendation](/202606/08/2606.05671v1-queryagent-r1-bridging-query-generation-and-product-retrieval-for-e-commerce-query-recommendation)  
    标签：评分：8.0/10、query:fla
-   evidence：提出可重用过程奖励框架，通过在线强化学习训练基于LLM的搜索智能体。
-6. [Can Generalist Agents Automate Data Curation?](/202606/07/2606.04261v1-can-generalist-agents-automate-data-curation)  
+   evidence：通过链式检索优化的智能体后训练方法用于查询推荐
+5. [Skill-3D: Evolving Scene-Aware Skills for Agentic 3D Spatial Reasoning](/202606/08/2606.07436v1-skill-3d-evolving-scene-aware-skills-for-agentic-3d-spatial-reasoning)  
    标签：评分：8.0/10、query:fla
-   evidence：评估通用智能体在视觉语言指令微调中自动化数据策管的能力
+   evidence：通过工具使用轨迹实现智能体三维推理的自演化技能学习
 
 ### 速读区论文标签
-1. [Coherence Maximization Improves Pluralistic Alignment](/202606/07/2606.03110v2-coherence-maximization-improves-pluralistic-alignment)  
+1. [Truthful AI Advisors: A Pre-Specified Benchmark for Large Language Model Honesty Under Preference Misalignment](/202606/08/2606.01456v1-truthful-ai-advisors-a-pre-specified-benchmark-for-large-language-model-honesty-under-preference-misalignment)  
    标签：评分：6.0/10、query:fla
-   evidence：无监督对齐示例生成，可应用于金融智能体对齐
+   evidence：偏好错位下LLM诚信基准，与金融顾问代理对齐相关
+2. [YouZhi: Towards High-Concurrency Financial LLMs via Adaptive GQA-to-MLA Transition](/202606/08/2606.05868v1-youzhi-towards-high-concurrency-financial-llms-via-adaptive-gqa-to-mla-transition)  
+   标签：评分：6.0/10、query:fla
+   evidence：通过结构转换训练流程为金融大语言模型注入领域专业知识
+3. [ACE-SQL: Adaptive Co-Optimization via Empirical Credit Assignment for Text-to-SQL](/202606/08/2606.05906v1-ace-sql-adaptive-co-optimization-via-empirical-credit-assignment-for-text-to-sql)  
+   标签：评分：6.0/10、query:fla
+   evidence：用强化学习联合优化模式检索与SQL生成的后训练方法
+4. [Progress-SQL: Improving Reinforcement Learning for Text-to-SQL via Progressive Rewards](/202606/08/2606.06825v1-progress-sql-improving-reinforcement-learning-for-text-to-sql-via-progressive-rewards)  
+   标签：评分：6.0/10、query:fla
+   evidence：多轮强化学习与渐进奖励，用于SQL修正后训练
 
 
 <div class="dpr-home-promo-card">
