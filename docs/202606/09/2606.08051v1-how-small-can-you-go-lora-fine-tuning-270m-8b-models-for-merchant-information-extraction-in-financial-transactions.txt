@@ -1,0 +1,459 @@
+Title: How Small Can You Go? LoRA Fine-Tuning 270M-8B Models for Merchant Information Extraction in Financial Transactions
+
+URL Source: https://arxiv.org/pdf/2606.08051v1
+
+Published Time: Tue, 09 Jun 2026 00:33:24 GMT
+
+Number of Pages: 9
+
+Markdown Content:
+# How Small Can You Go? LoRA Fine-Tuning 270M–8B Models for Merchant Information Extraction in Financial Transactions 
+
+Donghao Huang 1,3 , Tomáš Drietomský 2, Benjamin Barrett 1, Zhaoxia Wang 3,* 
+
+> 1
+
+Research and Development, Mastercard, Arlington, VA, USA 
+
+> 2
+
+Economic Intelligence, Mastercard, Prague, Czech Republic 
+
+> 3
+
+School of Computing and Information Systems, Singapore Management University, Singapore {donghao.huang, tomas.drietomsky, benjamin.barrett}@mastercard.com; zxwang@smu.edu.sg 
+
+Abstract —Financial transaction processing requires extracting structured merchant information from noisy, abbreviated bank transaction strings at scale. Our current production system, a LoRA-fine-tuned LLaMA 3.1-8B, achieves 96.95% F1 on this task, but deploying 8-billion-parameter models imposes prohibitive memory, latency, and cost constraints. To identify more efficient alternatives, we conduct a deployment-focused study of 24 model variants spanning four model families: Gemma 3 (270M, 1B, 4B), Qwen 3.5 (0.8B, 2B, 4B), Aya (3.35B), and LLaMA 3.1-8B— systematically evaluating accuracy, inference throughput, training cost, and hardware behavior to assess pro-duction suitability. Our findings show that: (1) reproducing the LLaMA 3.1-8B fine-tune with a LoRA rank of 8 achieves 96.75% F1, only 0.20 points below the rank-32 baseline; (2) Qwen 3.5 4B with JSON-only prompting reaches 96.60% F1, within 0.35 points of the 8B baseline while using roughly half the parameters; (3) the 0.8B Qwen 3.5 model achieves 94.75% F1, matching models 2.5–4× larger and offering an attractive latency–accuracy trade-off; (4) chain-of-thought fine-tuning generally improves F1 by 0.3-1.8 points across most models, although Qwen 3.5 4B performs best with direct JSON-only prompting; and (5) Qwen 3.5 Think and Nothink training templates produce nearly identical results (F1 differences <0.004), indicating that explicit reasoning super-vision is unnecessary for structured extraction tasks. We further deploy all 14 fine-tuned sub-8B models as Databricks Model Serv-ing endpoints and observe that benchmark performance transfers reliably to production, with an average F1 change of only 0.8 points. Aya 3.35B, based on the Cohere2 architecture, is the sole exception, exhibiting a 3-5 point decline under serving conditions. Based on these results, we provide deployment recommendations across accuracy and latency requirements, demonstrating that compact models can support production financial NLP workloads with approximately half the parameters and up to 4× lower per-sample inference latency. 
+
+Index Terms —Merchant information extraction, financial NLP, LoRA, parameter-efficient fine-tuning, small language models, structured prediction, production deployment 
+
+I. I NTRODUCTION 
+
+Financial transaction processing generates billions of text strings daily, each encoding merchant identity, location, and transaction metadata in compressed, noisy formats. A representative transaction string such as “VIATOR IT-1558003355 360 3RD ST, STE 400, SAN 
+
+*Corresponding author: zxwang@smu.edu.sg 
+
+FRANCISCO 7027495744” must be decomposed into ten distinct entity fields, which include merchant name, location, intermediary, and contact fields (Table I). Accurate extraction is critical for fraud detection, merchant categorization, and consumer analytics [1]. This study positions merchant information extraction as an upstream analytical component for Mastercard products and algorithms that operate on Mastercard-derived transaction descriptor data. The proposed approach is not designed to authorize, route, clear, settle, or otherwise process Mastercard payment transactions; rather, it operates on textual descriptors from existing transactions to improve merchant understanding, data enrichment and analytics, downstream product quality, and the overall reliability of merchant intelligence systems. Our current production system uses a LoRA-fine-tuned LLaMA 3.1-8B [2] that achieves approximately 97% F1 on this task. However, deploying an 8B-parameter model raises practical concerns: high GPU memory requirements (16+ GB in half-precision), limited inference throughput, and substan-tial energy costs [3]. As the system must process millions of transactions daily, even small improvements in efficiency translate to significant operational savings. The proliferation of capable small language models (SLMs)—Gemma 3 [4], Qwen 3.5 [5], Aya [6]—motivates a systematic investigation: what is the minimum model size that maintains production-grade accuracy for structured entity extraction? 
+
+This paper addresses this question from a deployment per-spective. Rather than focusing on methodological novelty, we provide a comprehensive empirical study spanning 24 model variants across four model families, two prompting strategies, and two training templates. Our contributions include: 1) A LoRA rank ablation on LLaMA 3.1-8B showing that rank 8 achieves 96.75% F1—within 0.20 points of the rank-32 baseline—demonstrating that smaller adapters are production-ready. 2) A scaling analysis from 0.27B to 8B parameters, re-vealing that Qwen 3.5 4B closes the accuracy gap to within 0.35 points of the 8B baseline. 
+
+> arXiv:2606.08051v1 [cs.AI] 6 Jun 2026
+
+3) Evidence that chain-of-thought prompting during fine-tuning generally improves performance, with gains of 0.3–1.8 F1 points across most models—though Qwen 3.5 4B is a notable exception where JSON-Only prompting achieves the best result. 4) A finding that Qwen 3.5’s hybrid Mamba-attention architecture achieves anomalously strong performance at 0.8B, matching 2B–4B conventional transformers. 5) A Think vs. Nothink training comparison showing that Qwen 3.5 models trained with and without rea-soning tokens achieve near-identical accuracy (F1 deltas 
+
+<0.004), with Nothink variants offering faster inference. 6) A production serving validation that deploys all 14 sub-8B fine-tuned variants as Databricks Model Serving endpoints, showing benchmark F1 transfers to produc-tion with a mean drop of just 0.8 points—with the Cohere2-based Aya the sole outlier. 7) Deployment recommendations covering accuracy– latency–cost trade-offs across hardware tiers. II. R ELATED WORK 
+
+A. Parameter-Efficient Fine-Tuning 
+
+LoRA [7] introduced low-rank adaptation as a parameter-efficient alternative to full fine-tuning, and has since been ex-tended by QLoRA [8] for quantized training and AdaLoRA [9] for adaptive rank. In practice these methods are most readily applied through open-source toolkits, and LLaMA-Factory [10] (ACL 2024) is among the most widely adopted: it provides a unified pipeline for parameter-efficient fine-tuning of 100+ open-source LLMs and VLMs, supports a range of training objectives (SFT, DPO, KTO, ORPO, PPO), and typically adds support for new model releases on a day-zero basis. Its widespread adoption has produced a growing body of follow-on research—for example, LoRA fine-tuning of 3.5B–72B open-source LLMs for Chinese-to-English trans-lation [11] and few-shot prompting combined with LoRA fine-tuning of LLMs for logical reasoning on Turtle Soup puzzles [12]—and we adopt it as the fine-tuning backbone of this study. 
+
+B. Small Language Models 
+
+Models such as Phi-3 [13], Gemma 3 [4], and Qwen 3.5 [5] have demonstrated strong performance at 1–4B parameters. Qwen 3.5 introduces a hybrid architecture combining Mamba state-space layers [14] with transformer attention [15]. Con-crete production-oriented evaluations are starting to show that small open-source LMs can match much larger proprietary models on demanding tasks: in LLM-based agentic payment systems, for example, Gemma 4 E4B has been shown to match GPT-5.2’s perfect workflow-fidelity score (ASR) despite being orders of magnitude smaller [16]. 
+
+C. Merchant Information Extraction in Financial Transac-tions 
+
+Traditional Named Entity Recognition (NER) approaches rely on CRF-based sequence labeling methods [17], [18].                                    
+
+> TABLE I ENTITY FIELDS AND DATASET CHARACTERISTICS (8,015 SAMPLES ).
+> Field Present (%) Unique Diff.
+> MERCHANT _N AME 100.0 6,411 Med. STATE 68.5 57 Easy CITY 46.8 1,799 Med. STREET 31.2 2,070 Med. DYN ._D ESCRIPTOR 29.1 2,278 Hard INTERMEDIARY 26.7 457 Med. PHONE 19.6 947 Easy COUNTRY 12.7 4Hard †
+> ZIP 12.0 843 Easy WEBSITE 5.4 170 Easy
+> †Low frequency despite few classes.
+
+Recent work has reframed information extraction as a genera-tion task [19], [20]. Financial NER tasks, such as merchant information extraction from noisy bank transaction strings, present unique challenges due to abbreviated text, limited con-text, and non-standard formatting [1], [21]. Chain-of-thought prompting [22] has also been shown to improve performance on structured prediction tasks [23]. III. M ETHODOLOGY 
+
+A. Task Definition 
+
+Given a raw bank transaction string x, the system produces a JSON object y with ten entity fields (Table I). Each field is either a substring of x or empty. 
+
+B. Dataset 
+
+The dataset contains 8,015 labeled bank transaction strings (8,014 unique), split into 6,125 training, 668 validation, and 1,213 test samples. Entity fields exhibit highly imbalanced presence rates (100% for M ERCHANT _N AME to 5.4% for WEBSITE ). 
+
+C. Models 
+
+We evaluate four model families, all LoRA fine-tuned in this study:  
+
+> •
+
+Gemma 3 [4]: 270M, 1B, 4B (instruction-tuned, standard transformer).  
+
+> •
+
+Qwen 3.5 [5]: 0.8B, 2B, 4B (hybrid Mamba-attention architecture with native extended thinking support).  
+
+> •
+
+Aya [6]: 3.35B ( tiny-aya-global , Cohere2 archi-tecture).  
+
+> •
+
+LLaMA 3.1-8B [2]: 8B (instruction-tuned, standard transformer). Re-fine-tuned with LoRA rank 8 to enable direct comparison against the production baseline. Our production baseline is a separately trained LLaMA 3.1-8B with LoRA rank 32 (F1=96.95%), included as a reference point. We additionally fine-tune LLaMA 3.1-8B with rank 8 under our standardized pipeline so that the 8B model can be compared head-to-head against the smaller candidates in this study. D. Fine-Tuning Pipeline 
+
+All eight models (including our LLaMA 3.1-8B rank-8 fine-tunes) are trained with LLaMA-Factory [10] on an NVIDIA DGX Spark—a compact desktop workstation powered by the GB10 Blackwell Superchip with 128 GB unified LPDDR5x memory. Both training and inference use this single device. This choice deliberately separates experimentation from production. Our Databricks production environment (Sec-tion V) is, by security policy, highly restrictive about which base models may be pulled into the workspace, and its built-in MLflow fine-tuning support lags the open-source ecosystem in covering newly released LLM architectures. LLaMA-Factory, by contrast, is an actively maintained project whose model coverage tracks new releases closely. Running it on a self-contained DGX Spark workstation outside the production perimeter lets us train, evaluate, and select among arbitrary candidate base models without policy or tooling friction. This is also materially cheaper. The 23 retained training runs re-ported here totaled 462 GPU-hours of training plus 195 hours of checkpoint evaluation (12 checkpoints per run) on the DGX Spark—657 GPU-hours of retained compute in all. At the workstation’s manufacturer’s suggested retail price (MSRP), this fixed-cost hardware breaks even against managed cloud GPU compute within a few hundred to a few thousand billable hours depending on instance class and rate; the retained sweep alone approaches that range, and the trial-and-error exploration preceding each retained entry multiplies it further. Only the best-of-family adapters identified through this sweep are subsequently promoted as managed serving endpoints— a two-stage experiment-then-deploy workflow whose viability we confirm via the endpoint validation in Section V. Key training hyperparameters:  
+
+> •
+
+LoRA : rank r=8 , α=16 (scaling α/r =2 .0) 
+
+> •
+
+Training : 6 epochs (2,298 steps), LR 10 −4, cosine sched-ule  
+
+> •
+
+Batch : Effective size 16 (4 × 4 gradient accumulation)  
+
+> •
+
+Checkpoints : Every 200 steps (12 per model) 
+
+E. Prompt Strategies 
+
+We compare two prompting strategies with identical output labels (full templates in Appendix A): 
+
+Free-Thinking (FT): A two-step chain-of-thought instruction—first analyze freely, then apply entity rules and output JSON. The reasoning is internal only (not in output labels). Prompt: 3,700 chars. 
+
+JSON-Only (JO): Direct extraction with the same rules but no CoT instruction. Prompt: 2,870 chars. 
+
+F. Evaluation Protocol 
+
+We evaluate each model at all 12 saved checkpoints and report the best. Per-field precision, recall, and F1 are computed via exact string match; the overall F1 is micro-averaged across all entity fields. Inference throughput is reported as median samples per second, measured on an NVIDIA DGX Spark with batch size 4 and deterministic decoding (do_sample =false , T =0 ).                                                                                                                                  
+
+> TABLE II OVERALL PERFORMANCE AT BEST CHECKPOINT (1,213 TEST SAMPLES ). SPEED IS MEDIAN SAMPLES /SECOND ON NVIDIA DGX S PARK . NT = NOTHINK TEMPLATE .‡OUR RANK -8 FINE -TUNE (VS .RANK -32 BASELINE ABOVE ).
+> Model Pr. Step F1 P / R s/s
+> LLaMA 3.1-8B FT —.9695 .971/.968 —LLaMA 3.1-8B ‡FT 2000 .9675 .967/.968 0.13 Qwen 3.5 4B JO 2000 .9660 .967/.965 0.51 LLaMA 3.1-8B ‡JO 1000 .9657 .967/.964 0.32 Gemma 3 4B FT 2000 .9624 .963/.962 0.29 Qwen 3.5 4B JO NT 1400 .9624 .963/.962 0.53 Qwen 3.5 4B FT NT 1600 .9624 .963/.962 0.49 Qwen 3.5 4B FT 1400 .9615 .962/.961 0.21 Aya 3.35B FT 1600 .9572 .956/.958 0.33 Gemma 3 4B JO 1600 .9540 .954/.954 0.30 Aya 3.35B JO 1400 .9522 .950/.954 0.36 Qwen 3.5 2B FT NT 1400 .9518 .951/.953 0.98 Qwen 3.5 2B FT 1600 .9510 .948/.954 0.94 Qwen 3.5 2B JO NT 1600 .9486 .948/.950 1.03 Qwen 3.5 0.8B FT NT 1400 .9475 .948/.947 1.32 Qwen 3.5 2B JO 1400 .9464 .948/.945 0.85 Qwen 3.5 0.8B JO 1200 .9461 .947/.945 0.46 Qwen 3.5 0.8B FT 1600 .9458 .949/.943 0.46 Qwen 3.5 0.8B JO NT 1600 .9452 .946/.944 0.50 Gemma 3 1B FT 1600 .9393 .942/.937 2.16 Gemma 3 1B JO 1600 .9292 .932/.926 2.03 Gemma 3 270M FT 1800 .8735 .884/.863 4.09 Gemma 3 270M JO 2000 .8554 .870/.842 2.86
+
+IV. E XPERIMENTAL RESULTS 
+
+A. Overall Performance 
+
+Table II presents overall performance. The LLaMA 3.1-8B rank-32 baseline achieves 96.95% F1. Our rank-8 LLaMA 3.1-8B fine-tune reaches 96.75% F1 (FT) and 96.57% (JO)— within 0.20 and 0.38 points of the baseline, respectively— demonstrating that rank 8 adapters are sufficient even at 8B. The best sub-8B model is Qwen 3.5 4B with JSON-Only prompting at 96.60% F1—a gap of only 0.35 points from the baseline at half the parameter count. Gemma 3 4B (FT) and both Qwen 3.5 4B Nothink variants (JO NT, FT NT) tie at 96.24%, though the Qwen 3.5 4B variants run 1.7–1.8 × faster. 
+
+B. Scaling Behavior 
+
+Fig. 1 shows F1 scaling with model size. Within Gemma 3 (same architecture at 270M, 1B, 4B), gains are +6.58 points from 270M →1B and +2.31 from 1B →4B, exhibiting dimin-ishing returns above ∼1B. The Qwen 3.5 0.8B model (F1=94.75% with FT No-think) nearly matches the 2B variant (95.18%) and ex-ceeds Gemma 3 1B (93.93%), a model 25% larger with a conventional transformer architecture. We attribute this to Qwen 3.5’s hybrid Mamba-attention design, which combines efficient linear-time sequence modeling with precise positional attention—particularly advantageous for structured extraction where the model must locate specific substrings within noisy input. At the 4B scale, the best Qwen 3.5 variant (JO, F1=96.60%) surpasses Gemma 3 4B (FT, 96.24%), demon-0.27 0.8 1 2 4 8
+
+Model Size (B params)      
+
+> 0.86
+> 0.88
+> 0.90
+> 0.92
+> 0.94
+> 0.96
+> 0.98
+> Best F1
+> Gemma 270M
+> Qwen 0.8B
+> Gemma 1B
+> Qwen 2B
+> Aya 3.35B
+> Gemma 4B
+> Qwen 4B
+> LLaMA 8B
+> LLaMA 8B baseline (r32) Fig. 1. Model size vs. best F1 score. Performance scales log-linearly with diminishing returns above 1B parameters. 0500 1000 1500 2000
+
+Training Steps  
+
+> 0.60
+> 0.65
+> 0.70
+> 0.75
+> 0.80
+> 0.85
+> 0.90
+> 0.95
+> 1.00
+> F1 Score
+> Gemma 3 270M
+> Gemma 3 1B
+> Gemma 3 4B
+> Qwen 3.5 0.8B
+> Qwen 3.5 2B
+> Qwen 3.5 4B
+> Aya 3.35B
+> Llama 3.1-8B
+> LLaMA 8B (r32)
+> Fig. 2. F1 progression during training (FT prompt). Dashed: LLaMA 8B rank-32 production baseline.
+
+strating that the hybrid architecture’s advantage persists at larger scales. 
+
+C. Training Dynamics 
+
+Fig. 2 shows F1 across training steps. Larger models converge faster (Gemma 4B reaches 95% by step 600 vs. 1,200+ for 270M), and our LLaMA 3.1-8B rank-8 fine-tune approaches the rank-32 production baseline (dashed line) within the first 1,000 steps and tracks it closely thereafter. Most models peak at steps 1,400–2,000 (epochs 3.7–5.2), with modest overfitting thereafter. This motivates systematic checkpoint selection in production pipelines. 
+
+D. Prompt Strategy Analysis 
+
+Fig. 3 compares Free-Thinking and JSON-Only across model sizes. FT outperforms JO for most models, with gains from +0 .18 points (LLaMA 8B) and +0 .46 (Qwen 2B) up to +1 .82 points (Gemma 270M). The advantage is most pronounced for Gemma and Aya families. Both variants share identical output labels; only the instruction differs. Gem.   
+
+> 270M
+> Gem.
+> 1B
+> Gem.
+> 4B
+> Qw.
+> 0.8B
+> Qw.
+> 2B
+> Qw.
+> 4B
+> Aya
+> 3.35B
+> LLaMA
+> 8B
+> 84
+> 86
+> 88
+> 90
+> 92
+> 94
+> 96
+> 98
+> Best F1 (\%)
+> +1.82
+> +1.01
+> +0.84
+> 0.00 +0.46
+> -0.45
+> +0.50
+> +0.18 Free-Thinking
+> JSON-Only
+> Fig. 3. Free-Thinking vs. JSON-Only. FT outperforms JO for most models; Qwen 3.5 4B is the exception.
+
+This demonstrates that chain-of-thought framing during fine-tuning guides models toward better internal representations, even without explicit reasoning in the output—consistent with findings on implicit CoT [24]. The benefit is larger for smaller models, suggesting CoT instructions partially compensate for limited capacity. Notably, even at 8B parameters LLaMA still shows a small positive FT-over-JO gain, indicating that CoT framing remains marginally beneficial at the upper end of the size range we study. The Qwen 3.5 4B model reverses this trend—JO (F1=96.60%) outperforms FT (96.15%) by 0.45 points, mak-ing it the best sub-8B model overall. We hypothesize that at sufficient capacity Qwen 3.5’s hybrid architecture can inter-nalize the extraction logic without explicit CoT scaffolding, and the shorter JO prompt allows the model to allocate more of its context window to the extraction task itself. 
+
+E. Per-Field Performance 
+
+Fig. 4 shows per-field F1 across models, with the LLaMA 8B baseline broken out into its rank-32 (r32) and rank-8 (r8) rows. S TATE (0.983–0.996) and Z IP (0.954–0.995) score very high even at 270M. C OUNTRY shows the widest spread (0.700–1.000), driven by low presence (12.7%). M ER -
+
+> CHANT
+
+_N AME (0.834–0.954) and S TREET (0.754–0.949) de-grade sharply below 1B. The two LLaMA 8B rows track each other closely across every field (within 0.02 in all cases, within 0.01 for six of ten fields), reinforcing the rank-8-vs-rank-32 finding: the 4 × smaller adapter loses very little per-field. 
+
+F. LoRA Rank Ablation 
+
+We compare LoRA rank 8 against rank 32 on two models. On Aya 3.35B, rank 32 (60.5M trainable params, 1.8%) achieves F1=95.29% vs. rank 8’s 95.22%—a difference within noise despite 4 × more parameters. On LLaMA 3.1-8B, our rank-8 FT fine-tune reaches 96.75% F1 compared to the rank-32 production baseline’s 96.95%, a gap of only 0.20 points. The findings are directionally consistent across both models: rank 32 provides marginally more adaptation capacity, but MERCHANT_NAME                                                                                   
+
+> DYNAMIC_DESCRIPTOR
+> INTERMEDIARY
+> STREET
+> CITY
+> STATE
+> ZIP
+> PHONE
+> WEBSITE
+> COUNTRY
+> LLaMA 8B (r32)
+> LLaMA 8B (r8)
+> Gemma 4B
+> Qwen 4B
+> Aya 3.35B
+> Qwen 2B
+> Qwen 0.8B
+> Gemma 1B
+> Gemma 270M
+> 0.954 0.948 0.943 0.942 0.979 0.996 0.988 0.980 0.989 0.933
+> 0.948 0.935 0.943 0.949 0.980 0.996 0.995 0.960 0.973 0.933
+> 0.946 0.930 0.956 0.924 0.975 0.993 0.991 0.962 0.944 1.000
+> 0.943 0.919 0.951 0.930 0.969 0.995 0.992 0.968 0.978 0.875
+> 0.938 0.941 0.974 0.913 0.965 0.990 0.992 0.947 0.957 0.700
+> 0.927 0.915 0.923 0.906 0.958 0.992 0.991 0.987 0.978 0.875
+> 0.921 0.892 0.974 0.883 0.958 0.992 0.983 0.980 0.962 0.857
+> 0.910 0.906 0.937 0.901 0.941 0.989 0.988 0.955 0.905 0.933
+> 0.834 0.831 0.883 0.754 0.857 0.983 0.954 0.824 0.843 0.857 0.70
+> 0.75
+> 0.80
+> 0.85
+> 0.90
+> 0.95
+> 1.00
+> F1
+
+Fig. 4. Per-field F1 across models (FT prompt, best checkpoint). The LLaMA 8B baseline is split into rank-32 (r32) and our rank-8 (r8) re-fine-tune. Fields ordered by difficulty; models by overall F1. 
+
+rank 8 captures the vast majority of the benefit. For practical deployment, rank 8 provides sufficient adaptation capacity while reducing adapter storage by 4 × and simplifying model versioning. 
+
+G. Think vs. Nothink: Training Template Comparison 
+
+Qwen 3.5 natively supports extended thinking via 
+
+<think>...</think> tags. We compare two LLaMA-Factory training templates that differ at both training and inference time:  
+
+> •
+
+Think (qwen3_5 ): Uses ReasoningTemplate —includes <think>...</think> tokens in training labels; inference prompt includes reasoning instructions.  
+
+> •
+
+Nothink (qwen3_5_nothink ): Uses base 
+
+Template —excludes thought tokens from training labels; inference prompt instructs direct JSON output. Each template has its own training configuration (separate checkpoint directories), ensuring a fair comparison. We eval-uate all six Qwen 3.5 configurations (3 sizes × 2 prompts) under both templates. 
+
+SFT suppresses thinking in Think-trained models. 
+
+Across all Think-trained Qwen variants and 1,213 test sam-ples, every prediction contains an empty thinking block (<think> \n\n</think> ) followed immediately by JSON. The models autonomously learned that reasoning provides no benefit for this structured extraction task. 
+
+Accuracy is near-identical across templates. Table III shows that Think and Nothink produce F1 scores within 0.004 of each other for every configuration. For FT prompts, Nothink matches or slightly exceeds Think at all three model sizes (∆ ≤0.002). For JO prompts, results are mixed: Qwen 4B JO Think achieves the overall best F1 (0.9660 vs. Nothink’s 0.9624), while Qwen 2B JO Nothink leads by +0.002. 
+
+Nothink is generally faster. For FT prompts, Nothink variants are 1.0–2.9 × faster than their Think counterparts (e.g., 0.8B FT: 1.32 vs. 0.46 s/s; 4B FT: 0.49 vs. 0.21 s/s), as they 
+
+TABLE III THINK VS . N OTHINK FOR QWEN 3.5 ( BEST CHECKPOINTS , 1,213 
+
+> SAMPLES
+
+). S PEED IS MEDIAN SAMPLES /SECOND ON DGX S PARK .
+
+Think Nothink Model Pr. F1 s/s F1 s/s ∆F1 Qwen 3.5 0.8B FT .9458 0.46 .9475 1.32 −.002 Qwen 3.5 0.8B JO .9461 0.46 .9452 0.50 +.001 Qwen 3.5 2B FT .9510 0.94 .9518 0.98 −.001 Qwen 3.5 2B JO .9464 0.85 .9486 1.03 −.002 Qwen 3.5 4B FT .9615 0.21 .9624 0.49 −.001 Qwen 3.5 4B JO .9660 0.51 .9624 0.53 +.004 
+
+avoid generating even empty thinking blocks. For JO prompts, speed differences are smaller and less consistent. 
+
+H. Accuracy–Latency Pareto Analysis 
+
+Fig. 5 plots best F1 against average inference time per sample for all retained variants, revealing the Pareto-optimal configurations. The frontier spans from Gemma 3 270M FT (0.24 s, F1=87.35%) through Gemma 1B FT, Qwen 2B No-think variants, Qwen 3.5 4B JO NT, Qwen 3.5 4B JO (1.97 s, F1=96.60%) to LLaMA 8B FT (7.46 s, F1=96.75%). Many configurations are dominated: Aya 3.35B and Gemma 3 4B achieve lower F1 than similarly-fast Qwen variants, and LLaMA 8B’s slow inference makes it Pareto-optimal only at the accuracy extreme. Most strikingly, switching from LLaMA 8B FT (7.46 s, F1=96.75%) to Qwen 3.5 4B JO (1.97 s, F1=96.60%) at the top of the frontier trades only 0.15 F1 points for a 3.8× reduction in per-sample inference time— the headline efficiency gain motivating sub-8B deployment in production. V. P RODUCTION SERVING VALIDATION ON DATABRICKS 
+
+The results above characterize models under local, batched inference on a single DGX Spark workstation. Production deployment instead exposes each model through a managed 0 1 2 3 4 5 6 7
+
+Average Inference Time (s/sample) 
+
+> 0.84
+> 0.86
+> 0.88
+> 0.90
+> 0.92
+> 0.94
+> 0.96
+> 0.98
+> Best F1
+> Gemma 270M FT
+> Qwen 0.8B FT
+> Gemma 1B FT
+> Qwen 2B FT
+> Aya 3.35B FT
+> Gemma 4B FT
+> Qwen 4B FT
+> LLaMA 8B FT
+> Pareto front
+> Gemma 270M JO
+> Qwen 0.8B JO
+> Gemma 1B JO
+> Qwen 2B JO
+> Aya 3.35B JO
+> Gemma 4B JO
+> Qwen 4B JO
+> LLaMA 8B JO
+> + = Nothink (NT) Fig. 5. Accuracy–latency Pareto analysis. Pareto-optimal configurations (solid markers, labeled) define the efficiency frontier; dominated variants are faded. The step-wise red line shows the best F1 achievable at each latency budget.
+
+serving layer—containerized endpoints, request routing, and per-request rather than batched execution—which can perturb observed accuracy. Because our study is deployment-oriented, we verify that its conclusions survive this transition: we regis-ter fine-tuned variants to the MLflow Model Registry, deploy each as a Databricks Model Serving endpoint, and re-evaluate the endpoint on the 1,213-sample test set. Endpoints are served via the standard HuggingFace transformers [25] flavor. We deploy all 14 primary (family × size × prompt) fine-tuned variants spanning the three small-model families, including the study’s top-ranked sub-8B model Qwen 3.5 4B JO. Endpoint deployment of the LLaMA 3.1-8B variants (Table II) is de-ferred to future work; the focus here is the sub-8B candidates that would actually replace the 8B in production. Table IV compares each endpoint’s F1 against the corre-sponding benchmark F1 from Table II. 
+
+Benchmark accuracy transfers to production serving. 
+
+Across the 14 endpoints the mean change is only −0.0081 F1. Excluding the two Aya 3.35B variants (discussed below), every endpoint falls within 1.1 points of its benchmark score, and two—Qwen 3.5 2B JO ( +0 .0023 ) and Gemma 3 4B JO (+0 .0007 )—marginally exceed it. This confirms the central premise of the study: the accuracy rankings established un-der local evaluation hold when the models are deployed as managed production endpoints. 
+
+Aya 3.35B is the sole exception. Both Aya variants degrade markedly once served—FT by 5.1 points ( .9572 → .9063 )and JO by 2.7 points ( .9522 → .9250 )—far larger than any Gemma or Qwen variant, whose worst case is a 1.1-point drop. We attribute this to Aya’s non-standard Cohere2 architecture, which has less mature support in common serving runtimes than the transformer-based Gemma and hybrid Qwen stacks. Aya is thus a weak production choice despite competitive benchmark accuracy, reinforcing that model selection must                                                                          
+
+> TABLE IV DATABRICKS MODEL SERVING ENDPOINT ACCURACY FOR THE 14
+> DEPLOYED VARIANTS .BENCH . F1 IS THE BEST -CHECKPOINT SCORE FROM TABLE II; ENDPT . F1 =BENCH . F1 + ∆ F1. R OWS ORDERED BY
+> ∆F1.
+> Model Pr. Bench. F1 Endpt. F1 ∆F1
+> Qwen 3.5 2B JO .9464 .9487 +.0023 Gemma 3 4B JO .9540 .9547 +.0007 Qwen 3.5 4B JO .9660 .9657 −.0003 Qwen 3.5 0.8B JO .9461 .9453 −.0008 Qwen 3.5 0.8B FT .9458 .9442 −.0016 Qwen 3.5 4B FT .9615 .9592 −.0023 Qwen 3.5 2B FT .9510 .9485 −.0025 Gemma 3 4B FT .9624 .9592 −.0032 Gemma 3 1B JO .9292 .9246 −.0046 Gemma 3 270M JO .8554 .8502 −.0052 Gemma 3 270M FT .8735 .8665 −.0070 Gemma 3 1B FT .9393 .9285 −.0108 Aya 3.35B JO .9522 .9250 −.0272 Aya 3.35B FT .9572 .9063 −.0509
+> Mean ∆F1 −.0081
+
+weigh serving-stack compatibility, not accuracy alone. VI. D EPLOYMENT RECOMMENDATIONS 
+
+Based on our results, we propose tiered deployment strate-gies: 
+
+Tier 1 — Maximum accuracy (>96% F1): for sites willing to keep the 8B footprint, the LLaMA 3.1-8B rank-8 FT fine-tune (96.75% F1) is a production-validated alternative to the rank-32 baseline at 4 × smaller adapter size; endpoint validation of this variant is deferred to future work. For a smaller alternative, Qwen 3.5 4B JO at 96.60% F1 closes to within 0.35 points of the baseline at half the parameter count. Gemma 3 4B FT or Qwen 3.5 4B Nothink variants achieve 96.24% and offer further deployment flexibility. 
+
+Tier 2 — Balanced (>95% F1): Qwen 3.5 2B FT Nothink (95.18% F1, 0.98 s/s) is the recommended choice—strong accuracy with high throughput and endpoint accuracy that matches benchmark ( ∆F1 = −0.0025 in Table IV). Aya 3.35B (95.72% F1, 14.5 h training, 0.33 s/s) edges it on benchmark but loses 3–5 F1 points on the Databricks endpoint due to its Cohere2 architecture (Section V); we therefore advise against Aya for production serving despite its benchmark score. 
+
+Tier 3 — Latency-critical (>94% F1): Qwen 3.5 0.8B FT Nothink achieves 94.75% F1 at 1.32 s/s on DGX Spark— remarkable for a sub-1B model. Its hybrid architecture makes it the clear choice for edge or high-throughput deployments. 
+
+Prompt strategy. Use Free-Thinking for Gemma and Aya models, which provides +0.3–1.8 F1 points with no inference cost increase. For Qwen 3.5 4B, JSON-Only prompting yields the best result (96.60%); for smaller Qwen models, FT and JO perform comparably. 
+
+Training template. For Qwen 3.5, Nothink training is preferred: it matches Think accuracy while offering faster inference (up to 2.9 × for FT prompts) and simpler output parsing (no thinking tags). LoRA configuration. Rank 8 is sufficient across model sizes: rank 32 yields only +0.07 points on Aya 3.35B and +0.20 points on LLaMA 3.1-8B at 4× the adapter size, reducing adapter footprint and simplifying model versioning. 
+
+Production serving. Endpoint validation (Section V) con-firms that benchmark accuracy transfers to Databricks Model Serving for the Gemma and Qwen families (mean ∆F1 
+
+= −0.0081 ). Aya 3.35B is the exception, losing 3–5 F1 points once deployed; we therefore favor the Gemma 3 and Qwen 3.5 families over Aya for production serving, and advise validating any candidate directly on its target endpoint. 
+
+Experiment-then-deploy workflow. Our results support a deliberate two-stage workflow: experiment and select with LLaMA-Factory on flexible compute (DGX Spark in our case), then deploy and serve only the selected adapters via MLflow on a security-constrained production cluster. This separation lets teams evaluate any newly released open-source LLM as soon as its weights become available, while keeping the pro-duction attack surface limited to a small set of vetted models. It also keeps experimentation cost predictable—fixed-hardware amortization rather than per-experiment cloud GPU spend— which matters disproportionately for the hyperparameter trial-and-error inherent in such sweeps. We expect this pattern to generalize to other enterprise settings with similar tooling and policy constraints. VII. C ONCLUSION 
+
+We presented a deployment-oriented study of LoRA-fine-tuned small language models for financial entity extrac-tion, evaluating 24 model variants from 0.27B to 8B pa-rameters across two prompting strategies and two training templates. Reproducing the LLaMA 3.1-8B fine-tune with LoRA rank 8 achieves 96.75% F1—within 0.20 points of the rank-32 baseline—confirming that smaller adapters are production-ready even for the 8B model. The best sub-8B model—Qwen 3.5 4B with JSON-Only prompting—achieves 96.60% F1, closing to within 0.35 points of the 8B baseline. Qwen 3.5’s hybrid Mamba-attention architecture enables com-petitive accuracy even at 0.8B parameters (94.75% F1). Chain-of-thought fine-tuning generally helps across model sizes, though Qwen 3.5 4B demonstrates that sufficiently capable hybrid architectures can match or exceed CoT-trained variants with direct prompting. Think and Nothink training templates produce near-identical accuracy for Qwen 3.5, with Nothink offering faster inference. Deploying the fine-tuned variants as Databricks Model Serving endpoints confirms that these benchmark results transfer to production serving (mean ∆F1 
+
+= −0.0081 ), with the Cohere2-based Aya the sole excep-tion. Together, these findings validate a two-stage experiment-then-deploy workflow—broad experimentation with LLaMA-Factory on flexible compute, followed by production deploy-ment of only the selected adapters via MLflow—that is well suited to enterprise environments where production model availability is constrained by security policy. Overall, the results demonstrate that production financial NLP systems can achieve near-state-of-the-art accuracy with dramatically reduced computational requirements, enabling deployment on consumer-grade hardware. REPRODUCIBILITY 
+
+All code, datasets, and results are released at GitHub 1. A reproducibility checklist accompanies the submission. APPENDIX APROMPT TEMPLATES 
+
+We provide the text of both prompt templates used for fine-tuning. The two prompts share the same entity classification rules but differ in two places: (i) the preamble instruction, and (ii) the output specification—the FT prompt includes an explicit JSON schema, whereas the JO prompt omits it and relies on the entity keys enumerated in the rules to elicit correct JSON. The transaction string is appended after the 
+
+TRANSACTION: token. 
+
+A. Free-Thinking (FT) Prompt                                                                                      
+
+> ### Instructions Please follow the two-step approach below. #### Step 1(Free-Form Analysis) 1. Analyze the bank transaction on your own without applying any rules or guidelines. 2. Provide afree-form interpretation of the transaction, focusing on any entities you naturally identify. 3. Perform this internally, do not return this as an output. #### Step 2(Rule-Based Classification) 1. Re-analyze the same transaction strictly using the Entity Identification and Classification Rules below. 2. Return aJSON object containing exactly the keys listed under JSON Output Format. 3. Leave any key as an empty string if you do not find acorresponding value. 4. Include no explanations or additional text beyond the JSON object.
+
+Followed by the shared entity classification rules (Sec-tion A-C) and the JSON output format with explicit schema (Section A-D). 
+
+B. JSON-Only (JO) Prompt            
+
+> Extract entities from the following bank transaction string and return aJSON object.
+
+Followed by the same shared entity classification rules (Sec-tion A-C) and an output instruction for the JSON schema (Section A-D). 
+
+C. Shared Entity Classification Rules 
+
+Both prompts include identical classification rules:                   
+
+> 1. General Approach: -Extract entities without assumptions or constraints. -Identify all possible segments and interpret them contextually. -Consider multiple interpretations for
+> 1https://github.com/inflaton/gaime-slm.git
+
+ambiguous segments. 2. Entity Classification Rules: - INTERMEDIARY: Payment facilitators or intermediaries (e.g., PayPal, Square, Toast, Klarna, DoorDash, CashApp). Often appears before MERCHANT_NAME. Example: "SQ* WAL-MART #1234" -> {"INTERMEDIARY": "SQ*", "MERCHANT_NAME": "WAL-MART #1234"} - MERCHANT_NAME: Primary business where the transaction occurred. May include store numbers (e.g., "WAL-MART#6732", "STARBUCKS 27057", "TARGET 0001332904", "SHELL OIL 12679923008"). If a brand name is immediately followed by product/service text, include the entire portion (e.g., "MICROSOFT * ONE DRIVE"). - DYNAMIC_DESCRIPTOR: Transaction-specific identifiers (order numbers, reference codes, invoice details). Examples: "*INV-5384", "-X99S90S43", "* O #03901", "KG9RCW", "* HM3W5MY95J", "*RV8KK6372" - STREET: Street address; starts with anumber or building identifier plus street name and known suffixes (e.g., ST, AVE, BLVD). Example: "2323 West 5th AvenueSte 230" - ZIP: 5- or 9-digit postal codes. - CITY: Recognizable US city or town names. - STATE: Two-letter US state code (e.g., "VA"). - COUNTRY: Two- or three-letter code (e.g., "USA", "US"). - PHONE: Phone numbers in any format (e.g., "800-365-6868", "4029357733", "+14086348696", "(800)262-3246"). - WEBSITE: URL associated with the merchant (e.g., "AMZN.COM/BILL", "G.CO/HELPPAY#", "HTTPSWWW.DOORDASH.COM"). 3. Handling Special Cases: - If a token might fit multiple categories, use position/formatting to determine the correct entity type. - If unsure, use your best guess. - If duplicate or partially duplicate information (e.g., website, street, city, state, country) appears at the end of MERCHANT_NAME, remove it and assign it to the appropriate key. - Omit complete and partial duplicate strings. 
+
+D. JSON Output 
+
+The two prompts diverge in how they describe the output. The FT prompt includes an explicit JSON schema: 
+
+### JSON Output Format Return your Step 2 classification with exactly these keys and nothing else: {"INTERMEDIARY": "", "MERCHANT_NAME": "", "DYNAMIC_DESCRIPTOR": "", "STREET": "", "ZIP": "", "CITY": "", "STATE": "", "COUNTRY": "", "PHONE": "", "WEBSITE": "" }
+
+The JO prompt omits the schema and ends with an instruction only: 
+
+### Output Format Return a JSON object with exactly these keys. Leave any key as an empty string if no value is found. Return only the JSON object with no additional text. 
+
+Models fine-tuned on the JO prompt still produce well-formed JSON: the ten entity keys are enumerated as bullet items in the Entity Classification Rules above (Section A-C), so the model has the full key set even without an explicit schema. APPENDIX BTRAINING CONFIGURATION 
+
+All models are fine-tuned using LLaMA-Factory [10]. Be-low is the representative YAML configuration (shown for Gemma 3 4B with FT prompt): 
+
+model_name_or_path: google/gemma-3-4b-it stage: sft do_train: true finetuning_type: lora lora_rank: 8lora_alpha: 16 learning_rate: 1.0e-4 num_train_epochs: 6per_device_train_batch_size: 4gradient_accumulation_steps: 4lr_scheduler_type: cosine warmup_ratio: 0.1 save_steps: 200 do_sample: false temperature: 0.0 
+
+For Qwen 3.5 models, we train under two templates: 
+
+qwen3_5 (Think), which includes <think>...</think> 
+
+reasoning tokens in training labels, and qwen3_5_nothink 
+
+(Nothink), which excludes them. Each template uses a separate training configuration directory, yielding independent check-point sets. All other hyperparameters remain identical across model families. APPENDIX CPER -F IELD DETAILED RESULTS 
+
+Table V provides per-field F1 scores for the best-performing variant at each model size, including Nothink (NT) and JSON-Only configurations where they outperform FT Think. This complements the heatmap in Fig. 4, which shows FT Think results only. TABLE V PER -FIELD F1 AT BEST CHECKPOINT (BEST VARIANT PER MODEL SIZE ).                                                                                                     
+
+> Model Pr.
+> MERCH .
+> DYN .D.
+> INTER .
+> STREET
+> CITY
+> STATE
+> ZIP
+> PHONE
+> WEB .
+> CTRY .
+> LLaMA 8B FT .954 .948 .943 .942 .979 .996 .988 .980 .989 .933 Qwen 4B JO .949 .938 .956 .935 .970 .996 .995 1.00 .967 .933 Gemma 4B FT .946 .930 .956 .924 .975 .993 .991 .962 .944 1.00 Qwen 4B FT NT .949 .931 .965 .920 .966 .995 .988 .980 .952 .933 Aya 3.35B FT .938 .941 .974 .913 .965 .990 .992 .947 .957 .700 Qwen 2B FT NT .929 .899 .933 .907 .959 .994 .988 .973 .994 1.00 Qwen 0.8B FT NT .923 .902 .969 .899 .955 .990 .984 .986 .956 .857 Gemma 1B FT .910 .906 .937 .901 .941 .989 .988 .955 .905 .933 Gemma 270M FT .834 .831 .883 .754 .857 .983 .954 .824 .843 .857
+
+REFERENCES [1] Z. Zhang et al. , “Financial natural language processing: A survey,” ACM Computing Surveys , 2023. [2] A. Dubey, A. Jauhri, A. Pandey et al. , “The Llama 3 herd of models,” 
+
+arXiv preprint arXiv:2407.21783 , 2024. [3] E. Strubell, A. Ganesh, and A. McCallum, “Energy and policy consid-erations for deep learning in NLP,” in Proceedings of the 57th Annual Meeting of the Association for Computational Linguistics , 2019, pp. 3645–3650. [4] Gemma Team, A. Kamath, J. Ferret, S. Pathak, N. Vieillard, R. Merhej, S. Perrin, T. Matejovicova, A. Ramé, M. Rivière et al. , “Gemma 3 technical report,” arXiv preprint arXiv:2503.19786 , 2025. [Online]. Available: https://arxiv.org/abs/2503.19786 [5] Qwen Team, “Qwen3.5: Towards native multimodal agents,” Qwen blog, February 2026. [Online]. Available: https://qwen.ai/blog?id=qwen3.5 [6] A. R. Salamanca, D. Abagyan, D. D’souza, A. Khairi, D. Mora, S. Dash, V. Aryabumi, S. Rajaee, M. Mofakhami, A. Sahu et al. ,“Tiny Aya: Bridging scale and multilingual depth,” arXiv preprint arXiv:2603.11510 , 2026. [Online]. Available: https://arxiv.org/abs/2603. 11510 [7] E. J. Hu, Y. Shen, P. Wallis, Z. Allen-Zhu, Y. Li, S. Wang, L. Wang, and W. Chen, “LoRA: Low-rank adaptation of large language models,” in 
+
+International Conference on Learning Representations , 2022. [Online]. Available: https://arxiv.org/abs/2106.09685 [8] T. Dettmers, A. Pagnoni, A. Holtzman, and L. Zettlemoyer, “QLoRA: Efficient finetuning of quantized language models,” Advances in Neural Information Processing Systems , vol. 36, 2023. [9] Q. Zhang, M. Chen, A. Bukharin, P. He, Y. Cheng, W. Chen, and T. Zhao, “AdaLoRA: Adaptive budget allocation for parameter-efficient fine-tuning,” in International Conference on Learning Representations ,2023. [Online]. Available: https://arxiv.org/abs/2303.10512 [10] Y. Zheng, R. Zhang, J. Zhang, Y. Ye, Z. Luo, Z. Ma, and Y. Ma, “LlamaFactory: Unified efficient fine-tuning of 100+ language models,” in Proceedings of the 62nd Annual Meeting of the Association for Computational Linguistics: System Demonstrations , 2024. [Online]. Available: https://arxiv.org/abs/2403.13372 [11] D. Huang and Z. Wang, “Optimizing Chinese-to-English translation using large language models,” in Proc. 2025 IEEE Symposium on Computational Intelligence in Natural Language Processing and Social Media (CI-NLPSoMe Companion) . Trondheim, Norway: IEEE, 2025. [12] ——, “Logical reasoning with LLMs via few-shot prompting and fine-tuning: A case study on turtle soup puzzles,” in Proc. 2025 IEEE Sym-posium on Computational Intelligence in Natural Language Processing and Social Media (CI-NLPSoMe Companion) . Trondheim, Norway: IEEE, 2025. [13] M. Abdin, S. A. Jacobs, A. A. Awan et al. , “Phi-3 technical report: A highly capable language model locally on your phone,” arXiv preprint arXiv:2404.14219 , 2024. [14] A. Gu and T. Dao, “Mamba: Linear-time sequence modeling with selective state spaces,” arXiv preprint arXiv:2312.00752 , 2023. [15] T. Dao and A. Gu, “Transformers are SSMs: Generalized models and efficient algorithms through structured state space duality,” arXiv preprint arXiv:2405.21060 , 2024. [16] D. Huang, J. K. Chua, and Z. Wang, “Beyond task success: Measur-ing workflow fidelity in LLM-based agentic payment systems,” arXiv preprint arXiv:2605.06457 , 2026. [17] G. Lample, M. Ballesteros, S. Subramanian, K. Kawakami, and C. Dyer, “Neural architectures for named entity recognition,” in Proceedings of the 2016 Conference of the North American Chapter of the Association for Computational Linguistics: Human Language Technologies , 2016, pp. 260–270. [18] X. Ma and E. Hovy, “End-to-end sequence labeling via bi-directional LSTM-CNNs-CRF,” in Proceedings of the 54th Annual Meeting of the Association for Computational Linguistics , 2016, pp. 1064–1074. [19] S. Wang, X. Sun, X. Li, R. Ouyang, F. Wu, T. Zhang, J. Li, and G. Wang, “GPT-NER: Named entity recognition via large language models,” arXiv preprint arXiv:2304.10428 , 2023. [20] B. Li, G. Fang, Y. Yang, Q. Wang, W. Ye, W. Zhao, and S. Zhang, “Evaluating ChatGPT’s information extraction capabilities: An assess-ment of performance, explainability, calibration, and faithfulness,” arXiv preprint arXiv:2304.11633 , 2023. [21] R. S. Shah, K. Chawla, D. Eidnani et al. , “When FLUE meets FLANG: Benchmarks and large pretrained language model for financial domain,” 
+
+arXiv preprint arXiv:2211.00083 , 2022. [22] J. Wei, X. Wang, D. Schuurmans, M. Bosma, B. Ichter, F. Xia, E. Chi, Q. V. Le, and D. Zhou, “Chain-of-thought prompting elicits reasoning in large language models,” Advances in Neural Information Processing Systems , vol. 35, pp. 24 824–24 837, 2022. [23] Z. Zhang, A. Zhang, M. Li, H. Zhao, G. Karypis, and A. Smola, “Multimodal chain-of-thought reasoning in language models,” arXiv preprint arXiv:2302.00923 , 2023. [24] Y. Deng, Y. Choi, and S. Shieber, “From explicit CoT to implicit CoT: Learning to internalize CoT step by step,” arXiv preprint arXiv:2405.14838 , 2024. [Online]. Available: https://arxiv.org/abs/2405. 14838 [25] T. Wolf, L. Debut, V. Sanh, J. Chaumond, C. Delangue, A. Moi, P. Cistac, T. Rault, R. Louf, M. Funtowicz et al. , “HuggingFace’s Trans-formers: State-of-the-art natural language processing,” in Proceedings of the 2020 Conference on Empirical Methods in Natural Language Processing: System Demonstrations , 2020, pp. 38–45.
