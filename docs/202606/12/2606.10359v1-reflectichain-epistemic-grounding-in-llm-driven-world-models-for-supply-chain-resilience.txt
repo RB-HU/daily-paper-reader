@@ -1,0 +1,259 @@
+Title: ReflectiChain: Epistemic Grounding in LLM-Driven World Models for Supply Chain Resilience
+
+URL Source: https://arxiv.org/pdf/2606.10359v1
+
+Published Time: Wed, 10 Jun 2026 00:34:21 GMT
+
+Number of Pages: 6
+
+Markdown Content:
+# ReflectiChain: Epistemic Grounding in LLM-Driven World Models for Supply Chain Resilience 
+
+Jia Luo 1
+
+## Abstract 
+
+AI agents in supply chains face a funda-mental epistemic gap: large language mod-els (LLMs) interpret policies but lack phys-ical grounding, while reinforcement learn-ing (RL) optimizes flows but is semantically blind to unstructured constraints. We in-troduce REFLECTI CHAIN , bridging this gap through a Generative Supply Chain World Model (SC-WM)—encoding heterogeneous supply net-works into a 6-dim graph-latent space with phys-ical conservation—and Double-Loop Learning that separates epistemic uncertainty (KL-trust-region-bounded policy adaptation) from aleatoric uncertainty (stochastic latent rollouts). On Semi-Sim, a 10-node semiconductor benchmark with SIR risk propagation, 6 perturbation types, and 10 policy constraint templates, R EFLECTI CHAIN 
+
+improves Rationale Consistency Score by 33.0% (p < 0.0001 , d = 2.78 ), maintains 82.3% operability under adversarial shocks, and ex-hibits anti-fragile behavior (+40.2% gain under moderate pressure). We identify three opera-tional epistemic mechanisms—uncertainty sepa-ration, knowledge-boundary detection, and em-pirical Bayesian policy updating—and discuss five limitation categories. 
+
+## 1. Introduction 
+
+Modern semiconductor supply chains exemplify a critical 
+
+epistemic grounding problem : when geopolitical poli-cies arrive as unstructured natural-language text, an AI agent must jointly reason about what constraints mean and 
+
+what actions are physically possible —bridging semantic 
+
+> 1
+
+School of Foreign Languages, Huazhong University of Science and Technology, Wuhan 430074, China. Correspondence to: Jia Luo 
+
+<u202317016@hust.edu.cn >.
+
+2nd Workshop on Epistemic Intelligence in Machine Learning (EIML@ICML 2026), Seoul, South Korea. Copyright 2025 by the author(s). 
+
+and physical knowledge whose representations are funda-mentally misaligned. This epistemic gap causes comple-mentary failure modes: RL is semantically blind —policies as text never enter its state representation; LLMs suffer 
+
+grounding gaps —they prescribe semantically plausible but physically infeasible actions. Neither system can represent the boundary of its own knowledge. 
+
+Illustration. When the CHIPS Act’s “guardrail clause” prohibits entities receiving U.S. subsidies from expand-ing advanced capacity ( ≤ 28 nm) in mainland China for 10 years, an agent must parse the conditional triggers (temporal: 10 years; geographic: mainland China; tech-nical: ≤ 28 nm), verify physical feasibility of alterna-tive routes, and anticipate cascading network effects. In a 4-tier network (S1–S3 → M1–M2 → D1–D2 → R1– R3), an export ban severs certified edge E M1 D1. Avanilla LLM proposes uncertified edge E S1 D2 (capacity 0)—semantically plausible but physically impossible. RL routes through E M1 D1—physically optimal but policy-violating. R EFLECTI CHAIN addresses both through epis-temic grounding : SC-WM encodes Gt into a 6-dim la-tent zt, performs H=5 rollouts to simulate physical con-sequences, and Double-Loop separates epistemic uncer-tainty (KL-trust-region-bounded policy adaptation) from aleatoric uncertainty (stochastic rollouts), while Crule de-tects knowledge boundaries when all N candidates are physically infeasible. We formalize this as a C-POMDP where epistemic con-straints Cpolicy are expressed in natural language, and contribute: (1) SC-WM —topology-aware world model, MPNN+attention encoder, 6-dim latent, learned transi-tion dynamics, dual-head decoding with physical conserva-tion; (2) Double-Loop Learning —Crule -bounded scoring + KL-trust-region LoRA updates; (3) Epistemic mecha-nisms —uncertainty separation, boundary detection, empir-ical Bayesian updating; (4) Rigorous validation across 4 strategies × 4 models, bootstrap tests, ablations with vari-ance, anti-fragility analysis. 
+
+## 2. Related Work 
+
+LLMs for Supply Chains. Traditional OR/RL are frag-ile under policy uncertainty (1). LLMs enable forecasting 1
+
+> arXiv:2606.10359v1 [cs.AI] 9 Jun 2026
+
+Figure 1: ReflectiChain architecture. (Left) SC-WM: Graph Encoder → Latent zt → Multi-step Rollout → Dual-Head Decoder. (Right) Double-Loop: Reflection-in-Action ( Crule -bounded candidate scoring) + Reflection-on-Action (KL-trust-region LoRA updates). (2; 3) and optimization (4; 5). KG-augmented LLMs parse geopolitical risk (6; 7; 8) but remain static interpreters— classifying policies without simulating physical propaga-tion. Generative World Models. Pixel-level models (9) are prohibitive for graphs. Latent-space models (10; 11) lack semantic reasoning. LLM-driven simulators (12; 13) hallucinate cascades. SC-WM resolves this with physi-cal conservation enforcement. Reflection. Verbal methods (Reflexion (14), ReAct (15)) append text without modify-ing policy. ReflAct succumbs to goal drift . Test-time train-ing (16; 17) is single-step. Our Double-Loop evolves the policy distribution via K=3 -step gradients. 
+
+## 3. ReflectiChain Framework 
+
+We formalize the setting as C-POMDP 
+
+(S, A, T , R, Ω, O, C, γ ). Observation ot: structured inventory {Ii,t , C i,t } and unstructured policy texts Cpolicy .Objective: max π E[P γtrt] s.t. at |= Cpolicy , ∀t.
+
+3.1. Generative Supply Chain World Model 
+
+Gt = (V, E, X t, E t): 10 nodes across 4 echelons (3S+2M+2D+3R), ∼30 edges (certified/uncertified). Node features: inventory, cash, congestion, compliance, risk, production rate, quality (A/B), region (Alpha/Beta). Edge features: certification, capacity [30 , 150] , latency [1 , 5] ,load, disruption prob [0 .02 , 0.08] , carbon cost. 
+
+Encoder Eψ : MPNN with multi-head attention: h(l+1)  
+
+> v
+
+=
+
+Attention (l)(h(l) 
+
+> v
+
+, {h(l) 
+
+> u
+
+⊕ euv }u∈N (v)). Graph latent: zt =
+
+Wproj · 1
+
+> |V|
+
+P 
+
+> v
+
+h(L) 
+
+> v
+
+∈ R6. Six dims: inventory, congestion, demand pressure, carbon, stockout risk, constraint tension. 
+
+Dynamics Tω : zt+1 = GELU (zt + Mω · zt + ∆ z(at; ω)) ,
+
+Mω ∈ R6×6, ∆z(at): transfer(uncertified) →tension+0.3; produce →inventory+0.8, carbon+0.2; wait →congestion −0.05. H=5 -step rollouts. 
+
+Dual-Head Decoder: ˆrwm (Reward), ∆ ˆSpred 
+
+(State Delta). LW M = MSE (ˆ rwm , r true ) + 0 .5 ·
+
+MSE (∆ ˆSpred , ∆Strue ).
+
+3.2. Double-Loop Test-Time Learning Reflection-in-Action: a∗ 
+
+> t
+
+= arg max k∈[N ](α ·
+
+Clip (s(k)
+
+> llm
+
+, Crule ) + β · ˆr(k)
+
+> wm
+
+), Crule verifies: mass conservation ( qship ≤ Isource ), capacity ( qship ≤ cap edge ), edge existence (e. is active). Violations →score zero. 
+
+α=0 .6, β =0 .4.
+
+Reflection-on-Action: ∇θ J ≈P 
+
+> j∈B
+
+r(j)∇θ log πθ (aj |oj ) − ηKL ∇θ DKL (πθ ∥πbase ), B:
+
+K=3 steps. 
+
+Epistemic Mechanisms (operationalized). REFLEC -
+
+> TI
+
+CHAIN instantiates three concrete epistemic operations: 
+
+(i) Uncertainty separation —the KL trust region bounds epistemic uncertainty (what the agent does not know about 
+
+π∗ 
+
+> θ
+
+given finite experience), while SC-WM rollouts han-dle aleatoric uncertainty (inherent stochasticity from de-2mand volatility and perturbation timing). These two uncer-tainty types flow through separate architectural pathways with distinct gradients. (ii) Knowledge-boundary detec-tion —when Clip (s(k)
+
+> llm
+
+, Crule ) = 0 for all N candidates, the agent receives an unambiguous signal that its genera-tive distribution cannot produce feasible actions. This trig-gers systematic exploration ( N ← N × 2) or conservative fallback, providing a measurable operational definition of epistemic boundary. (iii) Empirical Bayesian policy up-dating —each episode trajectory provides data for updat-ing the posterior over θ. The policy gradient implements this update with the KL penalty acting as a prior centered at πbase , preventing overfitting to stochastic single-episode outcomes. 
+
+3.3. Multi-Agent and Adversarial Extension 
+
+Markov game: M =3 heterogeneous agents (Profit/RCI weight 0.35, Resilience/ARL 0.25, Compliance/CEE 0.20). 
+
+Gadv severs max-betweenness edge. Adversarial Regret: Regret adv = P
+
+> t
+
+(max a∗ E[R|a∗] − E[R|at]) .
+
+## 4. Experiments 
+
+Semi-Sim. 10-node, ∼30-edge, 4-tier network. SIR risk: Ri,t +1 = (1 −γ)Ri,t + P 
+
+> j
+
+wji max(0 , Rj,t −τ ),
+
+γ=0 .1, τ =0 .3. 6 perturbation types ( p=0 .15 /step). 10 constraint templates (Absolute Embargo, Certified Path Only, Fair Allocation, Quality Threshold, Temporal Se-quence, Data Sovereignty, Carbon Budget, Supplier Di-versity, Dual-Use Restriction, Inventory Floor) sampled 2– 4/episode. T =30 steps. Data: 3,000 trajectories, 2,000 per-turbation scenarios, 500 multi-agent episodes (520 MB). Full spec: Appendix. 
+
+Baselines: 4 strategies × 4 backbones. NoThink-ing (Direct-CoT), ReAct (15), ReflAct (state-goal reflec-tion), LLM+TreeSearch ( B=5 ). Models: DeepSeek-V3.2, Qwen2.5-7B, InternLM2.5-7B, GPT-4o-mini. Ref-erence: PPO. All: identical $150K capital. Metrics: RCS (DeBERTa-NLI), CCR, TI, TS (+CEE/OR/ARL multi-agent). Statistics: 5 seeds, bootstrap N =100 ,000 , Cohen’s 
+
+d, 95% CI, Two-Way ANOVA. 
+
+4.1. Core Findings 
+
+Figure 2 and Table 1 reveal: (1) PPO collapses (TS= −0.20 ,CCR=60.7%) via compliance violations—semantic blind-ness is fatal. (2) ReflAct improves RCS (+14.2 pp over Re-Act) but plateaus < 72% —verbal reflection cannot resist goal drift. (3) ReflectiChain achieves 88.5–93.1% RCS, lowest TI (3.10–3.90). +33.0% RCS ( d = 2 .78 , very large effect). 
+
+Figure 2: Cross-model RCS. ReflectiChain: 88.5–93.1% RCS, +33.0% over ReflAct ( p < 0.0001 , d = 2 .78 ). Lower TS by design ( α>β ). Table 1: Results (DeepSeek-V3.2). Mean ± std, 5 seeds. 
+
+†TreeSearch.                             
+
+> Strategy TS CCR% TI RCS%
+> PPO −0.20 .15 60 .74.21.34 .12 —NoThinking 2.11 .18 68 .33.56.12 .45 48 .23.8
+> ReAct 7.48 .42 79 .03.05.79 .38 52 .33.5
+> ReflAct 8.12 .38 80 .52.85.10 .32 66 .52.9
+> +TreeSearch †9.15 .35 82 .12.54.45 .30 70 .12.7
+> ReflectiChain 1.85 .22 84 .32.43.90 .25 88 .51.8
+
+4.2. Ablation and Reasoning Analysis 
+
+Figure 3: SC-WM removal → grounding gap (CEE 
+
+−49%). Retro RL removal → static myopia (RCI −12.8 pp). KL trust removal → catastrophic drift (variance +81%). Crule removal → circular evaluation (RCI 68.5%). 
+
+4.3. Anti-Fragility and Scaling 
+
+Figure 5: anti-fragile response under moderate pressure (ρ ∈ [0 .3, 0.5] )—Double-Loop discovers counterfactual strategies (+40.2%, p < 0.05 ). T =100 : ARL →0.15, zero divergence. Multi-agent: disabling Double-Loop →
+
+social welfare −46.7% ($15.40M →$8.21M), ϵ-NE gap 0.66 →0.91. 
+
+Scaling: N ∈{ 1, 3, 5, 7, 10 }, K∈{ 1, 3, 5, 7, 10 }. N : 1 →3+38.6% ( p< 0.01 ); N =7 : +2.1% ( p> 0.1). K=3 optimal; 
+
+K=1 myopic ( −22.3%); K=7 dilutes ( −5.2%). ANOVA: 
+
+FN =35 .8, FK =22 .2, both p< 0.001 . Pareto: N =3 , K =3 .
+
+## 5. Limitations 
+
+Sim-to-real: Semi-Sim is synthetic; real data is propri-etary. Circular evaluation: LLM critic and Gadv share model family— Crule mitigates hard constraints but soft scoring remains LLM-mediated. Test-time safety: LoRA updates risk drift; KL trust region provides theoretical 3Figure 3: Ablation (5 seeds × 3 eps). SC-WM: CEE 
+
+−49%. Retro RL: RCI −12.8pp. KL trust: variance +81%. 
+
+Crule : RCI −15.8pp. 
+
+Figure 4: Reasoning traces. Constraint: “Do not access Node C.” Channel A blocked. ReAct: Exception Injection. ReflAct: Goal Drift. Ours: Semantic Anchoring via SC-WM+ Crule .safeguard but human oversight is essential. Scalability: 
+
+MPNN scales linearly but LLM scoring grows quadrati-cally. Societal impact: Automated agents could be mis-used; compliance-first design ( α>β ) and Crule prevent this. 
+
+We do not advocate 100% autonomous management. 
+
+## 6. Conclusion 
+
+This paper identified a fundamental epistemic ground-ing gap in AI-driven supply chain management: the mis-alignment between semantic policy understanding (LLM-mediated) and physical feasibility verification (simulation-mediated). REFLECTI CHAIN bridges this gap through SC-WM and Double-Loop learning, operationalizing three epistemic mechanisms— uncertainty separation (KL trust region vs. stochastic rollouts), knowledge-boundary de-tection (constraint infeasibility signals), and empirical Bayesian updating (retrospective credit assignment with KL prior). On Semi-Sim across 4 models × 4 strate-gies, it achieves 33.0% RCS improvement ( p< 0.0001 ,
+
+d=2 .78 ) with anti-fragile behavior under adversarial pres-sure. These epistemic principles extend beyond supply chains to any domain where language-conditioned agents must operate under physical constraints with verifiable 
+
+Figure 5: Anti-fragility. CEE vs. ρ, 7 values, 5-seed 95% CI. CEE: $1.02M ( ρ=0 .3) → $1.43M ( ρ=0 .5), +40.2% (p < 0.05 ). knowledge boundaries. 
+
+## References 
+
+[1] Zhe Song, Ying Xie, Lichao Yang, and Yifan Zhao. Large language models in supply chain manage-ment: a systematic literature review and application framework. International Journal of Production Re-search , 0(0):1–41, 2026. doi: 10.1080/00207543. 2026.2641103. URL https://doi.org/10. 1080/00207543.2026.2641103 .[2] Nate Gruver, Marc Finzi, Shikai Qiu, and An-drew Gordon Wilson. Large language models are zero-shot time series forecasters, 2024. URL 
+
+https://arxiv.org/abs/2310.07820 .[3] Shuning Jia, Baijun Song, Canming Ye, and Chun Yuan. M3time: Llm-enhanced multi-modal, multi-scale, and multi-frequency multivariate time se-ries forecasting. Proceedings of the AAAI Con-ference on Artificial Intelligence , 40(27):22265– 22273, Mar. 2026. doi: 10.1609/aaai.v40i27.39383. URL https://ojs.aaai.org/index.php/ AAAI/article/view/39383 .[4] Bowen Zhang, Pengcheng Luo, Genke Yang, Boon-Hee Soong, and Chau Yuen. Or-llm-agent: Automat-ing modeling and solving of operations research op-timization problems with reasoning llm, 2025. URL 
+
+https://arxiv.org/abs/2503.10009 .[5] Ziyang Xiao, Yuan Jessica Wang, Xiongwei Han, Shisi Guan, Jingyan Zhu, Jingrong Xie, Lilin Xu, Han Wu, Wing Yin Yu, Zehua Liu, et al. Deepor: A deep reasoning foundation model for optimization model-ing. In Proceedings of the AAAI Conference on Ar-
+
+4tificial Intelligence , volume 40, pages 34052–34060, 2026. [6] Azmine Toushik Wasi, MD Islam, and Adipto Raihan Akib. Supplygraph: A benchmark dataset for supply chain planning using graph neural networks. arXiv preprint arXiv:2401.15299 , 2024. [7] Matteo Iacoviello and Jonathan Tong. The ai-gpr in-dex: Measuring geopolitical risk using artificial intel-ligence. Working Paper, 2026. [8] Byeungchun Kwon, Taejin Park, Phurichai Rungcharoenkitkul, and Frank Smets. Parsing the pulse: decomposing macroeconomic sentiment with LLMs . Bank for International Settlements, Monetary and Economic Department, 2025. [9] Danijar Hafner, Jurgis Pasukonis, Jimmy Ba, and Timothy Lillicrap. Mastering diverse domains through world models, 2024. URL https:// arxiv.org/abs/2301.04104 .[10] Julian Schrittwieser, Ioannis Antonoglou, Thomas Hubert, Karen Simonyan, Laurent Sifre, Simon Schmitt, Arthur Guez, Edward Lockhart, Demis Has-sabis, Thore Graepel, Timothy Lillicrap, and David Silver. Mastering atari, go, chess and shogi by planning with a learned model. Nature , 588(7839): 604–609, December 2020. ISSN 1476-4687. doi: 10.1038/s41586-020-03051-4. URL http://dx. doi.org/10.1038/s41586-020-03051-4 .[11] Thomas Kipf, Elise van der Pol, and Max Welling. Contrastive learning of structured world models, 2020. URL https://arxiv.org/abs/1911. 12247 .[12] Shibo Hao, Yi Gu, Haodi Ma, Joshua Jiahua Hong, Zhen Wang, Daisy Zhe Wang, and Zhiting Hu. Rea-soning with language model is planning with world model, 2023. URL https://arxiv.org/abs/ 2305.14992 .[13] Jiahan Zhang, Muqing Jiang, Nanru Dai, Taiming Lu, Arda Uzunoglu, Shunchi Zhang, Yana Wei, Ji-ahao Wang, Vishal M. Patel, Paul Pu Liang, Daniel Khashabi, Cheng Peng, Rama Chellappa, Tianmin Shu, Alan Yuille, Yilun Du, and Jieneng Chen. World-in-world: World models in a closed-loop world, 2025. URL https://arxiv.org/abs/ 2510.18135 .[14] Noah Shinn, Federico Cassano, Edward Berman, Ashwin Gopinath, Karthik Narasimhan, and Shunyu Yao. Reflexion: Language agents with verbal rein-forcement learning, 2023. URL https://arxiv. org/abs/2303.11366 .[15] Shunyu Yao, Jeffrey Zhao, Dian Yu, Nan Du, Izhak Shafran, Karthik Narasimhan, and Yuan Cao. React: Synergizing reasoning and acting in language models, 2023. URL https://arxiv.org/abs/2210. 03629 .[16] Yu Sun, Xinhao Li, Karan Dalal, Jiarui Xu, Ar-jun Vikram, Genghan Zhang, Yann Dubois, Xin-lei Chen, Xiaolong Wang, Sanmi Koyejo, Tatsunori Hashimoto, and Carlos Guestrin. Learning to (learn at test time): Rnns with expressive hidden states, 2025. URL https://arxiv.org/abs/2407. 04620 .[17] Yining Hong, Huang Huang, Manling Li, Li Fei-Fei, Jiajun Wu, and Yejin Choi. Learning from trials and errors: Reflective test-time planning for embodied llms, 2026. URL https://arxiv.org/abs/ 2602.21198 .
+
+## Appendix: Semi-Sim Specification 
+
+Topology (Fig. 6, left): |V| =10 (3S+2M+2D+3R), ∼30 edges. Node: inventory, cash, compliance, risk, capac-ity, congestion, quality, region. Edge: certified/uncerti-fied, capacity, latency, disruption prob. Dynamics: It+1 =
+
+It +qbuy −qship , Ct+1 = Ct +psale qship −pcost qbuy +Γ ⊮violate .SIR risk: Rt+1 = (1 −γ)Rt + P wji max(0 , Rj,t −τ ),
+
+γ=0 .1, τ =0 .3. 6 perturbations, 10 constraints. 5Figure 6: Semi-Sim specification. Left: Topology—10 nodes, 4 tiers, ∼30 edges. Certified (solid), uncertified (dashed, red). Right: Prompt structure (4 components) and constraint violation rates (3,000 trajectories). 
+
+Full Prompt Templates (Single-Column, Color-Coded) 
+
+ReflectiChain (Ours) — Full System Prompt 
+
+You are a supply chain AI agent with aGenerative World Model (SC-WM). Make sequential decisions under policy shocks. STRICTLY follow all absolute constraints. WM predicts physical consequences via latent rollouts. CORE: Constraint compliance > Profit. Violations compound. TASK GOAL: "Maintain maximum throughput while respecting all constraints." ABSOLUTE CONSTRAINTS (sampled 2--4 per episode): [absolute embargo] No interaction with Node C. [CRITICAL] [certified path only] Certified channels only. Backup forbidden. [CRITICAL] [fair allocation] No downstream agent >40% stock. [HIGH] [quality threshold] Grade A materials only. No Grade B substitution. [HIGH] [temporal sequence] Inspection (Step-Q) must precede shipping (Step-S). [HIGH] [data sovereignty] Region Alpha processing only. [CRITICAL] [carbon cap] Total emissions <500 units. [MEDIUM] [supplier diversity] No single supplier >50% volume. [MEDIUM] [dual use restriction] No Dual-Use transit via non-allied nodes. [CRITICAL] [inventory floor] Safety stock >=20% baseline. [HIGH] WORLD MODEL PREDICTION (H=5 rollout): Current: inv=320, cong=15%, carbon=245, risk=8%, tension=12% +1: inv=298, feas=0.92 | +2: inv=275, feas=0.88 (risk 18%) +3: inv=234, feas=0.76 (carbon 420/500) | +4: inv=198, feas=0.61 (inv<floor) +5: inv=152, feas=0.45 (CRITICAL: carbon cap exceeded) CURRENT STATE: Node[S1] supplier inv=180/200 Alpha | Node[M1] mfr inv=95/150 Alpha Edge[E S1 M1] S1->M1 certified 45/120 | Edge[E S1 M2] DISRUPTED Edge[E S1 D2 direct] S1->D2 UNCERTIFIED 30/50 OUTPUT: Reasoning [constraints + WM + state + trade-off] + Action JSON 
+
+ReflAct (State-Goal Reflection) — Baseline 
+
+SYSTEM ADDITION: "Reflect on relationship between current state and task goal. Consider whether planned action maintains consistency with constraints." NO World Model. NO retrospective credit assignment. Language-level only. Example: "My goal is throughput, but path is blocked. Accessing C violates the rule, yet necessary to prevent global failure. Prioritize ultimate goal." --> GOAL DRIFT: violation rationalized by reprioritizing local task. RCS plateaus <72% across all backbones. 
+
+ReAct & NoThinking — Baselines 
+
+ReAct: "First think about current condition and plan future actions, then output your action." NO WM. NO reflection. Single-step reasoning. --> EXCEPTION INJECTION: "Channel Ablocked. Accessing Node C justified as emergency exemption." RCS 52%. NoThinking: "Directly analyze and output action." NO memory. NO WM. --> CONTEXT COLLAPSE: constraint awareness lost after 5 steps. RCS 48%. 
+
+SC-WM: 6-dim latent ∈ [0 , 1] . Mω transition matrix, ∆z
+
+action perturbation. Data: 3,000 traj, 2,000 perturbs, 500 MA eps (520 MB). Stats: 5 seeds, bootstrap 10 5, Cohen’s 
+
+d.6
