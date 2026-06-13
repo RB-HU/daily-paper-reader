@@ -6,32 +6,38 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-06-12
-- 运行时间：2026-06-12 21:24:48 UTC
+- 最新运行日期：2026-06-13
+- 运行时间：2026-06-13 21:25:20 UTC
 - 运行状态：成功
-- 本次总论文数：3
+- 本次总论文数：6
 - 精读区：3
-- 速读区：0
+- 速读区：3
 
 ### 今日简报（AI）
-今日深入研读两篇智能体前沿研究，聚焦技能进化与亿级用户规模落地评估。
-SkillComposer通过演化式技能学习提升智能体的任务规范与泛化能力，而客服实践揭示评估驱动框架是支撑大规模可靠性的核心。
-建议读者关注技能学习与评估体系的深度结合，以此推动智能体在生产环境中的稳健应用。
-- 详情：[/202606/12/README](/202606/12/README)
+今日精读两篇9分论文，聚焦竞争环境中智能体如何策略性获取资源，以及用过程化策略优化提升决策效率。最值得关注的方向是竞争多智能体博弈下的资源学习机制，以及无需手工奖励设计的自动化策略优化方法。普通读者可跟进这两类方法在复杂任务与LLM智能体训练中的实际表现。
+- 详情：[/202606/13/README](/202606/13/README)
 
 ### 精读区论文标签
-1. [SkillComposer: Learning to Evolve Agent Skills for Specification and Generalization](/202606/12/2606.06079v1-skillcomposer-learning-to-evolve-agent-skills-for-specification-and-generalization)  
+1. [Learning to Strategically Acquire Resources in Competition](/202606/13/2606.06882v1-learning-to-strategically-acquire-resources-in-competition)  
    标签：评分：9.0/10、query:fla
-   evidence：提出通过拒绝采样学习、改进和合并智能体技能的框架，解决专精与泛化之间的权衡
-2. [Building Customer Support AI Agents at 100M-User Scale: An Evaluation-Driven Framework](/202606/12/2606.08867v1-building-customer-support-ai-agents-at-100m-user-scale-an-evaluation-driven-framework)  
+   evidence：多智能体强化学习在金融资产市场中策略性获取资源
+2. [APPO: Agentic Procedural Policy Optimization](/202606/13/2606.12384v1-appo-agentic-procedural-policy-optimization)  
    标签：评分：9.0/10、query:fla
-   evidence：面向大规模金融客户支持的对话式AI代理
-3. [ReflectiChain: Epistemic Grounding in LLM-Driven World Models for Supply Chain Resilience](/202606/12/2606.10359v1-reflectichain-epistemic-grounding-in-llm-driven-world-models-for-supply-chain-resilience)  
+   evidence：提出基于细粒度信用分配的智能体RL训练方法
+3. [SlimSearcher: Training Efficiency-Aware Web Agents via Adaptive Reward Gating](/202606/13/2606.07074v1-slimsearcher-training-efficiency-aware-web-agents-via-adaptive-reward-gating)  
    标签：评分：8.0/10、query:fla
-   evidence：提出双循环学习以调整LLM驱动智能体的策略，分离认知不确定性与随机不确定性
+   evidence：采用自适应奖励门控训练网络智能体，在SFT和RL中权衡准确率与成本
 
 ### 速读区论文标签
-- 本次无速读推荐。
+1. [PBSD: Privileged Bayesian Self-Distillation for Long-Horizon Credit Assignment](/202606/13/2606.09348v1-pbsd-privileged-bayesian-self-distillation-for-long-horizon-credit-assignment)  
+   标签：评分：7.0/10、query:fla
+   evidence：面向多轮智能体任务中稀疏奖励的细粒度信用分配，提出贝叶斯校准自蒸馏方法。
+2. [HIPIF: Hierarchical Planning and Information Folding for Long-Horizon LLM Agent Learning](/202606/13/2606.10507v1-hipif-hierarchical-planning-and-information-folding-for-long-horizon-llm-agent-learning)  
+   标签：评分：7.0/10、query:fla
+   evidence：面向多轮LLM智能体任务中的长上下文干扰，提出分层规划与信息折叠方法。
+3. [ConSteer-RL: Steering Reasoning Capabilities in Large Language Models via Confidence-Aware Reinforcement Learning](/202606/13/2606.08088v1-consteer-rl-steering-reasoning-capabilities-in-large-language-models-via-confidence-aware-reinforcement-learning)  
+   标签：评分：6.0/10、query:fla
+   evidence：置信度感知的RL改进LLM推理，为自主智能体后训练提供可迁移方法
 
 
 <div class="dpr-home-promo-card">

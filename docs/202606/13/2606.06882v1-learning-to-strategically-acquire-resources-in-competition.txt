@@ -1,0 +1,5333 @@
+Title: Learning to Strategically Acquire Resources in Competition
+
+URL Source: https://arxiv.org/pdf/2606.06882v1
+
+Published Time: Mon, 08 Jun 2026 00:30:50 GMT
+
+Number of Pages: 41
+
+Markdown Content:
+# Learning to Strategically Acquire Resources in Competition 
+
+Safwan Hossain ∗
+
+Harvard University 
+
+Mirah Shi ∗
+
+University of Pennsylvania 
+
+Andrew Bennett 
+
+Morgan Stanley 
+
+Neil Andrew Chriss 
+
+Fixed Point Advisors 
+
+Michael Kearns 
+
+University of Pennsylvania 
+
+Anderson Schneider 
+
+Morgan Stanley 
+
+Yuriy Nevmyvaka 
+
+Morgan Stanley 
+
+## Abstract 
+
+We consider multiple agents competing to acquire some costly divisible resource ( e.g. shares of a financial asset, compute resources, etc.) over time. Leveraging a standard model for price dynamics, we propose a novel game-theoretic model for this problem, generalizing settings studied in diverse literatures. Our analysis considers different assumptions on the information available to agents. Under partial-information with a common prior (which subsumes complete information as a special case), we establish the existence, uniqueness, and efficient computability of the Bayesian Nash equilibrium (BNE), and bound the price of anarchy. Next and more generally, we consider agents with no common prior learning to act optimally given realistic market feedback from repeated interactions. We provide sufficient conditions on agents doing simultaneous learning dynamics for last-iterate convergence to the BNE. For all settings, we provide simulations based on real financial data to illustrate our theoretical results and offer new insights on strategic behavior in the context of trading and resource acquisition. 
+
+## 1 Introduction 
+
+Consider multiple traders trying to acquire a position in a stock ahead of an earnings release. If each trader were acting in isolation, they might follow a classical optimal execution strategy – such as that of Almgren & Chriss (2000) – to minimize their effect on price and thus the cost of trading. However, if multiple traders are pursuing their strategies simultaneously, their aggregate activity influences prices and liquidity. This interaction transforms the problem from individual optimization to understanding the inter-agent strategic behavior, where each agent’s decisions affect the market environment faced by all. This challenge of acquiring costly resources in competitive, dynamically priced environments extends beyond financial markets. Training an LLM may require securing substantial cloud computing resources within a given time. As spot prices are shaped by aggregate demand across many users (Shastri & Irwin, 2018), firms need to account not only for their own scheduling and budget constraints but also how others interact. Agents in such environments may only have incomplete knowledge of others or the market itself, complicating their strategy. While several works have attempted to formally capture these strategic perspectives, they do so with several limitations. Chriss (2024a;b;c) consider a complete-information setting, which is generally unrealistic. More recently, Chriss (2025); Kearns & Shi (2025) study extensions that either assume common priors or repeatedly interacting with the same market instance, a rare occurrence. Further, all these works: (1) require agents to acquire a fixed target position, ruling out more general action constraints; (2) do not allow for objectives 
+
+> ∗Equal contributors. Safwan Hossain and Mirah Shi interned at Morgan Stanley Machine Learning Research during the course of the project. Correspondence to shossain@g.harvard.edu, mirahshi@seas.upenn.edu, or Andrew.Bennett@morganstanley.com
+
+1
+
+> arXiv:2606.06882v1 [cs.GT] 5 Jun 2026
+
+Table 1: Comparison of our framework with prior work on strategic position building / resource acquisition.                      
+
+> Constraints Objective Information Equilibrium Result
+> Chriss (2024b;a) Fixed target Min. acquisition cost Complete Exact NE computation Chriss (2024c) Fixed target + monotonicity, rate bounds Min. acquisition cost Complete Approx. NE computation Chriss (2025) Fixed target Min. acquisition cost Incomplete (common prior) Exact BNE computation Kearns & Shi (2025) Fixed target + per-period trade bounds Min. acquisition cost Complete Approx. CCE computation (via simulated no-regret play)
+> This work General convex Max. general concave utility minus acquisition cost Incomplete (no prior required) Convergence to BNE via interaction
+
+that agents may wish to optimize alongside acquisition costs; and most importantly (3) do not address the computational and learning challenges that arise when agents act under incomplete information without common priors. The broad scope and practical relevance of this problem necessitates a general framework that can gracefully accommodate diverse constraints and limitations of real-world markets. As such, this work proposes a general competitive resource acquisition and trading framework for dynam-ically priced markets. A central feature of our model is that prices respond to the aggregate actions of all participants. Beyond this, our game-theoretic model makes minimal modeling assumptions. Information may be imperfect or asymmetric, and agents need not know the information structure a priori. Moreover, we allow for rich heterogeneity in agents’ objectives: agents may target some fixed position or seek to maximize a personalized utility function on their final position, with different agents having different goals. Finally, our framework accommodates action constraints that may be important for practical applications, such as no short selling or granular limits on per-period trades. Together, these accommodations provide a flexible game-theoretic model that captures a broad range of goals, constraints, and information structures relevant to strategic resource acquisition problems. 
+
+1.1 Our Contribution 
+
+• Section 2 formalizes a novel model for this problem, which generalizes on past settings, by allowing for convex constraints, concave value functions, and incomplete information (see Table 1). 1
+
+• Section 3 considers the partial-information Bayesian setting: each agent only observes their own private information (their “type”), but all agents have common knowledge of the prior distribution over agent types and market parameters. We establish the uniqueness and computability of the Bayesian Nash Equilibrium (BNE), and characterize the price of anarchy of this game. 
+
+• Section 4 extends our model to an online learning setting where agents only observe their type and have no knowledge of the distribution over others’ types or market parameters. They must instead learn from repeated interactions and choose their strategy conditioned on their realized type and past feedback. In particular, we consider a feedback model that is natural for this setting: instead of perfectly observing the market parameters or others’ actions as end-of-round feedback, agents see only the realized price trajectory and can evaluate their counterfactual costs using estimates of the market parameter. This models learning to acquire resources given realistic contextual information. We establish sufficient conditions under which agents simultaneous learning converge to the BNE in the final round. 
+
+• In Section 5, we empirically simulate our algorithms based on real market data where possible and offer new insights for both the with-prior and prior-free settings.  
+
+> 1Kearns & Shi (2025) could alternatively be framed as a partial information model with convergence to CCE via interac-tion. However, unlike our model for interaction, theirs assumes an identical game in every interaction (same target positions, constraints, market parameters, etc. ), and that players have sufficient information to compute exact best responses.
+
+21.2 Additional Related Work 
+
+Most relevant to our paper is the line of work on optimal position building in financial markets that we discussed above (Chriss, 2024b;c;a; 2025; Kearns & Shi, 2025). Our work can be seen as a generalization of these, accommodating constraints and objectives natural in both financial and non-financial settings such as compute markets Shastri & Irwin (2018), which are of growing importance. We provide a detailed discussion of how our model relates to and subsumes the settings of these works in Section C.2. A summary comparison is given in Table 1. More broadly, our model captures standard notions of market impact in finance, of which there is a large literature (see Webster (2023); Li et al. (2024) and citations therein for a detailed overview). These works broadly consider how prices change in response to trading (both theoretically and empirically from real markets). In this literature, market impact is often decomposed into permanent and temporary impact (Almgren & Chriss, 2000; Bacry et al., 2015; Moro et al., 2009), which is the same approach that we take. There are also models such as the propagator model (Bouchaud et al., 2003; Gatheral & Schied, 2013; Obizhaeva & Wang, 2013) that allow for transient impacts in between these extremes; we do not consider these, but such extensions would be an interesting direction for future work. Our work relates to the literature on learning in games more broadly. Particularly, the setting in Section 4 is similar in spirit to that of Hartline et al. (2015), who consider a framework for no-regret learning in repeated Bayesian games. That said, our model is outside their framework (as it allows continuous market types), and has some specific structure that we can additionally leverage (strong monotonicity). Our setup is conceptually related to resource allocation/congestion games, where agents share resources, and the cost of any resource depends on its demand (Rosenthal, 1973). Unlike canonical versions of these, however, we consider time-varying prices that endogenously adjust based on supply and demand. Lastly, while we study competitive resource acquisition in a market setting, a non-market variant has long been studied in the context of fair division (Moulin, 2004) for both divisible and indivisible goods. Recent literature here has extended this problem to an online setting (see Aleksandrov & Walsh (2020) for a survey), and often incorporates learning and predictions (Banerjee et al., 2023), spiritually motivating our model in Section 4. 
+
+## 2 Model 
+
+Preliminaries Consider a market of n strategic agents looking to trade (buy/sell) some costly, divisible resource (stock, currency, compute time, etc. ) over a period of T rounds. In the simplest setting, each strategic agent i’s action (also called strategy or trajectory) is a T -dimensional vector hi, where hi,t denotes how much they purchased at time t ∈ [T ]. Note that hi is a signed vector, and we conventionally denote positive (negative) values as buying (selling) throughout. Each agent has some set of convex constraints on their allowable actions, represented by a convex feasible set of trajectories Gi ⊆ RT . For example, if agent 
+
+i wants to procure at most Vi shares without short selling or over-buying, their constraints are given by 
+
+Gi = {hi : 0 ≤ ∑tl=1 hi,l ≤ Vi ∀t ∈ [T ]}. We also assume that each agent has some value function over their strategy, which can capture the value of their final position and/or any preferences on their acquisition schedule. For an agent i, we represent this via a bounded concave function 2 fi : RT → R, with |fi(·)| ≤ U .For example, if agent i has a concave value ϕi on their final acquired position (say they have a private valuation ri for the asset, so they value owning x shares as ϕi(x) = rix) and penalizes selling by some non-negative factor ζ, this function could be fi(hi) = ϕi(1⊤hi) − ζ ∑Tt=1 |hi,t |I{hi,t < 0}, which is clearly concave. In settings like compute markets or optimal trade execution, where the agents’ goal is to acquire a fixed target position as cheaply as possible, one can set fi = 0 and include a hard constraint on 1⊤hi in 
+
+Gi. Lastly, and inspired by the seminal work of Kyle (1985), we allow the market to contain a non-strategic (possibly random) exogenous agent, which captures all non-strategic trade flow. The exogenous action is given by a signed vector s ∈ RT , where positive values indicate buying. 
+
+> 2Concave utility on final position, which corresponds to diminishing marginal utility, is a natural restriction in economics and game theory. See (Mas-Colell et al., 1995; Debreu, 1959).
+
+3Price Model Core to understanding how agents interact strategically is modeling how the aggregate demand/supply levels influence resource prices. We assume the following dynamic model for price as affected by agents’ trading: 
+
+Assumption 1 (Price Dynamics) . All agents face the same price pt for each share of the resource traded at time t. The price pt is determined by the total trading trajectories of all agents up to and including time 
+
+t according to the following equations: 
+
+pt = pwt + βD t; pwt = pwt−1 + αD t
+
+where p0 = pw 
+
+> 0
+
+is the initial price, Dt = ∑ni=1 hi,t + st is the aggregate excess demand at time t, and α > 0
+
+and β ≥ 0 are some market parameters. 
+
+The dynamic process for pwt is a discretization of the Walrasian price dynamics from general equilibrium theory, which posits that prices evolve from an imbalance of supply and demand: dp t = α(demand t −
+
+supply t)dt , where α > 0 is a sensitivity factor (Walker, 1987). The additional β (∑ni=1 hi,t + st) term in the execution price pt accounts for additional costs imposed by market makers who provide liquidity to balance supply and demand, causing temporary deviations from the equilibrium price ( β ≥ 0 controls the strengths of this impact). This maps to how prices are modeled within the theory of optimal trade execution, with 
+
+α and β corresponding to permanent and temporary impact coefficients, respectively (Almgren & Chriss, 2000) – see Section C.1 for more details. That said, this remains a stylized model that abstracts some of the deeper micro-structures of limit order books – see Section 6 for a discussion on this. 
+
+Market Type We refer to the total set of parameters defining the market and pricing dynamics as the 
+
+Market Type , which we denote as the tuple λ = ( f1, . . . , f n, p 0, α, β, s).
+
+Agent Types We consider a very general partial information model, where each agent’s information is determined by their type . As discussed below, this framework subsumes complete information settings, so we do not study those separately. Agent types are formalized as follows. 
+
+Definition 1 (Agent Types) . For each agent i, let θi ∈ Θi denote their type , capturing all information known to them before acting. More specifically: 
+
+• Θi is some compact type space which can be either discrete (|Θi| = mi < ∞) or continuous (Θ i ⊆ Rmi ).
+
+• Player type θi fully determines their constraints, denoted Gi(θi) ⊆ RT , which we assume to be non-empty, closed, convex, and bounded. 
+
+While we make no assumptions about the types themselves, in practice they can be perceived as the features agents use to understand the market. Importantly, we make no assumptions about how well the private type 
+
+θi correlates with the market parameters λ; they may range anywhere from fully informative to completely uninformative, or anywhere in between. More generally, the correlation between agent types and λ may be of varying strengths for different agents, naturally capturing information asymmetry that is common in most markets. We also do not assume that θi fully specifies the value function fi: instead fi can depend on uncertain market parameters. Finally, we note that if θi is in fact fully informative of λ for every agent, then our model is equivalent to the canonical “complete information” setting. 
+
+Realized Utility For fixed market type and trading trajectories, we model the total utility realized by each agent i according to their personal value fi, minus the total cost they incur buying and selling. Formally: 
+
+Definition 2 (Realized Utility) . Let (hi, h−i) denote the trading trajectories of agent i and all other strategic agents respectively. Letting p(hi, h−i, λ) ∈ RT denote the sequence of prices under Assumption 1, agent i’s realized utility is: 
+
+ui(hi; h−i, λ) = fi(hi) − p(hi, h−i, λ)⊤hi .
+
+4Regular Strategy Spaces Under partial information, we formalize the strategy for each agent as a function hi : Θ i → RT , which determines how they would behave under any type realization. For any feasible strategy hi, it must be that hi(θi) ∈ Gi(θi) for every θi ∈ Θi. In practice, however, agents may benefit from considering more restricted spaces, especially when type spaces Θi become more complex and we wish to ensure learnability. We therefore consider a more general class of feasible strategy spaces with explicit complexity bounds: 
+
+Definition 3 (Strategy Spaces) . We say that a strategy space Hi for agent i is (B, L )-regular if: 1. The strategy space Hi is feasible: hi(θi) ∈ Gi(θi) for all θi in Θi, and hi ∈ H i.2. The strategy space Hi is convex and is a closed subset of the L2(Θ i, P θi ; RT ) function space where 
+
+⟨hi, h′
+
+> i
+
+⟩H∗ 
+
+> i
+
+= Eθi [⟨hi(θi), h′
+
+> i
+
+(θi)⟩].3. Every strategy hi ∈ H i is bounded: ∥hi(θi)∥2 ≤ B for all θi ∈ Θi
+
+4. Every strategy hi ∈ H i is Lipschitz: ∥hi(θi) − hi(θ′
+
+> i
+
+)∥∞ ≤ L∥θi − θ′
+
+> i
+
+∥∞ for all θi, θ ′ 
+
+> i
+
+∈ Θi.
+
+Bayesian Game Instance Putting the above together, we can fully characterize an overall Bayesian Game instance in terms of a distribution over possible instances, feasible strategies as mappings from player type to trading trajectory, and expected agent utilities, as follows: 
+
+Definition 4 (Bayesian Game Instance) . An instance of our Bayesian game setting is characterized by: 1. Distribution over instances: Let I = ( θ1, . . . , θ n, λ) denote a game instance. We assume a joint distribution P (θ1, . . . , θ n, λ) from which the components of an instance I are sampled from. 2. Strategy Spaces: Each agent i uses a (Bi, L i)-regular strategy space Hi, for some finite non-negative 
+
+Bi, and some (possibly infinite) non-negative Li.3. Game Payoff Structure: Each agent i’s expected utility given their and others’ strategies (hi, h−i) is the expected value of their realized utility over instances I ∼ P : Eθi,θ −i,λ∼P [ui(hi(θi); h−i(θ−i), λ)] .
+
+Since player strategies are ex-ante mappings from their possible types to feasible trading schedules, game play can be ordered as follows: (1) each agent ex-ante decides their strategy function hi, (2) a game instance 
+
+I ∼ P is sampled and the corresponding type information θi is privately revealed to each agent, and (3) each agent executes their trading schedule hi(θi) ∈ Gi(θi) and attains the realized utility. Finally, we comment on what information, if any, agents have about the prior distribution P over the game instances. In Section 3, we consider the case where all agents have common knowledge of P , whereas in Section 4 we consider agents having no knowledge of P and must learn via interaction. Although learning from interaction is more realistic, the idealized “common prior” setting allows us to define and analyze concrete notions of equilibria, which we then show in Section 4 can be approximately reached after sufficient rounds of interaction. 
+
+## 3 Agents with Common Prior 
+
+In this section, we assume that all strategic agents have common knowledge of the joint distribution P over agent and market types. Our focus here is on the characterization of equilibria, in terms of their existence, uniqueness, quality, and computability. This setting can be formally studied in the Bayesian game theory framework, using the standard equilibrium notion: 
+
+Definition 5 (Bayesian Nash Equilibrium) . The strategies (heq  
+
+> 1
+
+, . . . , heq n ) are in a Bayesian Nash Equilib-rium (BNE) if for all agents i, all h′ 
+
+> i
+
+∈ H i, and all θi ∈ Θi, we have: Eθ,λ∼P [ui(heq i (θi); heq 
+
+> −i
+
+(θ−i), λ)] ≥
+
+Eθ,λ∼P [ui(h′
+
+> i
+
+(θi); heq 
+
+> −i
+
+(θ−i), λ)] − ε and ε = 0 . When ε > 0, we denote the strategies as being in ε-BNE. 
+
+BNE are the set of joint strategies such that no agent has any ex-ante incentive to unilaterally deviate, given others’ strategies. Note that if all agent types are perfectly informative of λ (i.e. all agents have complete information), then the BNE coincides with the classical notion of Nash Equilibrium. 3     
+
+> 3Specifically, under complete information, agents are in BNE if and only if for every possible Itheir trajectories given Iare a Nash Equilibrium for the fixed game instance defined by I.
+
+5In any case, our definitions and statements so far have been framed with respect to pure (deterministic) strategies. In general, agents may use mixed (randomized) strategies, which begs the question: could mixed strategies appear in BNE? The following lemma immediately establishes that this cannot be the case. We give brief proof sketches of this and other results in this section, with the full details deferred to Section A. 
+
+Lemma 1. The best response of any agent i is always unique and deterministic – hi(θi) is unique and deterministic for every type θi – even if others are playing some mixed (possibly correlated) set of strategies. 
+
+This result relies on unrolling the auto-regressive price definition and observing that each agent’s utility can be expressed as a strictly concave quadratic function of the joint strategies h1(θi), . . . , h n(θn).
+
+Existence and Uniqueness of Equilibrium We now characterize the existence and uniqueness of the BNE for this game. The following theorem establishes that BNE always exist and are unique. 
+
+Theorem 1. Every instance of the Bayesian game (Definition 4) has a unique and deterministic BNE. 
+
+At a high level, the proof of Theorem 1 works by casting the BNE conditions as a variational inequality in the function space L2(P ) – the space of square-integrable functions from θi to RT with an inner product written in terms of expectation over P . The latter point is key since it means the first order optimality conditions characterizing the BNE can be expressed as a variational inequality in L2(P ). This variational inequality operator can be shown to be strongly monotone, with strong monotonicity constant depending on the distributions of α and β. This, in combination with the (Bi, L i)-regularity conditions on the strategy spaces Hi, are sufficient to ensure a unique, deterministic BNE. 
+
+Computability of Equilibria Treating the BNE computation as an optimization problem, we first note complexity results here are typically stated in terms of iterations or queries to some oracle. Since the BNE conditions can be cast as a strongly monotone variational inequality, by additionally proving Lipschitzness, we can invoke the extra-gradient algorithm to compute this (Korpelevich, 1976). Specifically, assuming oracle access to this operator, we can find a ε > 0 approximate BNE – in the sense that our solution ˆx satisfies 
+
+|| ˆx − x∗|| ≤ ε in O ( Lc log 1
+
+> ε
+
+) queries. We detail this in Corollary 1 in Section A. In the case of discrete type-spaces, a more granular bound can be given in terms of calls to the gradient of fi.
+
+Quality of Equilibria Finally, we turn to the characterization of BNE quality. For this, we use the popular Price of Anarchy (PoA) notion of Roughgarden (2010), which considers the ratio between maximum possible welfare (sum of all agent utilities) and the welfare at an equilibrium. Since BNE are deterministic and unique, we can give the following simplified formal definition of the PoA: 
+
+Definition 6. Let heq  
+
+> 1
+
+, . . . , heq n denote the unique BNE strategies given distribution P , and let welf (h1, . . . , hn, λ, θ) = ∑ni=1 ui(hi(θi); h−i(θ−i), λ) denote the total welfare function. The Price of An-archy ratio is then defined as: 
+
+sup h1,..., hn∈H 1... Hn Eθ,λ[welf (h1, . . . , hn, λ, θ)] 
+
+Eθ,λwelf (heq  
+
+> 1
+
+, . . . , heq n , λ, θ)
+
+Since the welfare is always non-negative in any non-degenerate case 4 the quantity above is always ≥ 1,with higher values indicating equilibrium welfare (multiplicatively) far from the optimal. We first consider whether it is possible to bound the PoA for any instance of the Bayesian game. The following theorem shows that this is impossible, as the PoA can be unbounded in some cases. 
+
+Theorem 2. For any constants α > 0, β > 0, T ≥ 2, and any ξ > 0, there exists a complete information instance where the PoA ratio is at least ξ.
+
+The proof of Theorem 2 is based on an explicit construction where with two traders who strategically trade in opposite directions — one buying and another selling and essentially providing liquidity to the first.  
+
+> 4if fi(0) = 0 , buying/selling nothing guarantees 0 utility to any agent and thus dominates negative utility strategies
+
+6As this construction relies on strategic agents trading on both sides, it is natural to ask whether PoA is bounded for game instances where strategic agents all want to trade in the same direction? Such scenarios commonly occur in markets. For example, after an earnings call with earnings above expectations, traders may systematically move their positions in a positive direction. As another example, it may be reasonable to expect that agents in compute markets are all trying to cheaply acquire compute resources. We next establish such a bound, with the proof based on the smooth games framework of Roughgarden (2015). 
+
+Theorem 3. For any Bayesian game instance P with the following properties: 
+
+• Agents are constrained to only buy: hi,t (θi) ≥ 0, ∀i, θ i, t and st ≥ 0.
+
+• Each agent i’s goal is to build a position Vi(θi) at minimum cost. That is, for all i, θi, ∑ 
+
+> t
+
+hi,t (θi) = 
+
+Vi(θi) is a constraint and fi = 0 .Then for γ = sup α,β ∈supp (P ) αα+2 β , the Price of Anarchy is upper bounded by O(n2T 2γ2).
+
+## 4 Learning to Play without a Common Prior 
+
+We now move to a more general and practically motivated setting, where players do not have prior common knowledge of P and instead must learn to act via repeated interaction with the market. Our focus here is to give learning algorithms for agents that ensure convergence to the unique BNE characterized earlier in Section 3. 
+
+Learning Problem Setup: For this learning setting, all agents interact over R ∈ N+ rounds. In each round r ∈ [R], the interaction follows the same sequence of events as in the Bayesian game outlined in Section 3 — each agent first decides their strategy hri , then an instance I is sampled from P and each agent observes their type θi and correspondingly plays strategy hri (θi). Each agent i’s strategy at round r, hri , can be chosen adaptively based on feedback observed in all previous rounds. We adopt a realistic feedback model, where at the end of every round, each agent observes the price trajectory of that round — typically public information in markets — and estimates of the market impact coefficients 
+
+αr and βr for that round. This can then be used to estimate their cost function. The end-of-round feedback is formalized as follows: 
+
+Assumption 2 (End-of-Round Feedback) . At the end of every round r, each agent i observes the realized price trajectory {prt }Tt=0 and receives estimates ˆαri , ˆβri of market coefficients αr , β r satisfying E[|ˆαri −αr |] ≤ ∆α
+
+and E[| ˆβri − βr |] ≤ ∆β .
+
+In practice, estimating market parameters can be done via standard regressions — or, more generally, any black-box predictive model — trained on observed market data. We provide one concrete procedure for constructing these estimates in Section 5. Our analysis in this section treats these estimates as outputs of some abstract oracle, and the resulting guarantees depend only on estimation error. 
+
+Doubly-Optimal Learning Task: A good learning algorithm should guarantee desirable convergence behavior without prior knowledge of P . Standard no-regret approaches can ensure that the empirical distri-bution of actions across rounds converges to a coarse-correlated equilibrium (see Hartline et al. (2015) for the classical result of this kind for Bayesian games). This, however, can be unsatisfying in practice since learners would typically prefer convergence of their actual strategy toward some equilibrium, with the best case being last-iterate convergence to BNE. Recently, there has been work on doubly-optimal algorithms for game-playing that guarantee last-iterate convergence to Nash equilibrium when applied simultaneously by all agents, while ensuring no-regret when other agents behave arbitrarily, which is a useful defensive guarantee (Jordan et al., 2024). Importantly, such algorithms do not require communication between agents, with each agent’s action determined by the 7feedback from their own cost function. Ideally, we would like to devise a learning algorithm that can obtain such doubly-optimal properties. The existing analysis on doubly-optimal learning does not apply to our setting for two key reasons: 1. Unlike Jordan et al. (2024), we consider Bayesian game instances, where strategies are mappings from types to trajectories. Since types may be continuous, strategies are not generally representable as finite-dimensional vectors, which their results rely upon. 2. Their algorithm and analysis require unbiased stochastic cost function gradients. On the one hand, the realized agent costs for the sampled instance I ∼ P at each round r is an unbiased estimate of the expected cost of that strategy over P . However, computing the gradients of these realized costs requires perfect knowledge of αr , βr , and aggregate demand ∑  
+
+> j̸=i
+
+hj + s. Under Assumption 2, the gradients available to agents can only be computed from estimated market-impact parameters and reconstructed aggregate demand, introducing bias in gradient estimates. These two limitations create new technical obstacles, which our algorithm and theory address. For the former, our approach is to discretize the type space. For the latter, our approach is to compute stochastic gradient estimates and extend the theory of Jordan et al. (2024) to handle bias in such estimates. We next discuss these two extensions, before presenting our main algorithm and convergence results. 
+
+Type Space Discretization: We handle continuous type spaces via discretization. Specifically, given a continuous type space Θi and hyperparameter δ, we compute a δ-net ˆΘi of Θi: for every θi ∈ Θi, there exists a ˆθi ∈ ˆΘi such that || θi − ˆθi|| ≤ δ. We then restrict ourselves to strategies ˆhi ∈ ˆHi ⊆ H i that are piece-wise constant over the “bins” (the set of θi ∈ Θi that are closest to a specific ˆθi ∈ ˆΘi) introduced by the nearest neighbour mapping between Θi and ˆΘi. Finally, we give a “lifting" argument using Lipschitzness of our strategies to show that convergence of learning under ˆHi ensures approximate convergence under Hi.
+
+Algorithm 1: Learning Under Estimated Market Parameters Fix δ = 1 / log R. Let ˆΘi be a δ-net of Θi. For each θi ∈ Θi, let ˆθi denote its nearest neighbor in ˆΘi
+
+Let ˆHi = {ˆhi : Θ i → RT |ˆhi(θi) = hi(ˆθi) ∀hi ∈ H i} be the strategy space that is piecewise constant over each bin given by the discretization Initialize ˆh1 
+
+> i
+
+∈ ˆHi
+
+Let z0 = 1log( R+10) 
+
+for r = 1 , ..., R do 
+
+Upon observing θri , compute ˆθri
+
+Sample M r ∼ Geometric (z0)
+
+Let ηr+1 = r+1 √1+max {M 1,...,M r }
+
+Update hr+1  
+
+> i
+
+= arg min ˆhi∈ ˆHi {(ˆhi − hri )⊤ ˜∇ri + ηr+1  
+
+> 2
+
+∥ˆhi − hri ∥2}, where ˜∇ri is the estimated gradient 
+
+Estimated Stochastic Cost Gradient: In our setting, agents do not observe the realized aggregate de-mand or the true market-impact parameters; instead, they observe prices and estimate these parameters. We therefore derive a recursive reconstruction of aggregate demand from the price trajectory and the estimated parameters, and use this reconstruction to compute an estimated stochastic gradient. The resulting gradient is biased, with bias controlled by the market-parameter estimation errors. To handle this, we give a new analysis of the algorithm that tolerates some amount of bounded bias, leading to convergence rates that degrade with the estimation error. Formally, for each agent i, let Dri,t = ∑ni=1 hri,t + srt denote the (unobserved) aggregate demand at time 
+
+t ∈ [T ] of round r. Given Assumption 1 it can be shown that Dri,t can be recursively defined in terms of price increments and αr , β r . Replacing αr , β r with estimates ˆαri , ˆβri then gives the following recursive estimate for 
+
+Dri,t :
+
+ˆDri,t = (prt − prt−1) + ˆβri ˆDri,t −1
+
+ˆαri + ˆβri
+
+, ˆDri, 0 = 0 
+
+8(See the proof of Theorem 4 for the derivation.) Given this, each agent i can then form an estimate of the aggregate external demand schedule: ˆdr 
+
+> −i
+
+= ˆDri − hri (θri ), where ˆdr
+
+> −i
+
+, ˆDri ∈ RT . Then, plugging this in along with the estimates ˆαri and ˆβri , each agent i can compute an estimated stochastic gradient of their expected cost at round r:
+
+˜∇r 
+
+> hi
+
+= p01T + ˆ αri W hri (θri ) + ˆ αri W ′ ˆdr 
+
+> −i
+
++ ˆβri
+
+(2hi(θi) + ˆdr
+
+> −i
+
+) − ∇ fi
+
+(hi(θi)),
+
+where W ∈ RT ×T is the matrix with Wtt = 2 for all t ∈ [T ] and 1 everywhere else, and W ′ ∈ RT ×T is the matrix with W ′ 
+
+> ts
+
+= 1 for s ≤ t and 0 everywhere else. 
+
+Main Algorithm and Learning Result: Given these ingredients, we present our learning procedure in Algorithm 1, which achieves the following ε-BNE guarantee – i.e. no agent can unilaterally deviate to improve their expected utility by more than ε:
+
+Theorem 4. Let all agents use Algorithm 1 to select strategies. Then, the last iterate strategies (hR 
+
+> 1
+
+, ..., hRn )
+
+are an ϵ-approximate BNE, for an ϵ that satisfies, in expectation over the algorithm’s randomness: 
+
+E[ϵ] = O
+
+(
+
+poly (n, T, p 0, B, S, U ′, α max , β max , 1/(κˆκ)) ·
+
+(
+
+L
+
+log R + log (m+3) /2(R)
+
+√R + (∆ α + ∆ β )
+
+(
+
+1 − 1
+
+R
+
+)
+
+log 2(R)
+
+)) 
+
+where m = max i mi, L = max i Li, and S, U ′, κ, ˆκ, αmax , and βmax are constants such that sup s ∥s∥ ≤ S,
+
+∥∇ fi(hi(θi)) ∥ ≤ U ′, κ ≤ ˆαri ≤ αmax , and ˆκ ≤ ˆβri ≤ βmax , which all hold uniformly over i, r, and θi.
+
+The proof sketch is as follows. We start by discretizing the strategy space using a δ-net (if they are already not discrete). Next, we extend the key convergence lemma of Jordan et al. (2024) to accommodate gradients biased by some ∆. Then, given a novel formulation of Bayesian games in their framework and the regularity properties of ˆHi, we establish approximate convergence to BNE with respect to the discretized strategy spaces ˆHi, with error dependent on ∆α + ∆ β . Finally, we extend this to convergence to BNE with respect to the true strategy spaces Hi with an additional L-dependent error by leveraging (B, L ) regularity. See Section B for full proof details. Estimation errors introduce a term in the equilibrium approximation ε that grows poly-logarithmically in 
+
+R; while this term is not sublinear, we argue that it does not preclude the guarantee from being meaningful in practice. For fixed horizon R, if the estimation error is sufficiently small relative to R – for instance, if the estimates improve over time as more market data is observed — then the overall error vanishes. Lastly and as desired, when ∆α = ∆ β = 0 (i.e agents have ex-post access to true market parameters), our result guarantees convergence to the BNE with vanishing error. Finally, we note that while Theorem 4 focuses on last-iterate convergence to BNE, a nearly identical analysis also establishes the other doubly-optimal property, i.e. that algorithm is approximately no-regret even if other agents behave arbitrarily (and potentially adversarially), which we omit for brevity. 
+
+Practical implementation of Algorithm 1: We briefly comment on the optimization step in the per-round update of Algorithm 1. For each agent i, after discretizing Θi into ˆΘi, a discretized strategy ˆhi can be represented as a | ˆΘi| × T matrix. Thus, the optimization problem of Algorithm 1 is a quadratic optimization problem over | ˆΘi| · T variables: 
+
+min 
+
+> ˆhi
+
+{(ˆhi − ˆhri )⊤ ˜∇ri + ηr+1 
+
+2 ∥ˆhi − ˆhri ∥2} s.t. ˆhi ∈ ˆHi
+
+Now, the feasible set ˆHi is specified by two types of constraints. First, for all ˆθi ∈ ˆΘi, the trajectory ˆhi(ˆθi)
+
+must lie in the feasible region given by the convex set Gi(ˆθi). Second, strategies ˆhi must be Li-Lipschitz in the ℓ∞ norm. That is, we require for every ˆθi ˆθ′ 
+
+> i
+
+∈ ˆΘi and t ∈ [T ]:
+
+−Li∥ˆθi − ˆθ′
+
+> i
+
+∥∞ ≤ ˆhi,t (ˆθi) − hi,t (ˆθ′
+
+> i
+
+) ≤ Li∥ˆθi − ˆθ′
+
+> i
+
+∥∞
+
+9This yields a set of 2| ˆΘi|2T linear constraints. Therefore, the update step is a standard convex quadratic program. In many natural scenarios, the constraints Gi are linear (e.g. inventory constraints, no short selling); in this case, the update step is a quadratic program for which standard solvers can efficiently solve. 
+
+## 5 Experimental Evaluations with Real Data 
+
+Empirical Bayesian Game Setup While there have been recent works on this topic (see Section 1.2), none of them have considered the problem of real data-based evaluation. Therefore, we now consider the problem of how to construct a Bayesian Game instance for simulated game play that is grounded in publicly available market data. This is meant to illustrate our theoretical results and of relevance for future research in this direction. A simple approach to this is to estimate distributions of market parameters ( i.e. α, β, and s) from data, and then simulate game play under these parameter distributions. A full Bayesian game instance can then be constructed by augmenting these estimated market parameter distributions with hand-crafted sets of agent types, which can be defined in terms of type-specific constraints Gi(θi), type-specific value functions fi(·; θi),and how they correlate with market parameters and each other. Unfortunately, past work exploring market parameter estimation from data has depended on either propri-etary ( e.g. Almgren et al. (2005)) or simulated ( e.g. Li et al. (2024)) data, which generally depend on a level of market microstructure information that is difficult to discern in publicly available data. Given this, we devised a simple approach that can utilize publicly available forex data from Dukascopy, a Swiss financial services firm, which provides tick-level data of bid/ask prices and volumes 5. To control for confounding ef-fects, as well as the inherently high signal-to-noise ratio in this data, we pooled all available data for a single market (Canadian Dollar to U.S. Dollar) over the same 3-hour window (9am-12pm ET) on every Tuesday from September 2, 2025 to November 4, 2025. We estimated market parameters from this data as follows: 
+
+• Estimating α: The permanent impact coefficient α represents the non-transient effect on price due to the imbalance of supply and demand. We first approximate the excess demand by taking the difference between the bid and ask volumes (actual execution data is rarely available publicly). Then we compute the mid-price – the mid-point of the bid and ask prices at each time step. Lastly, we regress the next step (rolling window of 100 ticks) mid-price change based on the average excess volume in the current step, with the regression slope capturing α.
+
+• Estimating β: The temporary impact coefficient is harder to estimate using a simple order-book like this. Since β captures the premium that traders pay at execution time due to a large imbalance of buy/sell volume present, we proxy this using the bid-ask spread – the larger this value, the higher amount market makers can charge to execute an order. Excess supply or excess demand, both lead to a higher spread and thus a higher execution cost. We thus predict the ask-bid spread at the next step (rolling window of 100 ticks), based on the absolute volume imbalance at the current step. 
+
+• Estimating s: We averaged the excess demand at each time of day over the 3-hour period. We present the results estimating α, β in Figures 3 and 4 in Appendix D, along with additional details on our experimental procedure. We set up a Bayesian game instance with these estimated market parameters and two strategic agents, each with 3 possible types, with P (θ1 = i, θ 2 = j) = 19 for all i, j ∈ { 1, 2, 3}. For each agent, we imposed type-specific constraints on their final position ( −Vi(θi) ≤ 1T hi(θi) ≤ Vi(θi)), and used value functions defined using type-specific reserve prices on their final position ( fi(hi) = ri(θi)1T hi). See Figure 1 for details on these parameters. We use a fixed, type-independent value of s, gathered as described above. As for the price parameters, P (α|θ1, θ 2) and P (β|θ1, θ 2) are Gaussian distributions whose means E[α|θ1, θ 2] and E[β|θ1, θ 2]
+
+are type-dependent. They are within ±1e−8 and ±1e−7 of α∗ and β∗ respectively for the left plot and within 
+
+±1e−8 and ±1e−6 of α∗ and 10 β∗ for the right plot. That is, the left part of Figure 1 has β values centered 
+
+> 5All raw data and corresponding code will be made publicly available upon publication and are available upon request.
+
+10 Figure 1: Cumulative position over time for agents under the BNE. The type conditioned expected reserves 
+
+E[ri|θi] are (1 .4, 1.405 , 1.41) and (1 .415 , 1.42 , 1.425) for agents 1 and 2 respectively. p0 = 1 .395 and the type conditioned market parameters α and β are gaussian distributed whose means are as given in the subplot title. α∗ = 4 .65 e−7 and β∗ = 3 .25 e−6 are the market parameters estimated from regression. See Appendix D for more details. 
+
+Figure 2: Comparison of Algorithm 1 (over 500 rounds) to exact BNE strategies: (left) we plot the last-iterate strategies returned by Algorithm 1 (solid lines) along with the true BNE (dashed lines) for all agents and types; and (right) we show the convergence in mean-squared error between the strategies from Algorithm 1 and the BNE over the 500 rounds. and close on the regression predictions; the right part considers β values roughly ten times larger. This is to evaluate how the α to β ratio affects equilibrium strategies. 
+
+Bayesian Nash Equilibrium Simulations: We present the equilibrium results in Figure 1 computed using the extra-gradient algorithm Korpelevich (1976). We notice that in the left plot where temporary impact β is lower, traders in equilibrium initially take advantage of the (1) high demand from the exogenous party/market aggregate s and (2) high price relative to their reserve. This leads them to start by initially selling to increase profit/utility. As this dampens the price and the aggregate market demand weakens, they switch to buying and building their position and end up close to their upper bound constraint. However, when temporary price impact is higher (right side of the figure), this arbitraging behaviour becomes costly. In this regime, the agent strategies are much more proportional to the market aggregate s as they build toward their final position. This strategy corresponds to the popular Volume Weighted Average Price (VWAP) execution algorithm: agents trade proportional to the volume of trade that occurred at that interval. We include a detailed discussion connecting our equilibrium strategy to the VWAP strategy and empirical evaluations of markets that include both types of execution in Appendix E. 
+
+Online Learning Simulations: We conclude with an empirical investigation on the convergence to equi-librium in the learning setting by simulating the interaction and feedback described in Section 4. We use 11 the same Bayesian game instance as above and have all agents follow Algorithm 1. To directly measure convergence to the BNE, we assume that in each round, agents observe αr , β r ∼ P as defined above, without additional observation bias (though these parameters themselves are estimates of the unknown true param-eters). We show the results of this simulation in Figure 2. On the left we directly compare the final iterate strategies from our learning dynamics with the BNE 6. We see that these almost exactly overlap, with only very minor discrepancies, which can be explained by noise in the observed market parameters. On the right we plot the convergence of the agent strategies during online learning to the BNE strategies in terms of mean-squared error (MSE), which very rapidly approaches 0, even faster than guaranteed by our theory. Overall, these results validate the technical results in Theorem 4. 
+
+## 6 Discussion 
+
+This work proposes a general game theoretic model for understanding acquisition and trading of costly re-sources in competition, a problem with wide-ranging applicability from financial markets to compute/cloud markets. To capture such diverse settings, we start with a standard price model and then accommodate arbi-trary convex constraints on the strategy, concave valuation function, and incomplete knowledge of the market and its participants which necessitates learning. We conclude by discussing some practical shortcomings of this model and the corresponding results which may motivate future work: 
+
+• In our framework, agents can trade any fractional asset amount at each time step at the endogenously-determined price pt, governed by the linear/quadratic model of Almgren & Chriss (2000). While this model is widely used in the literature, it is stylized from a practical perspective. Real price impact depends also on various market microstructure features. For example, for assets traded in electronic exchanges, agents may need to interact with the corresponding limit order book, and trades may only be possible in particular discrete quantities depending on available bids and offers in the book. Incorporating additional micro-structure, including limit-order books which are widespread (see Li et al. (2024) for a detailed overview), would be a fruitful line of future work. As would extensions to the propagator models of price impact (Bouchaud et al., 2003; Gatheral & Schied, 2013; Obizhaeva & Wang, 2013). 
+
+• The learning procedure in Section 4 faces two practical limitations. First, Algorithm 1 handles contin-uous type spaces by constructing a δ-net and optimizing over the resulting discretized strategy space. This discretization can scale exponentially with the dimension of the type space, giving an exponential dependence in the regret bound and increasing computational expense for high-dimensional type spaces. 7
+
+A direct implementation of our algorithm is thus most practical for low-dimensional spaces. A natu-ral direction for future work is to replace this discretization step with function approximation methods commonly used in online learning. Second, the convergence guarantee depends on the accuracy of the es-timated market parameters. As discussed in Section 4, estimation errors contribute a non-vanishing term unless they decay sufficiently quickly. Our results are thus strongest in settings where market impact parameters can be estimated accurately, or where estimation improves with additional observations. 
+
+• We assume that agents commit to their full trajectory of actions h ex-ante , and cannot adjust dynamically to the behavior of other agents. A richer model would be to consider type-specific policies that map history to the action at the next time step y, and connect to directions in multi-agent reinforcement learning. That said, our present model can approximate this dynamic interaction by splitting time into many smaller horizons, each of which can be modeled as a separate instance of our game. 
+
+• Lastly, our results currently assume all agents are strategic, standard in game-theory. In practice, however, markets contain many types of traders with varying behaviours. In Appendix E we include an initial investigation in this direction and consider a market including both strategic traders and those who trade at a constant rate with respect to volume-weighted time (VWAP), a popular execution algorithm. We empirically analyze this in the complete-information setting and make some interesting observations. While the VWAP traders would benefit from being strategic, the strategic traders would lose out due   
+
+> 6While Section 4 provide guarantees with respect to the BNE under the true market parameters, here we compare Algorithm 1 to the BNE under the game constructed using our estimated market parameters, since true parameters are unknown.
+> 7This is pessimistic and, in practice, we may suffer from some lower intrinsic dimension, see e.g. Pestov (2007); Kpotufe (2011); Pope et al. (2021).
+
+12 to this switch. Interestingly, the overall welfare to the system is often greater when a subset of agents are playing VWAP. This suggests a rich line of future work in rigorously understanding the impacts of such non-strategic actions within this setting. It may also be instructive to take a mechanism design perspective to incentivize behavior that improves overall welfare. 
+
+## Broader Impact Statement 
+
+This paper studies how multiple strategic agents compete to trade costly, divisible resources under endoge-nous price dynamics, with applications including financial assets and cloud/compute resources. By advancing game-theoretic and learning-based methods for these settings, this may enable more accurate modeling, sim-ulation, and potentially more efficient resource acquisition strategies. Potential positive societal impacts include improved understanding of strategic effects in these markets, which could inform better market de-sign and help identify conditions that reduce inefficiency or instability. Potential risks are largely indirect and depend on downstream use. These concerns are not unique to our approach and are common to many advances in this area. We view the primary contribution as improving understanding of such systems. 
+
+## References 
+
+Martin Aleksandrov and Toby Walsh. Online fair division: A survey. In Proceedings of the AAAI Conference on Artificial Intelligence , volume 34, pp. 13557–13562, 2020. Robert Almgren and Neil Chriss. Optimal execution of portfolio transactions. Journal of Risk , 3:5–40, 2000. Robert Almgren, Chee Thum, Emmanuel Hauptmann, and Hong Li. Direct estimation of equity market impact. Risk , 18(7):58–62, 2005. Emmanuel Bacry, Adrian Iuga, Matthieu Lasnier, and Charles-Albert Lehalle. Market impacts and the life cycle of investors orders. Market Microstructure and Liquidity , 01(02):1550009, 2015. doi: 10.1142/ S2382626615500094. URL https://doi.org/10.1142/S2382626615500094 .Siddhartha Banerjee, Vasilis Gkatzelis, Safwan Hossain, Billy Jin, Evi Micha, and Nisarg Shah. Proportion-ally fair online allocation of public goods with predictions. In Proceedings of the Thirty-Second Interna-tional Joint Conference on Artificial Intelligence , pp. 20–28, 2023. Jean-Philippe Bouchaud, Yuval Gefen, Marc Potters, and Matthieu Wyart. Fluctuations and response in financial markets: thesubtle nature ofrandom’price changes. Quantitative finance , 4(2):176, 2003. Neil A Chriss. Competitive equilibria in trading. arXiv preprint arXiv:2410.13583 , 2024a. Neil A Chriss. Optimal position-building strategies in competition. arXiv preprint arXiv:2409.03586 , 2024b. Neil A Chriss. Position-building in competition with real-world constraints. arXiv preprint arXiv:2409.15459 ,2024c. Neil A Chriss. Position building in competition is a game with incomplete information. arXiv preprint arXiv:2501.01241 , 2025. Gerard Debreu. Theory of value: An axiomatic analysis of economic equilibrium , volume 17. Yale University Press, 1959. Jim Gatheral and Alexander Schied. Dynamical models of market impact and algorithms for order execution. 
+
+Handbook on Systemic Risk, Jean-Pierre Fouque, Joseph A. Langsam, eds , pp. 579–599, 2013. Jason Hartline, Vasilis Syrgkanis, and Éva Tardos. No-regret learning in bayesian games. In Proceedings of the 29th International Conference on Neural Information Processing Systems - Volume 2 , NIPS’15, pp. 3061–3069, Cambridge, MA, USA, 2015. MIT Press. 13 Michael Jordan, Tianyi Lin, and Zhengyuan Zhou. Adaptive, doubly optimal no-regret learning in strongly monotone and exp-concave games with gradient feedback. Oper. Res. , 73(3):1675–1702, May 2024. ISSN 0030-364X. doi: 10.1287/opre.2022.0446. URL https://doi.org/10.1287/opre.2022.0446 .Michael Kearns and Mirah Shi. Algorithmic aspects of strategic trading. arXiv preprint arXiv:2502.07606 ,2025. David Kinderlehrer and Guido Stampacchia. An introduction to variational inequalities and their applica-tions . SIAM, 2000. Galina M Korpelevich. The extragradient method for finding saddle points and other problems. Matecon ,12:747–756, 1976. Samory Kpotufe. k-nn regression adapts to local intrinsic dimension. Advances in neural information processing systems , 24, 2011. Albert S Kyle. Continuous auctions and insider trading. Econometrica: Journal of the Econometric Society ,pp. 1315–1335, 1985. Fengpei Li, Vitalii Ihnatiuk, Yu Chen, Jiahe Lin, Ryan J Kinnear, Anderson Schneider, Yuriy Nevmyvaka, and Henry Lam. Do price trajectory data increase the efficiency of market impact estimation? Quantitative Finance , 24(5):545–568, 2024. Andreu Mas-Colell, Michael Dennis Whinston, Jerry R Green, et al. Microeconomic theory , volume 1. Oxford university press New York, 1995. Esteban Moro, Javier Vicente, Luis G. Moyano, Austin Gerig, J. Doyne Farmer, Gabriella Vaglica, Fabrizio Lillo, and Rosario N. Mantegna. Market impact and trading profile of hidden orders in stock markets. 
+
+Phys. Rev. E , 80:066102, Dec 2009. doi: 10.1103/PhysRevE.80.066102. URL https://link.aps.org/ doi/10.1103/PhysRevE.80.066102 .Hervé Moulin. Fair division and collective welfare . MIT press, 2004. Anna A Obizhaeva and Jiang Wang. Optimal trading strategy and supply/demand dynamics. Journal of Financial markets , 16(1):1–32, 2013. Vladimir Pestov. Intrinsic dimension of a dataset: what properties does one expect? In 2007 International Joint Conference on Neural Networks , pp. 2959–2964. IEEE, 2007. Phillip Pope, Chen Zhu, Ahmed Abdelkader, Micah Goldblum, and Tom Goldstein. The intrinsic dimension of images and its impact on learning. arXiv preprint arXiv:2104.08894 , 2021. R Tyrrell Rockafellar and Roger J-B Wets. Variational analysis , volume 317. Springer Science & Business Media, 2009. Robert W. Rosenthal. A class of games possessing pure-strategy nash equilibria. International Journal of Game Theory , 2(1):65–67, 1973. doi: 10.1007/BF01737559. Tim Roughgarden. Algorithmic game theory. Communications of the ACM , 53(7):78–86, 2010. Tim Roughgarden. Intrinsic robustness of the price of anarchy. Journal of the ACM (JACM) , 62(5):1–42, 2015. Supreeth Shastri and David Irwin. Cloud index tracking: Enabling predictable costs in cloud spot markets. In Proceedings of the ACM Symposium on Cloud Computing , pp. 451–463, 2018. Neha S Wadia, Yatin Dandi, and Michael I Jordan. A gentle introduction to gradient-based optimization and variational inequalities for machine learning. Journal of Statistical Mechanics: Theory and Experiment ,2024(10):104009, 2024. Donald A Walker. Walras’s theories of tatonnement. Journal of Political Economy , 95(4):758–774, 1987. K. Webster. Handbook of price impact modeling . Chapman and Hall/CRC, 2023. 14 A Proofs and Details For Section 3 
+
+Lemma 2. Suppose each θi is fully informative about all market parameters λ, thus giving us a complete information instance. Then the utility of agent i for joint strategy (h1(θ1), . . . , hn(θn)) is strictly concave in their strategy, and is given by: ui(hi(θi); h−i(θ−i), λ)= fi(hi(θi)) − 12 hTi (θi)Qα,β hi(θi) − ∑ 
+
+> j̸=i
+
+(Aα,β hj (θj ))T hi(θi) − sT Aα,β hi(θi) − p0(1T hi(θi)) ,
+
+where Qα,β and Aα,β are n × n matrices defined in terms of α and β, and Qα,β is symmetric and positive definite. Proof. Observe that since each θi is fully informative, there is no need to take any expectation over λ and the game can be thought of as a complete information setting. Pick an arbitrary realization of (θ1, . . . , θ n)
+
+and for brevity of notation, let h1 ∈ RT , . . . , hn ∈ RT denote the agent strategies. If the utility is concave in this tuple (h1, . . . , hn) then the claim holds since the choice of types was arbitrary. We first unroll the auto-regressive nature of the Walrasian price dynamic pwt . Observe that the following holds: 
+
+pw 
+
+> 1
+
+= p0 + α ∑
+
+> j
+
+hj, 1 + αs 1 ;
+
+pw 
+
+> 2
+
+= p0 + α ∑
+
+> j
+
+hj, 1 + αs 1 + α ∑
+
+> j
+
+hj, 2 + αs 2 ; . . . 
+
+The execution price an agent pays is also influenced by the temporary impact. Combining this with the above, we can write the net cost an agent i faces as follows: ui(h1, . . . , hn, λ)= fi(hi) − ∑
+
+> t
+
+hi,t p0 − α
+
+> T
+
+∑
+
+> t=1
+> t
+
+∑
+
+> ℓ=1
+
+hi,t hi,ℓ − α
+
+> T
+
+∑
+
+> t=1
+> t
+
+∑
+
+> ℓ=1
+
+hi,t (∑ 
+
+> j̸=i
+
+hj,ℓ + sℓ) − β
+
+> T
+
+∑
+
+> t=1
+
+hi,t 
+
+( n∑
+
+> j=1
+
+hj,t + st
+
+)
+
+= fi(hi) − α
+
+> T
+
+∑
+
+> t=1
+
+(
+
+h2 
+
+> i,t
+
++ hi,t t−1∑
+
+> ℓ=1
+
+hi,ℓ 
+
+)
+
+− β
+
+> T
+
+∑
+
+> t=1
+
+h2
+
+> i,t
+
+︸ ︷︷ ︸
+
+> quadratic terms
+
+− α
+
+> T
+
+∑
+
+> t=1
+
+hi,t t∑
+
+> ℓ=1
+
+∑ 
+
+> j̸=i
+
+hj,ℓ − β
+
+> T
+
+∑
+
+> t=1
+
+hi,t 
+
+∑ 
+
+> j̸=i
+
+hj,t 
+
+︸ ︷︷ ︸  
+
+> linear terms ∝other agent
+
+− α
+
+> T
+
+∑
+
+> t=1
+
+hi,t t∑
+
+> ℓ=1
+
+sℓ − β
+
+> T
+
+∑
+
+> t=1
+
+hi,t st
+
+︸ ︷︷ ︸  
+
+> linear term ∝exogenous agent
+
+− ∑
+
+> t
+
+p0hi,t 
+
+Focusing on the quadratic terms, it suffices to compute the Hessian, denoted by Qα,β . Note that Qα,β [t, t ] = 2α + 2 β. As for the off-diagonal values, these are composed entirely of α. Indeed, for any t1̸ = t2, we have that Qα,β [t1, t 2] = α. Next, we consider the linear terms that are proportional to other agents. We wish to express it in the following form: ∑  
+
+> j̸=i
+
+(Aα,β hj )T hi. For a given t, consider the first of the two linear terms proportional to others. For any j, observe that hi,t is multiplied by αh j, 1, . . . αh j, 1. As for the second term, it multiplies hi,t with βh j,t . Hence, we conclude that Aα,β is a lower-triangular matrix, whose diagonals are α + β and the remaining values are α. As for the linear term with respect to the exogenous agent, it follows a similar pattern, and we can express it as (Aα,β s)T hi. We thus have the following expression for the matrices Qα,β and Aα,β :
+
+Qα,β [i, j ] = 
+
+
+
+α if i < j 
+
+2α + 2 β if i = jα if i > j 
+
+; Aα,β [i, j ] = 
+
+
+
+0 if i < j α + β if i = jα if i > j 
+
+;
+
+15 Since Qα,β is a symmetric matrix that can be written as Qα,β = αJ + ( α + 2 β)I where J is the all 1s matrix and I the identity matrix. Observe that for any x, we have that: 
+
+xT Qα,β x = ( α + 2 β)( xT Ix ) + α(xT Jx ) = ( α + 2 β)( xT x) + α(xT Jx ) = ( α + 2 β)|| x|| 22 + α
+
+( T∑
+
+> i=1
+
+xi
+
+)2
+
+> 0
+
+where the strict inequality holds since the parameters α, β are non-negative and x̸ = 0 . In other words, the 
+
+Qα,β matrix is positive definite and thus the utility of each agent, in terms of their own strategy, is a strictly concave function. 
+
+A.1 Proof of Lemma 1 
+
+Proof. In the most general sense, observe that agent i’s best response for a realized type θi allows them to play a mixed strategy over all valid strategies: pi(hi|θi), where hi is a vector in RT since the probability is already conditioned on θi. Suppose the remaining agents are playing some mixed, possibly correlated strategy 
+
+σ−i, where σ−i(h−i|θ−i) denotes the probability that the remaining agents play strategy h−i ∈ G−i(θ−i)
+
+when their joint type realization is some θ−i. We can then express agent i’s best response problem as follows (note that Gi(θi) ⊆ RT ): br i(θi, σ −i) = arg max 
+
+> pi(·| θi)∈∆( Gi(θi))
+
+∫
+
+> hi
+
+pi(hi; θi)
+
+∫
+
+> θ−i
+
+∫
+
+> s,α,β
+
+P (θ−i, s, α, β |θi)
+
+∫
+
+> h−i
+
+σ−i(h−i|θ−i)ui(hi; h−i, λ)
+
+noting that in the case of discrete type spaces, ∫ 
+
+> θ−i
+
+is replaced by ∑ 
+
+> θ−i
+
+. The linearity of the integral and the fact that ∫ 
+
+> hi
+
+pi(h1|θi)dhi = 1 means that a maximum must exists at a vertex/pure strategy. If multiple pure strategies are optimal, then any linear combination (a mixed strategy) would also be a best-response. However, if there is a unique pure strategy maximizing this, then it means any mixed strategy must be strictly sub-optimal. In other words, it suffices to show that the pure-strategy best-response is unique even when others’ play mixed and correlated strategies. This pure best-response problem is given by (again replace the integral with summation for discrete types): br i(θi, σ −i) = arg max 
+
+> hi∈Gi(θi)
+
+∫
+
+> θ−i
+
+∫
+
+> λ
+
+P (θ−i, λ|θi)
+
+∫
+
+> h−i
+
+σ−i(h−i|θ−i)ui(hi; h−i, λ)= arg max 
+
+> hi∈Gi(θi)
+
+∫
+
+> θ−i
+
+∫
+
+> λ
+
+P (θ−i, λ|θi)
+
+∫
+
+> h−i
+
+σ−i(h−i|θ−i)
+
+[
+
+fi(hi) − hTi Qα,β hi − ∑ 
+
+> j̸=i
+
+hTj Aα,β hi − sT Aα,β hi
+
+]
+
+= arg max 
+
+> hi∈Gi(θi)
+
+∫
+
+> fi∈F
+
+fi(hi)dμ (fi) − hTi Qα,β hi
+
+−
+
+[ ∫ 
+
+> θ−i
+
+∫
+
+> s,α,β
+
+P (θ−i, s, α, β |θi)
+
+∫
+
+> h−i
+
+σ−i(h−i|θ−i) ∑ 
+
+> j̸=1
+
+hTj Aα,β + sT Aα,β 
+
+]︸ ︷︷ ︸ 
+
+> wT(·)
+
+hi
+
+= arg max 
+
+> hi∈Gi(θi)
+
+f ∗ 
+
+> i
+
+(hi) − hTi Qα,β hi − wT (·)hi
+
+where μ(fi) is any finite non-negative measure on the function space F , and f ∗ is the result of the integral. The concavity of the function class F and non-negativity of measure μ ensure that f ∗ is concave Rockafellar & Wets (2009). Next, we note that wT (·) is a T dimensional vector that does not depend on the hi. Thus, the objective faced by buyer i is strictly concave (since Qα,β is a PD matrix – see Lemma 2) and there is a unique solution. This immediately implies that a mixed strategy will always be a sub-optimal best-response. 16 Lemma 3. For non-negative market parameters α, β with at least one of them being positive (i.e. α > 0 or 
+
+β > 0), define the block Mα,β as follows (see lemma 2 for definitions of matrix Qα,β and Aα,β ): 
+
+Mα,β =
+
+
+
+Qα,β ∈ RT ×T Aα,β ∈ RT ×T . . . Aα,β ∈ RT ×T
+
+Aα,β ∈ RT ×T Qα,β ∈ RT ×T . . . Aα,β ∈ RT ×T
+
+... ... ... ...
+
+Aα,β ∈ RT ×T Aα,β ∈ RT ×T . . . Qα,β ∈ RT ×T
+
+ (1) 
+
+Then the symmetric component of this matrix M sα,β = 12 (Mα,β + M Tα,β ) is positive definite. This implies for any x ∈ RnT : xT Mα,β x > 0.Proof. The matrix M sα,β is an n × n block matrix with Qα,β on the diagonal (since Qα,β is symmetric) and all other elements being Asα,β = 12 (Aα,β + ATα,β ). This can be succinctly represented using the Kronecker product (let Jn is an n × n all 1s matrix and In is an n × n identity matrix): 
+
+M sα,β = In ⊗ (Qα,β − Asα,β ) + Jn ⊗ Asα,β (2) Note that the all 1s matrix is positive-definite with one eigenvalue of n and all other eigenvalues 0. Therefore, we can write ΛJn = U T JnU , where ΛJn = diag (n, 0, . . . 0) . Let P = U ⊗ IT , and note that P T P =(U T ⊗ IT )( U ⊗ IT ) = U T U ⊗ IT = InT , where we use the mixed product property of Kronecker products. We shall be using P to diagonalize (in the block sense) the matrix M sα,β . Specifically, observe that due to the mixed product rule: 
+
+P T M sα,β P = P T (In ⊗ Qα,β − Asα,β )P + P T (Jn ⊗ Asα,β )P
+
+= ( U T ⊗ IT )( In ⊗ Qα,β − Asα,β )( U ⊗ IT ) + ( U T ⊗ IT )( Jn ⊗ Asα,β )( U ⊗ IT )= ( U T InU ⊗ IT (Qα,β − Asα,β )IT ) + ( U T JnU ⊗ IT Asα,β IT )= ( In ⊗ (Qα,β − Asα,β )) + (Λ Jn ⊗ Asα,β )
+
+The first summand is a block diagonal matrix with Qα,β − Asα,β in each entry, and the second summand is also block diagonal with nA sα,β in the first entry and 0 elsewhere. Therefore, P T M sα,β P results in a block diagonal matrix diag (Qα,β + ( n − 1) Asα,β , Q α,β − Asα,β , . . . , Q α,β − Asα,β ). The eigenvalues of M sα,β are the eigenvalues of this block diagonal matrix, which in turn are the eigenvalues of each matrix in the diagonal. Thus, we need to show that Qα,β + ( n − 1) Asα,β and Qα,β − Asα,β both have positive eigenvalues. Note that 
+
+Qα,β = ( α + 2 β)IT + αJ T and Asα,β = ( α 
+
+> 2
+
++ β)IT + α 
+
+> 2
+
+JT . Thus, for any x ∈ RT :
+
+xT (Qα,β − Asα,β )xT = xT
+
+[
+
+( α 
+
+> 2
+
++ β)IT + α 
+
+> 2
+
+JT
+
+]
+
+x = ( α 
+
+> 2
+
++ β)xT x + α
+
+> 2
+
+( T∑
+
+> t=1
+
+xt
+
+)2
+
+> 0
+
+xT (Qα,β + ( n − 1) Asα,β )xT = xT
+
+[
+
+(n + 1)( α 
+
+> 2
+
++ β)IT + ( n + 1) α 
+
+> 2
+
+JT
+
+]
+
+x
+
+= ( n + 1)( α 
+
+> 2
+
++ β)xT x + ( n + 1) α
+
+> 2
+
+( T∑
+
+> t=1
+
+xt
+
+)2
+
+> 0
+
+as long as either α > 0 or β > 0. Since these diagonal matrices are positive definite, they have positive eigenvalues, implying M sα,β has positive eigenvalues and is thus positive definite. 
+
+A.2 Proof of Theorem 1 
+
+Proof. We first express the agent best response from a minimization perspective. That is, each agent’s best-response for type realization θi is: arg min hi∈Gi Eθ−i,λ|θi [ci(hi, h−i, λ)] , where ci(hi, h−i, λ) =
+
+17 −ui(hi, h−i, λ). Note that by definition, at an n agent BNE with pure strategies for each type, the fol-lowing must hold: 
+
+∀i ∈ [n], ∀θi ∈ [k], ∀h′ ∈ H i : Eθ−i,λ[ci(heq i (θi), heq 
+
+> −i
+
+(θ−i), λ) − ci(h′, heq 
+
+> −i
+
+(θ−i), λ)] ≤ 0
+
+Since the expected utility/cost is a smooth function and at equilibrium everyone is playing best response, this can equivalently expressed as follows: for any agent and realized type, there can exist no feasible direction at the equilibrium at which the expected cost is decreasing Rockafellar & Wets (2009). This can be expressed as the following variational inequality: 
+
+∀i ∈ [n], ∀θi, ∀h′(θi) ∈ Gi(θi) ⊆ RT : ⟨∇ hi(θi)E[ci(heq i (θi); heq 
+
+> −i
+
+(θ−i), λ)] , (h′
+
+> i
+
+(θi) − heq i (θi)) ⟩Hi ≥ 0
+
+Importantly, this characterization is exact even if the derivatives are scaled by a distinct constant. Formally, a set of strategies are at a BNE if and only if the following holds for any choice of γiℓ – we will choose 
+
+γi,ℓ = P (θi), the marginal probability of an agent i being of type θi:
+
+∀i ∈ [n], ∀θi, ∀h′(θi) ∈ Gi(θi) : ⟨γi,θ i ∇hi(θi)Eθ−i,λ[ci(heq i (θi), heq 
+
+> −i
+
+(θ−i), λ)] , (h′(θi) − heq i (θi)) ⟩Hi ≥ 0 (3) With our choice of scaling γi,ℓ , and switching the order of gradients and expectation, we have that for any 
+
+i, θ i:
+
+γi,θ i ∇hi(θi)Eθ−i,λ[ci(heq i (θi), heq 
+
+> −i
+
+(θ−i), λ)] = P (θi)
+
+( ∫ 
+
+> θ−i
+
+∫
+
+> λ
+
+Qα,β hi(θi)P (θ−i, λ|θi)dλdθ−i
+
++
+
+∫
+
+> θ−i
+
+∫
+
+> λ
+
+[ ∑ 
+
+> j̸=i
+
+Aα,β hj (θj ) + Bα,β s
+
+]
+
+P (θ−i, λ|θi)dλdθ−i − ∇ hi(θi)
+
+∫
+
+> λ
+
+fi(hi(θi)) dμ (fi|θi)
+
+)
+
+= P (θi)
+
+[ ∫ 
+
+> α,β
+
+Qα,β P (α, β |θi)d(α, β )
+
+]
+
+hi(θi) + P (θi) ∑ 
+
+> j̸=i
+
+∫
+
+> θj
+
+∫
+
+> α,β
+
+Aα,β hj (θj )
+
+∫
+
+> θ−(i,j )
+
+∫
+
+> s
+
+P (θj , θ−(i,j ), λ|θi)+
+
+∫
+
+> α,β, s
+
+Bα,β sP (λ, θ i)d(α, β, s)
+
+︸ ︷︷ ︸
+
+> bi,θ i
+
+−P (θi)∇hi(θi)
+
+∫
+
+> fi∈F
+
+fi(hi(θi)) dμ (fi|θi)
+
+︸ ︷︷ ︸  
+
+> f∗
+> i,θ i(hi(θi))
+
+= P (θi)
+
+[ ∫ 
+
+> α,β
+
+Qα,β P (α, β |θi)d(α, β )
+
+︸ ︷︷ ︸  
+
+> Q∗
+> i,θ i∈RT×T
+
+]
+
+hi(θi) + ∑ 
+
+> j̸=i
+
+∫
+
+> θj
+
+P (θj , θ i)
+
+[ ∫ 
+
+> α,β
+
+Aα,β P (α, β |θj , θ i)d(α, β )
+
+︸ ︷︷ ︸  
+
+> A∗
+> i,θ i,j,θ j∈RT×T
+
+]
+
+hj (θj )dθ j
+
++ bi,θ i − P (θi) · ∇ hi(θi)f ∗ 
+
+> i,θ i
+
+(hi(θi)) 
+
+where in the last transition, we observe: P (θj , α, β |θi) · P (θi) = P (α, β, θ j , θ i) = P (α, β |θi, θ j )P (θi, θ j ). We also note that μ(fi|θi) is a finite non-negative measure on the function space F, and f ∗ 
+
+> i,θ i
+
+is the result of the functional integral. The concavity of the function class F and non-negativity of measure μ ensure that f ∗
+
+> i,θ i
+
+is a concave function Rockafellar & Wets (2009). For discrete type spaces, the derivation above would be identical except for the integral over types replaced by sums. Let H∗ 
+
+> i
+
+denote a function space L2(Θ i, P ; RT ) where ⟨hi, h′
+
+> i
+
+⟩H∗ 
+
+> i
+
+= Eθi [⟨hi(θi), h′
+
+> i
+
+(θi)⟩]. Observe that 
+
+Hi ⊆ H ∗ 
+
+> i
+
+. Similarly, defining H = ∏ni=1 Hi and H∗ = ∏ni=1 H∗ 
+
+> i
+
+, H ⊆ H ∗. Observe that we can de-note the operator of this variational inequality exactly characterizing the BNE by F : H → H . This operator can be decomposed into a linear, non-linear, and constant component: F = F lin + F nonlin +
+
+F const . We use H = [ h1, . . . , hn] ∈ H to denote the joint strategies of all players, and ⟨H, H′⟩H =
+
+Eθ [⟨[h1(θ1); . . . ; hn(θn)] , [⟨[h′
+
+> 1
+
+(θ1); . . . ; h′
+
+> n
+
+(θn)] ⟩].
+
+F lin : [ F lin  
+
+> i
+
+(H)]( θi) = P (θi)Q∗ 
+
+> i,θ i
+
+hi(θi) + ∑ 
+
+> j̸=i
+
+∫
+
+> θj
+
+P (θj , θ i)A∗ 
+
+> i,θ i,j,θ j
+
+hj (θj )dθ j
+
+F const : [ F const  
+
+> i
+
+(H)]( θi) = bi,θ i
+
+F nonlin : [ F nonlin  
+
+> i
+
+(H)]( θi) = −P (θi) · ∇ hi(θi)f ∗ 
+
+> i,θ i
+
+(hi(θi)) 
+
+18 We now argue that the operator F is strongly monotone on the set H = ∏ni=1 . That is, there exists a scaler 
+
+c such that: ⟨F (H) − F (H′), (H − H′)⟩H ≥ c|| H − H′|| 2 
+
+> H
+
+, ∀H, H′ ∈ H . Starting with F nonlin , it is clear that since each f ∗ 
+
+> i,θ i
+
+is an integral over concave functions, it is concave function. Thus, −f ∗ 
+
+> i,θ i
+
+is a convex function and it is known that the gradient of such functions is a monotone operator. Formally: 
+
+⟨F nonlin (H) − F nonlin (H′), H − H′⟩H = −
+
+> n
+
+∑
+
+> i=1
+
+∫
+
+> θi
+
+P (θi)⟨∇ hi(θi)f ∗ 
+
+> i,θ i
+
+(hi(θi)) − ∇ h′
+
+> i(θi)
+
+f ∗ 
+
+> i,θ i
+
+(h′
+
+> i
+
+(θi)) ⟩RT dθ i ≥ 0
+
+Turning next to the linear component of the operator, observe we can express this as follows: 
+
+⟨F lin (H), H⟩H =
+
+> n
+
+∑
+
+> i=1
+
+∫
+
+> θi
+
+[
+
+P (θi)hTi (θi)Q∗ 
+
+> i,θ i
+
+hi(θi)dθ i + ∑ 
+
+> j̸=i
+
+∫
+
+> θj
+
+P (θj , θ i)hTi (θi)A∗ 
+
+> i,θ i,j,θ j
+
+hj (θj )d(θj )
+
+]
+
+=
+
+∫
+
+> θ
+
+∫
+
+> α,β
+
+P (θ, α, β )
+
+[ n∑
+
+> i=1
+
+hTi (θi)Qα,β hi(θi) + ∑ 
+
+> j̸=i
+
+hTi (θi)Aα,β hj (θj )
+
+]
+
+dθd(α, β )= Eθ,α,β 
+
+[ ∑
+
+> i=1
+
+zTi,θ i Qα,β zi,θ i + ∑
+
+> i̸=j
+
+zTi,θ i Aα,β zj,θ j
+
+]
+
+= Eθ,α,β [zT 
+
+> θ
+
+Mα,β zθ ]
+
+where zi,θ i = hi(θi) is a random vector of length T and for a realization θ, zθ = [ z1,θ 1 , . . . , zn,θ n ]T ∈ RnT is a concatenation of these n random vectors. Further, Mα,β is a random matrix which, for any realization of α, β ,is the same as the matrix in Lemma 3, the symmetric component of which we showed to be positive definite; thus, by choosing c = λmin (M sα,β ) ensures the strong monotonicity condition on the operator Mα,β . Thus, for any zθ and any realization realization of (α, β ), there exists a cα,β such that zT 
+
+> θ
+
+Mα,β zθ ≥ cα,β || zθ || 2,when zθ̸ = 0. Let cmin = min α,β λmin (M sα,β ) the smallest eigenvalue possible in the distribution support of 
+
+α, β . We thus have: 
+
+⟨F lin (H), H⟩H = Eθ,α,β [zT 
+
+> θ
+
+Mα,β zθ ] ≥ cmin Eθ [|| zθ || 22] (4) 
+
+Eθ [|| zθ || 22] = 
+
+> n
+
+∑
+
+> i=1
+
+∫
+
+> θi
+
+|| hi(θi)|| 22P (θi)dθ i =
+
+> n
+
+∑
+
+> i=1
+
+|| hi|| Hi = || H|| H (5) 
+
+=⇒ ⟨ F lin (H), H⟩H ≥ cmin || H|| H (6) We can now prove our claim that the overall operator F is strongly monotone. Since F const is a constant, it cancels out under subtraction. Due to the monotonicity of F nonlin and F lin being linear, we have: 
+
+⟨F (H) − F (H′), (H − H′)⟩H = ⟨F lin (H − H′), (H − H′)⟩H + ⟨F nonlin (H) − F nonlin (H′), (H − H′)⟩H ≥ cmin || H|| H
+
+Theorem 1.4 of Chapter 3 in Kinderlehrer & Stampacchia (2000) states that when H is a closed, bounded, convex, non-empty subset of H∗, and F is a strictly monotone and continuous operator, then there exists a unique solution to the variational inequality. As this solution corresponds to the BNE due to Equation 3, it suffices to verify the conditions. It is immediate that F is strictly monotone (strong monotonicity implies strict monotonicity) and continuous since F lin and F const are affine and F nonlin consists of the gradient of a smooth concave function. H by definition is the set of Lipschitz functions with feasible trajectories, which we assume to be non-empty. Next, (B, L ) regularity (see Definition 3) ensures that || hi(θi)|| 2 ≤ B; H is thus clearly bounded. It also ensures that Hi is a closed and convex function class. Thus the product space H is as well. 
+
+Corollary 1. Assuming oracle access to the operator F , the extra-gradient algorithm Korpelevich (1976) can obtain an ε-approximation to the optimal solution in O( Lc log 1 
+
+> ε
+
+) queries. Proof. We have shown above that the variational inequality operator defining the BNE is c-strongly mono-tone. Next, we claim it is also L-Lipschitz. Since the operator is of the form F lin + F const + F nonlin , it 19 suffices to show Lipschitzness of each term. The constant and linear operator is always lipschitz, with the constant depending on the norm of the operator matrix. Since each f ∈ F is smooth, F nonlin is composed of the gradient of some smooth concave functions over a bounded domain. Therefore, this is also Lipschitz, with the constant depending on the Hessian. Theorem 3.4 of Wadia et al. (2024) states that for any c-strongly monotone and L-Lipshcitz operator F , the extragradient algorithm with step-size η = 12( c+L) converges to the fixed point at a linear rate of 1 − c 
+
+> 4L
+
+.Specifically, it shows that for such an operator F (x) whose unique fixed point is denoted x∗, and xk and 
+
+xk+1 are consecutive iterates of the extra-gradient algorithm, the following holds: 
+
+|| xt+1 − x∗|| 2 ≤
+
+(
+
+1 − c
+
+4L
+
+)
+
+|| xt − x∗|| 2 (7) where c < L due since (equation 53 in Wadia et al. (2024)): 
+
+c ≤ ⟨F (x) − F (y), x − y⟩|| x − y|| 2 ≤ || F (x) − F (y)|| || x − y|| ≤ L. (8) To relate this result to a computational framework, observe that running the extra-gradient algorithm requires two calls to the operator F per iteration, and a projection oracle to ensure iterands lie within the feasible region. Assuming such oracle access, we can find a ε > 0 approximate fixed point – in the sense that our solution ˆx satisfies || ˆx − x∗|| ≤ ε in O ( Lc log 1
+
+> ε
+
+) queries. Specifically, due to equation 9, we have that: 
+
+|| xt − x∗|| 2 ≤
+
+(
+
+1 − c
+
+4L
+
+)t
+
+|| x0 − x∗|| 2 (9) Since the domain is bounded, || x0 −x∗|| ≤ d where d is some constant. Then it suffices to bound || xt −x∗|| 2 ≤
+
+ε21|| x0 − x∗|| 2 and thus: (
+
+1 − c
+
+4L
+
+)t
+
+≤ ε21 =⇒ t log 
+
+(
+
+1 − c
+
+4L
+
+)
+
+≤ 2 log ε1. (10) Now since − log(1 − z) ≥ z for z ∈ [0 , 1) , letting z = c 
+
+> 4L
+
+, we have that t ≥ 8Lc log( 1 
+
+> ε1
+
+). For a given ε, we can choose ε1 = ε/d , and we omit the dependence on d as it is a constant. A more granular bound (beyond oracle access to operator F ) can be given for discrete type spaces. Evaluating the operator herein requires, at most, summation over types and agents pairs, as well as gradient calls to the function fi. Thus for discrete type spaces, we can make a sharper statement: an ε approximate solution can be obtained in O ((nM T )2 Lc log 1
+
+> ε
+
+) arithmetic operations and queries to the gradient oracle, where 
+
+M = max i |Θi|.
+
+A.3 Proof of Theorem 2 
+
+Proof. As we consider a complete information setting, we use hi ∈ RT to denote the strategy of agent i and omit the dependence on θi for the sake of brevity. Suppose there are n = 2 agents and we have some constant values of α, β – one can assume, without loss of generality, that α = β = 1 8. Let the final position utility for both agents be given by the following linear function: fi(hi) = ri
+
+∑ 
+
+> t
+
+hi,t , where ri can be interpreted as the reserve/fair-market price as perceived by agent i. Further, the two have box constraints on their cumulative position: V − 
+
+> i
+
+≤ ∑ 
+
+> i
+
+hi,t ≤ V + 
+
+> i
+
+. We shall assume the exogenous agent is not present – i.e. s = 0.For a positive constant x, let the initial price p0 = x and the reserve prices for the agents be (r1 = x, r 2 =
+
+x − ε), where ε > 0. We first consider the equilibrium of this game without any constraints. Then each     
+
+> 8Insofar as α, β are constants and not scaling with respect to the εall results will hold.
+
+20 agent’s best response is given by: br 1(h2) = arg max 
+
+> h1
+
+{
+
+− 12 hT 
+
+> 1
+
+Qα,β h1 − (Aα,β h2)T h1
+
+}
+
+(11) br 1(h2) = arg max 
+
+> h2
+
+{
+
+− ε1T h2 − 12 hT 
+
+> 2
+
+Qα,β h2 − (Aα,β h1)T h2
+
+}
+
+(12) Observe that at the equilibrium of this unconstrained game, the gradient of both agents’ best responses must be 0. Since this is a quadratic function, the gradient is linear, and the equilibrium can be uniquely specified by the following system of linear equalities: 
+
+[Qα,β Aα,β 
+
+Aα,β Qα,β 
+
+]︸ ︷︷ ︸    
+
+> Matrix M∈R2T×2T
+
+[heq 
+
+> 1
+
+heq 
+
+> 2
+
+]
+
+=
+
+[ 0
+
+−ε
+
+]︸ ︷︷ ︸ 
+
+> z∈R2T
+
+Recall that the matrices Qα,β , A α,β are specified using only the terms α, β . In lemma 2, we noted that Qα,β 
+
+is a positive-definite matrix and thus invertible. The matrix Aα,β is a lower triangular matrix with α + β
+
+on the diagonals and is thus also invertible (insofar as α > 0 or β > 0). As such, the matrix M above is invertible and the unconstrained equilibrium strategy is given by M −1z. Note that this does not depend on the value of x. Further, if V − 
+
+> i
+
+≤ −|| M −1z|| 1 and V + 
+
+> i
+
+≥ || M −1z|| 1, then this unconstrained equilibrium is also an equilibrium in the original constrained game. As for the strategy itself, let mij denote the values of 
+
+−M −1 and note that mij can be seen as a scaler with respect to ε. Then we have that: 
+
+h1t = ε
+
+> 2T
+
+∑
+
+> j=T
+
+mt,j and h2t = ε
+
+> 2T
+
+∑
+
+> j=T
+
+mT +t,j (13) Given that the value of the final position is simply the product of the total amount bought and the reserve, the utility of buyer 1 (with reserve x) is: 
+
+u1 
+
+> eq
+
+= x ε 
+
+> T
+
+∑
+
+> t=1 2T
+
+∑
+
+> j=T
+
+mt,j 
+
+︸ ︷︷ ︸∑ 
+
+> th1t
+
+−
+
+> T
+
+∑
+
+> t=1
+
+[ 2T∑
+
+> j=T
+
+mt,j ε
+
+(
+
+x + αε 
+
+> t
+
+∑ 
+
+> τ=1 2T
+
+∑
+
+> j=T
+
+(mτ,j + mT +τ,j ) + βε 
+
+> 2T
+
+∑
+
+> j=T
+
+mt,j + mT +t,j 
+
+)︸ ︷︷ ︸ 
+
+> price pt
+
+]
+
+=
+
+∣∣∣∣
+
+> T
+
+∑
+
+> t=1 2T
+
+∑
+
+> j=T
+
+mt,j ε2
+
+(
+
+α
+
+> t
+
+∑ 
+
+> τ=1 2T
+
+∑
+
+> j=T
+
+(mτ,j + mT +τ,j ) + β
+
+> 2T
+
+∑
+
+> j=T
+
+(mt,j + mT +t,j )
+
+)∣ ∣∣∣ = Θ( ε2)
+
+where the absolute value in the second line follows, since utility at equilibrium will always be non-negative (the agents not trading would get utility 0, so utility at equilibrium must be at least 0). A similar analysis leads us to show that the utility of the second agent (with reserve x − ε) is also bounded by Θ( ε2), allowing us to conclude that the welfare at equilibrium is O(ε2). Formally: 
+
+ueq  
+
+> 2
+
+=
+
+∣∣∣∣ − ε2
+
+> T
+
+∑
+
+> t=1 2T
+
+∑
+
+> j=T
+
+mT +t,j −
+
+> T
+
+∑
+
+> t=1 2T
+
+∑
+
+> j=T
+
+mT +t,j ε2
+
+(
+
+α
+
+> t
+
+∑ 
+
+> τ=1 2T
+
+∑
+
+> j=T
+
+(mτ,j + mT +τ,j ) + β
+
+> 2T
+
+∑
+
+> j=T
+
+(mt,j + mT +t,j )
+
+)∣ ∣∣∣
+
+We now turn to characterizing the optimal welfare of this instance. For some δ > 0 (to be specified later), consider the following trajectories for each buyer (recall positive values mean buying): 
+
+h1 = [ x, x, 0, . . . , 0] and h2 = [ −x − δ, −x − δ, 0, . . . , 0] (14) Insofar as V + 
+
+> i
+
+≥ 2x and V − 
+
+> i
+
+≤ − 2x − δ, the trajectories above are feasible. Under this strategy, it suffices to consider the prices at rounds t = 1 , 2, for which we have that: p1 = x − αδ − βδ and p2 = x − 2αδ − βδ .21 Then the utilities for each buyer is given by: 
+
+u1 = x · 2x − x(x − αδ − βδ ) − x(x − 2αδ − βδ ) = 3 αδx + 2 βδx u2 = ( x − ε)( −2x − δ) + ( x + δ)( x − αδ − βδ ) + ( x + δ)( x − 2αδ − βδ )= 2 εx + 2 δε − 3αδx − 3αδ 2 − 2βδx − 2βδ 2
+
+=⇒ uopt  
+
+> 1
+
++ uopt  
+
+> 2
+
+≥ 2εx + 2 δε − 3αδ 2 − 2βδ 2 = 2 xε + 2 δε − (3 α + 2 β)δ2
+
+This gives a concave quadratic (in the unspecified parameter δ) lower bound on the optimal utility. Maxi-mizing it means choosing a δ such that the gradient is 0: 
+
+δ = ε
+
+3α + 2 β =⇒ uopt  
+
+> 1
+
++ uopt  
+
+> 2
+
+≥ 2xε + 2ε2
+
+3α + 2 β − ε2
+
+3α + 2 β = 2 xε + ε2
+
+3α + 2 β = Θ( xε )
+
+From here, it is evident that for any constants α, β and x, we can construct an ε > 0 parametrized instance Iε
+
+with box constraints V − 
+
+> i
+
+≤ min( −|| M −1z|| , −2x−2δ) and V + 
+
+> i
+
+≥ max( || M −1z|| , 2x) with the aforementioned 
+
+δ = ε 
+
+> 3α+2 β
+
+such that: PoA (Iε) = Uopt (Iε)
+
+Ueq (Iε) ≥ Ω( ε)
+
+O(ε2) = Ω 
+
+( 1
+
+ε
+
+)
+
+→ ∞ as ε → 0 (15) 
+
+A.4 Proof of Theorem 3 
+
+Proof. We first note that if each agent has a hard constraint Vi(θi), then regardless of their strategy (which is conditioned on θi), their value f (·) will be the same under that realization. Thus, it suffices to consider the objective of each agent i in such Bayesian instances as minimizing their expected cost and ignoring f (·)
+
+- defined as follows: 
+
+¯ci(hi, h−i) ≜ Eθ,λ[ci(hi(θi), h−i(θ−i), λ)] = Eθ,λ
+
+[ 
+
+> 12
+
+hi(θi)T Qα,β hi(θi)+ ∑ 
+
+> j̸=i
+
+hTi (θi)Aα,β hj (θj )+ hTi (θi)Aα,β s
+
+]
+
+Observe that for a complete strategy profile H = ( h1, . . . , hn), the total cost is given by: ∑ni=1 ¯ci(hi, h−i)
+
+(the PoA is the ratio between total equilibrium cost and the least total cost strategy). We next make use of two key facts. First is the standard AM-GM inequality and the second is a restatement of the smooth games framework proposed by Roughgarden (2015) which holds for any cost-minimization game. 
+
+Fact 1. For any positive integers a, b and for any ε > 0: 2ab ≤ εa 2 + 1 
+
+> ε
+
+b2 (by AM-GM Inequality). 
+
+Definition 7 (Roughgarden (2015)) . For any two valid and individually rational strategy profile H∗ =(h∗
+
+> 1
+
+, . . . , h∗
+
+> n
+
+) and H = ( h1, . . . , hn) of a cost-minimization game, the game is smooth if there exists constants 
+
+λ > 0 and μ < 1 such that: (LHS) ∑
+
+> i
+
+¯ci(h∗ 
+
+> i
+
+, h−i) ≤ λ ∑
+
+> i
+
+¯ci(H∗) + μ ∑
+
+> i
+
+¯ci(H) (RHS) (16) Due to the linearity of expectation, one way of showing equation 16 holds is by proving that for every realization of θ = ( θ1, . . . , θ n) and λ:(LHS) ∑
+
+> i
+
+ci(h∗ 
+
+> i
+
+, h−i, λ) ≤ λ ∑
+
+> i
+
+ci(H∗, λ) + μ ∑
+
+> i
+
+ci(H, λ) (RHS) (17) Pick any such realization and, for ease of notation, let H∗ ∈ Rn×T , H ∈ Rn×T denote the joint strategies used by the agents on this realization, with hi ∈ RT denoting the specific strategy of agent i. Next, we recall that the matrix Aα,β in the cost function is lower triangular. We define Asα,β = 12 (Aα,β + ATα,β ) as the 22 symmetric version of this matrix. Observe that under the definition of matrix Aα,β and Qα,β , we have that 
+
+Asα,β = 12 Qα,β . In addition, let Aaα,β = Aα,β − Asα,β denote the remaining (skew-symmetric) component. Finally, we define ˜Aa = Q−1/2 
+
+> α,β
+
+Aaα,β Q−1/2 
+
+> α,β
+
+, and κA = || ˜Aa|| 2.
+
+Let ctotal (H, λ) = ∑ 
+
+> i
+
+ci(H, λ). Further, let zi = Q1/2 
+
+> α,β
+
+hi and z∗ = Q1/2 
+
+> α,β
+
+h∗ 
+
+> i
+
+. Since Qα,β is symmetric and positive definite, we note that Q1/2 
+
+> α,β
+
+is symmetric. Then observe that: 
+
+ctotal (H) = ∑
+
+> i
+
+hTi Aα,β s + ∑ 
+
+> i
+> 12
+
+hTi Qα,β hi + ∑
+
+> (i̸=j)
+
+hTi Aα,β hj
+
+= ∑
+
+> i
+
+hTi Aα,β s + ∑ 
+
+> i
+> 12
+
+hTi Qα,β hi + ∑
+
+> i<j
+
+hTi Aα,β hj + hTj Aα,β hi
+
+= ∑
+
+> i
+
+hTi Aα,β s + 12
+
+> n
+
+∑
+
+> i=1
+
+|| zi|| 22 + ∑
+
+> i<j
+
+hTi (Aα,β + ATα,β )hj = hTi Aα,β s + 12
+
+> n
+
+∑
+
+> i=1
+
+|| zi|| 22 + ∑
+
+> i<j
+
+hTi Qα,β hj
+
+= ∑
+
+> i
+
+hTi Aα,β s + 12
+
+> n
+
+∑
+
+> i=1
+
+|| zi|| 22 + ∑
+
+> i<j
+
+zTi zj
+
+Importantly, since all strategy vectors hi are positive and s is positive, we can state the following for any two joint strategies H∗ and H:
+
+ctotal (H∗, λ) ≥ ∑
+
+> i
+
+h∗Ti Aα,β s + 12
+
+> n
+
+∑
+
+> i=1
+
+|| z∗ 
+
+> i
+
+|| 22 and ctotal (H, λ) ≥ 12
+
+> n
+
+∑
+
+> i=1
+
+|| zi|| 22 (18) As for the (LHS), we observe the following: LHS = ∑
+
+> i
+
+h∗Ti Aα,β s + 12
+
+> n
+
+∑
+
+> i=1
+
+h∗Ti Qα,β h∗ 
+
+> i
+
++ ∑
+
+> i=1
+
+∑
+
+> i̸=j
+
+h∗Ti Aα,β hj
+
+= ∑
+
+> i
+
+h∗Ti Aα,β s + 12
+
+> n
+
+∑
+
+> i=1
+
+|| z∗ 
+
+> i
+
+|| 2 + ∑
+
+> i=1
+
+∑ 
+
+> j̸=i
+
+h∗Ti (Asα,β + Aaα,β )hj
+
+= ∑
+
+> i
+
+h∗Ti Aα,β s + 12
+
+> n
+
+∑
+
+> i=1
+
+|| z∗ 
+
+> i
+
+|| 2 + 12
+
+> n
+
+∑
+
+> i=1
+
+∑ 
+
+> j̸=i
+
+h∗Ti Qα,β hj +
+
+> n
+
+∑
+
+> i=1
+
+∑ 
+
+> j̸=i
+
+z∗Ti Q−1/2 
+
+> α,β
+
+Aaα,β Q−1/2 
+
+> α,β
+
+zj
+
+= ∑
+
+> i
+
+h∗Ti Aα,β s + 12
+
+> n
+
+∑
+
+> i=1
+
+|| z∗ 
+
+> i
+
+|| 2 + 12
+
+> n
+
+∑
+
+> i=1
+
+∑ 
+
+> j̸=i
+
+z∗Ti zj +
+
+> n
+
+∑
+
+> i=1
+
+∑
+
+> i̸=j
+
+z∗Ti ˜Aazj
+
+≤ ∑
+
+> i
+
+h∗Ti Aα,β s + 12
+
+> n
+
+∑
+
+> i=1
+
+|| z∗ 
+
+> i
+
+|| 2 + 12
+
+> n
+
+∑
+
+> i=1
+
+∑ 
+
+> j̸=i
+
+|| z∗ 
+
+> i
+
+|| · || zj || +
+
+> n
+
+∑
+
+> i=1
+
+∑
+
+> i̸=j
+
+|| z∗ 
+
+> i
+
+|| · || zj || · κA
+
+≤ ∑
+
+> i
+
+h∗Ti Aα,β s + 12
+
+> n
+
+∑
+
+> i=1
+
+|| z∗ 
+
+> i
+
+|| 2 + ( 12 + κA)
+
+> n
+
+∑
+
+> i=1
+
+∑ 
+
+> j̸=i
+
+|| z∗ 
+
+> i
+
+|| · || zj || ≤ ∑
+
+> i
+
+h∗Ti Aα,β s + 12
+
+> n
+
+∑
+
+> i=1
+
+|| z∗ 
+
+> i
+
+|| 2 + ( 12 + κA)
+
+> n
+
+∑
+
+> i=1
+
+∑ 
+
+> j̸=i
+
+( ε 
+
+> 2
+
+|| z∗ 
+
+> i
+
+|| 2 + 12ε || zj || 2)
+
+(due to Fact 1) 
+
+≤ ∑
+
+> i
+
+h∗Ti Aα,β s + 12
+
+> n
+
+∑
+
+> i=1
+
+|| z∗ 
+
+> i
+
+|| 2 + ( 12 + κA)
+
+> n
+
+∑
+
+> i=1
+
+∑ 
+
+> j̸=i
+
+( ε 
+
+> 2
+
+|| z∗ 
+
+> i
+
+|| 2 + 12ε || zj || 2)
+
+≤ ∑
+
+> i
+
+h∗Ti Aα,β s + 12 [1 + ε(0 .5 + κA)( n − 1)] 
+
+︸ ︷︷ ︸
+
+> λ> 1
+> n
+
+∑
+
+> i=1
+
+|| z∗ 
+
+> i
+
+|| 2 + 12
+
+(0 .5 + κA)( n − 1) 
+
+ε︸ ︷︷ ︸
+
+> μn
+
+∑
+
+> i=1
+
+|| zi|| 2
+
+≤ λ
+
+[ ∑
+
+> i
+
+h∗Ti Aα,β s + 12
+
+> n
+
+∑
+
+> i=1
+
+|| z∗ 
+
+> i
+
+|| 2
+
+]
+
++ μ 12
+
+> n
+
+∑
+
+> i=1
+
+|| zi|| 2 ≤ λc total (H∗) + μc total (H) = RHS 23 We note that for smooth games, μ < 1, and we thus need to set (n − 1)(0 .5 + κA) < ε . From Roughgarden (2015), we know that PoA in smooth games is upper bounded by λ 
+
+> 1−μ
+
+. Letting a = (0 .5 + κA), we have that PoA as a function of ε is: PoA ε = ε(1 + εa (n − 1)) 
+
+ε − a(n − 1) (19) By taking the derivative and solving for ε to get the critical point, we have that : 
+
+ε∗ = ( n − 1) a + √(n − 1) 2a2 + 1 ≤ (n − 1) a + 1 + √(n − 1) 2a2 ≤ 2a(n − 1) + 1 .
+
+Letting b = a(n − 1) – and thus ε∗ = 2 b + 1 – we can plug in this expression of ε∗ to our PoA. We get: PoA = (2 b + 1)(1 + b(2 b + 1)) 2b + 1 − b = (2 b + 1)(2 b2 + b + 1) (b + 1) = 4b3 + 4 b2 + 3 b + 1 
+
+b + 1 = 4 b2 + 3 − 2
+
+b + 1 ≤ 4b2 + 3 ≤ 4a2(n − 1) 2 + 3 ≤ (1 + 2 κA)2(n − 1) 2 + 3 
+
+Lastly, we note that: || Aaα,β || 2 ≤
+
+√
+
+|| Aaα,β || 1 · || Aaα,β || ∞ = ( T − 1) α 
+
+> 2
+
+. Then we have that: 
+
+κA = || Q−1/2 
+
+> α,β
+
+Aα,β Q−1/2 
+
+> α,β
+
+|| 2 ≤ || Q−1/2 
+
+> α,β
+
+|| 22 || Aaα,β || 2 ≤ T − 12
+
+αα + 2 β = T − 12 γ (20) Note that since κA depends on the market parameters, which are sampled, we choose γ = sup αα+2 β (the supremum is over the support of α, β to obtain an upper bound that holds uniformly on all samples). Plugging everything in, we have that: PoA ≤ (1 + γ(T − 1)) 2(n − 1) 2 + 3 = O(n2T 2γ2) (21) 
+
+## B Proofs and Details for Section 4 
+
+In what follows we primarily use the cost notation ci(·) (recall that ci(hi(θi); h−i(θ−i), λ) =
+
+−ui(hi(θi); h−i(θ−i), λ)). Unless otherwise specified, we use ∥ · ∥ throughout to denote the ℓ2 norm. We will often use the notion of a “population loss." 
+
+Definition 8 (Population Loss) . Let hri denote the strategy of agent i in round r. Then, the expected loss for each agent i in round r is a function ℓri : Hi → R given by: 
+
+ℓri (hi) = EI∼ P [cri (hi)] = Eθ,λ∼P [−ui(hi(θi); hr
+
+> −i
+
+(θ−i), λ)] .
+
+Lemma 4. For all i ∈ [n], let Vi(h) = ∇hi ℓi(hi, h−i; P ) = ∇hi Eθ, λ∼P [ci(hi(θi), h−i(θ−i), λ)] ∈ Rki×T and 
+
+V (h) = ( V1(h), ..., V n(h)) ∈ Rn×k×T . The operator V is m-strongly monotone, i.e. ⟨V (h′) − V (h), h′ − h⟩ ≥ 
+
+m∥h′ − h∥2 for all h, h′, where m is the strong monotonicity constant of Theorem 1. Consequently, for all 
+
+i, ℓi(hi, h−i; P ) is m-strongly convex in hi.Proof. Recall that Theorem 1 shows that the operator W (h) ∈ Rn×k×T , defined by: 
+
+Wi(θi)( h) = Pr( θi) · ∇ hi(θi)Eθ−i,λ∼P |θi [ci(hi(θi), h−i(θ−i), λ)] ∈ RT
+
+in the entry corresponding to agent i and type θi, is m-strongly monotone for some positive m.Now, for every i, we can write: 
+
+Vi(h) = ∇hi
+
+(∑
+
+> θi
+
+Pr( θi) · Eθ−i,λ∼P |θi [ci(hi(θi), h−i(θ−i), λ)] 
+
+)
+
+24 Fix a agent i and a type θ∗ 
+
+> i
+
+. Since each agent has finitely many types, we can write V as a vector of size 
+
+nkT , where the entry of V corresponding to agent i and type θ∗ 
+
+> i
+
+is: 
+
+Vi(θ∗ 
+
+> i
+
+)( h) = ∇hi(θ∗ 
+
+> i)
+
+(∑
+
+> θi
+
+Pr( θi) · Eθ−i,λ∼P |θi [ci(hi(θi), h−i(θ−i), λ)] 
+
+)
+
+= ∇hi(θ∗ 
+
+> i)
+
+(
+
+Pr( θ∗ 
+
+> i
+
+) · Eθ−i,λ∼P |θ∗ 
+
+> i
+
+[ci(hi(θ∗ 
+
+> i
+
+), h−i(θ−i), λ)] 
+
+)
+
+(since all terms not involving θ∗ 
+
+> i
+
+can be treated as constants) 
+
+= Pr( θ∗ 
+
+> i
+
+) · ∇ hi(θ∗ 
+
+> i)
+
+Eθ−i,λ∼P |θ∗ 
+
+> i
+
+[ci(hi(θ∗ 
+
+> i
+
+), h−i(θ−i), λ)] = Wi(θ∗ 
+
+> i
+
+)( h)
+
+Thus V = W , and V is m-strongly monotone, i.e. ⟨V (h′)−V (h), h′ −h⟩ ≥ m∥h′ −h∥2 for all h, h′. For every 
+
+i, m-strong convexity then follows by definition, by considering h, h′ that are the same in all coordinates except i.
+
+B.1 Jordan et al. (2024) Algorithm Details 
+
+Here we present the algorithm of Jordan et al. (2024) and state its guarantees. 
+
+Algorithm 2: AdaOGD (Algorithm 1 of Jordan et al. (2024)) 
+
+Input: Strategy space Hi, cost function ℓi
+
+Initialize h1 
+
+> i
+
+∈ H i
+
+Let z0 = 1log( R+10) 
+
+for r = 1 , ..., R do 
+
+Sample M r ∼ Geometric (z0)
+
+Let ηr+1 = r+1 √1+max {M 1,...,M r }
+
+Update hr+1  
+
+> i
+
+= arg min hi∈H i {(hi − hri )⊤ ˜∇ri + ηr+1  
+
+> 2
+
+∥hi − hri ∥2}
+
+Theorem 5 (Theorem 3.7 of Jordan et al. (2024)) . Consider a game G among n agents, each with a convex and bounded action set Hi ⊆ Rdi and a cost function ℓi : ∏ni=1 Hi → R satisfying: (i) ℓi(hi, h−i) is continuous in (hi, h−i) and continuously differentiable in hi; (ii) ∇hi ℓi(hi, h−i) is continuous in (hi, h−i);(iii) ∥h − h′∥ ≤ D for all h, h′ ∈ ∏ni=1 Hi; and (iv) G is m-strongly monotone. Suppose at every round 
+
+r ∈ [R], each agent observes an unbiased and bounded gradient ˜∇r
+
+> hri
+
+satisfying E[ ˜∇r
+
+> hri
+
+|hr ] = ∇hr ℓi(hri , hr
+
+> −i
+
+)
+
+and E[∥ ˜∇r 
+
+> hi
+
+∥2|hr ] ≤ M . Then, if all agents run Algorithm 2, the final iterate satisfies: 
+
+E [∥hR − h∗∥2] ≤ O
+
+( D2M (1 + exp(1 /(m2 log R))) log( nR ) log 2(R)
+
+R
+
+)
+
+where h∗ is the Nash equilibrium of G, i.e. for all i ∈ [n], for all hi ∈ H i, ℓi(h∗ 
+
+> i
+
+, h∗−i) ≤ ℓi(hi, h∗−i).
+
+B.2 Algorithm 2 Under Biased Gradient Observations 
+
+We first show how the guarantees of Algorithm 2 change under possibly biased gradient observations. To do so, we extend a key lemma in Jordan et al. (2024) to accommodate for biased gradients. 
+
+Lemma 5 (Extended version of Lemma 3.10 in Jordan et al. (2024)) . Consider a game G among n agents, each with a convex and bounded action set Hi ⊆ Rdi and a cost function ℓi : ∏ni=1 Hi → R satisfying 
+
+∥h − h′∥ ≤ D for all h, h′ ∈ ∏ni=1 Hi and G is m-strongly monotone. Suppose at every round r ∈ [R], each agent observes a gradient estimate ˜∇r
+
+> hri
+
+satisfying ∥E[ ˜∇r
+
+> hri
+
+|hr ]−∇ hri ℓi(hri , hr
+
+> −i
+
+)∥ ≤ ∆ and E[∥ ˜∇r
+
+> h
+
+∥2|hr ] ≤ M .
+
+25 Then, if all agents run Algorithm 2, letting h⋆ denote the (unique) Nash equilibrium, we have 
+
+> n
+
+∑
+
+> i=1
+
+ηRi E[∥hRi − h⋆i ∥2 ∣∣ {ηri }i∈[n], r ∈[R]
+
+] ≤
+
+> n
+
+∑
+
+> i=1
+
+η1 
+
+> i
+
+∥h1 
+
+> i
+
+− h⋆i ∥2 + D2
+
+> R−1
+
+∑
+
+> r=1
+
+max 
+
+{
+
+0, max 
+
+> i∈[n]
+
+(ηr+1  
+
+> i
+
+− ηri − 2m)}
+
+(22) 
+
++ M
+
+> R−1
+
+∑
+
+> r=1
+
+(
+
+max 
+
+> i∈[n]
+
+1
+
+ηr+1 
+
+> i
+
+)
+
++ 2 D√n ∆ ( R − 1) .
+
+Proof. We follow the proof of Lemma 3.10 in Jordan et al. (2024). Fix r ∈ { 1, . . . , R − 1}. We will condition throughout on the entire step-size realization {ηri }i∈[n], r ∈[R] but suppress this conditioning in the notation to reduce clutter. Algorithm 2 performs, for each agent i, a projected gradient step of the form 
+
+hr+1  
+
+> i
+
+∈ arg min 
+
+> hi∈H i
+
+{〈 ˜∇r 
+
+> hri
+
+, hi − hri
+
+〉
+
++ ηr+1 
+
+> i
+
+2 ∥hi − hri ∥2
+
+}
+
+.
+
+By the first-order optimality condition, for any hi ∈ H i,
+
+〈 ˜∇r 
+
+> hri
+
+, hr+1  
+
+> i
+
+− hi
+
+〉
+
+≤ ηr+1 
+
+> i
+
+2
+
+(
+
+∥hri − hi∥2 − ∥ hr+1  
+
+> i
+
+− hi∥2 − ∥ hr+1  
+
+> i
+
+− hri ∥2)
+
+.
+
+Rearranging and using the identity ⟨ ˜∇r
+
+> hri
+
+, hri − hi⟩ = ⟨ ˜∇r
+
+> hri
+
+, hri − hr+1  
+
+> i
+
+⟩ + ⟨ ˜∇r
+
+> hri
+
+, hr+1  
+
+> i
+
+− hi⟩, we obtain 
+
+ηr+1 
+
+> i
+
+(∥hr+1  
+
+> i
+
+− hi∥2 − ∥ hri − hi∥2) ≤ 2
+
+〈
+
+hi − hri , ˜∇r
+
+> hri
+
+〉
+
++ 1
+
+ηr+1 
+
+> i
+
+∥ ˜∇r 
+
+> hri
+
+∥2 + ( ηr+1  
+
+> i
+
+− ηri )∥hri − hi∥2, (23) where we used the standard inequality 2⟨hri − hr+1  
+
+> i
+
+, ˜∇r
+
+> hri
+
+⟩ − ηr+1  
+
+> i
+
+∥hr+1  
+
+> i
+
+− hri ∥2 ≤ 1
+
+> ηr+1
+> i
+
+∥ ˜∇r
+
+> hri
+
+∥2.
+
+Now set hi = h⋆i in equation 23 and sum over i ∈ [n]. Writing ˜∇r 
+
+> hr
+
+:= ( ˜∇r
+
+> hr
+> 1
+
+, . . . , ˜∇r 
+
+> hrn
+
+) and using ∥hr −h⋆∥2 =
+
+∑ 
+
+> i
+
+∥hri − h⋆i ∥2, we get 
+
+> n
+
+∑
+
+> i=1
+
+ηr+1 
+
+> i
+
+(∥hr+1  
+
+> i
+
+− h⋆i ∥2 − ∥ hri − h⋆i ∥2) ≤ 2 〈h⋆ − hr , ˜∇r
+
+> hr
+
+〉 +
+
+> n
+
+∑
+
+> i=1
+
+1
+
+ηr+1 
+
+> i
+
+∥ ˜∇r 
+
+> hri
+
+∥2
+
++
+
+> n
+
+∑
+
+> i=1
+
+(ηr+1  
+
+> i
+
+− ηri )∥hri − h⋆i ∥2. (24) Using ∑ 
+
+> i1
+> ηr+1
+> i
+
+∥ ˜∇r
+
+> hri
+
+∥2 ≤
+
+(
+
+max i∈[n] 1
+
+> ηr+1
+> i
+
+) ∑ 
+
+> i
+
+∥ ˜∇r
+
+> hri
+
+∥2 =
+
+(
+
+max i∈[n] 1
+
+> ηr+1
+> i
+
+)
+
+∥ ˜∇r 
+
+> hr
+
+∥2, and taking conditional ex-pectation given hr (and the step sizes), we obtain from equation 24 
+
+> n
+
+∑
+
+> i=1
+
+ηr+1  
+
+> i
+
+E[∥hr+1  
+
+> i
+
+− h⋆i ∥2 ∣∣ hr ] −
+
+> n
+
+∑
+
+> i=1
+
+ηr+1  
+
+> i
+
+∥hri − h⋆i ∥2 ≤ 2 〈h⋆ − hr , E[ ˜∇r 
+
+> hr
+
+| hr ]〉
+
++
+
+(
+
+max 
+
+> i∈[n]
+
+1
+
+ηr+1 
+
+> i
+
+)
+
+E[∥ ˜∇r 
+
+> hr
+
+∥2 | hr ]
+
++
+
+> n
+
+∑
+
+> i=1
+
+(ηr+1  
+
+> i
+
+− ηri )∥hri − h⋆i ∥2. (25) Next, define the game operator V (h) := ( ∇h1 ℓ1(h), . . . , ∇hn ℓn(h)) and the conditional bias vector 
+
+br := E[ ˜∇r 
+
+> hr
+
+| hr ] − V (hr ) = (E[ ˜∇r 
+
+> hr
+> 1
+
+| hr ] − ∇ h1 ℓ1(hr ), . . . , E[ ˜∇r 
+
+> hrn
+
+| hr ] − ∇ hn ℓn(hr )).
+
+By assumption, each block satisfies ∥bri ∥ ≤ ∆, hence 
+
+∥br ∥2 =
+
+> n
+
+∑
+
+> i=1
+
+∥bri ∥2 ≤ n∆2 ⇒ ∥br ∥ ≤ √n ∆. (26) 26 Using this decomposition in the first inner product on the right-hand side of equation 25, 
+
+〈h⋆ − hr , E[ ˜∇r 
+
+> hr
+
+| hr ]〉 = ⟨h⋆ − hr , V (hr )⟩ + ⟨h⋆ − hr , b r ⟩.
+
+Since G is m-strongly monotone and h⋆ is a Nash equilibrium, we have V (h⋆) = 0 and therefore 
+
+⟨hr − h⋆, V (hr ) − V (h⋆)⟩ ≥ m∥hr − h⋆∥2 ⇒ ⟨h⋆ − hr , V (hr )⟩ ≤ − m∥hr − h⋆∥2.
+
+Moreover, by Cauchy–Schwarz, the diameter bound ∥hr − h⋆∥ ≤ D, and equation 26, 
+
+⟨h⋆ − hr , b r ⟩ ≤ ∥ h⋆ − hr ∥ ∥ br ∥ ≤ D√n ∆.
+
+Combining the last three displays yields 
+
+〈h⋆ − hr , E[ ˜∇r 
+
+> hr
+
+| hr ]〉 ≤ − m∥hr − h⋆∥2 + D√n ∆. (27) Plugging equation 27 and E[∥ ˜∇r 
+
+> hr
+
+∥2 | hr ] ≤ M into equation 25, taking expectation over hr , and using 
+
+∥hr − h⋆∥2 ≤ D2, we obtain 
+
+> n
+
+∑
+
+> i=1
+
+ηr+1  
+
+> i
+
+E[∥hr+1  
+
+> i
+
+− h⋆i ∥2] −
+
+> n
+
+∑
+
+> i=1
+
+ηri E[∥hri − h⋆i ∥2] ≤
+
+> n
+
+∑
+
+> i=1
+
+(ηr+1  
+
+> i
+
+− ηri − 2m) E[∥hri − h⋆i ∥2]
+
++ M
+
+(
+
+max 
+
+> i∈[n]
+
+1
+
+ηr+1 
+
+> i
+
+)
+
++ 2 D√n ∆. (28) Moreover, n∑
+
+> i=1
+
+(ηr+1  
+
+> i
+
+− ηri − 2m) E[∥hri − h⋆i ∥2] ≤ D2 max 
+
+{
+
+0, max 
+
+> i∈[n]
+
+(ηr+1  
+
+> i
+
+− ηri − 2m)}
+
+.
+
+Substituting this into equation 28 and summing over r = 1 , . . . , R − 1 yields 
+
+> n
+
+∑
+
+> i=1
+
+ηRi E[∥hRi − h⋆i ∥2] ≤
+
+> n
+
+∑
+
+> i=1
+
+η1 
+
+> i
+
+∥h1 
+
+> i
+
+−h⋆i ∥2+D2
+
+> R−1
+
+∑
+
+> r=1
+
+max 
+
+{
+
+0, max 
+
+> i∈[n]
+
+(ηr+1  
+
+> i
+
+−ηri −2m)}
+
++M
+
+> R−1
+
+∑
+
+> r=1
+
+(
+
+max 
+
+> i∈[n]
+
+1
+
+ηr+1 
+
+> i
+
+)
+
++2 D√n ∆ ( R−1) ,
+
+This completes the proof. We can now state the guarantees of Algorithm 2 under biased gradient observations. 
+
+Theorem 6 (Extended version of Theorem 3.7 in Jordan et al. (2024)) . Consider a game G among n agents, each with a convex and bounded action set Hi ⊆ Rdi and a cost function ℓi : ∏ni=1 Hi → R satisfying: (i) 
+
+ℓi(hi, h−i) is continuous in (hi, h−i) and continuously differentiable in hi; (ii) ∇hi ℓi(hi, h−i) is continuous in (hi, h−i); (iii) ∥h − h′∥ ≤ D for all h, h′ ∈ ∏ni=1 Hi; and (iv) G is m-strongly monotone. Suppose that at every round r ∈ [R], each agent i observes a gradient estimate ˜∇r
+
+> hri
+
+satisfying ∥E[ ˜∇r
+
+> hri
+
+|hr ]−∇ hri ℓi(hri , hr
+
+> −i
+
+)∥ ≤ 
+
+∆ and E[∥ ˜∇r
+
+> h
+
+∥2|hr ] ≤ M . Then, letting h⋆ denote the (unique) Nash equilibrium of G, if all agents run Algorithm 2 for R rounds, the final iterate satisfies 
+
+E[∥hR − h⋆∥2] ≤ O
+
+( D2M (1 + exp(1 /(m2 log R)) ) log( nR ) log 2(R)
+
+R +
+
+(
+
+1 − 1
+
+R
+
+) √n∆ log( nR ) log( R)
+
+)
+
+Proof. The proof closely follows the proof of Theorem 3.7 in Jordan et al. (2024). Since ∥h − h′∥ ≤ D for all h, h′ ∈ H and for all i, ηr+1  
+
+> i
+
+= r+1 √1+max {M 1    
+
+> i,...M ri}
+
+as in Algorithm 2, we have: 
+
+> n
+
+∑
+
+> i=1
+
+η1 
+
+> i
+
+∥h1 
+
+> i
+
+− h⋆i ∥2 ≤ D2
+
+27 and: 
+
+ηr+1  
+
+> i
+
+− ηri ≤ 1
+
+√1 + max {M 1 
+
+> i
+
+, ...M ri }
+
+Therefore, by Lemma 5: 
+
+> n
+
+∑
+
+> i=1
+
+ηRi E[∥hRi − h⋆i ∥2 ∣∣ {ηri }i,r 
+
+] ≤ D2 + D2
+
+> R−1
+
+∑
+
+> r=1
+
+max 
+
+{
+
+0, max 
+
+> 1≤i≤n
+
+( 1
+
+√1 + max {M 1 
+
+> i
+
+, ...M ri } ) − 2m
+
+)}
+
++ M
+
+> R−1
+
+∑
+
+> r=1
+
+max 
+
+> 1≤i≤n
+
+{ 1
+
+ηr+1 
+
+> i
+
+}
+
++ 2 D√n ∆( R − 1) . (29) Next, the definition of ηr+1  
+
+> i
+
+implies: 
+
+> R−1
+
+∑
+
+> r=1
+
+max 
+
+> 1≤i≤n
+
+{ 1
+
+ηr+1 
+
+> i
+
+}
+
+≤ √1 + max   
+
+> 1≤i≤n, 1≤r≤R
+
+M riR−1∑
+
+> r=1
+
+1
+
+r + 1 ≤ log( R + 1) √1 + max   
+
+> 1≤i≤n, 1≤r≤R
+
+M ri . (30) Plugging equation 30 into equation 29 yields: 
+
+> n
+
+∑
+
+> i=1
+
+ηRi E[∥hRi − h⋆i ∥2 ∣∣ {ηri }i,r 
+
+] ≤ D2 + D2
+
+> R−1
+
+∑
+
+> r=1
+
+max 
+
+{
+
+0, max 
+
+> 1≤i≤n
+
+( 1
+
+√1 + max {M 1 
+
+> i
+
+, ...M ri } ) − 2m
+
+)}
+
++ M log( R + 1) √1 + max   
+
+> 1≤i≤n, 1≤r≤R
+
+M ri + 2 D√n ∆( R − 1) . (31) Moreover, by the definition of ηRi :
+
+ηRi ≥ R
+
+√1 + max {M 1 
+
+> i
+
+, . . . , M Ri } ≥ R
+
+√1 + max 1≤j≤n, 1≤r≤R M rj
+
+,
+
+which implies: 
+
+> n
+
+∑
+
+> i=1
+
+ηRi E[∥hRi − h⋆i ∥2 ∣∣ {ηri }i,r 
+
+] ≥ R
+
+√1 + max 1≤j≤n, 1≤r≤R M rj
+
+E[∥hR − h⋆∥2 ∣∣ {ηri }i,r 
+
+] .
+
+Combining this with equation 31 and multiplying both sides by √1 + max j,r M rj gives: 
+
+R E[∥hR − h⋆∥2 ∣∣ {ηri }i,r 
+
+] ≤ D2√1 + max  
+
+> j,r
+
+M rj + M log( R + 1) (1 + max  
+
+> j,r
+
+M rj
+
+)
+
++ D2√1 + max  
+
+> j,r
+
+M rjR−1∑
+
+> r=1
+
+max 
+
+{
+
+0, max 
+
+> 1≤i≤n
+
+( 1
+
+√1 + max {M 1 
+
+> i
+
+, ...M ri } ) − 2m
+
+)}
+
++ 2 D√n ∆( R − 1) √1 + max  
+
+> j,r
+
+M rj . (32) Taking expectations of both sides, define the three terms I, II, III as: 
+
+I := E
+
+[√1 + max  
+
+> j,r
+
+M rj
+
+]
+
+, II := E
+
+[
+
+1 + max  
+
+> j,r
+
+M rj
+
+]
+
+,
+
+and 
+
+III := E
+
+[R−1∑
+
+> r=1
+
+max 
+
+{
+
+0, max 
+
+> 1≤i≤n
+
+(
+
+ηr+1  
+
+> i
+
+− ηri − 2m
+
+)} √1 + max  
+
+> j,r
+
+M rj
+
+]
+
+.
+
+Then equation 32 becomes 
+
+R E[∥hR − h⋆∥2] ≤ D2I + M log( R + 1) II + D2 III + 2 D√n ∆( R − 1) I. (33) It remains to bound the terms I, II, and III . This step is identical to the argument in Jordan et al. (2024), and so we defer the details to Jordan et al. (2024). The result then follows from plugging the respective bounds into equation 33. 28 B.3 Proof of Theorem 4 
+
+To prove Theorem 4, our approach will be to run Algorithm 2 on suitable discretizations of the type space. Hence, we first establish the following theorem, which bounds last-iterate convergence to BNE in Bayesian game instances where agents have finitely many types. 
+
+Theorem 7. Suppose for all agents i, |Θi| < ∞. Suppose all agents use Algorithm 2 to decide their strategy in each round r, where at every round r, the end-of-round feedback is as specified in Assumption 2. Then, letting k = max i∈[n] |Θi|, the final iterate strategies hR 
+
+> 1
+
+, . . . , hRn are an ϵ-approximate BNE, for some ϵ that satisfies the following in expectation over the algorithm’s randomness: 
+
+E[ϵ′] = O
+
+(
+
+poly (n, T, p 0, B, S, U ′, α max , β max , 1/(κˆκ)) ·
+
+(√k log 3/2(R)
+
+√R + (∆ α + ∆ β )
+
+(
+
+1 − 1
+
+R
+
+)
+
+log 2(R)
+
+)) 
+
+where S, U ′, κ, ˆκ are constants such that sup s ∥s∥ ≤ S, ∀ i sup hi∈H i ∥∇ fi(hi(θi)) ∥ ≤ U ′, ∀r ∈ [R] ˆ αri ≥
+
+κ, ˆβri ≥ ˆκ.Proof. We define the game G where each agent i chooses a strategy map hi ∈ H i and suffers cost: 
+
+ℓi(hi, h−i; P ) = Eθ, λ∼P [ci(hi(θi), h−i(θ−i), λ)] 
+
+We verify the conditions of Theorem 5 on this game G. Since for all type profiles θ, ci(hi(θi), h−i(θ−i), λ)
+
+is continuous in (hi(θi), h−i(θ−i)) and continuously differentiable in hi(θi), we have that ℓi(hi, h−i; P ) is continuous in (hi, h−i) and continuously differentiable in hi. Under (B, L ) regularity, ∥h − h′∥ ≤ B√nk 
+
+for all h, h′. Furthermore, by Lemma 4, G is m-strongly monotone, where m is the strong monotonicity of Theorem 1. To apply Theorem 5, it remains to establish the required conditions on agents’ gradient feedback. Recall at each round r ∈ [R], agent i receives as feedback: ˜∇r 
+
+> hi
+
+= ∇hri ˆci(hri (θri ); {pt}, ˆαri , ˆβri ). We first show that the feedback ˜∇r 
+
+> hi
+
+is close in expectation to the true population gradient feedback. To do so, we formally derive the expression for the gradient. We first write the change in price as an expression of the true total aggregate demand. Fix a round r ∈ [R] and agent i ∈ [n]. Fix α, β . For each type profile θ, we denote the external aggregate demand at time t ∈ [T ] by dr
+
+> −i
+
+(θ) = ∑  
+
+> j̸=i
+
+hrj (θrj ) − sr , so that the true total aggregate demand is: Drt (θ) = hri,t (θri ) + dr
+
+> −i,t
+
+(θr ). Recall that prt = pw,r t + βD rt (θ)
+
+and pw,r t − pw,r t−1 = αD rt (θ). Let ∆prt := prt − prt−1 denote the observed price differences. Combining these equations, we get the following recursive expression: 
+
+∆prt = ( α + β) Drt (θ) − β D rt−1(θ)
+
+Using this, we now derive an expression for the estimated total aggregate demand based on the realized prices {prt }Tt=0 and estimates ˆαri , ˆβri of α, β of the true market impact parameters the agent receives at the end of round r. Rewriting the above expression in terms of ˆαri , ˆβri and rearranging, agent i constructs an estimated total aggregate demand sequence, where ˆDri, 0 := 0 and for all t = 1 , ..., T :
+
+ˆDri,t := ∆prt + ˆβri ˆDri,t −1
+
+ˆαri + ˆβri
+
+Finally, define the estimate of the external aggregate demand at time t as: 
+
+ˆdr 
+
+> −i,t
+
+:= ˆDri,t − hri,t (θri )
+
+which subtracts the agent’s own realized demand trajectory. Thus, the estimated gradient can be written as: 
+
+˜∇r 
+
+> hi
+
+= p01T + ˆ αri W hi(θri ) + ˆ αri W ′ ˆdr 
+
+> −i
+
++ ˆβri
+
+(2hi(θi) + ˆdr
+
+> −i
+
+) − ∇ fi
+
+(hi(θi))
+
+29 while the true gradient can be written as: 
+
+∇hi ci
+
+(hi(θi), hr
+
+> −i
+
+(θ−i), λr ) = p01T + αr W hi(θi) + αr W ′ dr
+
+> −i
+
+(θ) + βr (2hi(θi) + dr
+
+> −i
+
+(θ)) − ∇ fi
+
+(hi(θi)).
+
+where W ∈ RT ×T is the matrix with Wtt = 2 for all t ∈ [T ] and 1 everywhere else, and W ′ ∈ RT ×T is the matrix with W ′ 
+
+> ts
+
+= 1 for s ≤ t and 0 everywhere else. Since θr , λr ∼ P are sampled independently from the strategies chosen at round r, we have that E[ ˜∇r 
+
+> hi
+
+|hr ] = 
+
+E[ ˜∇r 
+
+> hi
+
+] and thus: 
+
+∥∥E[ ˜∇r 
+
+> hi
+
+|hr ] − ∇ hi ℓi(hi, hr
+
+> −i
+
+)∥∥
+
+= ∥∥E[ ˜∇r 
+
+> hi
+
+] − ∇ hi ℓi(hi, hr
+
+> −i
+
+)∥∥
+
+= ∥∥Eθr ,λr ∼P [ ˜∇r 
+
+> hi
+
+] − ∇ hi Eθ, λ∼P
+
+[ci
+
+(hi(θi), hr
+
+> −i
+
+(θ−i), λ)]∥ ∥
+
+=
+
+∥∥∥∥∥Eθr ,λr ∼P
+
+[(ˆαri − αr ) W hi(θi) + (ˆαri − αr ) W ′ dr
+
+> −i
+
+(θ) + ( ˆβri − βr ) ( 2hi(θi) + dr
+
+> −i
+
+(θ))
+
++ ˆ αri W ′ ( ˆdr 
+
+> −i
+
+− dr
+
+> −i
+
+(θ)) + ˆβri
+
+( ˆdr 
+
+> −i
+
+− dr
+
+> −i
+
+(θ))]∥∥∥∥∥
+
+≤
+
+∥∥∥Eθr ,λr ∼P
+
+[(ˆαri − αr )( W hi(θi) + W ′ dr
+
+> −i
+
+(θ)) + ( ˆβri − βr )( 2hi(θi) + dr
+
+> −i
+
+(θ))]∥ ∥∥︸ ︷︷ ︸ 
+
+> =: T1
+
++
+
+∥∥∥Eθr ,λr ∼P
+
+[
+
+ˆαri W ′ ( ˆdr 
+
+> −i
+
+− dr
+
+> −i
+
+(θ)) + ˆβri
+
+( ˆdr 
+
+> −i
+
+− dr
+
+> −i
+
+(θ))]∥ ∥∥︸ ︷︷ ︸ 
+
+> =: T2
+
+(by triangle inequality) We can bound T 1 as: 
+
+T 1 ≤ (T B + T (( n − 1) B + S)) Eθr ,λr ∼P [|ˆαri − αr |] + (( n + 1) B + S)Eθr ,λr ∼P [| ˆβri − β|]
+
+(by triangle inequality and boundedness assumptions) 
+
+≤ ∆α (T B + T (( n − 1) B + S)) + ∆ β (( n + 1) B + S) (by Assumption 2) Next we bound T 2, which is the error in the gradient arising from the estimated aggregate demand trajectory. For t = 0 , ..., T , let the per-time reconstruction error et := ˆDri,t − Drt (θ). Then, for each t = 1 , ..., T , we have: 
+
+et = ∆prt + ˆβri ˆDri,t −1
+
+ˆαri + ˆβri
+
+− ∆prt + βr Drt−1(θ)
+
+αr + βr
+
+(plugging in the recursive equation for total aggregate demand) 
+
+= ˆβri
+
+ˆαri + ˆβri
+
+( ˆDri,t −1 − Drt−1(θ)) + 
+
+( 1ˆαri + ˆβri
+
+− 1
+
+αr + βr
+
+)
+
+∆prt +
+
+( ˆβri
+
+ˆαri + ˆβri
+
+− βαr + βr
+
+)
+
+Drt−1(θ)= ˆβri
+
+ˆαri + ˆβri
+
+et−1 +
+
+( 1ˆαri + ˆβri
+
+− 1
+
+αr + βr
+
+)
+
+∆prt +
+
+( ˆβri
+
+ˆαri + ˆβri
+
+− βαr + βr
+
+)
+
+Drt−1(θ)
+
+To bound this expression, let s := αr + βr ≥ κ > 0 and ˆs := ˆ αri + ˆβri ≥ ˆκ > 0. Let Dmax := sup i,r,t |Drt (θ)| ≤ 
+
+nB +S by our boundedness assumptions. Then, using the price recursion given by the true aggregate demand 
+
+∆prt = sD rt (θ) − βD rt−1(θ) and s ≤ αmax + βmax , β ≤ βmax , we can bound: 
+
+|∆prt | ≤ (s + β) Dmax ≤ (αmax + 2 βmax ) Dmax =: Pmax .
+
+Next: ∣∣∣ 1ˆs − 1
+
+s
+
+∣∣∣ = |ˆs − s|
+
+ˆs s ≤ 2
+
+κˆκ |ˆs − s| ≤ 2
+
+κˆκ
+
+(|ˆαri − α| + | ˆβri − β|)
+
+30 and: 
+
+∣∣∣ ˆβri
+
+ˆs − βs
+
+∣∣∣ =
+
+∣∣∣ ˆβri − β
+
+ˆs + β
+
+( 1ˆs − 1
+
+s
+
+)∣ ∣∣
+
+≤ 2
+
+κ | ˆβri − β| + βmax · 2
+
+κˆκ
+
+(|ˆαri − α| + | ˆβri − β|).
+
+Thus: 
+
+|et| ≤ | et−1| +
+
+∣∣∣ 1ˆs − 1
+
+s
+
+∣∣∣ · | ∆prt | +
+
+∣∣∣ ˆβri
+
+ˆs − βs
+
+∣∣∣ · | Drt−1(θ)|≤ | et−1| +
+
+( 2Pmax 
+
+κˆκ
+
+)(|ˆαri − α| + | ˆβri − β|) +
+
+( 2Dmax 
+
+κˆκ
+
+)
+
+| ˆβri − β| +
+
+( 2βmax Dmax 
+
+κˆκ
+
+)(|ˆαri − α| + | ˆβri − β|)
+
+Taking expectations and using E[|ˆαri − α|] ≤ ∆α and E[| ˆβri − β|] ≤ ∆β gives 
+
+E[|et|] ≤ E[|et−1|] + Ce (∆ α + ∆ β )
+
+where Ce = poly (n, B, S, α max , β max , 1/κ ˆκ). Since e0 = ˆDri, 0 − Dr 
+
+> 0
+
+(θ) = 0 by definition, iterating gives us: 
+
+max   
+
+> t∈[T]
+
+E[|et|] ≤ T C e(∆ α + ∆ β ).
+
+Therefore, we have that the deviation of the estimated external aggregate demand from the true external aggregate demand is: 
+
+E[∥ ˆdr 
+
+> −i
+
+− dr
+
+> −i
+
+(θ)∥] = E[∥e∥] ≤ √T max   
+
+> t∈[T]
+
+E[|et|] ≤ √T
+
+(
+
+T C e(∆ α + ∆ β )
+
+)
+
+.
+
+and we can bound T 2 as: 
+
+T2 ≤ αmax E[∥W ′( ˆdr 
+
+> −i
+
+− dr
+
+> −i
+
+(θ)) ∥] + βmax E[∥ ˆdr 
+
+> −i
+
+− dr
+
+> −i
+
+(θ)∥]
+
+≤ (αmax T + βmax ) E[∥ ˆdr 
+
+> −i
+
+− dr
+
+> −i
+
+(θ)∥]
+
+≤ (αmax T + βmax ) √T
+
+(
+
+T C e(∆ α + ∆ β )
+
+)
+
+Combining the bounds on T 1 and T 2, the bias of the gradient can be bounded by ∆ := ∆α (T B + T (( n − 1) B + S)) + ∆ β (( n + 1) B + S) + ( αmax T + βmax )√T (T C e(∆ α + ∆ β )) ≤ (∆ α + ∆ b) ·
+
+poly (n, T, B, S, α max , β max , 1/(κˆκ)) .We now move to bounding the norm of the gradient feedback. From the recursive reconstruction expression of the estimated demand, we have that for all t = 1 , ..., T :
+
+| ˆDri,t | =
+
+∣∣∣∣∣
+
+∆prt + ˆβri ˆDri,t −1
+
+ˆs
+
+∣∣∣∣∣ ≤ |∆prt |
+
+ˆκ + ˆβri
+
+ˆκ | ˆDri,t −1| ≤ Pmax 
+
+ˆκ + βmax 
+
+ˆκ | ˆDri,t −1| ≤ Pmax 
+
+ˆκ · t ≤ T P max 
+
+ˆκ
+
+and therefore 
+
+∥ ˆDri ∥ ≤ √T max   
+
+> t∈[T]
+
+| ˆDri,t | ≤ T 3/2Pmax 
+
+ˆκ .
+
+Since ∥ ˆdr
+
+> −i
+
+∥ ≤ ∥ ˆDri ∥ + ∥hri (θri )∥, it follows that: 
+
+∥ ˆdr
+
+> −i
+
+∥2 ≤ T 3/2Pmax 
+
+ˆκ + √T B 
+
+So, we can derive: 
+
+∥ ˜∇rhi ∥ ≤ ∥ p01T ∥ + ˆ αri ∥W hri (θri )∥ + ˆ αri ∥W ′ ˆdr
+
+> −i
+
+∥ + ˆβri ∥2hri (θri ) + ˆdr
+
+> −i
+
+∥ + ∥∇ fi(hri (θri )) ∥≤ | p0|√T + αmax T ∥hri (θri )∥ + αmax T ∥ ˆdr
+
+> −i
+
+∥ + βmax 
+
+(2∥hri (θri )∥ + ∥ ˆdr
+
+> −i
+
+∥) + U ′
+
+≤ | p0|√T + αmax T 3/2B + αmax T
+
+( T 3/2Pmax 
+
+ˆκ + √T B 
+
+)
+
++ βmax 
+
+(
+
+2√T B + T 3/2Pmax 
+
+ˆκ + √T B 
+
+)
+
++ U ′
+
+≤ poly (n, T, p 0, B, S, U ′, α max , β max , 1/ˆκ)
+
+31 In particular, taking expectations yields E[∥ ˜∇rhi ∥2|hr ]E[∥ ˜∇rhi ∥2] ≤ poly (n, T, p 0, B, S, U ′, α max , β max , 1/ˆκ).Therefore, by Theorem 5, the final iterate produced by Algorithm 2 satisfies: 
+
+E [∥hR − h∗∥2] ≤ O
+
+( D2M (1 + exp(1 /m 2 log R)) log( nR ) log 2(R)
+
+R +
+
+(
+
+1 − 1
+
+R
+
+) √n∆ log( nR ) log( R)
+
+)
+
+where h∗ is the Nash equilibrium of G, and the expectation is taken over the randomness of the algorithm. Here, we have D ≤ B√nk and M ≤ poly (n, T, p 0, B, S, U ′, α max , β max , 1/ˆκ).Next we show that ℓi is Lipschitz in the ℓ2 norm, which will allow us to argue that since hR and h∗ are close in ℓ2 distance, they must also incur similar cost. Observe that for any j̸ = i, for any hi, h−i, θ, λ:
+
+∥∇ hj ci(hi(θi), h−i(θ−i), λ)∥ = ∥αM ⊤hi(θi) + βhi(θi)∥ ≤ (αT + β)B
+
+and so: 
+
+sup 
+
+> h
+
+∥∇ hci(hi(θi), h−i(θ−i), λ)∥≤ | p0|√T + αT B + αT (( n − 1) B + S) + β(( n + 1) B + S) + U ′ + n(αT + β)B
+
+︸ ︷︷ ︸
+
+> =: L′(p0,α,β )
+
+Therefore for all h, h′, θ, λ, ci is L′(p0, α, β )-Lipschitz in h, i.e.: 
+
+|ci(h′
+
+> i
+
+(θi), h′−i(θ−i), λ) − ci(hi(θi), h−i(θ−i), λ)| ≤ L′∥h′ − h∥
+
+Taking expectations, we have that ℓi is L-Lipschitz in h, i.e. for all h, h′:
+
+|ℓi(h′
+
+> i
+
+, h′−i; P ) − ℓi(hi, h−i; P )| = |Eθ, λ∼P [ci(h′
+
+> i
+
+(θi), h′−i(θ−i), λ) − ci(hi(θi), h−i(θ−i), λ)] |≤ Eθ, λ∼P [|ci(h′
+
+> i
+
+(θi), h′−i(θ−i), λ) − ci(hi(θi), h−i(θ−i), λ)|]
+
+≤ L∥h′ − h∥
+
+where L ≤ max p0,α,β L′(p0, α, β ) = poly (n, T, α, β, p 0, B, S, U ′).Thus, the cost evaluated at hR is close to the cost evaluated at h∗: E [ℓi(h∗ 
+
+> i
+
+, h∗−i; P ) − ℓi(hRi , hR
+
+> −i
+
+; P )]
+
+≤ L · E [∥hR − h∗∥] (by L-Lipschitzness) 
+
+≤ L · O
+
+√
+
+D2M (1 + exp(1 /m 2 log R)) log( nR ) log 2(R)
+
+R +
+
+(
+
+1 − 1
+
+R
+
+) √n∆ log( nR ) log( R)
+
+
+
+In the second inequality, we use that fact that E [∥hR − h∗∥]2 ≤ E [∥hR − h∗∥2] by Jensen’s inequality. Furthermore, since the entries of ∥hR − h∗∥ are non-negative, we also have that for any hi ∈ H i:
+
+E [ℓi(hi, hR
+
+> −i
+
+; P ) − ℓi(hi, h∗−i; P )] ≤ L · E [∥hR 
+
+> −i
+
+− h∗−i∥] (by L-Lipschitzness) 
+
+≤ L · E [∥hR − h∗∥]
+
+≤ L · O
+
+√
+
+D2M (1 + exp(1 /m 2 log R)) log( nR ) log 2(R)
+
+R +
+
+(
+
+1 − 1
+
+R
+
+) √n∆ log( nR ) log( R)
+
+
+
+32 Combining the above, we can show that hR is an approximate Nash equilibrium of G. In particular, for any 
+
+i, for any hi ∈ H i: E [ℓi(hRi , hR
+
+> −i
+
+; P ) − ℓi(hi, hR
+
+> −i
+
+; P )]
+
+≤ E [ℓi(h∗ 
+
+> i
+
+, h∗−i; P ) − ℓi(hi, hR
+
+> −i
+
+; P )] +
+
+L · O
+
+√
+
+D2M (1 + exp(1 /m 2 log R)) log( nR ) log 2(R)
+
+R +
+
+(
+
+1 − 1
+
+R
+
+) √n∆ log( nR ) log( R)
+
+
+
+≤ E [ℓi(h∗ 
+
+> i
+
+, h∗−i; P ) − ℓi(hi, h∗−i; P )] +2L · O
+
+√
+
+D2M (1 + exp(1 /m 2 log R)) log( nR ) log 2(R)
+
+R +
+
+(
+
+1 − 1
+
+R
+
+) √n∆ log( nR ) log( R)
+
+
+
+≤ 2L · O
+
+√
+
+D2M (1 + exp(1 /m 2 log R)) log( nR ) log 2(R)
+
+R +
+
+(
+
+1 − 1
+
+R
+
+) √n∆ log( nR ) log( R)
+
+
+
+(by the fact that h∗ is a Nash equilibrium) Thus, we can conclude that hR is an approximate Bayesian Nash equilibrium. Specifically, for all i and hi:
+
+E[Eθ, λ∼P [ci(hRi (θi), hR
+
+> −i
+
+(θ−i), λ) − ci(hi(θi), hR
+
+> −i
+
+(θ−i), λ)]] 
+
+≤ 2L · O
+
+√
+
+D2M (1 + exp(1 /m 2 log R)) log( nR ) log 2(R)
+
+R +
+
+(
+
+1 − 1
+
+R
+
+) √n∆ log( nR ) log( R)
+
+
+
+≤ O
+
+(
+
+poly (n, T, p 0, B, S, U ′, α max , β max , 1/(κˆκ)) ·
+
+(√k log 3/2(R)
+
+√R + (∆ α + ∆ β )
+
+(
+
+1 − 1
+
+R
+
+)
+
+log 2(R)
+
+)) 
+
+as desired. 
+
+Proof of Theorem 4. We begin by defining a “discretized game" obtained by discretizing types over a covering of Θi. Let δ = 1 / log R. For each agent i, let ˆΘi be a δ-net of Θi. That is, for any θi ∈ Θi, there exists 
+
+ˆθi ∈ ˆΘi satisfying ∥ˆθi − θi∥∞ ≤ δ. For any θi ∈ Θi, we will write ˆθi to denote its nearest neighbor in 
+
+ˆΘi. Define ˆP as the joint distribution over game types and discretized player types that is the pushforward of the distribution P under the transformation (θ1, ..., θ n, λ ) 7 → (ˆθ1, ..., ˆθ1, λ ). For every agent i, let ˆHi =
+
+{ˆhi : Θ i → RT |ˆhi(θi) = hi(ˆθi) ∀hi ∈ H i} be the set of strategies that is piecewise constant over each “bin" induced by the discretization. Observe that we can represent every ˆhi ∈ Rki×T , as a ki × T -dimensional matrix, where ki = | ˆΘi| ≤ (1 /δ )mi (we can always obtain a δ-net by discretizing each coordinate to multiples of δ). Let k = max i ki.Now, Algorithm 1 runs Algorithm 2 over this discretized game. To invoke its guarantees, we first verify that the strategy space ˆHi is convex. Indeed, observe that for any ζ ∈ [0 , 1] and any ˆhi, ˆh′ 
+
+> i
+
+∈ ˆHi, (1 − ζ)ˆhi + ζ ˆh′ 
+
+> i
+
+∈
+
+Gi, since Gi is itself convex. Also, any convex combination of piecewise constant functions is also convex. Finally, since ˆhi, ˆh′ 
+
+> i
+
+are L-Lipschitz over ˆΘi, for any ˆθi, ˆθ′
+
+> i
+
+:
+
+∥(1 − ζ)ˆhi(ˆθi) + ζ ˆh′
+
+> i
+
+(ˆθi) − (1 − ζ)ˆhi(ˆθ′
+
+> i
+
+) − ζ ˆh′
+
+> i
+
+(ˆθ′
+
+> i
+
+)∥∞
+
+≤ (1 − ζ)∥ˆhi(ˆθi) − ˆhi(ˆθ′
+
+> i
+
+)∥∞ + ζ∥ˆh′
+
+> i
+
+(ˆθi) − ˆh′
+
+> i
+
+(ˆθ′
+
+> i
+
+)∥∞
+
+≤ (1 − ζ)L∥ˆθi − ˆθ′
+
+> i
+
+∥∞ + ζL ∥ˆθi − ˆθ′
+
+> i
+
+∥∞
+
+= L∥ˆθi − ˆθ′
+
+> i
+
+∥∞
+
+Thus (1 − ζ)ˆhi + ζ ˆh′ 
+
+> i
+
+∈ ˆHi, proving convexity. Therefore, we can invoke Theorem 7, which guarantees that the final iterates are approximate ex-ante BNE. Let ˆhR 
+
+> 1
+
+, . . . , ˆhRn be the final iterate strategies produced by all agents running Algorithm 1. By Theorem 7, 33 ˆhR 
+
+> 1
+
+, . . . , ˆhRn satisfy for all i, all ˆh′ 
+
+> i
+
+∈ ˆHi:
+
+Eˆθ, λ∼ ˆP [ci(ˆhRi (ˆθi); ˆhR
+
+> −i
+
+(ˆθ−i), λ)] ≤ Eˆθ, λ∼ ˆP [ci(ˆh′
+
+> i
+
+(ˆθi); ˆhR
+
+> −i
+
+(ˆθ−i), λ)] + ϵ′ (34) where E[ϵ′] = O
+
+(
+
+poly (n, T, p 0, B, S, U ′, α max , β max , 1/(κˆκ)) ·
+
+(√k log 3/2(R) 
+
+> √R
+
++ (∆ α + ∆ β ) (1 − 1
+
+> R
+
+) log 2(R)
+
+)) 
+
+.Note that this equilibrium guarantee is stated over the distribution ˆP , the underlying distribution induced by the discretized game. We now lift this guarantee to an ex-ante BNE guarantee in the original, continuous-type game. Recall that for all agents i and all ˆθi ∈ ˆΘi, ˆhi is piecewise constant over all θi ∈ Θi in the same bin as ˆθi — that is, ˆhi(θi) = ˆhi(ˆθi) for all θi such that ˆθi is its nearest neighbor in ˆΘi. Thus, since ˆP is the pushforward distribution of P obtained by discretizing all θi to ˆθi, we have that, for the LHS of Eq. 34: 
+
+Eˆθ, λ∼ ˆP [ci(ˆhRi (ˆθi); ˆhR
+
+> −i
+
+(ˆθ−i), λ)] = Eθ, λ∼P [ci(ˆhRi (θi); ˆhR
+
+> −i
+
+(θ−i), λ)] 
+
+Similarly, for the RHS: 
+
+Eˆθ, λ∼ ˆP [ci(ˆh′
+
+> i
+
+(ˆθi); ˆhR
+
+> −i
+
+(ˆθ−i), λ)] = Eθ, λ∼P [ci(ˆh′
+
+> i
+
+(θi); ˆhR
+
+> −i
+
+(θ−i), λ)] 
+
+Thus, Eq. 34 guarantees that for any agent i, their final iterate strategy is ϵ-optimal against any deviation to an alternative strategy in ˆHi. It remains to compare their costs under any deviation to an alternative strategy in Hi.We show that for all agents i, for any hi ∈ H i, there exists ˆhi ∈ ˆHi such that their outputs on any θi are close, and thus agent i’s costs under the two strategies are close. Fixing a hi ∈ H i, define ˆhi: ˆhi(θi) = hi(ˆθi).Then, by L-Lipschitzness, for all θi ∈ Θi:
+
+∥hi(θi) − ˆhi(θi)∥∞ = ∥hi(θi) − hi(ˆθi)∥∞ ≤ L∥θi − ˆθi∥∞ ≤ Lδ 
+
+We then establish that ci is Lipschitz so that under these two strategies, the costs are similar. We can derive, for any θ, λ:
+
+sup 
+
+> hi
+
+∥∇ hi ci(hi(θi), h−i(θ−i), λ)∥ ≤ p0
+
+√T + αT B + αT (( n − 1) B + S) + β(( n + 1) B + S) + U ′
+
+︸ ︷︷ ︸
+
+> =: Lc(p0,α,β )
+
+Using Lc(p0, α, β )-Lipschitzness of ci, we have that for all θ, λ:
+
+|ci(hi(θi); ˆhR
+
+> −i
+
+(θ−i), λ) − ci(ˆhi(θi); ˆhR
+
+> −i
+
+(θ−i), λ)|≤ Lc(p0, α, β )∥hi(θi) − ˆhi(θi)∥≤ Lc(p0, α, β )∥hi(θi) − ˆhi(θi)∥≤ Lc(p0, α, β )√T ∥hi(θi) − ˆhi(θi)∥∞
+
+≤ Lc(p0, α, β )L√T δ 
+
+Taking expectations, we have: 
+
+|Eθ, λ∼P [ci(hi(θi); ˆhR
+
+> −i
+
+(θ−i), λ)] − Eθ, λ∼P [ci(ˆhi(θi); ˆhR
+
+> −i
+
+(θ−i), λ)] | ≤ LcL√T δ 
+
+where Lc = max λ Lc(p0, α, β ) = poly (n, T, α, β, p 0, B, S, U ′).Therefore, any deviation to a strategy in Hi cannot increase agent i’s cost by more than LcLδ . That is: 
+
+∀ˆh′ 
+
+> i
+
+∈ ˆHi : Eθ, λ∼P [ci(ˆhRi (θi); ˆhR
+
+> −i
+
+(θ−i), λ)] ≤ Eθ, λ∼P [ci(ˆh′
+
+> i
+
+(θi); ˆhR
+
+> −i
+
+(θ−i), λ)] + ϵ
+
+=⇒ ∀ h′ 
+
+> i
+
+∈ H i : Eθ, λ∼P [ci(ˆhRi (θi); ˆhR
+
+> −i
+
+(θ−i), λ)] ≤ Eθ, λ∼P [ci(h′
+
+> i
+
+(θi); ˆhR
+
+> −i
+
+(θ−i), λ)] + LcL√T δ + ϵ
+
+34 Thus we can conclude that the final iterate strategies are an (LcLδ + ϵ′)-approximate ex-ante BNE, where 
+
+LcL√T δ + E[ϵ′] = Lδ · poly (n, T, α, β, p 0, B, S, U ′)+ O
+
+(
+
+poly (n, T, p 0, B, S, U ′, α max , β max , 1/(κˆκ)) ·
+
+(√k log 3/2(R)
+
+√R + (∆ α + ∆ β )
+
+(
+
+1 − 1
+
+R
+
+)
+
+log 2(R)
+
+)) 
+
+= Lδ · poly (n, T, α, β, p 0, B, S, U ′)+ O
+
+(
+
+poly (n, T, p 0, B, S, U ′, α max , β max , 1/(κˆκ)) ·
+
+(
+
+(1 /δ )m/ 2 log 3/2(R)
+
+√R + (∆ α + ∆ β )
+
+(
+
+1 − 1
+
+R
+
+)
+
+log 2(R)
+
+)) 
+
+= O
+
+(
+
+L · poly (n, T, α, β, p 0, B, S, U ′)log R
+
++ poly (n, T, p 0, B, S, U ′, α max , β max , 1/(κˆκ)) ·
+
+(
+
+log (m+3) /2(R)
+
+√R + (∆ α + ∆ β )
+
+(
+
+1 − 1
+
+R
+
+)
+
+log 2(R)
+
+)
+
+= O
+
+(
+
+poly (n, T, p 0, B, S, U ′, α max , β max , 1/(κˆκ)) ·
+
+(
+
+L
+
+log R + log (m+3) /2(R)
+
+√R + (∆ α + ∆ β )
+
+(
+
+1 − 1
+
+R
+
+)
+
+log 2(R)
+
+)
+
+where the second-to-last step follows from our choice of δ.
+
+## C Additional Discussion on the Model and its Practical Implications 
+
+C.1 Derivation of Price Model 
+
+First, we discuss in more detail how our price dynamics in Assumption 1 relate to Walrasian price dynamics. As mentioned in Section 2, this model positions that (mean) prices evolve according to the continuous time differential equation 
+
+dp t = α(demand t − supply t)dt , 
+
+for some price-sensitivity factor α. Given this, the dynamic model for pwt can be viewed as a discretization of this process. In addition, allowing for noise in st, this turns it into a discretization of the corresponding stochastic differential equation 
+
+dp t = α(demand t − supply t)dt + σdW t ,
+
+for some noise process dW t (e.g. Brownian motion). The actual price that traders must pay differs from this Walrasian process by amount β(∑ni=1 hi,t + st). We can interpret this difference as a temporary (instanta-neous) price adjustment from pwt driven by the imbalance of supply and demand; when supply and demand are not balanced, the difference must be met by market makers , who provide liquidity. These market makers require some spread from pwt in order to account for the risk they take by providing liquidity. For example, if demand outstrips supply at time t, the market makers will balance this by selling an equal amount at a slight premium; hence, the instantaneous market price pt will be slightly higher than pwt . We implicitly assume as part of Assumption 1 that this difference is linear in the imbalance ∑ni=1 hi,t + st, with coefficient 
+
+β.Alternatively, this model can also be justified from the literature on market impact. For example, the seminal model of Almgren & Chriss (2000), which is the basis for much of the classical theory on (non-strategic) optimal trade execution, posits almost exactly the same model for price impact from trade execution over time, except that they consider a slightly more general offset based on supply and demand imbalance of the kind ψ(∑ni=1 hi,t + st), for some concave function ψ : R+ → R+. Therefore, our price model is equivalent to theirs in the case of ψ(x) = βx . We note that empirical research (see e.g. Almgren et al. (2005)) suggests power-law models of the kind ψ(x) = βx γ with γ ≈ 3/5 to be well supported by real data. Such a model would be more challenging to study under strategic interaction, as it could break strong monotonicity without 35 some additional assumptions on fi and/or Gi; we leave the investigation of alternative price models like this to future work. 
+
+C.2 Relation to Existing Models in the Literature 
+
+Here, we make some concrete comparisons of our model with the models used in the recent lines of work on position building under competition Chriss (2024b;c;a; 2025); Kearns & Shi (2025). 
+
+Relation to Existing Discrete Time Model First, consider the special case of our model with no idiosyncratic utilities ( fi = 0 for all i), and no exogenous actions ( s = 0 ). In this case, we can re-formulate the objective for each agent as minimizing a cost function ci(hi, h−i) given by the negative of the utility ui,which if we unroll the autoregressive price definitions like in the proof of Lemma 2, we can easily verify is given by 
+
+ci(hi; h−i) = α
+
+> T
+
+∑
+
+> t=1
+
+hi,t t∑
+
+> l=1
+> n
+
+∑
+
+> j=1
+
+hj,l + β
+
+> T
+
+∑
+
+> t=1
+
+hi,t n∑
+
+> j=1
+
+hj,t +
+
+> T
+
+∑
+
+> t=1
+
+hi,t p0
+
+Now, assume further that the constraints Gi contains a constraint of the kind ∑Tt=1 hi,t = Vi for some fixed 
+
+Vi. Then, the third term above can be ignored, as it is always equal to p0Vi for any feasible hi ∈ Gi. Given this, and with some slight re-arranging of terms, we have that the cost structure is given by 
+
+ci(hi; h−i) = α
+
+> T
+
+∑
+
+> t=1
+
+hi,t n∑
+
+> j=1
+
+xj,t −1 + ( α + β)
+
+> T
+
+∑
+
+> t=1
+
+hi,t n∑
+
+> j=1
+
+hj,t ,
+
+where we define xi,t = ∑tl=1 hi,l as the cumulative position acquired by agent i over the first t time steps. This corresponds exactly to the kind of cost structure assumed in Kearns & Shi (2025), who considered a discrete time version of optimal position building, with cost function 
+
+cKS  
+
+> i
+
+(hi; h−i) = κ
+
+> T
+
+∑
+
+> t=1
+
+hi,t n∑
+
+> j=1
+
+xj,t −1 +
+
+> T
+
+∑
+
+> t=1
+
+hi,t n∑
+
+> j=1
+
+hj,t .
+
+Following terminology for literature on optimal position building, they denote first term as the permanent-impact cost , and the second term as the temporary-impact cost , with permanent-impact coefficient κ, and unit temporary-impact coefficient (which is completely general up to normalization of cost). Therefore, if we normalize our cost by α + β, we see that under the above model restrictions it recovers theirs with 
+
+κ = α/ (α + β).Although our model may seem less general given the above reduction, as they allow for any κ ≥ 0 but ours only allows κ ∈ [0 , 1] , we argue that this restriction does not have much or any material impact in practice. First, as discussed in Kearns & Shi (2025), if they decompose their cost into zero-sum and potential ( i.e. congestion game-style cost) components, the coefficient in front of potential cost becomes negative when κ > 2. This implies that agents are rewarded rather than punished from congestion of their trading schedule, which therefore encourages agents to behave as aggressively as their constraints will allow (this is reflected e.g. in the unstable dynamics they observe when agents play no-regret with κ > 2). Given this, we would probably wish to restrict to κ < 2 in such a discrete model in practice. Second, and perhaps more importantly, to the extent that their model is justified as a discretization of the continuous time model discussed below, the convergence of this discretization as we make it more and more fine-grained only works if we let the ratio of temporary-impact-coefficient to permanent-impact-coefficient ( i.e. κ) tend towards zero as T → ∞ . Therefore, no matter the target κ value in the continuous-time cost cNC  
+
+> i
+
+defined below, the corresponding κ in the discrete-time cost cKS  
+
+> i
+
+that approximates this will be less than 1 if the discretization is sufficiently fine-grained. 
+
+Relation to Existing Continuous Time Model The works by Chriss (2024b;c;a; 2025) consider a continuous-time version of this problem, where the strategies hi are functions over some continuous time 36 range (which they normalize to be [0 , 1] without loss of generality). In this setting, we assume the strategies are defined by functions hi : [0 , 1] → R, where hi(t) is their instantaneous trading rate at time t. We also define xi implicitly in terms of hi as the total accumulated position up to time t, which is mathematically given by: xi(t) = ∫ t 
+
+> 0
+
+hi(l)dl . Then, the assumed cost structure is: 
+
+cNC  
+
+> i
+
+(hi; h−i) = κ
+
+∫ 10
+
+hi(t)
+
+> n
+
+∑
+
+> j=1
+
+xi(t)dt +
+
+∫ 10
+
+hi(t)
+
+> n
+
+∑
+
+> j=1
+
+hj (t)dt , 
+
+which is the continuous-time analogue of the cost structure based on decomposition into permanent-impact cost and temporary-impact cost mentioned above. 9
+
+Now, suppose we are given a problem instance of this continuous time model, with κ given, and time normalized into range [0 , 1] . We can approximate this arbitrarily well with a discrete time model as T → ∞ ,by letting the discrete time grid correspond to { 1 
+
+> T
+
+, 2 
+
+> T
+
+, . . . 1} in continuous time. Specifically, we can do this as follows: suppose we are given collection of continuous-time strategies hc
+
+> 1
+
+, . . . , hcn, and define 
+
+xci (t) = 
+
+∫ t
+
+> 0
+
+hci (l)dl (for continuous t ∈ [0 , 1]) 
+
+xi,t = xci
+
+( tT
+
+)
+
+(for discrete t ∈ [T ]) 
+
+hi,t = xi,t − xi,t −1 (for discrete t ∈ [T ]) .
+
+Then, our discrete-time cost structure in terms of these strategy vectors hi will be given by 
+
+cα,β,T i (hi; h−i) = α
+
+> T
+
+∑
+
+> t=1
+
+hi,t n∑
+
+> j=1
+
+xj,t −1 + ( α + β)
+
+> T
+
+∑
+
+> t=1
+
+hi,t n∑
+
+> j=1
+
+hj,t 
+
+= α
+
+> T
+
+∑
+
+> t=1
+
+{
+
+xci
+
+( tT
+
+)
+
+− xci
+
+( t − 1
+
+T
+
+)} n∑
+
+> j=1
+
+xcj
+
+( t − 1
+
+T
+
+)
+
++ ( α + β)
+
+> T
+
+∑
+
+> t=1
+
+{
+
+xci
+
+( tT
+
+)
+
+− xci
+
+( t − 1
+
+T
+
+)} n∑
+
+> j=1
+
+{
+
+xcj
+
+( tT
+
+)
+
+− xcj
+
+( t − 1
+
+T
+
+)}
+
+= α
+
+> T
+
+∑
+
+> t=1
+
+1
+
+T hci
+
+( t − γi,t 
+
+T
+
+) n∑
+
+> j=1
+
+xcj
+
+( t − 1
+
+T
+
+)
+
++ ( α + β)
+
+> T
+
+∑
+
+> t=1
+
+1
+
+T hci
+
+( t − γi,t 
+
+T
+
+) n∑
+
+> j=1
+
+1
+
+T hcj
+
+( t − γj,t 
+
+T
+
+)
+
+,
+
+where the final line follows from the mean-value theorem, where γi,t ∈ (0 , 1) for all i, t . Therefore, if we consider a sequence of discrete problem instances with α = κ and β = T , we get 
+
+lim   
+
+> T→∞
+
+cκ,T,T i (hi; h−i) = lim   
+
+> T→∞
+
+κ 1
+
+T
+
+> T
+
+∑
+
+> t=1
+
+hci
+
+( t − γi,t 
+
+T
+
+) n∑
+
+> j=1
+
+xcj
+
+( t − 1
+
+T
+
+)
+
++ lim  
+
+> T→∞
+
+( κ + TT
+
+) 1
+
+T
+
+> T
+
+∑
+
+> t=1
+
+hci
+
+( t − γi,t 
+
+T
+
+) n∑
+
+> j=1
+
+hcj
+
+( t − γj,t 
+
+T
+
+)
+
+= κ
+
+∫ 10
+
+hci (t)
+
+> n
+
+∑
+
+> j=1
+
+xci (t)dt +
+
+∫ 10
+
+hci (t)
+
+> n
+
+∑
+
+> j=1
+
+hcj (t)dt , 
+
+where first equality plugs in the above result with α = κ and β = T , and the second follows from product of limits and the definition of the Riemann integral. Therefore, under appropriate re-normalization of the ratio 
+
+β/α as we make the discrete-time approximation more fine-grained, our model can approximate the existing continuous time cost structure considered in Chriss (2024b;c;a; 2025) arbitrarily well if we let T → ∞ .Therefore, our model on the above restriction on idiosyncratic utilities, constraints, and exogenous actions subsumes theirs up to a vanishing discretization error. 
+
+> 9Historically this continuous time model predates the discrete time version as it originated in the finance/economics literature. We present in opposite order since our model, being computational, is discrete-time.
+
+37 D Experiment Details 
+
+D.1 Estimating Market Parameters: 
+
+We extract market data for the Canadian Dollar (CAD) to U.S. Dollar (USD) forex exchange from Dukascopy, a Swiss financial services firm, which provides tick-level data on the following columns: bid, ask, bid volume, and ask volume. We use the approach outlined in Section 5 to estimate the permanent and temporary impact coefficients α and β from such basic data. To control for periodic effects, we built a training data set with tick data from 10am-11am, 11am-12pm, and 12pm-1pm (Eastern time) for the 9 Tuesdays between September 2, 2025 and November 4, 2025. Each of these hour-long intervals consist of roughly 6000 ticks. For the test set, we consider the same three hour time window on Tuesday, Nov 11. We present the results estimating α, β in Figures 3 and 4. Note that we expect the data here to be extremely noisy. A very strong signal/correlation of these market coefficients would allow strong predictions on price and would thus be quickly discovered by market participants ( i.e. would violate principle of no arbitrage). 
+
+D.2 Details on the Simulation Setup: 
+
+Let α∗ = 4 .65 e−7 and β∗ = 3 .25 e−6 be the parameters estimated from our regression analysis on real data. To set the type dependent parameters means E[α|θ1, θ 2] we choose μα,θ 1,θ 2 = E[α|θ1, θ 2] = α∗ +
+
+Unif (−1e−8, 1e−8) and μβ,θ 1,θ 2 = E[β|θi] = β∗ + Unif (−1e−7, 1e−7). Then conditioned on their realized type, P (α|θ1, θ 2) ∼ N (μα,θ 1,θ 2 , 1e−8) and P (β|θ1, θ 2) ∼ N (μβ,θ i , 1e−7). Conditioned on θ1, θ 2, α and β are independent in our instance generation process. 
+
+Figure 3: Regression performance on test data with 
+
+α = 4 .65 e−7
+
+Figure 4: Regression performance on test data with 
+
+β = 3 .25 e−6
+
+D.3 Sensitivity Analysis 
+
+To evaluate the robustness of the analytical Bayesian Nash Equilibrium and the last iterate result produced by Algorithm 1, we conduct a sensitivity analysis. First, we compute the confidence interval of our predicted 
+
+α∗ and β∗ parameters by using the standard approach for ordinary least squares regression. In figures 5 and 6 below, we fix one of these price parameters and vary the other over it’s 95% confidence interval. The trajectory at the estimated α∗ and β∗ are considered the baseline. While the simplest approach would be to plot, at each time t, the deviation from the baseline as a % of the baseline position at t, this suffers from a core issue: since all positions start at 0 at t = 0 , we can see a blow up and numerical instability at early times. As such, we plot the deviation from the baseline as a % of the baseline position at the final time T .Further, since all agents types have some constraint or goal on their final position, this a meaningful anchor. We observe that in both the last iterate and the Bayesian Nash Equilibrium, the trajectories remain fairly consistent and stable across these perturbations, differing by no more than 1% .38 Figure 5: Varying β over its 95% confidence interval [3 .10 e−7, 3.35 e−7] for fixed α∗. Plotted is the deviation from baseline position as a % of the final baseline position. On the left is the effect on the last iterate from Algorithm 1. On the right is the effect on the empirical BNE. 
+
+Figure 6: Varying α over its 95% confidence interval [4 .40 e−7, 4.9e−7] for fixed β∗. Plotted is the deviation from baseline position as a % of the final baseline position. On the left is the effect on the last iterate from Algorithm 1. On the right is the effect on the empirical BNE. 
+
+## E Comparisons and Connections to VWAP 
+
+Figure 7: Cumulative position over time for 5 agents when all are being strategic and playing Nash Equilib-rium strategies. 39 Figure 8: The strategies of the 5 players when agents 2 and 3 are play VWAP and the rest play the induced equilibrium of this setting. Our model considers the dynamics of n traders looking to execute a position within some markets governed by parameters α, β , signifying the permanent and temporary impact of trading volume on price. We take a game-theoretic approach, where each trader’s strategy is dictated by an equilibrium between all players. It is, however, instructive to compare such an approach with the widely used execution strategy known as 
+
+VWAP - Volume Weighted Average Price .The VWAP strategy is simple and doesn’t require strategic consideration: at any given time interval, each agent trades proportional to the historical volume of trade that occurred at that interval. Larger trades are placed when there is expected to be large volume in the market, and smaller-sized trades are placed when the market volume is low. While our model does not explicitly model the historical market volume (except in empirical evaluations where s is the aggregate market demand), this can be easily remedied by reinterpreting our model’s time dimension. That is, instead of treating each time step [t, t +1] as a fixed period of wall-clock time, we instead interpret it as volume weighted time . That is, based on past historical market data, we dilate each interval (shrink or expand) such that an equal amount of volume is traded within each interval. This may mean, for instance, that one interval corresponds to wall-clock time [9:30, 9:35] (high volume at the start of the day) and another to wall-clock time [11:00, 12:00] (lower volume at mid-day). Indeed, the price impact model (Almgren & Chriss, 2000) that our work is based on implicitly already assumes that time is defined as “volume-weighted time” exactly like this (see e.g. Almgren et al. (2005) for a detailed discussion of this issue.) Changing time measurement does not change any of our results. In volume-weighted time, the VWAP strategy is simple: trade a constant amount at each interval. So, a trader building a position Vi simply executes Vi/T at each interval. A core question thus emerges: How does the VWAP strategy compare to the equilibrium strategy and what are the dynamics of a market that includes both equilibrium traders and VWAP traders? 
+
+We explore this question in the context of a simple synthetic example in the complete information setting. Suppose we have 5 traders who want to build (hard constraint) positions of [10 , 15 , 20 , 25 , 30] . They each have a linear final position utility fi(hi) = ri
+
+∑ 
+
+> t
+
+hi,t for some reserve price ri (we use reserve values of 
+
+[4 , 5, 6, 7, 8] respectively). We set p0 = 2 , α = 0 .1, vary β ∈ { 0.1, 1, 10 }, and set the exogenous player s to be randomly sampled from a gaussian distribution. Then, in Figure 8, we plot the joint strategies where agents 2 and 3 follow VWAP, and the remaining agents follow the corresponding complete-information 3 player Nash Equilibrium given agents 2 and 3 following VWAP. Even though agents 0, 1, 4 are strategic in both settings (Figures 7 and 8), the fact that agents 2 and 3 have now shifted to a VWAP strategy changes the equilibrium strategy of these 3. Note, however, that for the large β = 10 setting, the agent behaviors do not change much (both for those who deviate and those who don’t). This is intuitive since when the temporary impact is large, agents generally want to spread out their trades regardless of other factors. 40 We next ask, how does this shift affect the cost (i.e. negative utility) incurred by all agents? In Figure 10, we see that the agents who switch from being strategic to playing VWAP pay a higher cost for doing so. However, as β becomes larger, this becomes less consequential, as the ratio tends to 1. The effect on the remaining three players, however, is the opposite. These players end up paying a lower cost when agents (2,3) are following VWAP versus when they are strategic. This suggests that players who switch from being strategic to playing VWAP end up paying a higher cost at VWAP. Agents who are always strategic can exploit those who follow VWAP. As β becomes large, however, these effects become small. Our results suggest a transition to VWAP to strategic (or vice versa) can have both a positive or negative impact depending on the player. How does this affect total welfare , i.e. the (negative) sum of all costs incurred by agents? In Figure 9, we plot the cumulative cost as a function of β. We plot 6 curves, where the 
+
+kth curve corresponds to a subset of k agents playing the VWAP strategy (we in fact consider all combinations of k agents playing VWAP and take the average). Interestingly, we observe that the cumulative cost is almost always lower when a subset of agents are playing VWAP as compared to the all-strategic cumulative cost. This suggests that VWAP strategies could have better social welfare properties than all-strategic. We believe that this is an interesting finding that should be considered by market designers and regulators. 
+
+Figure 9: On the left is the ratio of cost between playing VWAP and playing strategically for agents 2 and 3. On the right is the ratio of costs for the remaining 3 agents (0,1,4) between when agents 2,3 were playing VWAP and when agents 2 and 3 were strategic. 
+
+Figure 10: Ratio of cumulative costs be-tween a subset of agents playing VWAP and all agents being strategic. 41
