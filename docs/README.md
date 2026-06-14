@@ -6,38 +6,37 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-06-13
-- 运行时间：2026-06-13 21:25:20 UTC
+- 最新运行日期：2026-06-14
+- 运行时间：2026-06-14 21:25:53 UTC
 - 运行状态：成功
-- 本次总论文数：6
+- 本次总论文数：5
 - 精读区：3
-- 速读区：3
+- 速读区：2
 
 ### 今日简报（AI）
-今日精读两篇9分论文，聚焦竞争环境中智能体如何策略性获取资源，以及用过程化策略优化提升决策效率。最值得关注的方向是竞争多智能体博弈下的资源学习机制，以及无需手工奖励设计的自动化策略优化方法。普通读者可跟进这两类方法在复杂任务与LLM智能体训练中的实际表现。
-- 详情：[/202606/13/README](/202606/13/README)
+今日精读两篇前沿论文：揭示大模型交易系统的执行假设与可复现危机，以及LLM驱动的自反思代理如何重塑欺诈检测格局。  
+重点方向：Agent架构的可复现性陷阱与金融场景中自反思机制的有效性验证。  
+推荐从业者关注模型落地时的环境假设校验，并尝试将自反思闭环引入风控流程。
+- 详情：[/202606/14/README](/202606/14/README)
 
 ### 精读区论文标签
-1. [Learning to Strategically Acquire Resources in Competition](/202606/13/2606.06882v1-learning-to-strategically-acquire-resources-in-competition)  
+1. [Beyond Agent Architecture: Execution Assumptions and Reproducibility in LLM-Based Trading Systems](/202606/14/2606.08285v1-beyond-agent-architecture-execution-assumptions-and-reproducibility-in-llm-based-trading-systems)  
    标签：评分：9.0/10、query:fla
-   evidence：多智能体强化学习在金融资产市场中策略性获取资源
-2. [APPO: Agentic Procedural Policy Optimization](/202606/13/2606.12384v1-appo-agentic-procedural-policy-optimization)  
-   标签：评分：9.0/10、query:fla
-   evidence：提出基于细粒度信用分配的智能体RL训练方法
-3. [SlimSearcher: Training Efficiency-Aware Web Agents via Adaptive Reward Gating](/202606/13/2606.07074v1-slimsearcher-training-efficiency-aware-web-agents-via-adaptive-reward-gating)  
+   evidence：回顾基于LLM的金融交易智能体，关注执行真实性和可复现性
+2. [SAGE: An LLM-driven Self Reflective Agentic Framework for Fraud Detection](/202606/14/2606.08146v1-sage-an-llm-driven-self-reflective-agentic-framework-for-fraud-detection)  
    标签：评分：8.0/10、query:fla
-   evidence：采用自适应奖励门控训练网络智能体，在SFT和RL中权衡准确率与成本
+   evidence：LLM驱动的金融欺诈检测多智能体框架
+3. [Knowing When to Ask: Self-Gated Clarification for Hierarchical Language Agents](/202606/14/2606.11349v1-knowing-when-to-ask-self-gated-clarification-for-hierarchical-language-agents)  
+   标签：评分：8.0/10、query:fla
+   evidence：将自门控澄清应用于海关税则分类智能体，属于金融领域任务导向智能体
 
 ### 速读区论文标签
-1. [PBSD: Privileged Bayesian Self-Distillation for Long-Horizon Credit Assignment](/202606/13/2606.09348v1-pbsd-privileged-bayesian-self-distillation-for-long-horizon-credit-assignment)  
-   标签：评分：7.0/10、query:fla
-   evidence：面向多轮智能体任务中稀疏奖励的细粒度信用分配，提出贝叶斯校准自蒸馏方法。
-2. [HIPIF: Hierarchical Planning and Information Folding for Long-Horizon LLM Agent Learning](/202606/13/2606.10507v1-hipif-hierarchical-planning-and-information-folding-for-long-horizon-llm-agent-learning)  
-   标签：评分：7.0/10、query:fla
-   evidence：面向多轮LLM智能体任务中的长上下文干扰，提出分层规划与信息折叠方法。
-3. [ConSteer-RL: Steering Reasoning Capabilities in Large Language Models via Confidence-Aware Reinforcement Learning](/202606/13/2606.08088v1-consteer-rl-steering-reasoning-capabilities-in-large-language-models-via-confidence-aware-reinforcement-learning)  
+1. [SPA: A SQL-Plan-Aware Reinforcement Learning Framework for Query Rewriting with LLMs](/202606/14/2606.08620v1-spa-a-sql-plan-aware-reinforcement-learning-framework-for-query-rewriting-with-llms)  
    标签：评分：6.0/10、query:fla
-   evidence：置信度感知的RL改进LLM推理，为自主智能体后训练提供可迁移方法
+   evidence：基于强化学习的LLM策略后训练方法
+2. [Addressing Market Regime Changes and Heavy-Tailed Returns in Portfolio Optimization via Bayesian VAR and Elliptical Black-Litterman](/202606/14/2606.09104v1-addressing-market-regime-changes-and-heavy-tailed-returns-in-portfolio-optimization-via-bayesian-var-and-elliptical-black-litterman)  
+   标签：评分：6.0/10、query:fla
+   evidence：提出考虑厚尾收益和机制转换的DRL投资组合优化智能体，属于金融领域任务型智能体
 
 
 <div class="dpr-home-promo-card">
