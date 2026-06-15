@@ -6,37 +6,40 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-06-14
-- 运行时间：2026-06-14 21:25:53 UTC
+- 最新运行日期：2026-06-15
+- 运行时间：2026-06-15 22:56:21 UTC
 - 运行状态：成功
-- 本次总论文数：5
-- 精读区：3
+- 本次总论文数：6
+- 精读区：4
 - 速读区：2
 
 ### 今日简报（AI）
-今日精读两篇前沿论文：揭示大模型交易系统的执行假设与可复现危机，以及LLM驱动的自反思代理如何重塑欺诈检测格局。  
-重点方向：Agent架构的可复现性陷阱与金融场景中自反思机制的有效性验证。  
-推荐从业者关注模型落地时的环境假设校验，并尝试将自反思闭环引入风控流程。
-- 详情：[/202606/14/README](/202606/14/README)
+1) 今日精读「可进化智能体工坊」与「推理流追踪」，速览「解耦专家知识注入」与「时间不一致均衡」，聚焦 Agent 架构与推理机制。
+2) 最值得关注：可组合与自适应的 Agent 框架（HarnessX）让智能体持续进化，推理信息流的可视化追踪则为定向强化学习提供新抓手。
+3) 建议读者从 Agent 进化性与推理可解释性切入，尝试构建能自我优化的智能体原型。
+- 详情：[/202606/15/README](/202606/15/README)
 
 ### 精读区论文标签
-1. [Beyond Agent Architecture: Execution Assumptions and Reproducibility in LLM-Based Trading Systems](/202606/14/2606.08285v1-beyond-agent-architecture-execution-assumptions-and-reproducibility-in-llm-based-trading-systems)  
+1. [HarnessX: A Composable, Adaptive, and Evolvable Agent Harness Foundry](/202606/15/2606.14249v1-harnessx-a-composable-adaptive-and-evolvable-agent-harness-foundry)  
    标签：评分：9.0/10、query:fla
-   evidence：回顾基于LLM的金融交易智能体，关注执行真实性和可复现性
-2. [SAGE: An LLM-driven Self Reflective Agentic Framework for Fraud Detection](/202606/14/2606.08146v1-sage-an-llm-driven-self-reflective-agentic-framework-for-fraud-detection)  
+   evidence：提出HarnessX，通过多智能体演化和RL进化智能体运行框架，推动后训练。
+2. [How Does Reasoning Flow? Tracing Attention-Induced Information Flow for Targeted RL in LLMs](/202606/15/2606.10646v1-how-does-reasoning-flow-tracing-attention-induced-information-flow-for-targeted-rl-in-llms)  
    标签：评分：8.0/10、query:fla
-   evidence：LLM驱动的金融欺诈检测多智能体框架
-3. [Knowing When to Ask: Self-Gated Clarification for Hierarchical Language Agents](/202606/14/2606.11349v1-knowing-when-to-ask-self-gated-clarification-for-hierarchical-language-agents)  
+   evidence：提出FlowTracer，一种用于LLM中词元级信用分配的RL框架，改进智能体推理。
+3. [Speculative Rollback Correction for Quality-Diverse Web Agent Imitation](/202606/15/2606.12485v1-speculative-rollback-correction-for-quality-diverse-web-agent-imitation)  
    标签：评分：8.0/10、query:fla
-   evidence：将自门控澄清应用于海关税则分类智能体，属于金融领域任务导向智能体
+   evidence：提出分支级模仿框架训练网页智能体
+4. [CacheRL:Multi-Turn Tool-Calling Agents via Cached Rollouts and Hybrid Reward](/202606/15/2606.14179v1-cacherlmulti-turn-tool-calling-agents-via-cached-rollouts-and-hybrid-reward)  
+   标签：评分：8.0/10、query:fla
+   evidence：通过缓存轨迹和混合奖励训练小规模基础智能体模型，用于多轮工具调用
 
 ### 速读区论文标签
-1. [SPA: A SQL-Plan-Aware Reinforcement Learning Framework for Query Rewriting with LLMs](/202606/14/2606.08620v1-spa-a-sql-plan-aware-reinforcement-learning-framework-for-query-rewriting-with-llms)  
+1. [Decoupled Mixture-of-Experts for Parametric Knowledge Injection](/202606/15/2606.14243v1-decoupled-mixture-of-experts-for-parametric-knowledge-injection)  
+   标签：评分：7.0/10、query:fla
+   evidence：通过解耦混合专家进行模块化微调以注入领域知识
+2. [Deterministic Policy Gradient for Learning Equilibrium in Time-Inconsistent Control Problems](/202606/15/2606.11798v1-deterministic-policy-gradient-for-learning-equilibrium-in-time-inconsistent-control-problems)  
    标签：评分：6.0/10、query:fla
-   evidence：基于强化学习的LLM策略后训练方法
-2. [Addressing Market Regime Changes and Heavy-Tailed Returns in Portfolio Optimization via Bayesian VAR and Elliptical Black-Litterman](/202606/14/2606.09104v1-addressing-market-regime-changes-and-heavy-tailed-returns-in-portfolio-optimization-via-bayesian-var-and-elliptical-black-litterman)  
-   标签：评分：6.0/10、query:fla
-   evidence：提出考虑厚尾收益和机制转换的DRL投资组合优化智能体，属于金融领域任务型智能体
+   evidence：提供面向时间非一致控制问题的确定性策略梯度强化学习方法，可潜在用于金融智能体训练。
 
 
 <div class="dpr-home-promo-card">
