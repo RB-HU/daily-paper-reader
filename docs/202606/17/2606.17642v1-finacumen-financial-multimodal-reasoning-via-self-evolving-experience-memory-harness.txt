@@ -1,0 +1,926 @@
+Title: FinAcumen: Financial Multimodal Reasoning via Self-Evolving Experience Memory Harness
+
+URL Source: https://arxiv.org/pdf/2606.17642v1
+
+Published Time: Wed, 17 Jun 2026 00:42:39 GMT
+
+Number of Pages: 17
+
+Markdown Content:
+## FinAcumen: Financial Multimodal Reasoning via Self-Evolving Experience Memory Harness 
+
+Pianran Guo 1,* , Pengcheng Zhou 2,* , Yuchen Jian 1, Shuhua Chen 1
+
+> 1
+
+Beijing University of Posts and Telecommunications, 2Queen Mary University of London 
+
+guopianran@bupt.edu.cn , jp2020213547@qmul.ac.uk ,
+
+jianyucheng@bupt.edu.cn , lyonia_orangerica@bupt.edu.cn 
+
+> *
+
+Equal contribution 
+
+Abstract 
+
+Financial multimodal reasoning requires agents to coordinate numerical computation, retrieval, visual interpretation, and temporal ground-ing across heterogeneous evidence sources. Existing tool-augmented agents improve ex-ecution fidelity, yet remain largely stateless across episodes, repeatedly rediscovering rea-soning strategies and failure patterns. In high-stakes financial settings, this leads to unreliable tool routing, noisy retrieval, and hallucination-prone reasoning. We present FinAcumen, a financial reasoning agent framework cen-tered on selective experience memory for tool-augmented multimodal reasoning. FinAcumen accumulates financially grounded reasoning experience from prior trajectories, distilling successful strategies and failure-derived cau-tionary rules into a persistent memory bank. During inference, retrieved experiences condi-tion reasoning only when semantic relevance exceeds a calibrated threshold, while irrele-vant memory is explicitly suppressed through a fallback mechanism. A deterministic finan-cial tool environment further grounds numer-ical computation, retrieval, visual decoding, and answer verification.Across four financial multimodal reasoning benchmarks, FinAcu-men consistently improves a frozen 8B vision-language model over finance-specialized mod-els and approaches leading proprietary general-purpose models. Further analysis shows that selective experience activation improves rea-soning reliability under retrieval uncertainty. Our code is anonymously available at https: //anonymous.4open.science/r/FinAcumen 
+
+1 Introduction 
+
+Financial multimodal reasoning requires agents to coordinate heterogeneous evidence from text, ta-bles, charts, and time-indexed records. Unlike con-ventional QA, this setting jointly demands visual interpretation, numerical computation, retrieval, and temporal grounding across multiple interact-ing modalities. Figure 1 illustrates example items from the four benchmarks we evaluate in this work. Recent benchmarks expose complementary aspects of this challenge, including SEC-grounded quantity localization, chart-centric numerical rea-soning, temporal-aware multimodal retrieval, and hallucination-sensitive financial analysis (Koncel-Kedziorski et al., 2023; Tang et al., 2025; Zhu et al., 2025; Luo et al., 2025). Despite rapid progress in multimodal large lan-guage models, reliable financial reasoning remains unresolved. General-purpose models lack finan-cially grounded reasoning strategies under com-plex multimodal settings, while finance-specialized models often exhibit limited robustness outside their tuning distributions (Liu et al., 2025; Huang et al., 2024; Caillaut et al., 2025). Recent evidence shows that even models performing competitively on distribution-near tasks can fail sharply on chart-dense and retrieval-intensive settings, suggesting that static fine-tuning alone does not provide adap-tive reasoning policies for heterogeneous modality compositions (Dai et al., 2026; Deng et al., 2026). Performance remains particularly constrained in high-difficulty settings, where benchmark lead-ers still exhibit substantial degradation under re-trieval ambiguity, multi-step numerical reasoning, and hallucination-sensitive evaluation (Tang et al., 2026, 2025; Luo et al., 2025; Zhu et al., 2025). In practical financial analysis workflows, human experts rely not only on domain knowledge, but also on accumulated experience about when to re-trieve evidence, invoke tools, cross-check modal-ities, and verify intermediate conclusions. Tool-augmented paradigms such as ReAct externalize computation and perception, yet remain largely stateless across episodes and repeatedly rediscover reasoning procedures (Yao et al., 2023). Existing memory-based paradigms partially address this lim-itation by storing prior reflections or trajectories, but they often conflate successful and failed ex-1               
+
+> arXiv:2606.17642v1 [cs.AI] 16 Jun 2026 Shared FM
+> + FT Rollout
+> Multi-Trajectory →
+> Strategies & Guard Rules
+> Selective Retrieval
+> (τ-gated)
+> Numerical Engine
+> Numerical Engine
+> Grounded Retrieval
+> Answer Gate
+> Strategies: Filing-
+> structured localization
+> Strategies: Temporal
+> query decomposition
+> Strategies: OCR-first
+> visual decoding
+> Strategies: Domain-
+> specific rewriting
+> Guard: Distractor
+> filtering
+> Guard: Arithmetic state
+> consistency
+> Guard: Hallucination
+> prevention
+> Guard: Retrieval-
+> quality verification
+> FinMMR: Multimodal Numerical Reasoning
+> Core Challenge
+> Data badge
+> Visual noise × multi-step arithmetic × 0.2% tolerance
+> 4,300 QA ~8,700 images 14 subdomains
+> {...
+> ratio = a / b
+> ...
+> }
+> ?
+> = 2.37
+> BizBench (SEC-NUM): SEC Quantity Grounding
+> Core Challenge
+> Data badge
+> Dense distractors × open labels × exact match
+> 8,845 samples 2,000 test
+> 165
+> 2026
+> 161
+> Total 2024 2025
+> Interest 625 170
+> 665 661 Debt Svc 8,151 170
+> "Projected interest costs due in fiscal 2026"
+> FinMME: Broad-Spectrum Chart Evaluation
+> Core Challenge
+> Data badge
+> Broad domain shift × diverse chart semantics ×
+> hallucination penalty
+> 11,099 samples 18 domains 6 asset classes
+> FinTMMBench: Temporal-Aware Multimodal RAG
+> Core Challenge
+> Data badge
+> Retrieval-first failures × time anchoring × heterogeneous fusion
+> 36,100 records 5,676 QA 10 task types
+> Time
+> P/E = 15.2
+> Dec 30, 2022
+
+Figure 1: Example items from the four financial multimodal benchmarks evaluated in this work. 
+
+periences, retrieve weakly related guidance, and expand without controlling retrieval quality (Shinn et al., 2023; Zhao et al., 2024; Ouyang et al., 2025; Zhang et al., 2026). Such behavior is particularly problematic in finance, where irrelevant retrieval can directly degrade reasoning quality and halluci-nated evidence may lead to incorrect analytical con-clusions (Shi et al., 2023; Liu et al., 2024). Bench-marks such as FinTMMBench and FinMME make this issue explicit by penalizing retrieval errors and unsupported reasoning, requiring systems to deter-mine not only what to retrieve, but also whether retrieved guidance should influence inference (Zhu et al., 2025; Luo et al., 2025). We propose FinAcumen , a financial multi-modal reasoning framework centered on selective experience-guided inference for tool-augmented agents. FinAcumen introduces a Financial Mem-ory (FM) module that accumulates financially grounded reasoning experience from prior trajec-tories, separating reusable strategies from failure-derived cautionary rules. During inference, re-trieved experience conditions reasoning only when semantic relevance exceeds a calibrated threshold; otherwise, the model explicitly falls back to its base reasoning policy to suppress noisy memory injec-tion. A complementary Financial Tools (FT) envi-ronment provides deterministic support for numer-ical computation, retrieval, visual decoding, and answer verification. Our contributions are summarized as follows: 1. We introduce a selective experience memory framework for financial multimodal agents that separates reusable reasoning strategies from failure-derived cautionary guidance. 2. We propose a retrieval-conditioned inference mechanism in which memory activates only under sufficient semantic relevance, enabling fallback under retrieval uncertainty. 3. Across four financial multimodal reasoning benchmarks, FinAcumen consistently im-proves a frozen 8B VLM over general-purpose and finance-specialized baselines, while ap-proaching leading proprietary models. 
+
+2 Related Work 
+
+Financial multimodal reasoning. Financial QA evaluation has expanded from text-only settings to multimodal, temporal-aware, and hallucination-sensitive benchmarks. Representa-tive datasets cover SEC-grounded quantity local-ization (BizBench, where we evaluate the SEC-NUM subset), chart-centric numerical reasoning (FinMMR), temporal multimodal retrieval and rea-soning (FinTMMBench), and broad financial multi-modal assessment (FinMME) (Koncel-Kedziorski et al., 2023; Tang et al., 2025; Zhu et al., 2025; Luo et al., 2025). On the modeling side, finance-oriented LLMs such as Fin-R1 (Liu et al., 2025), Open-FinLLMs (Huang et al., 2024), and LLM Pro Finance Suite (Caillaut et al., 2025) mainly in-ject domain knowledge through parameter updates. In contrast, our formulation in §3 and §4 keeps the backbone frozen and adapts at inference time through a fixed tool suite and retrieved experience, so performance differences are attributable to expe-rience conditioning rather than model re-training. 
+
+Cross-episode experience memory. Research on cross-episode agent improvement can be viewed along three steps: memory construction, retrieval 2decision, and bank maintenance. ReAct (Yao et al., 2023) established tool-interleaved reason-ing but remains episode-local. Reflexion (Shinn et al., 2023), ExpeL (Zhao et al., 2024), Reasoning-Bank (Ouyang et al., 2025), and EchoSafe (Zhang et al., 2026) move to persistent experience accu-mulation across episodes. For retrieval, prior ev-idence shows that irrelevant context can harmrea-soning quality (Shi et al., 2023; Liu et al., 2024), while Self-RAG (Asai et al., 2024) highlights ex-plicit retrieve-or-not decisions. Relative to these lines, FinAcumen’s FM in §4.2 explicitly sepa-rates guidance from cautions, activates memory through similarity-thresholded retrieval with an empty-return fallback, and applies deduplication-aware ranking before prompt injection. 
+
+3 Problem Formulation 
+
+Notation. We consider multimodal financial QA with disjoint train and test splits. Each instance 
+
+x = ( q, c, I ) comprises question q, textual context 
+
+c, and optional images I, with gold answer y⋆(x)
+
+scored under benchmark metric μ. A frozen VLM 
+
+πθ performs multi-turn tool-augmented decoding over a fixed tool suite T (§4.4). A memory bank 
+
+M, populated from training trajectories, stores structured experience entries. At inference, en-tries are retrieved via embedding similarity and the top-k are injected into the prompt (Algorithm 1); a complete symbol table appears in Appendix A. Given M populated from Dtrain trajectories, we seek M⋆ that maximizes expected accuracy on 
+
+Dtrain :
+
+M⋆ ∈ arg max  
+
+> M
+
+Ex∼D train 
+
+h
+
+μ πθ(x; M, T ), y ⋆(x)i
+
+.
+
+(1) At test time, M⋆ is frozen and read-only: queries may activate stored patterns but never write to the bank. Final performance is reported as 
+
+Ex∼D test [μ(πθ(x; M⋆, T ), y ⋆(x))] .The discrete optimization in (1) is approximated in Section 4 through a writer-retriever loop (Algo-rithm 1) that constructs M from graded training trajectories. 
+
+4 Method 
+
+4.1 Overview 
+
+As defined in Section 3, a frozen language model 
+
+πθ operates over a tool suite T to solve financial problems. F IN ACUMEN extends this formulation with two components, illustrated in Figure 2: Fi-nancial Memory (FM) and Financial Tools (FT). FM enables the model to accumulate experience from its own solution trajectories and retrieve it as guidance for new problems, growing a bank of generalized strategies and guard rules through multi-trajectory sampling. FT provides a determin-istic execution layer that offloads computation, data retrieval, visual decoding, and answer consolida-tion from the generative process. The pipeline is shared across accumulation and inference, isolating memory retrieval as the sole conditioned pathway. 
+
+4.2 Financial Memory Memory bank structure. Each entry in M is a structured record of one completed problem, con-taining the original question, its gold answer, and the distilled experience. The experience consists of two parts: strategies generalized from trajectories that reached the correct answer, and guard rules extracted from those that did not. 
+
+Memory consolidation. For each problem the model encounters, the framework generates multi-ple independent solution trajectories from πθ with diverse decoding, scores each against the gold an-swer, and feeds the scored set to a single summary agent. Let {Traj 1, . . . , Traj K } denote the trajec-tories for problem x with gold answer y∗, and let 
+
+sk = Score (Traj k, y ∗) be the correctness score as-signed to each. The summary agent synthesizes two outputs: 
+
+(S, C ) = Summarize  {(Traj k, s k)}Kk=1 , y ∗,
+
+(2) where S collects strategies from successful trajecto-ries and C collects cautions from failed ones. These are written into a new entry alongside the original question and answer, incrementally expanding the bank for future retrieval. 
+
+Memory activation. At inference, a query x is embedded into the same semantic space as the bank through the shared encoder E(·). Its similarity to each entry m is defined by cosine distance over the resulting vectors: sim (x, m ) = E(x) · zm
+
+∥E(x)∥ ∥ zm∥ , (3) where zm denotes the pre-stored embedding of en-try m. Entries passing a calibrated threshold τ
+
+form the candidate set 
+
+Mx = { m ∈ M | sim (x, m ) ≥ τ }, (4) 3Final answer 
+
+Financial Memory(FM) 
+
+Financial Tools(FT)  
+
+> Grounded Data
+> Retrieval
+> Visual Structure Answer Consolidation
+
+Experience memory bank 
+
+query tokens 
+
+... 
+
+memory tokens 
+
+system tokens 
+
+> No
+
+tool_calls 
+
+Read 
+
+Write   
+
+> context "findings": [ "To identify the entity with the minimum value
+> among named entities...''] "cautions": [ "When comparing numeric ..."]
+
+... 
+
+> Memory
+> Found
+> FALLBACK
+
+... 
+
+... 
+
+No M em-
+
+ory Found  
+
+> think() act()
+> observe()
+> tool_calls Yes
+> u=12, h=9
+
+...     
+
+> Correct :guiding‑path(positive) insight:
+> Incorrect : guard‑rule insight: "When
+> (condition), (action)"
+> "first … then … derive the final answer" Memory
+> Consolidation
+> Numerical Reasoning
+> Engine
+> "question": "Is there any positive news articles regarding..."
+> "gold_answer": "Yes",
+> Decoder Gate
+> Solver Agent
+> Annotator Agent
+> INJECT
+
+... 
+
+> Rewrite retrieved
+> experience into personal
+> instructions
+
+Figure 2: The F IN ACUMEN pipeline. Experience accumulated through multi-trajectory sampling is stored in FM as generalized strategies and guard rules. At inference, semantically similar entries are retrieved and provided as in-context guidance; when none qualify, the model proceeds with FT alone. 
+
+which is then deduplicated and ranked. The top-ranked subset M∗
+
+x is rendered as a structured pre-fix prepended before the problem prompt. The model produces its final answer y through a tool-augmented rollout 
+
+y =
+
+
+
+Rollout  πθ, x mem , T , M∗
+
+x̸ = ∅
+
+Rollout  πθ, x, T , otherwise , (5) where xmem denotes the prompt with memory pre-fix prepended. 
+
+4.3 Agent Architecture 
+
+All LLM-driven roles in F IN ACUMEN share the same base model and are distinguished by their prompt-defined behavior. During consolidation, the model acts as a sampling agent that generates multiple diverse solution trajectories, and as a sum-mary agent that scores them against the gold answer before synthesizing strategies from successes and cautions from failures. During inference, an anno-tator agent rewrites retrieved experiences into di-rectives personalized to the current problem before the solver agent plans and executes tool-augmented reasoning. The solver internally decomposes into two phases: planning, where it inventories inputs, judges experience applicability, and formulates a strategy; and execution, where it invokes tools and terminates with the final answer. 
+
+4.4 Financial Tools 
+
+The tool suite T comprises four tools: 
+
+T =
+
+
+
+Numerical Reasoning Engine ,
+
+Grounded Data Retrieval ,
+
+Visual Structure Decoder ,
+
+Answer Consolidation Gate 
+
+
+
+, (6) covering precise arithmetic, factual data lookup, chart interpretation, and answer verification. The same tool set and calling schema are shared across all configurations, so that tool mechanics remain identical whether or not FM conditions the prompt. 
+
+Numerical Reasoning Engine. This tool decou-ples financial arithmetic from the generative pro-cess by executing code in a persistent namespace. Let σt denote the variable bindings accumulated across consecutive calls within the same agent loop, with σ0 containing no bindings: 
+
+(ot, σ t) = EXECUTE (code t, σ t−1), (7) 4where ot is the captured output. This stateful design enables cascaded operations such as rate compounding and cross-statement aggregation that stateless code generators cannot reliably chain: without persistent state, the model must reinitialize all quantities in every code block, risking inconsis-tency across arithmetic steps. Financial multi-step reasoning chains intermediate quantities by nature: growth rates build on prior period values, ratios depend on previously computed numerators and denominators. A fresh execution session per code call severs this dependency chain; the persistent namespace preserves it. 
+
+Grounded Data Retrieval. This tool resolves factual financial queries against a curated panel of OHLC records, news corpora, and quarterly indica-tor tables. Given a symbol, date, and indicator, the lookup returns the corresponding structured entry: 
+
+r = LOOKUP (symbol , date , indicator ), (8) anchoring each numerical claim to a verifiable source row. All filtering logic executes determin-istically within the tool backend, preventing the model from fabricating lookup parameters or re-sults. Financial quantities such as quarterly rev-enue or daily closing prices are factual, time-bound values. Parametric knowledge, encoded during pre-training, cannot reliably reproduce them when the query demands a specific date or indicator; consult-ing a deterministic panel anchors each claim in an externally verifiable source. 
+
+Visual Structure Decoder. This tool handles chart and table images in two layers. Before the agent loop begins, all available images are tran-scribed via OCR and prepended to the context as structured text, providing precise numerical inputs upfront. During reasoning, if the agent detects that computation results contradict values previously read from images, it may explicitly invoke this tool to re-parse the source image, producing an updated structured representation that resolves the discrep-ancy. 
+
+Answer Consolidation Gate. This tool serves as the sole termination point of the agent loop. Given the accumulated trajectory Traj and the proposed answer a, it enforces three conditions before emis-sion: VERIFY (Traj , a ) ≡ source-traceable (Traj) 
+
+∧ units-ok (Traj) 
+
+∧ format-valid (a),
+
+(9) where source-traceable checks that a or its numeric equivalent appears among the captured outputs of Execute calls, the returned entries of Lookup calls, or the OCR-extracted values in the context; units-ok verifies that quantity units remain compatible across tool calls without unresolved conversions; and format-valid ensures a conforms to the task instruction. Because termination is already the final reasoning step, embedding the verification check there costs no additional inference; a separate post-hoc auditor would require a second traversal of the full trajectory. 
+
+Interface with FM. FM is the memory bank described in §4.2; πθ is the frozen language model. FM operates strictly at the prompt level and never interleaves with the tool-calling mechan-ics. The baseline executes ROLLOUT (πθ, x, T )
+
+without memory, while the memory-active path prepends retrieved experiences before x. Be-cause T and the calling protocol remain identical across both paths, any performance difference is at-tributable solely to the experiential guidance rather than altered tool dynamics. 
+
+5 Experiments 
+
+5.1 Experimental Setup Benchmarks. We evaluate six settings from four benchmarks, covering numerical grounding, mul-timodal numerical reasoning, temporal-aware re-trieval, and chart understanding. BizBench SEC-NUM (Koncel-Kedziorski et al., 2023) includes 2000 SEC 10-K/10-Q items for quantity local-ization under numeric distractors; we use exact match with 1% relative tolerance. FinMMR (Tang et al., 2025) includes Easy/Medium/Hard splits (1200/1200/1000) for bilingual multi-image finan-cial numerical reasoning; we follow its 0.2% rela-tive tolerance criterion. FinTMMBench (Zhu et al., 2025) includes 1136 temporal-aware multimodal retrieval-reasoning items over tables, news, prices, and charts; we report official GPT-4o-mini-judge accuracy. FinMME (Luo et al., 2025) includes 2220 chart-intensive items across diverse financial domains; because the released annotations avail-able to us do not include official per-sample domain labels required to reproduce the benchmark’s of-ficial domain-normalized average.Therefore, we supplemented this part ourselves for comparison. We follow each benchmark’s official split and eval-uation protocol, with the FinMME scoring caveat above. Full dataset, scoring, and implementation 5details are provided in Appendix F. We follow each benchmark’s official split and evaluation protocol. Full dataset specifications and example items are provided in Appendix F. 
+
+Implementation details. We use frozen Qwen3-VL-8B-Instruct (Bai et al., 2025) (temperature 0, DashScope), serving without augmentation as the BASE model-only baseline (Table 1). As detailed in Section 4.4, the tool suite (B ASE + FT) equips the backbone with a ReAct loop (max 16 steps) over four tool components for numerical reason-ing, data retrieval, visual decoding, and answer gating; its standalone contribution is isolated in the ablation study (Section 5.3). The FM bank pools ∼2,400 experience accumulation trajectories across all benchmarks, sourced exclusively from training/validation splits held out from test data, and is frozen read-only at evaluation. All abla-tion conditions share identical tool and decoding configurations, isolating the effect of FM and FT. Published baseline numbers are collected from re-spective benchmark sources; exact model variant specifications and per-cell attributions appear in Appendix F.3, with further implementation details in Appendix F. 
+
+5.2 Main Results 
+
+Table 1 reports per-benchmark accuracy across all baselines and F IN ACUMEN . We treat this as a 
+
+deployment-setting comparison : F IN ACUMEN is a memory- and tool-enhanced small-model sys-tem, while published closed-source baselines are benchmark-reported native model results without our FM and FT wrapper. The claim is not that an 8B backbone is intrinsically stronger than GPT-4o or Claude, but that external memory and determinis-tic tools can substantially strengthen a frozen small VLM under constrained deployment. The intended reading is vertical: the gap from Base to F IN ACUMEN isolates the framework con-tribution under the same backbone, while the gap to the best General LLM indicates remain-ing headroom under the published benchmark set-ting. Model variant specifics are documented in Appendix F.3. Table 1 supports three observations. First, F I-
+
+> N
+
+ACUMEN produces large system-level gains :the same frozen backbone rises from 27.67 to 68.65 on BizBench and from 27.84 to 51.08 raw aver-age on FinMME, while also surpassing the pub-lished GPT-4o entries on FinMMR Easy/Medium. 
+
+Second, it is more robust than static finan-cial specialization : across all shared columns, FIN ACUMEN outperforms Llama-Open-Finance-8B, FinLLaVA, and Fin-R1, suggesting that finan-cial multimodal QA benefits from test-time evi-dence routing, verification, and strategy adaptation. 
+
+Third, the remaining gaps are informative : F I-
+
+> N
+
+ACUMEN still trails the best General LLM on BizBench, FinMMR Hard, and FinTMMBench, where stronger planning, temporal retrieval, or dif-ficult numerical reasoning is required. Thus, F I-
+
+> N
+
+ACUMEN is best viewed as a deployment-efficient way to strengthen frozen VLMs, not as evidence that an 8B backbone has superior intrinsic paramet-ric ability. 
+
+5.3 Ablation Study 
+
+Since Table 1 compares a full system against pub-lished model-only baselines, we isolate the source of the gain by toggling FT and FM on the same Qwen3-VL-8B backbone. Table 2 reports Fin-MMR Easy, whose moderate base accuracy (59.17) makes module-level gains easy to measure. All variants share the same backbone, decoding config-uration, and scoring protocol. The ablation explains the main-table gains. Adding FT raises accuracy from 59.17 to 74.08, showing that tools resolve many execution-level errors. Adding FM on top of the same tool suite further improves accuracy to 81.67, a 7.59-point gain over tool-only inference. This shows that F I-
+
+> N
+
+ACUMEN is not merely a tool wrapper: retrieved experiences provide strategy-level guidance about tool use, quantity verification, and recurring finan-cial reasoning traps. Together, FT and FM yield a 22.50-point improvement over the base model. 
+
+5.4 Memory Accumulation Behavior 
+
+To isolate the marginal contribution of experi-ence memory, we evaluate a frozen FM bank on BizBench SEC-NUM across seven snapshots span-ning 0 to 2400 accumulated entries. The n = 0 
+
+condition corresponds to the FT-augmented agent with an empty FM bank and is distinct from the bare model baseline. Figure 3 reports the accuracy trajectory. Starting from 55.15% with no experience entries, accuracy rises to 68.65% at 2400 entries, a net gain of 13.5 points. The curve exhibits diminishing returns: per-interval gains are most pronounced at smaller bank sizes and progressively decline, entering a satura-tion regime beyond 1800 entries where additional 6Table 1: Per-benchmark accuracy across six financial QA settings. Published baseline entries are benchmark-reported model results without our FM and FT wrapper; per-cell variant details and source attributions are in Appendix F.3. Best result per column in bold, second-best underlined. A dash indicates unreported by the source benchmark. F IN ACUMEN results use a frozen Qwen3-VL-8B-Instruct backbone with FM and FT. 
+
+Group Model BizBench FinMMR FinTMMBench FinMME SEC-NUM Easy Medium Hard General LLMs GPT 79.30 78.00 63.33 45.40 21.53 46.56 Claude Sonnet 63.39 77.00 62.25 50.80 – 48.20 Qwen2.5-VL-72B 69.85 77.42 63.42 43.30 15.15 52.54 Llama 74.70 77.83 63.25 48.70 11.57 –Gemini 2.0 Flash – 74.92 57.83 44.40 18.42 51.85 Financial LLMs Llama-Open-Finance-8B 63.64 – – – – 29.95 FinLLaVA 53.46 3.25 2.75 3.90 11.80 27.70 Fin-R1 59.32 – – – – 26.62 Base Qwen3-VL-8B-Instruct 27.67 59.17 45.75 31.40 16.20 27.84 FIN ACUMEN Qwen3-VL-8B + F IN ACUMEN 68.65 81.67 67.00 46.10 19.98 51.08 
+
+Table 2: Ablation of FT and FM on FinMMR Easy with Qwen3-VL-8B-Instruct. ∆ denotes absolute improve-ment over the Base only variant. 
+
+Variant Accuracy ∆
+
+Base only 59.17 –Base + FT 74.08 +14.91 Base + FT + FM (full F IN ACUMEN ) 81.67 +22.50 
+
+entries produce marginal improvements. A detailed decomposition of per-interval marginal gains is pro-vided in the Appendix. This monotonic saturating pattern confirms that the FM bank accumulates useful experience during training while selective retrieval at test time prevents stale entries from de-grading performance, consistent with the retrieval analysis in Section 5.5. 
+
+5.5 Sensitivity Analysis 
+
+The FM retrieval pipeline has two hyperparameters: a similarity threshold τ governing entry admission and a retrieval depth kmax governing how many admitted entries enter the reasoning context. We analyze each independently. 
+
+Cosine similarity threshold τ . We evaluate τ via hit rate rather than downstream accuracy, as this threshold must establish a viable candidate pool before kmax can operate; hit rate measures the frac-tion of test queries for which at least one bank entry exceeds the threshold. Figure 4a shows hit rates for nine τ values spanning [0 .50 , 0.90] against accumu-lated bank size. Three operational regimes emerge. A loose-filtering regime at τ ≤ 0.55 exceeds 87% hit rate at 120 entries with negligible semantic fil-0 120 240 600 1200 1800 2400   
+
+> FM Entries ( n)
+> 55
+> 60
+> 65
+> 70
+> Accuracy (%)
+> +1.80
+> -0.05
+> +4.00
+> +3.05
+> +3.40
+> +1.30
+> Total : +13.5%
+> w/o memory Saturation
+> Memory Accumulation on BizBench SEC-NUM
+
+Figure 3: Accuracy on BizBench SEC-NUM as a func-tion of accumulated FM bank size. The n = 0 condi-tion includes the FT tool suite. Per-step delta annota-tions reveal diminishing marginal returns, with accuracy approaching a saturation regime beyond n = 1800 ,marked by the shaded region. 
+
+tering. A strict-blocking regime at τ ≥ 0.75 stays below 37% even at 1200 entries, denying most queries access to memory. A moderate-filtering regime in [0 .60 , 0.70] yields 43% to 80% across bank expansion. At τ = 0 .65 , the center of this moderate regime, hit rate rises from 43.2% at 120 entries to 79.8% at 1200 entries; saturation beyond 600 entries mirrors the accumulation plateau ob-served in Figure 3, consistent with early entries capturing prevalent error patterns. 
+
+Retrieval depth kmax . We test kmax ∈{1, 3, 5, 7} at τ = 0 .65 on 500 questions evenly split across BizBench and FinMMR-M, with all other configurations matching the main 70 120 240 360 480 600 720 840 960 1080 1200    
+
+> Financial Memory Bank Size n
+> 0%
+> 20%
+> 40%
+> 60%
+> 80%
+> 100%
+> Hit Rate
+> nq= 1, 000 / dataset
+> = 0.50
+> = 0.55
+> = 0.60
+> = 0.65
+> = 0.70
+> = 0.75
+> = 0.80
+> = 0.85
+> = 0.90
+> Retrieval Hit Rate vs. Memory Bank Size
+
+(a) Hit rate as a function of bank size, stratified by similarity threshold τ .1 3 5 7     
+
+> Retrieval Depth kmax
+> 50 %
+> 55 %
+> 60 %
+> 65 %
+> 70 %
+> Accuracy
+> n= 500 (250 BizBench + 250 FinMMR-M)
+> BizBench
+> FinMMR-M
+> Macro Avg
+> Accuracy vs.\ Retrieval Depth kmax
+
+(b) Accuracy as a function of retrieval depth kmax .
+
+Figure 4: Sensitivity analysis of two retrieval hyperparameters. (a) Hit rate across bank sizes for different cosine thresholds; three operational regimes emerge, with the practical range centered at moderate filtering strictness. (b) Accuracy as a function of retrieval depth, following an inverted-U pattern that peaks at moderate depth and degrades at both extremes. Shaded regions denote 95% bootstrap confidence intervals. 
+
+experiments. Figure 4b shows an inverted-U relationship between retrieval depth and accuracy. At kmax = 1 macro accuracy is 57.80%; expanding to 3 reaches 57.85%, a shift of 0.05 percentage points that lies within bootstrap confidence intervals and is thus not statistically meaningful. At kmax = 5 macro accuracy rises to 63.11%, a gain of 5.26 points that falls well outside the confidence bounds, with consistent improvements on BizBench of 5.98 points and FinMMR-M of 4.55 points. This sharp transition is consistent with a scenario where entries ranked fourth and fifth cover strategy categories absent from the top three; the highest-ranked entries tend to cluster around a single dominant error type, while moderately-ranked entries span complementary failure modes demanding qualitatively different solution patterns. At kmax = 7 macro accuracy drops to 62.17%, a decline of 0.94 points, indicating that retrieval beyond five entries introduces distractors that outweigh any additional strategic signal. The tension between insufficient strategic coverage at low kmax and signal dilution at high kmax is resolved at kmax = 5 , which is adopted for all experiments. 
+
+6 Conclusion 
+
+We introduced F IN ACUMEN , a framework cou-pling self-evolving Financial Memory with deter-ministic Financial Tools for financial multimodal QA. Across four benchmarks, F IN ACUMEN with a frozen 8B VLM achieves consistent gains over finance-specialized models and competitive perfor-mance against leading general-purpose systems at a fraction of their parameter scale. Ablation con-firms complementary roles: FM improves routing and strategy selection via polarity-aware memory activation, while FT guarantees numerical fidelity through execution-environment grounding; when no relevant experience is retrievable, FM falls back to the tool-augmented baseline without degradation. The decoupled architecture, in which an evolving experience bank operates orthogonally to a deter-ministic tool suite around a frozen base model, sug-gests a general paradigm for professional-domain AI: externalized memory captures reusable strat-egy patterns without destabilizing the core model, while domain-specific tools provide computational guarantees that generative components alone typ-ically struggle to guarantee. Future work spans two dimensions: sample-efficient consolidation and compositional memory structures to reduce cold-start cost and enable cross-task strategy trans-fer; and cross-lingual alignment with stronger vi-sual encoders for robust deployment on multilin-gual and chart-dense real-world settings. 8References 
+
+Akari Asai, Zeqiu Wu, Yizhong Wang, Avi Sil, and Hannaneh Hajishirzi. 2024. Self-rag: Learning to re-trieve, generate, and critique through self-reflection. In International Conference on Learning Representa-tions .Shuai Bai, Yuxuan Cai, Ruizhe Chen, Keqin Chen, Xionghui Chen, and 1 others. 2025. Qwen3-VL tech-nical report. arXiv preprint arXiv:2511.21631 . Tech-nical report for Qwen3-VL; base model is Qwen3-VL-8B-Instruct. Gaëtan Caillaut, Raheel Qader, Jingshu Liu, Mariam Nakhlé, Arezki Sadoune, Massinissa Ahmim, and Jean-Gabriel Barthelemy. 2025. The llm pro finance suite: Multilingual large language models for finan-cial applications. arXiv preprint arXiv:2511.08621 .Yuyang Dai, Yan Lin, Zhuohan Xie, and Yuxia Wang. 2026. Realfin: How well do llms reason about fi-nance when users leave things unsaid? arXiv preprint arXiv:2602.07096 .Shuangyan Deng, Zhongsheng Wang, Rui Mao, Ciprian Doru Giurc˘ aneanu, and Jiamou Liu. 2026. Cler: Improving multimodal financial reasoning by cross-mllm error reflection. In Proceedings of the AAAI Conference on Artificial Intelligence , vol-ume 40, pages 30494–30502. Jimin Huang, Mengxi Xiao, Dong Li, Zihao Jiang, Yuzhe Yang, Yifei Zhang, Lingfei Qian, Yan Wang, Xueqing Peng, Yang Ren, and 1 others. 2024. Open-finllms: Open multimodal large language models for financial applications. arXiv preprint arXiv:2408.11878 .Rik Koncel-Kedziorski, Michael Krumdick, Viet Lai, Varshini Reddy, Charles Lovering, and Chris Tan-ner. 2023. BizBench: A quantitative reasoning benchmark for business and finance. arXiv preprint arXiv:2311.06602 . SEC-grounded numerical reason-ing benchmark; cited in §4.1 dataset table. Nelson F Liu, Kevin Lin, John Hewitt, Ashwin Paran-jape, Michele Bevilacqua, Fabio Petroni, and Percy Liang. 2024. Lost in the middle: How language mod-els use long contexts. Transactions of the association for computational linguistics , 12:157–173. Zhaowei Liu, Xin Guo, Zhi Yang, Fangqi Lou, Lingfeng Zeng, Jinyi Niu, Mengping Li, Qi Qi, Zhiqiang Liu, Yiyang Han, and 1 others. 2025. Fin-r1: A large language model for financial reasoning through reinforcement learning. arXiv preprint arXiv:2503.16252 .Junyu Luo, Zhizhuo Kou, Liming Yang, Xiao Luo, Jinsheng Huang, Zhiping Xiao, Jingshu Peng, Chengzhong Liu, Jiaming Ji, Xuanzhe Liu, and 1 oth-ers. 2025. Finmme: Benchmark dataset for financial multi-modal reasoning evaluation. In Proceedings of the 63rd Annual Meeting of the Association for Computational Linguistics (Volume 1: Long Papers) ,pages 29465–29489. Siru Ouyang, Jun Yan, I Hsu, Yanfei Chen, Ke Jiang, Zifeng Wang, Rujun Han, Long T Le, Samira Daruki, Xiangru Tang, and 1 others. 2025. Reasoningbank: Scaling agent self-evolving with reasoning memory. 
+
+arXiv preprint arXiv:2509.25140 .Freda Shi, Xinyun Chen, Kanishka Misra, Nathan Scales, David Dohan, Ed H Chi, Nathanael Schärli, and Denny Zhou. 2023. Large language models can be easily distracted by irrelevant context. In Inter-national Conference on Machine Learning , pages 31210–31227. PMLR. Noah Shinn, Federico Cassano, Ashwin Gopinath, Karthik Narasimhan, and Shunyu Yao. 2023. Re-flexion: Language agents with verbal reinforcement learning. Advances in neural information processing systems , 36:8634–8652. Zichen Tang, E Haihong, Rongjin Li, Jiacheng Liu, Lin-wei Jia, Zhuodi Hao, Zhongjun Yang, Yuanze Li, Haolin Tian, Xinyi Hu, and 1 others. 2026. Finm-mdocr: Benchmarking financial multimodal reason-ing with scenario awareness, document understand-ing, and multi-step computation. In Proceedings of the AAAI Conference on Artificial Intelligence , vol-ume 40, pages 25858–25866. Zichen Tang, Jiacheng Liu, Zhongjun Yang, Rongjin Li, Zihua Rong, Haoyang He, Zhuodi Hao, Xinyang Hu, Kun Ji, Ziyan Ma, and 1 others. 2025. Finmmr: make financial numerical reasoning more multimodal, com-prehensive, and challenging. In Proceedings of the IEEE/CVF International Conference on Computer Vision , pages 3245–3257. Shunyu Yao, Jeffrey Zhao, Dian Yu, Nan Du, Izhak Shafran, Karthik Narasimhan, and Yuan Cao. 2023. React: Synergizing reasoning and acting in language models. In International Conference on Learning Representations (ICLR) .Ce Zhang, Jinxi He, Junyi He, Katia Sycara, and Yaqi Xie. 2026. Evolving contextual safety in multi-modal large language models via inference-time self-reflective memory. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recog-nition . EchoSafe: free-form NL insight memory with cosine-similarity retrieval and simple-append (no deduplication or pruning); cited in ablation as the 
+
+−dedup/prune baseline. arXiv:2603.15800. Andrew Zhao, Daniel Huang, Quentin Xu, Matthieu Lin, Yong-Jin Liu, and Gao Huang. 2024. Expel: Llm agents are experiential learners. In Proceedings of the AAAI Conference on Artificial Intelligence ,volume 38, pages 19632–19642. Fengbin Zhu, Junfeng Li, Liangming Pan, Wenjie Wang, Fuli Feng, Chao Wang, Huanbo Luan, and Tat-Seng Chua. 2025. Towards temporal-aware multi-modal retrieval augemented generation in finance. In Pro-ceedings of the 33rd ACM International Conference on Multimedia , pages 6289–6297. 
+
+9Appendix 
+
+A Notation . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 10 
+
+B Inference Algorithm . . . . . . . . . . . . . . . . . . .10 
+
+C Marginal Gain Decomposition of Memory Accumulation . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 10 
+
+D Memory Strategy Ablation . . . . . . . . . . . . 11 
+
+E Retrieval Stability Analysis . . . . . . . . . . . . 12 
+
+E.1 Experimental Design . . . . . . . . . . . . . . . 12 
+
+E.2 Retrieval Metrics . . . . . . . . . . . . . . . . . . 12 
+
+E.3 Coverage and Retrieval Density . . . . . 12 
+
+E.4 Retrieval Stability . . . . . . . . . . . . . . . . . 13 
+
+F Experimental Details . . . . . . . . . . . . . . . . . . 14 
+
+F.1 Evaluation Protocols . . . . . . . . . . . . . . . 14 
+
+F.2 FinAcumen Configuration . . . . . . . . . . . 14 
+
+F.3 Baseline Attribution . . . . . . . . . . . . . . . . 15 
+
+G Experimental Details . . . . . . . . . . . . . . . . . . 15 
+
+H Limitations . . . . . . . . . . . . . . . . . . . . . . . . . . 17 
+
+A Notation 
+
+We define mathematical symbols that appear across multiple sections of the main text. Symbols intro-duced and used only within a single paragraph or algorithm are defined locally and not repeated here. 
+
+Table 3: Global mathematical notation.                
+
+> Symbol Definition
+> Problem and model
+> x= ( q, c, I )Instance: question q, text context c,optional images IπθFrozen vision-language model with parameters θ
+> TFinancial tool suite (§4.4)
+> Memory bank and retrieval
+> MExperience memory bank
+> zmPre-computed embedding of entry
+> m∈ M
+> E(·)Unit-scale text embedding operator
+> τCosine similarity threshold ( τ= 0 .65 )
+
+B Inference Algorithm C Marginal Gain Decomposition of Memory Accumulation 
+
+Figure 5 decomposes the memory accumulation curve from Section 5.4 into per-segment marginal gains, defined as the accuracy improvement per 100 accumulated FM entries for each consecutive snapshot interval. The evaluation protocol mirrors the main analysis: the FT-augmented Qwen3-VL-8B-Instruct backbone is evaluated on the full 2000-
+
+Algorithm 1 FIN ACUMEN single-instance infer-ence with retrieval 
+
+Require: x, M, πθ, T , ω, Emgr  
+
+> 1:
+
+vq ← E(q(x) ⊕ c(x)[:600] ) 
+
+> 2:
+
+VM ← Emgr .resolve_all (M)
+
+> 3:
+
+⃗s ← v q · V ⊤M 
+
+> 4:
+
+I ← { i | si ≥ 0.65 } 
+
+> 5:
+
+if I = ∅ then  
+
+> 6:
+
+return ROLLOUT (πθ, x, T ) 
+
+> 7:
+
+end if 
+
+> 8:
+
+⃗ I ← DESCENDING SORT (I,⃗ s)
+
+> 9:
+
+⃗ I ← DEDUP BYSOURCE (⃗ I)
+
+> 10:
+
+⃗ Itop ←⃗ I[:3]  
+
+> 11:
+
+xml ← RENDER MEMORY BLOCK (M[⃗ Itop ])  
+
+> 12:
+
+y ← ROLLOUT 
+
+ πθ, PREPEND (xml , x ), T  
+
+> 13:
+
+UPDATE STATS (⃗ Itop , y ) 
+
+> 14:
+
+if ω then  
+
+> 15:
+
+schedule async CONSOLIDATE (x, y, M) 
+
+> 16:
+
+end if  
+
+> 17:
+
+return y
+
+item BizBench SEC-NUM test set at seven bank snapshots spanning 0 to 2400 entries. The marginal gain decomposition in Figure 5 reveals a three-phase accumulation dynamic on BizBench. Phase 1 (0–120 entries): The initial accumulation of 120 entries yields a marginal gain of +1.50 per 100 entries, capturing the most com-mon error patterns. Phase 2 (240–1800 entries): 
+
+The next 1560 entries sustain a robust marginal ef-ficiency of +0.51 to +1.11 per 100 entries, with the 240–600 interval producing the strongest per-entry return (+1.11) and the 600–1200 interval yielding +0.51. The 1200–1800 interval yields +0.57 per 100 entries, reflecting an uptick in marginal effi-ciency as newly accumulated entries target pre-viously uncovered error patterns. Phase 3 ( n ≥
+
+1800 ): Beyond 1800 entries, the marginal gain de-clines to +0.22 per 100 entries, or approximately +1.30 points across the final 600-entry block. This diminishing return supports the selection of 1800 entries as the saturation knee for the production bank. The consistently positive marginal gains across all intervals, including the saturation phase, con-firm that the FM bank continues to provide useful signal even after substantial accumulation. While individual snapshots contain minor fluctuations (the 120–240 interval shows a near-zero change of −0.04 ), the overall trajectory is monotonically 10 120 240 600 1200 1800 2400  
+
+> FM Entries ( n)
+> 0.0
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> 1.0
+> 1.2
+> 1.4
+> Accuracy / 100 entries
+> Saturation
+> Total : +13.5%
+> Marginal Gain per 100 FM Entries on BizBench SEC-NUM
+
+Figure 5: Marginal accuracy gain per 100 accumulated FM entries on BizBench SEC-NUM. The curve traces a diminishing-returns pattern across consecutive snapshot intervals. The dashed vertical line separates the main accumulation phase from the saturation regime. 
+
+increasing on the macro timescale. This character-istic supports our deployment strategy of accumu-lating experience passively throughout training and freezing the bank at the empirically determined sat-uration point for test-time inference, as described in Section 5.4. 
+
+D Memory Strategy Ablation 
+
+This appendix isolates the marginal contribution of each component in the F IN ACUMEN pipeline by comparing five injection strategies that toggle four fields of the retrieved memory block. • Q (Question): the original question text of the top-retrieved similar item. • A (Answer): the gold answer of the retrieved item. • E (Experience): distilled Findings, reusable solu-tion recipes, and Cautions, guard rules from past failures. • Annot (Annotation): LLM-generated personal-ized directives that map generic rules to query-specific entities such as ticker symbols, date ranges, and metric names. All strategies share Qwen3-VL-8B-Instruct as the backbone and operate on the same 600-question test subsample with MIN_COSINE set to 0.60. Strategies A and B use the single-shot baseline-raw variant without tools; strategies C through E use the full FinAcumen variant with the four-tool ReAct loop. Table 4 reports per-benchmark accuracy and the macro average across the four benchmarks. The strategy comparisons in Table 4 decompose BizBench       
+
+> (SEC-NUM)
+> FinMMR
+> Easy
+> FinMMR
+> Medium
+> FinMME
+> Benchmark
+> 0
+> 20
+> 40
+> 60
+> 80
+> 100
+> Accuracy (%)
+> 54
+> 67
+> 53
+> 38
+> 58
+> 66
+> 61
+> 40
+> 66
+> 71
+> 64
+> 47
+> 65 64 63
+> 42
+> 69
+> 81
+> 67
+> 53
+> Memory Strategy Ablation
+> ABCDE
+
+Figure 6: Memory strategy ablation on a shared test subsample. Checkmarks in Table 4 indicate the injected fields for each strategy. 
+
+the contribution of each field. Adding gold answers to Q-only references, A to B, yields 3.25 macro points, confirming that reference answers carry a measurable signal. Adding tools and annotation without experience, B to D, yields 2.25 points, less than half the gain from experience alone. Experience provides the dominant marginal im-provement. Strategy C, which includes Q, A, and experience but omits annotation, exceeds strategy D, which includes Q, A, and annotation but omits experience, by 3.50 macro points. This gap isolates Findings and Cautions from the effect of annota-tion. The gain is concentrated on FinMME, from 42 to 47, and on FinMMR Easy, from 64 to 71, benchmarks on which sign convention and unit conversion errors recur systematically and are cap-tured by distilled guard rules. Annotation amplifies experience rather than adding independently to it. Strategy E, the full pipeline, exceeds C by 5.50 points, a margin larger than the D-to-C gap of 3.50. This asymmetry in-dicates that annotator directives are most effective when experience content is already rich: person-alization prevents a guard rule about fiscal year 2022 from being misapplied to a query about fiscal year 2024, but generic Findings and Cautions must first be present to be personalized. The total gain from A to E is 14.50 macro points, from 53.00 to 67.50. The monotonic progression across all five strategies confirms that tools, experience, and an-notation address complementary failure modes that no subset of the pipeline can cover alone. 11 Table 4: Memory strategy ablation. Checkmarks indicate which fields are injected into the memory block for each strategy. Macro is the arithmetic mean across the four benchmarks.                                                
+
+> Strategy QAEAnnot BizB F-E F-M MME Macro A✓54 67 53 38 53.00 B✓✓58 66 61 40 56.25 C✓✓✓66 71 64 47 62.00 D✓✓✓65 64 63 42 58.50 E✓✓✓✓69 81 67 53 67.50
+
+E Retrieval Stability Analysis 
+
+E.1 Experimental Design 
+
+We evaluate retrieval composition across 11 bank snapshots, from 0 to 1200 entries, by comput-ing cosine similarity between all 11,379 test query embeddings and each bank entry at the operating threshold τ = 0.65 . The snapshots are constructed as cumulative prefixes drawn uniformly across six benchmarks: entries from 
+
+finacumen/memory/v8_unified/meta.json are partitioned by source.dataset , shuffled with seed 42, and the first S/ 6 entries per bench-mark are concatenated for each target size S ∈{0, 120 , 240 , . . . , 1200 }. Each successive snap-shot retains all entries from the previous size and appends 20 additional entries per benchmark, yield-ing a cumulative prefix of 120 entries per step. A small fraction of entries lack resolvable embed-dings, yielding actual bank cardinalities slightly below the nominal target sizes. While we fix the primary operational threshold at τ = 0.65 for cross-benchmark analysis, we also sweep τ ∈
+
+[0 .50 , 0.90] to examine how retrieval density and volatility scale under different matching strictness. 
+
+E.2 Retrieval Metrics 
+
+We report four metrics, where Rn(q) denotes the set of entries retrieved for query q at snapshot n
+
+and Q denotes the full query set of size 11,379. 
+
+Hn = 1
+
+|Q|
+
+X
+
+> q∈Q
+
+1[|Rn(q)| > 0] 
+
+Hit rate Hn measures the fraction of queries re-ceiving at least one retrieved entry at bank size 
+
+n.
+
+¯En = 1
+
+|Q|
+
+X
+
+> q∈Q
+
+|Rn(q)|
+
+Mean entries per query ¯En captures retrieval density. For adjacent snapshots n1 and n2, the per-query Jaccard similarity is defined with an explicit case for two empty retrieval sets: 
+
+Jq(n1, n 2) = 
+
+
+
+1, if Rn1 (q) = Rn2 (q) = ∅,
+
+|Rn1 (q) ∩ Rn2 (q)||Rn1 (q) ∪ Rn2 (q)| , otherwise .Jn1,n 2 = 1
+
+|Q|
+
+X
+
+> q∈Q
+
+Jq(n1, n 2)
+
+Adjacent-size Jaccard similarity Jn1,n 2 quanti-fies compositional stability across snapshots. As-signing Jq = 1 when both retrieval sets are empty inflates Jaccard estimates for benchmarks with low hit rates, a phenomenon of trivial stability dis-cussed in Section E.4. 
+
+Cn1,n 2 = 1
+
+|Q|
+
+X
+
+> q∈Q
+
+1[Rn1 (q)̸ = Rn2 (q)] 
+
+Change fraction Cn1,n 2 captures retrieval volatil-ity as the strict proportion of queries whose re-trieval set differs between snapshots. Per-dataset hit rate and Jaccard curves, together with their global aggregates, appear in Figures 7 and 9. Table 5 summarizes the terminal-state met-rics at bank size 1200 for τ = 0 .65 .
+
+E.3 Coverage and Retrieval Density 
+
+Hit rate saturates beyond 600 entries across all benchmarks: FinTMM reaches 90.4% at 1200 en-tries whereas FinMME reaches only 47.5%. This gap reflects divergent semantic affinity between benchmark query distributions and the patterns memorized in the bank. Chart-oriented FinMME queries activate substantially fewer stored experi-ences than numerical reasoning queries, consistent with a bank composition that over-represents text-and table-centric failure cases. Mean entries per query confirms this pattern: at τ = 0 .65 , FinMMR-Medium and FinMMR-Hard retrieve 54.5 and 38.2 12 Table 5: Terminal retrieval state at bank size N = 1200 
+
+under τ = 0 .65 . H1200 denotes hit rate, ¯E1200 mean entries per query, and J1080 ,1200 the Jaccard similarity at the final adjacent-size transition. 
+
+Benchmark H1200 ¯E1200 J1080 ,1200 
+
+BizBench 0.68 5.72 0.93 FinMMR-Easy 0.80 9.63 0.93 FinMMR-Medium 0.90 54.54 0.90 FinMMR-Hard 0.89 38.16 0.91 FinTMM 0.90 3.97 0.91 FinMME 0.48 1.15 0.95 Global 0.71 13.07 0.93 0 120 240 360 480 600 720 840 960 1080 1200   
+
+> Financial Memory bank size
+> 0%
+> 20%
+> 40%
+> 60%
+> 80%
+> 100%
+> Hit rate
+> BizBench
+> FinMMR-Easy
+> FinMMR-Medium
+> FinMMR-Hard
+> FinTMM
+> FinMME
+> Global
+> Hit Rate at = 0.65 Across Benchmarks
+
+Figure 7: Hit rate as a function of FM bank size at 
+
+τ = 0 .65 , with a global aggregate curve. All bench-marks exhibit saturation beyond 600 entries; cross-dataset variation reflects divergent semantic affinity be-tween benchmark query distributions and the bank’s memorized patterns. 
+
+entries per query on average, while FinMME re-trieves 1.1. FinTMM presents an intermediate pro-file with a hit rate of 90.4% but a mean entry count of only 4.0, indicating that its queries resolve with sparser yet highly targeted retrieval sets. Under threshold-based retrieval, the expected number of retrieved entries follows E[|Rn(q)|] = 
+
+n · p, where p = P (sim (q, e ) ≥ τ ) is indepen-dent of the current bank size. This produces the nearly linear growth of mean entries observed in Figure 8. Because new entries are purely additive under threshold filtering, the retrieval set monoton-ically expands: Rn(q) ⊆ Rn+∆ n(q) holds for all queries. 
+
+E.4 Retrieval Stability 
+
+Since Rn(q) ⊆ Rn+∆ n(q) holds under threshold retrieval, the expected Jaccard similarity between 0 240 480 720 960 1200 
+
+> FM bank size
+> 0
+> 25
+> 50
+> 75
+> 100
+> 125
+> 150
+> 175
+> Mean entries per query
+> =0.50
+> =0.55
+> =0.60
+> =0.65
+> =0.70
+> =0.75
+> =0.80
+> =0.85
+> =0.90
+> Mean Retrieved Entries per Query
+
+Figure 8: Mean number of retrieved entries per query aggregated across all 11,379 test queries. Each curve corresponds to one cosine threshold; the near-linear growth is predicted by E[|Rn(q)|] = n · p.
+
+adjacent snapshots has the closed form 
+
+E[Jn,n +∆ n] ≈ n · p
+
+(n + ∆ n) · p = nn + ∆ n ,
+
+which increases monotonically and approaches 1.0 as n grows. This matches the dominant trend in Figure 9: all benchmarks exhibit a monotonic rise toward saturation, with the final transition values exceeding 0.90 for every dataset. Minor termi-nal fluctuations, such as the 0.004 drop observed in FinMMR-Medium, are consistent with sample variance: at specific transitions the empirical re-trieval probability ˆp of newly admitted entries de-viates slightly from the population p, producing sub-thousandth-level oscillations that are not statis-tically significant. The high Jaccard values of FinMME require careful interpretation. FinMME exhibits the low-est hit rate among all benchmarks, reaching only 47.5% at 1200 entries. For the remaining 52.5% of FinMME queries no entries are retrieved at ei-ther snapshot, and the convention Jq(∅, ∅) = 1 
+
+applies. This trivial stability inflates the observed Jaccard toward 1.0 and partially accounts for Fin-MME’s higher Jaccard curve. For benchmarks with sufficient retrieval coverage the Jaccard trajectory reflects genuine compositional convergence. The change fraction Cn1,n 2 measures the propor-tion of queries for which at least one newly admit-ted entry exceeds the similarity threshold. Under threshold retrieval, a query’s retrieval set changes if and only if at least one entry among the ∆n = 120 
+
+newly added entries satisfies the similarity condi-tion. This probability is 
+
+P (Change ) = 1 − (1 − p)∆n,
+
+13 0-120  
+
+> 120-240
+> 240-360
+> 360-480
+> 480-600
+> 600-720
+> 720-840
+> 840-960
+> 960-1080
+> 1080-1200
+> Financial Memory bank size range
+> 0.0
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> 1.0
+> Jaccard similarity
+> BizBench
+> FinMMR-Easy
+> FinMMR-Medium
+> FinMMR-Hard
+> FinTMM
+> FinMME
+> Global
+> Retrieval Stability (Jaccard) at = 0.65
+
+Figure 9: Adjacent-bank Jaccard similarity at τ = 0 .65 
+
+with error bars indicating one standard deviation across queries. Jaccard similarity increases monotonically to-ward 1.0, consistent with E[J] ≈ n/ (n + ∆ n); minor local fluctuations are attributable to sample variance in newly added entries. 0-120 
+
+> 240-360
+> 480-600
+> 720-840
+> 960-1080
+> FM bank size range
+> 0.0
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> 1.0
+> Change fraction
+> Retrieval Volatility Invariant to Bank Size
+
+Figure 10: Change fraction across adjacent bank snap-shots for nine cosine thresholds. The near-horizontal trajectory for each threshold confirms that retrieval volatility is invariant to bank size, as predicted by 
+
+P (Change ) = 1 − (1 − p)∆n.
+
+which depends solely on τ and the fixed step size 
+
+∆n, not on the current bank size n. Empirically, the change fraction curves in Figure 10 are near-horizontal across all bank size transitions for every threshold value, confirming this invariance. Taken together, these results establish that under threshold-based retrieval, retrieval stability is an inherent consequence of the retrieval mechanism rather than an emergent property of bank size. Jac-card similarity converges toward 1.0 as n/ (n+∆ n)
+
+approaches unity, and change fraction remains con-stant at 1 − (1 − p)∆n independent of n. For prac-titioners, adjusting the similarity threshold τ offers a more direct lever for controlling retrieval churn than limiting bank size. 
+
+F Experimental Details 
+
+This appendix documents the experimental proto-col behind Table 1 and the ablation analyses. The goal is to make the comparison reproducible while keeping the main text focused on the central find-ings. 
+
+F.1 Evaluation Protocols 
+
+We evaluate F IN ACUMEN on the official test split of each benchmark and follow the native metric de-fined by the corresponding benchmark paper. For BizBench SEC-NUM, predictions are normalized by removing currency markers, percentage signs, commas, and whitespace before exact-match com-parison with a 1% relative numerical tolerance. For FinMMR, we report accuracy on the Easy, Medium, and Hard splits using the official 0.2% relative tol-erance after numeric and unit normalization. For FinTMMBench, we use the benchmark’s GPT-4o-mini judge to decide whether the prediction and the reference answer express the same financial fact. For FinMME, we report answer accuracy, corresponding to the core correctness component of FinScore: multiple-choice questions require ex-act letter-set agreement and numerical questions follow the tolerance specified by each item. All reported F IN ACUMEN results are computed as the fraction of correctly answered test items under these native scoring rules. We do not in-troduce a unified post-hoc metric across datasets because the benchmarks differ substantially in an-swer form, ranging from exact quantities to tempo-rally grounded retrieval answers and chart-based multiple-choice questions. 
+
+F.2 FinAcumen Configuration 
+
+The backbone for all F IN ACUMEN and Base rows is Qwen3-VL-8B-Instruct. The backbone parame-ters are frozen throughout; F IN ACUMEN changes only the inference-time context and tool execution path through FM and FT. Unless otherwise stated, decoding uses temperature 0 for final test evalu-ation, and the ReAct-style solver is capped at 16 tool-interaction steps. The tool suite is fixed across all F IN ACUMEN runs and consists of Python exe-cution for deterministic arithmetic, financial data lookup, OCR-based visual structure extraction, and a termination gate that checks source traceability, unit consistency, and answer format. The memory bank is built before final testing from training/validation trajectories and is kept 14 Table 6: Benchmark settings used in the main experiments. Each benchmark keeps its original split and native scoring rule. 
+
+Benchmark Setting Test size Primary challenge Reported metric BizBench SEC-NUM SEC filings 2000 Numeric grounding under distractors Accuracy, 1% tolerance FinMMR Easy / Medium / Hard 1200 / 1200 / 1000 Multi-image financial reasoning Accuracy, 0.2% tolerance FinTMMBench Temporal multimodal QA 1136 Retrieval over tables, news, prices, and charts GPT-4o-mini judge accuracy FinMME Chart-intensive financial QA 2220 Chart understanding across financial domains Average value 
+
+Table 7: Per-cell model variants for grouped General LLM baselines in Table 1. All numbers are copied from the corresponding benchmark papers. A dash indicates that the source benchmark did not report the model. 
+
+Model family BizBench FinMMR-Easy FinMMR-Medium FinMMR-Hard FinTMMBench FinMME GPT GPT-4 GPT-4o GPT-4o GPT-4o GPT-4o-mini GPT-4o Claude Sonnet Claude 3.7 Sonnet Claude 3.7 Sonnet Claude 3.7 Sonnet Claude 3.7 Sonnet – Claude 3.5 Sonnet Llama Llama 2 70B Llama 4 Maverick 17B Llama 4 Maverick 17B Llama 4 Maverick 17B Llama 3.2 11B –
+
+read-only during evaluation. Test questions never write new entries into the bank. Each memory entry stores the source question, gold answer, dis-tilled findings from successful trajectories, and cau-tions extracted from failed trajectories. At infer-ence time, the query embedding is formed from the question and the first 600 characters of the con-text, then compared against pre-computed memory-entry embeddings. Entries below the cosine thresh-old τ = 0 .65 are discarded, duplicate source items are removed, and at most kmax = 5 retrieved en-tries are rendered into the memory prefix for the main results in Table 1. The Base row disables both FM and FT, while ablations keep the back-bone, decoding configuration, tool interfaces, and benchmark scoring fixed. All other retrieval and tool parameters follow the architecture described in Section 4. 
+
+F.3 Baseline Attribution 
+
+The non-F IN ACUMEN baseline numbers in Table 1 are taken from the original benchmark papers rather than re-run in our environment: BizBench results from Koncel-Kedziorski et al. (2023), FinMMR results from Tang et al. (2025), FinTMMBench results from Zhu et al. (2025), and FinMME re-sults from Luo et al. (2025). This choice follows the standard leaderboard-comparison protocol for these benchmarks and avoids conflating our frame-work contribution with differences in closed-source API versions, prompting details, or evaluation ac-cess. When a benchmark paper reports a model family rather than a single shared variant across all constraint injection             
+
+> tool calls
+> rewrite into directives
+> Question + multimodal context
+> Retrieved memory snippets (if any)
+> Prompt Sources 1
+> Experience Retrieval & Composition
+> Retrieve relevant entries → assemble Memory Block Prefix
+> <Memory_Block>
+> <Findings> = reusable strategies from successes 💡
+> <Cautions> = failure guard rules 📍
+> </Memory_Block>
+> (populated from train-time accumulation)
+> 2
+> Directive Rewriter
+> Rewrite entries into task-specific directives
+> "MUST extract values as variables ... "
+> "DO NOT compute without verifying ... "
+> 3
+> <Think>
+> 1) Inventory evidence (text/tables/images)
+> 2) Check applicability (skip if irrelevant)
+> 3) Plan: variables + unit conversion check
+> 4) Next Action: tool call or finalize
+> </Think>
+> Solver Prompt Policy 4
+> Prompt Guardrails
+> <Invariants>
+> do NOT skip narrative paragraphs
+> do NOT conclude data unavailable
+> NEVER submit placeholder final_answer
+> </Invariants>
+> 5
+
+## 🔒 
+
+> Verified Final Answer
+> Traceable Answer
+> 6
+
+Figure 11: Prompt orchestration in F IN ACUMEN .
+
+columns, Table 1 groups the results by family and the per-cell model variant is specified below. For Qwen2.5-VL-72B, Gemini 2.0 Flash, and the financial-domain baselines, we preserve the ex-act variants and scores reported by the benchmark sources whenever available. Missing cells in Ta-ble 1 mean that the benchmark paper did not report that model under the official setting, not that the model failed evaluation. 
+
+G Prompt Templates 
+
+Figure 11 provides a visual overview of the prompt orchestration in F IN ACUMEN . Each prompt ex-cerpt is labeled by its corresponding agent role, described in §4.3. 15 Solver agent (FinAcumen System Prompt, ex-cerpted) 
+
+<Memory_Handling> The input may contain a <Memory_Block> before the <Problem> block. Each <Entry> has: - <Question>: The original problem that produced this experience. Use it to judge whether your current problem is in a similar scenario (industry, data source, problem shape). - <Answer>: The correct answer to that original problem. Use as a format reference --- not to copy the value, but to understand what kind of output your problem expects (number, text, percentage, etc.). - <Experience>: Distilled reusable rules organized as <Findings> and <Cautions>: <Findings>: Patterns that succeeded --- follow these strategies. <Cautions>: Guard rules from failures --- apply if the condition triggers. The block ends with an <OptOut> --- use it only when an entry truly does not fit. </Memory_Handling> <Think_Steps> <Think> ### 1. Input Inventory (MANDATORY --- do NOT skip to computation) Output a complete inventory before any tool call. [NARRATIVE] Every standalone number with its unit and context, one per line. [TABLES] ALL row labels with ALL column values; list each cell. [IMAGES] ALL fields from OCR/vision; flag ambiguous readings. [TERM_MATCH] Map question terms to inventory entries. If a term has NO direct match, list candidate matches explicitly. If any section is incomplete, you have not finished reading. DO NOT proceed to Strategy until the inventory covers ALL of Context. ### 2. Experience Applicability (if Memory_Block present) {step2_text} ### 3. Problem Understanding - What quantity? Unit? Precision? Check Instruction. - Resolve TERM_MATCH warnings. - Output TYPE: ENTITY NAME, NUMERIC VALUE, DESCRIPTIVE SENTENCE, VERDICT, or NEWS SENTIMENT. Match answer format to expected type: * ENTITY -> terminate(final_answer=" Company Name") 
+
+* NUMERIC -> terminate(final_answer=" VALUE UNIT") * DESCRIPTIVE -> terminate(final_answer ="Direction: description with numbers ") * VERDICT -> terminate(final_answer=" Yes/No" or "true/false") * NEWS -> terminate(final_answer="Yes" or "No") ### 4. Strategy Write ALL values as python variables before computing (e.g., rev_2022 = 125.4). Check unit conversion (millions<>billions, %<>decimal). ### 5. Next Action Tool call or terminate. </Think> After </Think>, emit the tool call. No & lt;Answer&gt; block. </Think_Steps> <Invariants> - NEVER skip narrative paragraphs to jump to tables. Context is one document --- prose AND tables must both be read. - "data not available" is never true. If you think data is missing, re-read from the beginning --- you missed a section. - NEVER submit placeholder text as final_answer: avoid 
+
+'I will terminate ', 'data not available 
+
+', 'insufficient data ',empty strings. - final_answer MUST contain the actual answer value, not a meta-status. </Invariants> 
+
+Summary agent—Experience synthesis (ex-cerpted) 
+
+<findings_guide> Write generalized reusable strategies. Strip ALL specific values: numbers, years, entity names. Format: "To <goal>, use/do <method>." Trigger: what information format triggers this? What question type? Method: what to do step by step? Which tool? Which formula? Each finding is one sentence, self-contained and executable. <cautions_guide> Write generalized guard rules. Strip ALL specific values. Format: "When <detectable condition>, < corrective action>." Condition must be detectable from question/context text (not hindsight). 
+
+16 Action must be concrete: what to check, how to check, what to do. <Output> Return ONLY: <Think> analysis: [problem-specific derivation] -> From above, generalize findings: -> From above, generalize cautions: -> Verify: does each item have trace support? Is the condition detectable? </Think> <Answer> {"findings": ["To ..., use/do ..."], "cautions": ["When ..., ..."], "analysis": "<< REPLACE_WITH_YOUR_PROBLEM_DERIVATION >>"} </Answer> 
+
+Annotator agent—Directive annotation (ex-cerpted) 
+
+<Task> For each entry write 1-3 directive sentences using MUST / DO NOT. Extract the entry 's methodology ( extraction pattern, computation logic ,verification step) and adapt it to the current problem. NEVER write an empty annotation. Set "useful": false ONLY when the task TYPE is fundamentally different (chart reading vs. table lookup vs. narrative extraction). Otherwise, useful MUST be true. <Generalization_Rule> Map the memory 's METHODOLOGY, not its literal entity names. Memory: specific years/entity names -> current problem: relevant equivalents .If you cannot map entities, the entry is NOT useful. <Output> [{"i": 0, "useful": true, "annotation": "MUST extract values from Context table as python variables before computing. DO NOT compute without verifying which table row matches the question."}, ...] 
+
+Memory_Block XML injection format 
+
+<Memory_Block> <Field_Guide> Each Entry is a past experience: 
+
+- Question: the original problem (use to judge scenario similarity) - Answer: the correct answer (format reference only, never copy value) - Experience: distilled reusable rules organized as: - Findings: patterns that succeeded -> follow these strategies - Cautions: guard rules from failures -> apply if condition triggers </Field_Guide> <Entry> <Question>original problem text</ Question> <Answer>correct answer</Answer> <Experience> <Findings>reusable strategies from successes</Findings> <Cautions>guard rules from failures </Cautions> </Experience> </Entry> <OptOut>If any entry above does NOT actually fit this problem, ignore it.</OptOut> </Memory_Block> 
+
+H Limitations 
+
+We acknowledge two primary limitations.First, Fi-nancial Memory construction requires auxiliary LLM calls for trajectory tagging, embedding, and experience consolidation, introducing a non-trivial upfront cost during bank initialization. Although retrieval remains efficient after consolidation, im-proving sample efficiency and enabling incremen-tal online accumulation remain important future directions. Second, our evaluation is limited to En-glish financial multimodal benchmarks. Financial documents vary substantially across languages in terminology, tabular conventions, and chart struc-tures, which may limit direct transferability of re-trieved experience and tool configurations. Extend-ing experience-conditioned reasoning to multilin-gual financial settings and broader model families remains future work. 17
