@@ -6,40 +6,32 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-06-18
-- 运行时间：2026-06-18 21:45:06 UTC
+- 最新运行日期：2026-06-19
+- 运行时间：2026-06-19 21:50:33 UTC
 - 运行状态：成功
-- 本次总论文数：6
-- 精读区：4
-- 速读区：2
+- 本次总论文数：3
+- 精读区：0
+- 速读区：3
 
 ### 今日简报（AI）
-今日精选企业多智能体系统的可扩展定制部署方案，并挖掘出提升RL推理效率的系统感知自投机解码技术。  
-最值得关注的是面向企业级应用的多智能体规模化落地方法，以及通过感知系统延迟的自投机机制大幅加速强化学习数据生成。  
-建议企业AI开发者优先跟进多智能体系统在企业场景的定制实践，同时关注自投机解码在落地的推理优化机会。
-- 详情：[/202606/18/README](/202606/18/README)
+今日速览3篇AI前沿论文，聚焦强化学习、提示优化与经济分析智能体。  
+最值得关注RL-Index用强化学习动态推理检索索引，以及SAGE通过智能体随机探索优化提示词。  
+建议读者尝试将强化学习引入检索增强生成流程，提升复杂查询的推理效果。
+- 详情：[/202606/19/README](/202606/19/README)
 
 ### 精读区论文标签
-1. [Towards Scalable Customization and Deployment of Multi-Agent Systems for Enterprise Applications](/202606/18/2606.18502v1-towards-scalable-customization-and-deployment-of-multi-agent-systems-for-enterprise-applications)  
-   标签：评分：9.0/10、query:fla
-   evidence：框架结合持续预训练、监督微调和偏好优化进行智能体定制
-2. [EfficientRollout: System-Aware Self-Speculative Decoding for RL Rollouts](/202606/18/2606.18967v1-efficientrollout-system-aware-self-speculative-decoding-for-rl-rollouts)  
-   标签：评分：9.0/10、query:fla
-   evidence：加速RL推理生成，是LLM智能体后训练的关键技术
-3. [Skill-MAS: Evolving Meta-Skill for Automatic Multi-Agent Systems](/202606/18/2606.18837v1-skill-mas-evolving-meta-skill-for-automatic-multi-agent-systems)  
-   标签：评分：8.0/10、query:fla
-   evidence：通过进化元技能实现不依赖参数更新的智能体后训练提升
-4. [Efficient Financial Language Understanding via Distillation with Synthetic Data](/202606/18/2606.18875v1-efficient-financial-language-understanding-via-distillation-with-synthetic-data)  
-   标签：评分：8.0/10、query:fla
-   evidence：利用指令微调教师模型通过合成数据蒸馏进行金融情感分析
+- 本次无精读推荐。
 
 ### 速读区论文标签
-1. [PreLort: Prefix-Nested LoRA for Federated Fine-Tuning under Rank Heterogeneity](/202606/18/2606.15963v1-prelort-prefix-nested-lora-for-federated-fine-tuning-under-rank-heterogeneity)  
+1. [RL-Index: Reinforcement Learning for Retrieval Index Reasoning](/202606/19/2606.16316v1-rl-index-reinforcement-learning-for-retrieval-index-reasoning)  
+   标签：评分：7.0/10、query:fla
+   evidence：利用强化学习以智能体方式改进检索索引推理，可应用于智能体能力的后训练增强
+2. [SAGE: Stochastic Prompt Optimization via Agent-Guided Exploration](/202606/19/2606.18902v1-sage-stochastic-prompt-optimization-via-agent-guided-exploration)  
    标签：评分：6.0/10、query:fla
-   evidence：联邦LoRA微调方法，适用于金融隐私敏感场景
-2. [Dissecting model behavior through agent trajectories](/202606/18/2606.17454v2-dissecting-model-behavior-through-agent-trajectories)  
+   evidence：智能体引导的提示优化作为自主智能体的后训练改进
+3. [AI Economist Agent: An Agentic Framework for Model-Grounded Economic Analysis with RAG, Knowledge Graphs, and Large Language Models](/202606/19/2606.20041v1-ai-economist-agent-an-agentic-framework-for-model-grounded-economic-analysis-with-rag-knowledge-graphs-and-large-language-models)  
    标签：评分：6.0/10、query:fla
-   evidence：代理系统与模型意图的对齐
+   evidence：基于RAG和知识图谱的AI经济学家智能体用于经济分析
 
 
 <div class="dpr-home-promo-card">
