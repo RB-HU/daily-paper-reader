@@ -1,0 +1,54 @@
+{
+  "label": "2026-06-22",
+  "date": "2026-06-22",
+  "generated_at": "2026-06-22T22:43:40",
+  "count": 3,
+  "papers": [
+    {
+      "paper_id": "202606/22/2606.15866v1-stride-strategic-trajectory-reasoning-via-discriminative-estimation-for-verifiable-reinforcement-learning",
+      "section": "quick",
+      "title_en": "STRIDE: Strategic Trajectory Reasoning via Discriminative Estimation for Verifiable Reinforcement Learning",
+      "authors": "Qinjian Zhao, Zhihao Dou, Dinggen Zhang, Xiangyu Li, Chaoda Song, Zhongwei Wan, Xinpeng Li, Yanyan Zhang, Kaijie Chen, Qingtao Pan, Chengcheng Feng, Zhiqiang Gao, Xiaoyu Xia",
+      "date": "2026-06-14",
+      "pdf": "https://arxiv.org/pdf/2606.15866v1",
+      "score": "7.0",
+      "evidence": "提出用于大语言模型推理后训练的令牌级判别式奖励，适用于智能体训练",
+      "tldr": "现有基于可验证奖励的强化学习（RLVR）依赖最终答案正确性提供稀疏轨迹级奖励，忽略了token的实际贡献差异。STRIDE提出一种精细的RLVR框架，通过对比响应组内成功与失败轨迹，估计n-gram策略模式的结果判别偏好，并结合推理显著性熵识别决策关键模式，实现差异化优势值分配。实验显示，STRIDE在多种模型、任务及扩展设定（含VLMs和智能体）中持续提升推理能力。该方法为可验证奖励的细粒度信用分配提供了新途径。",
+      "tags": "query:fla",
+      "abstract_en": "Reinforcement Learning with Verifiable Rewards (RLVR) has become an effective post-training paradigm for improving the reasoning abilities of large language models. However, existing RLVR methods typically rely on final-answer correctness to assign trajectory-level rewards, providing sparse supervision and treating all tokens uniformly regardless of their actual contribution to reasoning. Although recent studies introduce intermediate signals such as process rewards, high-entropy tokens, and semantic uncertainty, these signals are often not inherently verifiable and may fail to distinguish beneficial strategic patterns from harmful ones. To address this limitation, we propose STRIDE (Strategic Trajectory Reasoning with Discriminative Estimation), a fine-grained RLVR framework that derives strategic reasoning supervision from verifiable outcomes. STRIDE contrasts successful and failed trajectories within each response group to estimate the outcome-discriminative preference of each $n$-gram strategic pattern, and further combines this signal with reasoning saliency entropy to identify decision-relevant strategic patterns. These patterns are assigned differentiated advantage values during RL optimization, enabling more precise credit assignment while preserving the verifiability of RLVR. Extensive experiments demonstrate that STRIDE consistently improves reasoning performance across diverse models, tasks, and extended settings, including VLMs and agent-based systems.",
+      "source": "arxiv",
+      "selection_source": "fresh_fetch"
+    },
+    {
+      "paper_id": "202606/22/2606.19919v1-adapt-token-level-decoupling-for-efficient-large-reasoning-models",
+      "section": "quick",
+      "title_en": "ADaPT: Token-Level Decoupling for Efficient Large Reasoning Models",
+      "authors": "Tingyun Li, Zishang Jiang, Jinyi Han, Xinyi Wang, Sihang Jiang, Han Xia, Zhaoqian Dai, Shuguang Ma, Fei Yu, Jiaqing Liang, Yanghua Xiao",
+      "date": "2026-06-18",
+      "pdf": "https://arxiv.org/pdf/2606.19919v1",
+      "score": "7.0",
+      "evidence": "分离效率与正确性的训练框架，用于高效推理的后训练技术，可应用于智能体",
+      "tldr": "大型推理模型依赖长链思维取得强表现，但均匀推理带来高计算成本，限制部署。现有高效方法因序列级耦合效率与正确性奖励，常误罚优质长推理，致能力下降。ADaPT通过模式选择令牌，在令牌级解耦效率与正确性优化，避免惩罚长推理，仅在适当时候鼓励效率。推理时调节该令牌概率，单一模型即可连续控制效率-性能权衡，沿帕累托前沿平滑移动。实验表明，ADaPT大幅降本且保持强推理能力，为高效推理模型提供新范式。",
+      "tags": "query:fla",
+      "abstract_en": "Large reasoning models rely on long chain-of-thought to achieve strong performance, but applying such reasoning uniformly incurs high computational cost. Existing efficiency-oriented methods attempt to shorten or mix reasoning strategies, yet often degrade reasoning capability. We identify the root cause as sequence-level coupling between efficiency incentives and correctness optimization, which implicitly penalizes long but correct reasoning trajectories. To address this issue, we propose Adaptive Dual-Process Thinking (ADaPT), a token-level dual-process framework that explicitly decouples efficiency and correctness signals during training. ADaPT introduces a mode-selection token to control fast and slow reasoning, applying efficiency-related rewards exclusively to this token to avoid penalizing correct long reasoning while encouraging efficiency when appropriate. Moreover, ADaPT enables precise and continuous control over the efficiency-performance trade-off at inference time: by adjusting the generation probability of the mode-selection token, a single trained model can smoothly move along the efficiency-performance Pareto frontier. Extensive experiments demonstrate that ADaPT significantly reduces inference cost while maintaining strong reasoning performance across multiple benchmarks.",
+      "source": "arxiv",
+      "selection_source": "fresh_fetch"
+    },
+    {
+      "paper_id": "202606/22/2606.15734v1-retrievable-gradients-continual-post-training-without-cumulative-weight-drift",
+      "section": "quick",
+      "title_en": "Retrievable Gradients: Continual Post-Training Without Cumulative Weight Drift",
+      "authors": "Weihang Su, Jiacheng Kang, Jingyan Xu, Qingyao Ai, Jianming Long, Hanwen Zhang, Bangde Du, Xinyuan Cao, Min Zhang, Yiqun Liu",
+      "date": "2026-06-14",
+      "pdf": "https://arxiv.org/pdf/2606.15734v1",
+      "score": "6.0",
+      "evidence": "使用可检索梯度进行持续后训练以防止权重漂移的方法",
+      "tldr": "持续后训练通过更新共享参数吸收新知识，却累积权重漂移，导致灾难性遗忘和通用能力下降；检索增强生成虽避免参数漂移，但知识整合深度不足。ReGrad创新地将梯度视为可检索知识单元，预计算文档梯度存入银行，推理时动态检索并临时调整权重，且通过双层元学习重塑梯度为泛化适应信号。在多场景实验中，ReGrad均优于持续后训练与检索增强基线，实现了可扩展、可逆的参数知识注入而无权重漂移。",
+      "tags": "query:fla",
+      "abstract_en": "Continual post-training enables models to absorb emerging knowledge after deployment, but repeatedly updating shared parameters can accumulate weight drift, potentially causing catastrophic forgetting and degrading general capabilities. Retrieval-augmented generation avoids such parameter drift, yet often lacks the depth of parametric knowledge integration. In this paper, we propose ReGrad (Retrievable Gradients), a new paradigm that treats gradients as retrievable units of knowledge. ReGrad pre-computes document-specific gradients offline, stores them in an indexed Gradient Bank, and retrieves only query-relevant gradients at inference time for temporary weight adaptation. However, raw language-modeling gradients are optimized for token-level document reconstruction rather than for query-driven knowledge use. We therefore introduce a bi-level meta-learning objective that reshapes document-derived gradients into generalizable adaptation signals for downstream tasks. Experiments across general and domain-specific settings show that \\textsc{ReGrad} outperforms CPT and RAG baselines, enabling scalable and reversible parametric knowledge injection without accumulating weight drift.",
+      "source": "arxiv",
+      "selection_source": "fresh_fetch"
+    }
+  ],
+  "errors": []
+}
