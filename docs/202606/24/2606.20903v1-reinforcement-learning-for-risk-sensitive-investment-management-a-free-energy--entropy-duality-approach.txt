@@ -1,0 +1,2967 @@
+Title: Reinforcement Learning for Risk-Sensitive Investment Management: a Free Energy–Entropy Duality Approach
+
+URL Source: https://arxiv.org/pdf/2606.20903v1
+
+Published Time: Tue, 23 Jun 2026 00:15:56 GMT
+
+Number of Pages: 32
+
+Markdown Content:
+# Reinforcement Learning for Risk-Sensitive Investment Management: a Free Energy–Entropy Duality Approach 
+
+S´ ebastien Lleo ∗ Wolfgang Runggaldier †
+
+June 23, 2026 
+
+Abstract 
+
+This paper develops a reinforcement-learning approach to continuous-time risk-sensitive benchmarked asset allocation in a partly model-based setting. The benchmarked problem does not directly fit the standard Markovian stochastic-control template: the state is un-controlled, whereas the terminal reward contains a controlled Itˆ o integral. We use free energy–entropy duality to reformulate the problem as a linear–quadratic–Gaussian stochas-tic differential game under an equivalent probability measure, yielding explicit finite- and infinite-horizon saddle-point solutions. This structure guides a continuous-time q-learning actor–critic method: the quadratic value function motivates the critic, while the affine saddle-point controls motivate deterministic actors for the portfolio allocation and adver-sarial control. The learned allocation admits an economic interpretation through fractional Kelly decompositions. A proof-of-concept implementation calibrated to U.S. equity data shows that the actors learn the optimal policy with high accuracy and reveals a favorable asymmetry: the portfolio actor receives a cleaner learning signal than the auxiliary adver-sarial actor. 
+
+Keywords: actor–critic methods, Fractional Kelly strategies, Free energy–entropy duality, Policy gradient, Reinforcement learning, Risk-sensitive control, Stochastic games. 
+
+JEL Classification : C32; C44; C61; C73; G11; G12. 
+
+MSC classes: 68T05, 91G10; 91G80; 93E20. 
+
+# 1 Introduction 
+
+In continuous-time asset allocation models, investors are typically assumed to know the model parameters or to estimate them with sufficient accuracy. In practice, however, expected returns, factor exposures, and covariance matrices are difficult to estimate. Moreover, estimation error can have a substantial effect on optimal portfolios, even in classical mean–variance settings (Chopra & Ziemba, 1993). One response is to model the problem under partial observation, leading to a joint estimation–control problem and raising questions about the separation of estimation and control (see Lleo & Runggaldier, 2024). Reinforcement learning (RL) offers a 
+
+> ∗
+
+Finance Department and ‘AI, Data Science & Business’ AE, NEOMA Business School, France 
+
+> †
+
+University of Padova, Italy, and Fellow, Institut Louis Bachelier, Paris, France 
+
+1
+
+> arXiv:2606.20903v1 [q-fin.PM] 18 Jun 2026
+
+complementary route (Sutton & Barto, 2018): it seeks to learn investment policies from data and feedback, thereby reducing reliance on fully specified and precisely estimated models. This paper develops an RL approach to a continuous-time risk-sensitive benchmarked asset allocation problem in a partly model-based setting. The investment problem is motivated by a price-taking asset manager who observes market prices, allocates across a factor-driven invest-ment universe, and is evaluated relative to a stochastic benchmark. The RL formulation uses the structure of the analytical solution to design interpretable actor and critic parametrizations, while relaxing the assumption that all model coefficients are known. The starting point is the risk-sensitive benchmarked asset allocation model. This model is a natural foundation for financial engineering applications: the market is factor-based, the per-formance criterion is measured against a benchmark, the risk-sensitive objective is connected to both utility theory and continuous-time mean–variance optimization, and the optimal allocation admits an interpretation through the Kelly criterion. At the same time, the benchmarked prob-lem does not directly fit the standard Markovian stochastic-control template. The state process is uncontrolled, while the terminal reward contains a controlled Itˆ o integral that does not disap-pear under expectation. We therefore use the free energy–entropy duality of Lleo & Runggaldier (2026b) to reformulate the benchmarked risk-sensitive problem as a linear–quadratic–Gaussian stochastic differential game under an equivalent probability measure. The resulting game has a quadratic value function and explicit affine saddle-point controls. The paper first develops the finite- and infinite-horizon versions of this duality-based formu-lation. The finite-horizon case provides the foundation for episodic actor–critic learning, while the infinite-horizon case leads to an ergodic game and a continuing-task RL formulation. The ergodic setting is especially relevant for institutional investment management, where the invest-ment organization is naturally modeled as a going concern focused on long-run risk-adjusted performance. Building on this stochastic-game representation, we develop continuous-time q-learning actor–critic methods for the benchmarked investment problem. Our construction follows the martingale approach to continuous-time RL developed by Jia & Zhou (2022a,b, 2023), and is related to the stochastic-control perspective on continuous-time RL in Wang et al. (2020). We specialize this framework to the LQG game generated by the duality. This specialization is useful: the quadratic form of the value function motivates the critic parametrization, while the affine form of the saddle-point controls motivates the actor parametrization. The target actors are deterministic Markov policies in the sense of Silver et al. (2014): they map the time–state pair directly into the portfolio control and the adversarial control. Exploration, when used for learning, is introduced through behavior policies rather than through the target policy itself. The paper contributes to the literature in four ways. First, it develops a reinforcement-learning formulation and implementation for a continuous-time risk-sensitive investment prob-lem. The closest related work in continuous-time risk-sensitive RL is Jia (2026), who studies continuous-time risk-sensitive RL under an entropy-regularized exploratory diffusion formula-tion. Our approach is complementary. Jia considers a general risk-sensitive RL formulation with exploratory policies, whereas we start from a benchmarked investment problem, use free energy–entropy duality to recast it as an LQG stochastic differential game, and then design de-2terministic actor–critic updates adapted to the resulting structure. Both approaches highlight the importance of learning with both a state-value function and a q-function. Second, the paper contributes to the emerging literature on continuous-time reinforcement learning with deterministic policies. In discrete-time RL with continuous action spaces, deter-ministic policy gradient methods are not merely a limiting case of stochastic policy gradient methods (Silver et al., 2014). An analogous distinction arises in continuous time. Cheng et al. (2026) derive a continuous-time deterministic policy gradient formula based on an advantage-rate function, establish a martingale characterization, and use it to motivate a model-free continuous-time deterministic policy gradient algorithm. Our paper takes a different but re-lated route: rather than pursuing a fully model-free method, we use the analytical structure of a financial stochastic game to reduce model dependence while retaining interpretability. Third, the paper contributes to the growing literature on RL for portfolio selection and asset management, including Kolm & Ritter (2020, 2025); Halperin et al. (2025), Jiang et al. (2022), and Lleo & Runggaldier (2026a). Much of this literature formulates portfolio RL through risk-adjusted rewards, transaction costs, or other dynamic portfolio objectives. By contrast, our model starts from continuous-time risk-sensitive control and benchmarked performance. It is therefore inherently dynamic, factor-based, and benchmark-relative. The Kelly portfolio appears as a limiting case, while the benchmarked allocation admits a fractional Kelly interpre-tation. Fourth, the paper addresses interpretability. A common criticism of RL methods in invest-ment management is that their recommendations may be difficult to explain to clients, invest-ment committees, and regulators. We show how the structure of the benchmarked risk-sensitive solution can be used to decompose the learned allocation into a Kelly portfolio, a benchmark-tracking portfolio, and an intertemporal hedging portfolio. This decomposition makes the RL output economically interpretable at a limited additional computational cost. Finally, we provide a proof-of-concept implementation for the continuing case. The imple-mentation considers a six-factor U.S. equity allocation problem with m = 13 exchange-traded funds and a replicable benchmark. We use these data to compute the parameters for the an-alytical ergodic risk-sensitive benchmarked asset management model. The learning speed and accuracy of the actor–critic algorithm are assessed against this analytical model. The experi-ment focuses on learning the optimal portfolio and adversarial policies, while the value function is computed from the analytical model. The algorithm recovers the analytical saddle point with high accuracy. The diagnostics also reveal a structural asymmetry induced by the duality: the portfolio-gradient critic is learned essentially exactly, while the adversarial-gradient critic retains a small residual error because the adversarial control enters the state transition. This asymmetry is favorable in asset-management applications, since the portfolio allocation is the economically relevant control. The remainder of the paper is organized as follows. Section 2 presents the finite-horizon duality-based formulation. Section 3 develops the ergodic counterpart. Section 4 derives the continuous-time actor–critic framework and discusses explainability through fractional Kelly decompositions. Section 5 presents the proof-of-concept implementation. Section 6 concludes. 32 Risk-Sensitive Benchmarked Asset Management Problem: So-lution via the Free Energy–Entropy Duality 
+
+This section sets out the finite-horizon benchmarked risk-sensitive investment problem and its dual stochastic-game representation. The formulation follows Lleo & Runggaldier (2026b) and provides the finite-horizon duality foundation for the reinforcement-learning methods developed below. The setting is a continuous-time factor model with benchmarked performance, expo-nential risk sensitivity, and an equivalent stochastic differential game obtained through the free energy–entropy duality. Let (Ω , F, (Fs)0≤s≤T , P) be a filtered complete probability space supporting a d-dimensional (Fs)-Wiener process W , where d := n + m + 1 for integers n, m ≥ 1. We use terminology that connects stochastic control and reinforcement learning. A strategy or policy is a stochastic process H = ( hs)s∈[t,T ]. The value hs ∈ Rm is the control , or action , at time s. A Markov 
+
+strategy or policy is a measurable map h : [ t, T ] × Rn → Rm, so that the Markov control 
+
+hs = h(s, X s). 
+
+2.1 Model for the Financial Market 
+
+The investor trades in m risky financial assets S = ( Ss)s∈[0 ,T ]. Their discounted prices satisfy 
+
+dS s = diag( Ss) [( as + AsXs) ds + Σ s, dW s] , (2.1) where diag( ·) maps a vector into a diagonal matrix. The factor process X = ( Xs)s ∈ [0 , T ], also called the state process, represents financial and economic factors affecting asset returns and follows 
+
+dX s = ( bs + BsXs) ds + Λ s, dW s. (2.2) The initial state Xt is either deterministic, with Xt = x, or random. In the latter case, Xt ∼
+
+N (μ, P ), with known μ ∈ Rn and P ∈ Rn×n, independently of W . The discounted benchmark index L = ( Ls)s∈[0 ,T ] satisfies 
+
+dL s
+
+Ls
+
+= ( cs + CsXs) ds + Ξ ′
+
+> s
+
+dW s. (2.3) Throughout the paper, we write as, A s, Σs, etc., for a(s), A (s), Σ( s), etc. Vectors are column vectors unless otherwise stated, and a prime denotes matrix transposition. For notational convenience, Cs is treated as a row vector in expressions involving the benchmark drift, so that we write CsXs rather than C′
+
+> s
+
+Xs. Moreover, the coefficients of equations (2.1)-(2.3) satisfy the following standing assumption: 
+
+Assumption 2.1. The coefficient functions in (2.1)–(2.3) are continuously differentiable on [0 , T ] and have the dimensions specified above. We also assume that the risky assets have a nonsingular instantaneous covariance matrix: 
+
+Assumption 2.2. For every s ∈ [0 , T ], the matrix Σ sΣ′ 
+
+> s
+
+is positive definite. 4We model the self-financing investment policy as an Fs-adapted process H = ( hs)s∈[0 ,T ] ∈
+
+Rm belonging to the class AHT .
+
+Definition 2.3 (Admissible (Target) Investment Policies) . A policy H = ( hs)s∈[0 ,T ] ∈ Rm is in class AHT if the control process hs is a Markov control and P
+
+R T 
+
+> 0
+
+|hs|2 ds < +∞
+
+
+
+= 1. The discounted wealth process ( Vs)s∈[0 ,T ] generated by the investment policy H solves the SDE: 
+
+dV s
+
+Vs
+
+= h′ 
+
+> s
+
+(as + AsXs) ds + h′
+
+> s
+
+ΣsdW s. (2.4) To track the investment portfolio’s cumulative outperformance relative to its benchmark, we introduce the log price relative process ( Rs)s∈[0 ,T ], defined as Rs := ln Vs 
+
+> Ls
+
+. This process solves the SDE: 
+
+dR s =
+
+ 
+
+− 12 h′
+
+> s
+
+ΣsΣ′
+
+> s
+
+hs + h′
+
+> s
+
+as + 12 Ξ′
+
+> s
+
+Ξs − cs
+
+
+
++  h′
+
+> s
+
+As − Cs
+
+ Xs
+
+
+
+ds +  h′
+
+> s
+
+Σs − Ξ′
+
+> s
+
+ dW s.
+
+(2.5) From here, we obtain the log excess return of the portfolio over its benchmark as the difference 
+
+RT − R0.The investor seeks to maximize the risk-sensitive benchmarked criterion: 
+
+JT (H, θ ) := − 1
+
+θ ln E
+
+h
+
+e−θ(RT −R0)i
+
+, (2.6) where θ ∈ (−1, 0) ∪ (0 , ∞) is the risk-sensitivity parameter and T < ∞ is a fixed time horizon. Equivalently, one may minimize the exponentially transformed criterion 
+
+IT (H, θ ) := e−θJ T (H,θ ) = E
+
+h
+
+e−θ(RT −R0)i
+
+. (2.7) The case θ > 0 is the primary one, as noted in Lleo & Runggaldier (2026b), so we focus on it in this paper. 
+
+2.2 Using the Free Energy–Entropy Duality to Express the Risk-Sensitive Control Problem as a Stochastic Differential Game 
+
+Using the free energy–entropy duality , Section 2.2 in Lleo & Runggaldier (2026b) proved that inf 
+
+> H∈A HT
+
+IT (H, θ ) = exp 
+
+(
+
+inf 
+
+> H∈A HT
+
+sup 
+
+> Γ∈A Γ
+> T
+
+EPΓ
+
+
+
+θ
+
+Z T
+
+> 0
+
+g(s, X s, h s, γ s; θ) ds 
+
+)
+
+, (2.8) where Γ = ( γs)s∈[0 ,T ] ∈ Rd is an Fs-adapted, a.s. square integrable process belonging to the class 
+
+AΓ 
+
+> T
+
+which we define below, EPΓ
+
+[·] denotes the expectation taken with respect to an equivalent measure PΓ, and where 
+
+g(s, x, h, γ ; θ) := 12 h′ΣsΣ′
+
+> s
+
+h − h′as − 12 Ξ′
+
+> s
+
+Ξs + cs −  h′Σs − Ξ′
+
+> s
+
+ γ −  h′As − Cs
+
+ x − 12θ ∥γ∥2.
+
+(2.9) 5The measure PΓ is parameterized by the process Γ. By Girsanov’s theorem, the Radon– Nikodym derivative dPΓ 
+
+> dP
+
+restricted to FT is 
+
+dPΓ
+
+dP FT
+
+= exp 
+
+
+
+− 12
+
+Z T
+
+> 0
+
+∥γs∥2ds +
+
+Z T
+
+> 0
+
+γ′
+
+> s
+
+dW s
+
+
+
+=: χΓ[0 ,T ], (2.10) and the PΓ-Wiener process W Γ is given by W Γ 
+
+> s
+
+:= Ws − R s 
+
+> 0
+
+γs ds .Under the measure PΓ, the dynamics of the state process X satisfies 
+
+dX s = ( bs + BsXs + Λ sγs) ds + Λ s dW Γ 
+
+> s
+
+, (2.11) and analogously for (2.1) and (2.3). Therefore, the SDE for the log price relative process R
+
+under PΓ is 
+
+dR s
+
+=
+
+
+
+− 12 h′
+
+> s
+
+ΣsΣ′
+
+> s
+
+hs + h′
+
+> s
+
+as + 12 Ξ′
+
+> s
+
+Ξs − cs +  h′
+
+> s
+
+Σs − Ξ′
+
+> s
+
+ γs +  h′
+
+> s
+
+As − Cs
+
+ Xs
+
+
+
+ds +  h′
+
+> s
+
+Σs − Ξ′
+
+> s
+
+ dW Γ 
+
+> s
+
+.
+
+(2.12) Finally, the class AΓ 
+
+> T
+
+of policies Γ is: 
+
+Definition 2.4 (Admissible (Target) Adversarial Policies) . A policy Γ = ( γs)s∈[0 ,T ] ∈ Rd is in class AΓ 
+
+> T
+
+if (i) the control process γs is a Markov control; (ii) P
+
+R T 
+
+> 0
+
+|γs|2 ds < +∞
+
+
+
+= 1; and (iii) χΓ[0 ,T ], defined at (2.10), is an exponential martingale. The right-hand side of (2.8) defines a two-player stochastic differential game with objective inf 
+
+> H∈A HT
+
+sup 
+
+> Γ∈A Γ
+> T
+
+EPΓ
+
+
+
+θ
+
+Z T
+
+> 0
+
+g(s, X s, h s, γ s; θ) ds 
+
+
+
+, (2.13) where the strategy of the minimizing player is H = ( hs)s∈[0 ,T ] ∈ Rm in class AHT , the strategy of the maximizing player is Γ = ( γs)s∈[0 ,T ] ∈ Rd in class AΓ 
+
+> T
+
+, and the state process dynamics is given at (2.11). 
+
+2.3 Finite-Horizon Duality-Based Solution 
+
+For a generic t ∈ [0 , T ) and with Rt = 0, the criteria in (2.6) and (2.7) become 
+
+JT (t, x ; H, θ ) := − 1
+
+θ ln Et,x 
+
+h
+
+e−θR T
+
+i
+
+, IT (t, x ; H, θ ) := e−θJ T (t,x ;H,θ ) = Et,x 
+
+h
+
+e−θR T
+
+i
+
+, (2.14) so the duality at (2.8) generalizes to inf 
+
+> H∈A HT
+
+IT (t, x ; H, θ ) = exp 
+
+(
+
+inf 
+
+> H∈A HT
+
+sup 
+
+> Γ∈A Γ
+> T
+
+EPΓ
+
+> t,x
+
+
+
+θ
+
+Z Tt
+
+g(s, X s, h s, γ s; θ) ds 
+
+)
+
+, (2.15) 6and the stochastic differential game at (2.13) becomes 
+
+u(t, x ) = inf 
+
+> H∈A HT
+
+sup 
+
+> Γ∈A Γ
+> T
+
+EPΓ
+
+> t,x
+
+
+
+θ
+
+Z Tt
+
+g(s, X s, h s, γ s; θ) ds 
+
+
+
+, (2.16) where u(t, x ) is the optimal value function associated with the game 1.The stochastic differential game for u(t, x ) is a Linear-Quadratic-Gaussian (LQG) game with associated Bellman–Isaacs partial differential equation (PDE): 
+
+∂u (s, x )
+
+∂s + H  s, x, Du (s, x ), D 2u(s, x ) = 0 (2.17) where Du ′(s, x ) = 
+
+ ∂u (s,y ) 
+
+> ∂y 1
+
+, . . . , ∂u (s,y ) 
+
+> ∂y i
+
+, . . . , ∂u (s,y )
+
+> ∂y n
+
+
+
+> y=x
+
+, D2u(s, x ) = 
+
+h ∂2u(s,y )
+
+> ∂y i∂y j
+
+i 
+
+> y=x
+
+for i, j =1, . . . , n ,
+
+H(s, x, p, M ) := inf  
+
+> h∈Rm
+
+sup 
+
+> γ∈Rd
+
+
+
+[bs + Bsx + Λ sγ]′ p + 12 tr  ΛsΛ′
+
+> s
+
+M  + θg (s, x, h, γ ; θ)
+
+
+
+, (2.18) with terminal condition u(T, x ) = 0. Lleo & Runggaldier (2026b) showed that the order in which the infimum and supremum are performed in the Hamiltonian does not affect the solution of the game. 
+
+Theorem 2.5 (Finite-horizon duality-based solution) . The value function u defined at (2.16) 
+
+is quadratic of the form 
+
+u(t, x ) = −θ
+
+ 12 x′Qtx + q′
+
+> t
+
+x + kt
+
+
+
+, (2.19) 
+
+where Q : [ t, T ] → Rn×n, q : [ t, T ] → Rn, and k : [ t, T ] → R are three functions such that: (i) Qt is the unique symmetric non-negative definite solution to the matrix Riccati equation 
+
+˙Qs − θQ ′
+
+> s
+
+Λs
+
+
+
+Id − θθ + 1 Σ′
+
+> s
+
+(Σ sΣ′
+
+> s
+
+)−1Σs
+
+
+
+Λ′
+
+> s
+
+Qs +
+
+
+
+B′ 
+
+> s
+
+− θθ + 1 A′
+
+> s
+
+(Σ sΣ′
+
+> s
+
+)−1ΣsΛ′
+
+> s
+
+
+
+Qs
+
++ Q′
+
+> s
+
+
+
+Bs − θθ + 1 ΛsΣ′
+
+> s
+
+(Σ sΣ′
+
+> s
+
+)−1As
+
+
+
++ 1(θ + 1) A′
+
+> s
+
+(Σ sΣ′
+
+> s
+
+)−1As = 0 , QT = 0; (2.20) 
+
+(ii) qt solves the linear ODE 
+
+˙qs +
+
+
+
+B′ 
+
+> s
+
+− θθ + 1 A′
+
+> s
+
+(Σ sΣ′
+
+> s
+
+)−1ΣsΛ′
+
+> s
+
+
+
+qs − θQ ′
+
+> s
+
+Λs
+
+
+
+Id − θθ + 1 Σ′
+
+> s
+
+(Σ sΣ′
+
+> s
+
+)−1Σs
+
+
+
+Λ′
+
+> s
+
+qs
+
++ Q′
+
+> s
+
+
+
+bs − θθ + 1 ΛsΣ′
+
+> s
+
+(Σ sΣ′
+
+> s
+
+)−1 (as + θΣsΞs) + θΛsΞs
+
+
+
+− C′ 
+
+> s
+
++ 1
+
+θ + 1 A′
+
+> s
+
+(Σ sΣ′
+
+> s
+
+)−1 (as + θΣsΞs) = 0 , qT = 0; (2.21)        
+
+> 1Solving the stochastic differential game is equivalent to solving the original control problem. Specifically, Lemma 1 in Lleo & Runggaldier (2026b) shows that u(t, x ) = −θsup H∈A HTJT(t, x ;H, θ ).
+
+7(iii) kt is found by integration via 
+
+kt =
+
+Z Tt
+
+(
+
+θ
+
+2 q′
+
+> s
+
+Λs
+
+
+
+Id − θθ + 1 Σ′
+
+> s
+
+(Σ sΣ′
+
+> s
+
+)−1Σs
+
+
+
+Λ′
+
+> s
+
+qs
+
+−
+
+
+
+b′ 
+
+> s
+
++ θΞ′
+
+> s
+
+Λ′ 
+
+> s
+
+− θθ + 1 (as + θΣsΞs)′ (Σ sΣ′
+
+> s
+
+)−1ΣsΛ′
+
+> s
+
+
+
+qs − 12 tr  ΛsΛ′
+
+> s
+
+Qs
+
+
+
+− 12( θ + 1) (as + θΣsΞs)′ (Σ sΣ′
+
+> s
+
+)−1 (as + θΣsΞs) + cs + θ − 12 Ξ′
+
+> s
+
+Ξs
+
+)
+
+ds, kT = 0 .
+
+(2.22) 
+
+Moreover, the pair of optimal strategies (H∗, Γ∗) is defined by H∗ = ( h∗(s, X s)) s∈[t,T ] := 
+
+ˆh(s, X s, Du (s, X s)) 
+
+  
+
+> s∈[t,T ]
+
+and Γ∗ = ( γ∗(s, X s)) s∈[t,T ] := (ˆ γ(s, X s, Du (s, X s))) s∈[t,T ], where the policies ˆh(·) and ˆγ(·) are given by 
+
+ˆh(s, x, Du (s, x )) = 1
+
+θ + 1 
+
+ ΣsΣ′
+
+> s
+
+−1  as + Asx + θΣsΞs + Σ sΛ′
+
+> s
+
+Du (s, x ) (2.23) ˆγ(s, x, Du (s, x )) =Λ ′
+
+> s
+
+Du (s, x ) − θ
+
+
+
+Σ′
+
+> s
+
+ˆh(s, x, Du (s, x )) − Ξs
+
+
+
+(2.24) =
+
+
+
+Id − θθ + 1 Σ′
+
+> s
+
+ ΣsΣ′
+
+> s
+
+−1 Σs
+
+
+
+Λ′
+
+> s
+
+Du (s, x ) − θθ + 1 Σ′
+
+> s
+
+ ΣsΣ′
+
+> s
+
+−1 (as + Asx)+ θ
+
+
+
+Id − θθ + 1 Σ′
+
+> s
+
+ ΣsΣ′
+
+> s
+
+−1 Σs
+
+
+
+Ξs, (2.25) 
+
+or equivalently, 
+
+ˆh(s, x, Du (s, x )) =  ΣsΣ′
+
+> s
+
+−1 (as + Asx) +  ΣsΣ′
+
+> s
+
+−1 Σs ˆγ(s, x, Du (s, x )) (2.26) ˆγ(s, x, Du (s, x )) = 
+
+h
+
+Id + θΣ′
+
+> s
+
+ ΣsΣ′
+
+> s
+
+−1 Σs
+
+i−1 h
+
+−θΣ′
+
+> s
+
+ ΣsΣ′
+
+> s
+
+−1 (as + Asx) + θΞs + Λ ′
+
+> s
+
+Du (s, x )
+
+i
+
+(2.27) 
+
+Finally, the value function u solves the stochastic differential game with the objective (2.16) ,in the sense that the saddle point condition 
+
+EPΓ
+
+> t,x
+
+
+
+θ
+
+Z Tt
+
+g(s, X s, h ∗ 
+
+> s
+
+, γ s; θ) ds 
+
+
+
+≤ u(t, x ) ≤ EPΓ∗
+
+> t,x
+
+
+
+θ
+
+Z Tt
+
+g(s, X s, h s, γ ∗ 
+
+> s
+
+; θ) ds 
+
+
+
+(2.28) 
+
+holds for any admissible strategies H = ( hs)s∈[t,T ] ∈ A HT and Γ = ( γs)s∈[t,T ] ∈ A Γ 
+
+> T
+
+, and that 
+
+u(t, x ) = EPΓ∗
+
+> t,x
+
+
+
+θ
+
+Z Tt
+
+g(s, X s, h ∗ 
+
+> s
+
+, γ ∗ 
+
+> s
+
+; θ) ds 
+
+
+
+. (2.29) In summary, the results in Section 2.3 provide the finite-horizon duality foundation for the learning methodology developed below. The free energy–entropy duality identifies the risk-sensitive control problem with an LQG stochastic differential game; the quadratic form of the value function motivates the critic parameterization; and the affine form of the saddle-point policies motivates the actor parameterization. The reinforcement-learning approach developed in Section 4 preserves this structure while replacing the closed-form solution of the known-8coefficient model by data-driven learning procedures. 
+
+2.4 The Kelly Criterion 
+
+The Kelly criterion corresponds to the risk-neutral limiting case of the risk-sensitive criterion as 
+
+θ → 0 and also coincides with the logarithmic utility. It is of interest as both a limiting case of the duality-based solution above and as an interpretable reference policy for the reinforcement-learning approach that will be developed in Section 4. For Rt = 0, the Kelly criterion is 
+
+JKT (t, x ; H) := Et,x [RT ] = Et,x 
+
+Z Tt
+
+
+
+− 12 h′
+
+> s
+
+ΣsΣ′
+
+> s
+
+hs + h′
+
+> s
+
+as + 12 Ξ′
+
+> s
+
+Ξs − cs +  h′
+
+> s
+
+As − Cs
+
+ Xs
+
+
+
+ds 
+
+
+
+,
+
+(2.30) where the equality follows from (2.5) and from the martingale property of the stochastic integral 
+
+R Tt (h′
+
+> s
+
+Σs − Ξ′
+
+> s
+
+) dW s. Define the Kelly value function by ΦK (t, x ) := sup 
+
+> H∈A HT
+
+JKT (t, x ; H) = sup 
+
+> H∈A HT
+
+Et,x 
+
+Z Tt
+
+gK (s, X s, h s) ds 
+
+
+
+, (2.31) where 
+
+gK (s, x, h ) := − 12 h′ΣsΣ′
+
+> s
+
+h + h′as + 12 Ξ′
+
+> s
+
+Ξs − cs +  h′As − Cs
+
+ x. (2.32) The state process evolves under P according to (2.2). Hence, Φ K solves the HJB equation 
+
+∂ΦK (s, x )
+
+∂s + ( bs + Bsx)′ DΦK (s, x ) + 12 tr  ΛsΛ′
+
+> s
+
+D2ΦK (s, x ) + sup 
+
+> h∈Rm
+
+gK (s, x, h ) = 0 , (2.33) with terminal condition Φ K (T, x ) = 0. Because the state process is uncontrolled under P, the optimal control is obtained by point-wise maximization of gK . Assumption 2.2 gives 
+
+hK (s, x ) =  ΣsΣ′
+
+> s
+
+−1 (as + Asx) , (s, x ) ∈ [t, T ) × Rn. (2.34) The value function can be shown to be quadratic, i.e. Φ K (t, x ) = 12 x′QKt x +  qKt
+
+′ x + kKt ,
+
+with coefficients obtained by substituting (2.34) into the HJB equation. This Kelly solution provides a θ → 0 reference point against which the risk-sensitive policies and the learning-based approximations can be compared. 
+
+# 3 Extension to Infinite-Horizon Problems 
+
+Section 2 provides the finite-horizon duality foundation for reinforcement-learning algorithms formulated as episodic tasks. To support continuing tasks, this section extends the duality-based solution to an infinite-horizon risk-sensitive control problem. Under constant coefficients and stabilizing assumptions, the finite-horizon Riccati system admits limiting coefficients, which yield a relative value function, an ergodic Bellman–Isaacs equation, and stationary saddle-point 9policies. The section adapts the asymptotic results of Davis & Lleo (2008), originally derived under a Kuroda–Nagai change of measure, to the limiting stochastic differential games produced by the free energy–entropy duality. This transfer is justified by the equivalence between the two approaches established in Lleo & Runggaldier (2026b, Section 3). The section also connects the ergodic game value to the long-run risk-sensitive criterion and identifies the ergodic Kelly investment policy as the risk-neutral limiting reference case. 
+
+Assumption 3.1. The coefficient functions in (2.1)–(2.3) are constant. 
+
+Definition 3.2 (Admissible (Target) Policies) .
+
+(i) H = ( ht)t≥0 with values in Rm is in class ¯AH if H [0 ,T ] ∈ A HT for every T > 0. (ii) Γ = ( γt)t≥0 with values in Rd is in class ¯AΓ if Γ [0 ,T ] ∈ A Γ 
+
+> T
+
+for every T > 0, and the mean 
+
+mt and covariance matrix Pt of the state process Xt under PΓ admit finite, nondegenerate limits as t → ∞ .Such strategies are called admissible for the infinite horizon problem. The investor seeks to maximize the risk-sensitive log excess return per unit time: 
+
+J∞(H, θ ) := lim inf   
+
+> T→∞
+
+− 1
+
+θT ln IT (H, θ ). (3.1) where the criterion IT is defined at (2.7). The ergodic criterion J∞ at (3.1) is the long-run counterpart of the finite horizon criterion JT at (2.6). Equivalently, since θ > 0, J∞(H, θ ) = 
+
+− 1 
+
+> θ
+
+lim sup T →∞ 1 
+
+> T
+
+ln IT (H, θ ). We therefore define the exponentially transformed ergodic crite-rion by 
+
+I∞(H, θ ) := e−θJ ∞(H,θ ) = exp 
+
+
+
+lim sup  
+
+> T→∞
+
+1
+
+T ln IT (H, θ )
+
+
+
+= lim sup  
+
+> T→∞
+
+(IT (H, θ )) 1/T . (3.2) Thus, for θ > 0, maximizing J∞(H, θ ) is equivalent to minimizing I∞(H, θ ). Motivated by the finite-horizon dual representation, we consider the ergodic stochastic dif-ferential game ¯u(x) := inf  
+
+> H∈¯AH
+
+sup  
+
+> Γ∈¯AΓ
+
+lim sup  
+
+> T→∞
+
+1
+
+T EPΓ
+
+> x
+
+
+
+θ
+
+Z T
+
+> 0
+
+g(Xt, h t, γ t; θ) dt 
+
+
+
+, (3.3) where ¯ u is the relative value function. We solve this game in the next two subsections, and then show that this game corresponds to an ergodic extension of the duality-induced relation (2.15). 
+
+3.1 Asymptotic Behavior of the Value Function Coefficients 
+
+For notational convenience, let 
+
+P− := Id − θθ + 1 Σ′  ΣΣ ′−1 Σ (3.4) 
+
+K0 := θΛP−Λ′ (3.5) 
+
+K1 := B − θθ + 1 ΛΣ ′(ΣΣ ′)−1A (3.6) 10 The Riccati equation (2.20) becomes ˙Qt − QtK0Qt + K′
+
+> 1
+
+Qt + QtK1 + 1
+
+θ + 1 A′(ΣΣ ′)−1A = 0 , QT = 0 , (3.7) with an analogous reformulation for the linear ODE (2.21) and integral (2.22). Because the Riccati system coincides with that obtained under the Kuroda–Nagai change of measure, the asymptotic results of Davis & Lleo (2008) apply directly. 
+
+Proposition 3.3 (Proposition 1 in (Davis & Lleo, 2008)) .
+
+(i). If 
+
+K1 defined at (3.6) is stable , (3.8) 
+
+then the finite-horizon Riccati coefficient Q converges, as the horizon T → +∞, to a nonnegative definite matrix ¯Q, which is a solution of the algebraic Riccati equation: 
+
+− ¯QK 0 ¯Q + K′ 
+
+> 1
+
+¯Q + ¯QK 1 + 1
+
+θ + 1 A′(ΣΣ ′)−1A = 0 (3.9) 
+
+Moreover, ¯Q satisfies the estimate 
+
+0 ≤ ¯Q ≤ 1
+
+θ
+
+Z +∞
+
+> 0
+
+esK ′ 
+
+> 1
+
+A′(ΣΣ ′)−1Ae sK 1 ds (3.10) 
+
+(ii). In addition, q converges as T → +∞ to a constant vector ¯q, which satisfies 
+
+ K′ 
+
+> 1
+
+− ¯QK 0
+
+ ¯q + ¯Qb + θ ¯QΛΞ − C′ + 1
+
+θ + 1 
+
+ A′ − θ ¯QΛΣ ′ (ΣΣ ′)−1 (a + θΣΞ) = 0 , (3.11) 
+
+and kT converges to a constant ¯k defined by 
+
+¯k = 12 tr  ΛΛ ′ ¯Q − θ
+
+2 ¯q′ΛΛ ′ ¯q + b′ ¯q + 121
+
+θ + 1 a′(ΣΣ ′)−1a + 12
+
+θ2
+
+θ + 1 ¯q′ΛΣ ′(ΣΣ ′)−1ΣΛ ′ ¯q
+
+− θθ + 1 ¯q′ΛΣ ′(ΣΣ ′)−1a − θ2
+
+θ + 1 ¯q′ΛΣ ′(ΣΣ ′)−1ΣΞ + θΞ′Λ′ ¯q − 12 (θ − 1) Ξ ′Ξ+ θθ + 1 a′(ΣΣ ′)−1ΣΞ + 12
+
+θ2
+
+θ + 1 Ξ′Σ′(ΣΣ ′)−1ΣΞ − c (3.12) 
+
+(iii). If, in addition to condition (3.8) we assume that 
+
+(B′, A ′(ΣΣ ′)−1Σ) is controllable (3.13) 
+
+then the solution ¯Q of (3.9) is strictly positive definite. 
+
+3.2 Ergodic Bellman–Isaacs Equation 
+
+The ergodic Bellman–Isaacs PDE is 
+
+H  x, D ¯u(x), D 2 ¯u(x) = ρ, (3.14) 11 where 
+
+H  x, D ¯u(x), D 2 ¯u(x) := inf  
+
+> h∈Rm
+
+sup 
+
+> γ∈Rd
+
+n
+
+Lh,γ ¯u(x) + θg (x, h, γ ; θ)
+
+o
+
+= sup 
+
+> γ∈Rd
+
+inf 
+
+> h∈Rm
+
+n
+
+Lh,γ ¯u(x) + θg (x, h, γ ; θ)
+
+o
+
+,
+
+(3.15) the generator Lh,γ ¯u of ¯ u(Xt), assuming ¯ u ∈ C2(Rn), is 
+
+Lh,γ ¯u(x) := [ b + Bx + Λ γ]′ D¯u(x) + 12 tr  ΛΛ ′D2 ¯u(x) . (3.16) The constant ρ is the optimal long-run value of the dual stochastic differential game. Equiva-lently, when the limiting duality relation holds, the optimal long-run risk-sensitive criterion is 
+
+−ρ/θ .The ergodic Bellman–Isaacs PDE at (3.14) has a solution given by the pair ¯u(x) = − θ
+
+ 12 x′ ¯Qx + ¯ q′x
+
+
+
+, (3.17) 
+
+ρ = − θ¯k, (3.18) where ¯Q, ¯q, and ¯k are given in Proposition 3.3. 
+
+Theorem 3.4. Let ¯u be the relative value function at (3.17) , and let ρ be the constant defined at (3.18) . Define the stationary strategies H∗ = ( h∗(Xt)) t≥0 and Γ∗ = ( γ∗(Xt)) t≥0, by h∗(x) = ¯h(x, D ¯u(x)) and γ∗(x) = ¯ γ(x, D ¯u(x)) , where ¯h(·) and ¯γ(·) are given by 
+
+¯h(x, D ¯u(x)) = 1
+
+θ + 1 
+
+ ΣΣ ′−1  a + Ax + θΣΞ + ΣΛ ′D¯u(x) (3.19) ¯γ(x, D ¯u(x)) =Λ ′D¯u(x) − θ  Σ′¯h(x, D ¯u(x)) − Ξ (3.20) =
+
+
+
+Id − θθ + 1 Σ′  ΣΣ ′−1 Σ
+
+
+
+Λ′D¯u(x) − θθ + 1 Σ′  ΣΣ ′−1 (a + Ax )+ θ
+
+
+
+Id − θθ + 1 Σ′  ΣΣ ′−1 Σ
+
+
+
+Ξ, (3.21) 
+
+or equivalently 
+
+¯h(x, D ¯u(x)) =  ΣΣ ′−1 (a + Ax ) +  ΣΣ ′−1 Σ¯ γ(x, D ¯u(x)) (3.22) ¯γ(x, D ¯u(x)) = 
+
+h
+
+Id + θΣ′  ΣΣ ′−1 Σ
+
+i−1 h
+
+−θΣ′  ΣΣ ′−1 (a + Ax ) + θΞ + Λ ′D¯u(x)
+
+i
+
+. (3.23) 
+
+If the assumptions in Proposition 3.3, namely (3.8) and (3.13) , hold, and we have both 
+
+(B′, Λ) is controllable (3.24) 
+
+θ ¯QΛΣ ′(ΣΣ ′)−1ΣΛ ′ ¯Q < A ′(ΣΣ ′)−1A, (3.25) 
+
+then, 1. The pair of strategies (H∗, Γ∗) is admissible, with H∗ ∈ ¯AH and Γ∗ ∈ ¯AΓ. Moreover, their defining policies h∗(·) and γ∗(·) are Borel-measurable maps. 
+
+12 2. The saddle point inequalities 
+
+lim sup  
+
+> T→∞
+
+1
+
+T EPΓ
+
+> x
+
+
+
+θ
+
+Z T
+
+> 0
+
+g(Xt, h ∗ 
+
+> t
+
+, γ t; θ) dt 
+
+
+
+≤ ρ ≤ lim sup  
+
+> T→∞
+
+1
+
+T EPΓ∗
+
+> x
+
+
+
+θ
+
+Z T
+
+> 0
+
+g(Xt, h t, γ ∗ 
+
+> t
+
+; θ) dt 
+
+
+
+(3.26) 
+
+holds for any admissible strategies H = ( ht)t≥0 ∈ ¯AH and Γ = ( γt)t≥0 ∈ ¯AΓ, and 
+
+u(x) = lim sup  
+
+> T→∞
+
+1
+
+T EPΓ∗
+
+> x
+
+
+
+θ
+
+Z T
+
+> 0
+
+g(Xt, h ∗ 
+
+> t
+
+, γ ∗ 
+
+> t
+
+; θ) dt 
+
+
+
+= ρ. (3.27) 
+
+3. The strategies H∗ and Γ∗ are optimal for the ergodic stochastic differential game (3.3) .Proof. Proof See Appendix A. 
+
+3.3 Relation between the Ergodic Stochastic Differential Game and the Free Energy–Entropy Duality 
+
+The preceding theorem identifies the long-run value of the ergodic stochastic differential game induced by the free energy–entropy duality. Under the assumptions of Theorem 3.4, the sta-tionary saddle point ( H∗, Γ∗) yields the long-run value 
+
+ρ = inf  
+
+> H∈¯AH
+
+sup  
+
+> Γ∈¯AΓ
+
+lim sup  
+
+> T→∞
+
+1
+
+T EPΓ
+
+> x
+
+
+
+θ
+
+Z T
+
+> 0
+
+g(Xt, h t, γ t; θ) dt 
+
+
+
+. (3.28) Consequently, the limiting duality relation gives inf H∈ ¯AH I∞(H, θ ) = eρ. Equivalently, since 
+
+I∞(H, θ ) = e−θJ ∞(H,θ ) and θ > 0, the optimal long-run risk-sensitive criterion is sup  
+
+> H∈¯AH
+
+J∞(H, θ ) = − ρθ . (3.29) 
+
+3.4 The Ergodic Kelly Criterion 
+
+The ergodic Kelly criterion is the risk-neutral limiting case of the ergodic risk-sensitive criterion. For a policy H, define 
+
+JK
+
+> ∞
+
+(x; H) := lim inf  
+
+> T→∞
+
+1
+
+T Ex [RT − R0] . (3.30) Under constant coefficients, the corresponding relative value function Φ K
+
+> ∞
+
+(x) := sup H∈ ¯AH JK
+
+> ∞
+
+(x; H)solves the following ergodic Bellman–Isaacs PDE (see (3.14)-(3.15)): 
+
+ρK = ( b + Bx )′DΦK
+
+> ∞
+
+(x) + 12 tr  ΛΛ ′D2ΦK
+
+> ∞
+
+(x) + sup 
+
+> h∈Rm
+
+gK (x, h ). (3.31) The pointwise maximizer is 
+
+hK (x) = (ΣΣ ′)−1(a + Ax ). (3.32) 13 The relative value function is quadratic, Φ K
+
+> ∞
+
+(x) = 12 x′ ¯QK x +  ¯qK ′ x, where ¯QK , ¯qK , and ρK
+
+solve the corresponding algebraic Kelly equations obtained from (3.31). 
+
+# 4 Actor–Critic Methods for Continuous-Time LQG Stochastic Differential Games 
+
+Sections 2 and 3 provide model-based finite- and infinite-horizon solutions to the duality-induced stochastic differential games. Building on this foundation, we develop reinforcement learning algorithms. We retain the LQG specification as a modeling framework, but no longer assume that the coefficients are known. We focus on continuous-time q-learning actor–critic methods, following the martingale char-acterization of Jia & Zhou (2022a,b, 2023). Relative to that general framework, our setting is specialized to the LQG stochastic differential game generated by the benchmarked investment problem. The quadratic form of the value functions motivates the critic parametrization, while the affine form of the saddle-point policies motivates the actor parametrization. The actors are deterministic Markov policies in the sense of Silver et al. (2014): they map the time–state pair directly into the portfolio control and the adversarial control. The finite-horizon game of Section 2 leads to an episodic actor–critic algorithm, in which each episode corresponds to one run of the model over [0 , T ]. The ergodic game of Section 3 leads in-stead to a continuing actor–critic algorithm, in which learning proceeds along a non-terminating trajectory. This section develops the episodic actor critic–algorithm in detail. The continuing 
+
+algorithm follows with some minor adaptations. In both cases, the partly model-based struc-ture reduces the burden of function approximation and provides interpretable reference policies, including the Kelly policy discussed in Subsection 4.5. 
+
+4.1 Preliminary Results for Episodic Tasks 
+
+4.1.1 State-Value Function v
+
+Recall that the admissible strategies in AHT and AΓ 
+
+> T
+
+are given by Markov control processes. This allows us to define the value function v associated with the strategies H = ( hs)s∈[t,T ] ∈ A HT ,Γ = ( γs)s∈[t,T ] ∈ A Γ 
+
+> T
+
+as the PΓ-expectation 
+
+v(t, x ; H, Γ, θ ) := EPΓ
+
+> t,x
+
+
+
+θ
+
+Z Tt
+
+g(s, X s, h s, γ s; θ) ds 
+
+
+
+, (4.1) where g is defined at (2.9). Hence, the optimal value function u defined at (2.16) is 
+
+u(t, x ) = inf 
+
+> H∈A HT
+
+sup 
+
+> Γ∈A Γ
+> T
+
+v(t, x ; H, Γ, θ ). (4.2) 
+
+Definition 4.1 (on-and off-policy learning) . On-policy learning optimizes the target policy directly. Off-policy learning optimizes the target policy based on a behavior policy (see Defini-tion 4.5 below). 14 Remark 1. The change-of-measure representation of the state-value function ν can be viewed as an application of importance sampling with χΓ[0 ,T ] at (2.10) acting as the likelihood ratio. In reinforcement learning, this structure appears in the off-policy approach. Our approach performs on-policy learning while still relying on importance sampling in the probabilistic sense to handle the risk-sensitive change of measure. By the Feynman–Kac formula, for fixed policies H and Γ, the value function v solves the parabolic PDE 
+
+∂v ∂t + [ bs + Bsx + Λ sγ(s, x )] ′ ∂v ∂x + 12 tr 
+
+
+
+ΛsΛ′
+
+> s
+
+∂2v∂x 2
+
+
+
++ θg (s, x, h (s, x ), γ (s, x ); θ) = 0 , (t, x ) ∈ [0 , T ) × Rn
+
+(4.3) with terminal condition v(T, x ; H, Γ, θ ) = 0 , ∀x ∈ Rn. The optimal value function u(t, x )satisfies the Bellman–Isaacs PDE at (2.17)-(2.18), that is 
+
+∂u ∂t + inf  
+
+> h∈Rm
+
+sup 
+
+> γ∈Rd
+
+
+
+[bs + Bsx + Λ sγ]′ ∂u ∂x + 12 tr 
+
+
+
+ΛsΛ′
+
+> s
+
+∂2u∂x 2
+
+
+
++ θg (s, x, h, γ ; θ)
+
+
+
+= 0 , (4.4) with terminal condition u(T, x ) = 0 , ∀x ∈ Rn.Next, for a filtration ( Fs)s∈[0 ,T ], semimartingale ( Ys)s≥0, and measure PΓ defined at (2.10), we denote by 
+
+L2
+
+> F
+
+ [t, T ]; Y ; PΓ := 
+
+(
+
+(κs)s∈[t,T ] : κs is Fs-progressively measurable, EPΓ
+
+Z Tt
+
+|κs|2d⟨Y ⟩s
+
+
+
+< ∞
+
+)
+
+(4.5) the Hilbert space with L2-norm ∥κ∥L2 := 
+
+
+
+EPΓ hR Tt |κs|2d⟨Y ⟩s
+
+i 1/2
+
+, where ⟨·⟩ denotes quadratic variation. We now introduce the following martingale process. 
+
+Definition 4.2. For given admissible strategies H ∈ A HT , Γ ∈ A Γ 
+
+> T
+
+, let ( Ms)s∈[t,T ] be the PΓ-process 
+
+Ms := v(s, X s; H, Γ, θ ) + θ
+
+Z st
+
+g(u, X u, h u, γ u; θ)du, (4.6) where v is the function defined at (4.1), g is defined at (2.9), and ( Xs)s∈[t,T ] satisfies (2.11) under PΓ with an initial value that is either fixed, that is Xt = x ∈ Rn, or random, meaning here that Xt = x ∼ N (μ, Λ0) and is independent of the Wiener process Ws.Proposition 1 in Jia & Zhou (2022a) shows that under standard assumptions, the process (Ms)s∈[t,T ] is a square-integrable martingale uniquely defined by the value function v. We restate their result in our setting and extend it to allow a random initial value for the process (Xs)s∈[t,T ]:
+
+Proposition 4.3. Under the assumptions on the functions b, B, Λ, a, A, Σ, c, C, Ξ presented in Section 2.1, the process (Ms)s∈[t,T ] introduced in Definition 4.2 is a square-integrable PΓ-martingale. 
+
+15 Additionally, the process (Ms)s∈[t,T ] is unique. Formally, if there is a continuous function ˇv
+
+such that (i) ˇv(T, x ) = 0 , ∀x ∈ Rn, and (ii) the process ˇMs := ˇ v (s, X s)+ θ R st g(u, X u, h u, γ u; θ)du is a square-integrable PΓ-martingale, then ˇv = v on [0 , T ] × Rn.Proof. Proof The proof follows along the lines of that of Proposition 1 in Jia & Zhou (2022a). The extension to a random initial value follows immediately from the assumption that X0 is independent of Ws.
+
+Corollary 4.4 (Martingale Orthogonality Condition) . Let (Ms)s∈[t,T ] be the square-integrable 
+
+PΓ-martingale from Definition 4.2, for fixed H ∈ A HT , Γ ∈ A Γ 
+
+> T
+
+, and given the fixed or random initial condition Xt = x. Then, for any test function ξ ∈ L2
+
+> F
+
+ [t, T ]; M ; PΓ,
+
+EPΓ
+
+> t,x
+
+Z st
+
+ξudM u
+
+
+
+= EPΓ
+
+> t,x
+
+Z st
+
+ξu {dv (u, X u; H, Γ, θ ) + θg (u, X u, h u, γ u; θ)du }
+
+
+
+= 0 . (4.7) 
+
+Remark 2. Jia and Zhou noted that the term ‘test function’ is used by convention; ξs is in fact a stochastic process. Hence, the corollary follows from the properties of martingales. 
+
+4.1.2 Action-Value Function q
+
+So far, we have discussed the state-value function v. The action-value function q also plays a pivotal role in deterministic policy gradient algorithms (see Silver et al., 2014). Consistently with Jia & Zhou (2023), we now define the function q as the “left-hand side” of the PDE (4.3): 
+
+q (s, x, h, γ ; θ) := ∂v ∂t + [ bs + Bsx + Λ sγ]′ ∂v ∂x + 12 tr 
+
+
+
+ΛsΛ′
+
+> s
+
+∂2v∂x 2
+
+
+
++ θg (s, x, h, γ ; θ). (4.8) Following Jia & Zhou (2023), we call this object the continuous-time action-value function, although analytically it is the Hamiltonian residual associated with the value function. These authors showed that q is the continuous-time analog to the action-value function Q in discrete time. We now present a proposition motivated by the martingale characterization in Jia and Zhou, and which adapts the logic of their Theorem 7 to deterministic Markov policies. A key difference between the deterministic policies employed in this paper and the exploratory policies considered in Jia & Zhou (2023) is that deterministic policies do not themselves identify the action dependence of q (Silver et al., 2014). Importantly, this result addresses both target policies, policies we aim to optimize, and behavior policies, policies used for evaluation. The class of behavior policies we work with is the following: 
+
+Definition 4.5 (Behavior Policy) . A behavior investment policy H = ( hs)s∈[0 ,T ] belongs to 
+
+AH, beh  
+
+> T
+
+if hs is Rm-valued, progressively measurable, c` adl` ag, and square-integrable on [0 , T ]. A 
+
+behavior adversarial policy Γ = ( γs)s∈[0 ,T ] belongs to AΓ,beh  
+
+> T
+
+if γs satisfies the same conditions and χΓ[0 ,T ] is an exponential martingale. 16 Remark 3. We will use a behavior policy defined as a perturbed version of the target policy in the implementation in Section 5 below. We therefore implicitly assume that the filtration (Fs)0≤s≤T tracks both the Brownian motion W and the independent perturbation. Note as well that admissible policies, the set of policies in which we seek the optimal policy, are a subset of behavior policies. Under the regularity and uniqueness conditions of Jia & Zhou (2023, Theorem 7), the follow-ing martingale characterization specializes to the present LQG game. We use the superscripts tar and beh to distinguish target and behavior policies. 
+
+Proposition 4.6. Fix target policies Htar ∈ A HT and Γtar ∈ A Γ 
+
+> T
+
+. Let ˜v : [ t, T ] × Rn → R,
+
+˜q : [ t, T ] × Rn × Rm × Rd → R be sufficiently smooth, with ˜v(T, x ) = 0 and 
+
+˜q(s, x, h tar  
+
+> s
+
+, γ tar  
+
+> s
+
+; θ) = 0 , (s, x ) ∈ [t, T ] × Rn, (4.9) 
+
+without ˜q being identically zero. Then ˜v and ˜q are the value function and q-function associated with (Htar , Γtar ) if and only if 
+
+˜Ms := ˜ v (s, X s) + 
+
+Z st
+
+θg (u, X u, h tar  
+
+> u
+
+, γ tar  
+
+> u
+
+; θ) − ˜q(u, X u, h tar  
+
+> u
+
+, γ tar  
+
+> u
+
+; θ) du, (4.10) 
+
+is a PΓtar 
+
+-martingale. Moreover, if ˜v and ˜q are the corresponding value and q-functions, then for any behavior policies Hbeh ∈ A H, beh  
+
+> T
+
+and Γbeh ∈ A Γ,beh  
+
+> T
+
+, the process 
+
+˜Ms := ˜ v (s, X s) + 
+
+Z st
+
+h
+
+θg (u, X u, h beh  
+
+> u
+
+, γ beh  
+
+> u
+
+; θ) − ˜q(u, X u, h beh  
+
+> u
+
+, γ beh  
+
+> u
+
+; θ)
+
+i
+
+du, (4.11) 
+
+is a PΓbeh 
+
+-martingale. Conversely, the existence of such a behavior-policy martingale identifies 
+
+˜v and ˜q. Finally, if the target policies satisfy the pointwise saddle-point conditions 
+
+htar  
+
+> s
+
+∈ argmin 
+
+> h
+
+˜q(s, x, h, γ tar  
+
+> s
+
+; θ), γtar  
+
+> s
+
+∈ argmax 
+
+> γ
+
+˜q(s, x, h tar  
+
+> s
+
+, γ ; θ), (4.12) 
+
+then Htar and Γtar are optimal and ˜v is the optimal value function. Proof. Proof The result follows the martingale-characterization argument of Theorem 7 in Jia & Zhou (2023), specialized to the present LQG game and deterministic Markov controls. 
+
+Remark 4. The second statement in Proposition 4.6 connects behavior and target policies. From the definition of the q-function at (4.8) and the Bellman–Isaacs PDE (2.17), which forms the foundations of Theorem 2.5, one can see that the candidate policies given at (2.23)-(2.25) of Theorem 2.5 coincide with those at (4.12) in Proposition 4.6. As a corollary to Proposition 4.6, we have: 
+
+Corollary 4.7 (Martingale Orthogonality Condition) . Let ( ˜Ms)s∈[t,T ] be the square-integrable 
+
+PΓ-martingale defined at (4.10) , for policies H = ( hs)s∈[t,T ] ∈ A HT , Γ = ( γs)s∈[t,T ] ∈ A Γ 
+
+> T
+
+, and given a fixed or random initial state value Xt = x. Furthermore, let ˜q : [ t, T ] × Rn × Rm ×
+
+17 Rd → R satisfying (4.9) without ˜q being identically zero. Then, for any test function ξ ∈
+
+L2
+
+> F
+
+
+
+[t, T ]; ˜M ; PΓ
+
+
+
+,
+
+EPΓ
+
+> t,x
+
+Z st
+
+ξud ˜Mu
+
+
+
+= EPΓ
+
+> t,x
+
+Z st
+
+ξu {d˜v (u, X u) + [ θg (u, X u, h u, γ u; θ) − ˜q(u, X u, h u, γ u; θ)] du }
+
+
+
+= 0 (4.13) 
+
+4.2 Parametrized Function Approximation for Policy Gradient Methods (Episodic Tasks) 
+
+In practice, the value functions v and q associated with the strategies H and Γ are not known. Policy gradient methods learn the parameters of a function approximation of the policies and value function. This section introduces the parametrization we will use to approximate the policies H and Γ, the state-value function v, and the action-value function q.We start with the function approximation of the policies. For our partly model-based setting, Theorem 2.5 shows that the optimal policies are affine in the state variable. To keep the discussion general, we consider a parametrization Hϕ = ( h(s, x ; ϕ)) s∈[t,T ] ∈ A HT and Γ ϕ =(γ(s, x ; ϕ)) s∈[t,T ] ∈ A Γ 
+
+> T
+
+of the policies, where the controls h(s, x ; ϕ) ∈ Rm and γ(s, x ; ϕ) ∈ Rd
+
+are affine in the state x, with time-varying coefficients parametrized by a vector ϕ ∈ RdΦ :
+
+h(s, x ; ϕ) := f (h, 1) 
+
+s; ϕ(h, 1) 
+
++ f (h, 2) 
+
+s; ϕ(h, 2) 
+
+xγ(s, x ; ϕ) := f (γ, 1) 
+
+s; ϕ(γ, 1) 
+
++ f (γ, 2) 
+
+s; ϕ(γ, 2) 
+
+x, (4.14) where f (h, 1) : [0 , T ] × Rd(h, 1)  
+
+> ϕ
+
+→ Rm, f (h, 2) : [0 , T ] × Rd(h, 2)  
+
+> ϕ
+
+→ Rm×n, f (γ, 1) : [0 , T ] × Rd(γ, 1)  
+
+> ϕ
+
+→ Rd,
+
+f (γ, 2) : [0 , T ] × Rd(γ, 2)  
+
+> ϕ
+
+→ Rd×n are C1,1 functions. We restrict attention to parameter values ϕ
+
+for which the induced Markov controls belong to AHT and AΓ 
+
+> T
+
+. The derivatives ∂h ∂ϕ and ∂γ ∂ϕ are matrices of dimension m × dϕ and d × dϕ, respectively 2.Theorem 2.5 shows that the optimal value function u is quadratic in the state variable with time-varying parameters, so we consider the following quadratic parametrization vψ of the state-value function v, given parametrized policies Hϕ ∈ A HT , Γ ϕ ∈ A Γ 
+
+> T
+
+:
+
+vψ(t, x ) = − θ
+
+ 12 x′ ˜Q(t; ψ)x + ˜ q(t; ψ)′x + ˜k(t; ψ)
+
+
+
+, (4.15) where ˜Q : [0 , T ]×Rdψ → Rn×n, ˜ q : [0 , T ]×Rdψ → Rn, and ˜k : [0 , T ]×Rdψ → R are C1,1 functions parametrized by a dψ-element vector ψ, such as polynomial functions of time t where the vector 
+
+ψ contains the polynomial’s coefficients. For example, we could choose Taylor expansions of Q,
+
+q, and k of degree dP , requiring a total of dψ = ( dP + 1) × (n2 + n + 1) parameters. 
+
+Remark 5. The optimal value function u and the optimal policies H∗ and Γ ∗ depend on the risk-sensitivity parameter θ both explicitly and implicitly. This implicit dependence occurs via the coefficients Qs, qs, and ks, defined at (2.20)-(2.22) in Theorem 2.5, and whose equations 
+
+> 2Silver et al. (2014) already noted that, in the case of deterministic policy, the derivative of the policy with respect to its parameters is a matrix. By contrast, in the case of stochastic policies, the derivative of the policy with respect to its parameters is typically a vector.
+
+18 depend on θ. In the definition of the parametrized function vψ at (4.15), the learned parameters ˜Qs, ˜ qs, ˜ks absorb the function v’s entire dependence on θ.The action-value function q can be parametrized by using its definition in (4.8). In fact, given our parametrization of the state-value function v as a quadratic function of the state xt
+
+with time-varying coefficients generated by sufficiently smooth functions of time ( C1[0 , T ]), the partial derivatives of vψ are themselves at most quadratic in the state x with coefficients that are (at least) continuous in t. Moreover, the function g, which is defined at (2.9), is linear in 
+
+x and quadratic in h and γ. Hence, we can consider a parametric approximation of q in the following form 
+
+qw (s, x, h, γ ) := f (q, 0) (s; w) + f (q, 1) (s; w)x + x′f (q, 2) (s; w)x + γ′f (q, 3) (s; w) + γ′f (q, 4) (s; w)x + h′f (q, 5) (s; w)+ h′f (q, 6) (s; w)x + h′f (q, 7) (s; w)γ + h′f (q, 8) (s; w)h − γ′f (q, 9) (s; w)γ, (4.16) where f (q,i ) are C1,1 functions with appropriate dimensions, and w ∈ Rdw is a vector of param-eters that needs to be estimated. 
+
+Remark 6. The matrix-valued function f (q, 9) need not be estimated if one imposes the known structure of the risk-sensitive game. Since θg contains the term − 12 γ′γ, the direct quadratic contribution in γ is obtained by setting f (q, 9) = 12 Id. This restriction can therefore be hard-coded. 
+
+4.3 Actor–Critic via q-Learning for Episodic Tasks 
+
+The family of algorithms we discuss here parallels the semi-gradient Temporal Difference (TD) 
+
+algorithms for discrete-time MDPs. As is typical of TD methods, this family of algorithms updates the time t parameters based on reward information at time s > t (respectively time ti
+
+and ti+1 in discrete time). The update may be performed offline or online in a fully analogous way. Here, we focus on the online implementation (see (4.22) below). Following Jia & Zhou (2023), we use the martingale orthogonality condition in Corollary 4.7 to estimate the critic functions vψ and qw. The choice of the Ft-adapted test functions specifies the resulting semi-gradient TD algorithm. For the critic, we use 
+
+ξt := ∂v ψ(t, X t)
+
+∂ψ , ζt := ∂q w(t, X t, h t, γ t)
+
+∂w . (4.17) These choices produce TD-style stochastic-approximation updates for the critic parameters ψ
+
+and w.The orthogonality condition then implies that 
+
+EPΓ
+
+> t,x
+
+Z st
+
+ξud ˜Mu
+
+
+
+=EPΓ
+
+> t,x
+
+Z st
+
+ξu
+
+n
+
+dv ψ (u, X u) + 
+
+h
+
+θg (u, X u, h ϕu, γ ϕu ; θ) − qw(u, X u, h ϕu, γ ϕu ; θ)
+
+i
+
+du 
+
+o
+
+= 0 , (4.18) for ξ and analogously for ζ.The actor update is treated separately. Since the policies are deterministic maps from the 19 time-state space into the action spaces, we use deterministic policy gradients, in the spirit of Silver et al. (2014). For the minimizing actor h and maximizing actor γ, define 
+
+η(h) 
+
+> t
+
+:= 
+
+ ∂h ϕ(t, X t)
+
+∂ϕ (h)
+
+′
+
+∇hqw(t, X t, h t, γ t), (4.19) 
+
+η(γ) 
+
+> t
+
+:= 
+
+ ∂γ ϕ(t, X t)
+
+∂ϕ (γ)
+
+′
+
+∇γ qw(t, X t, h t, γ t). (4.20) Define the discrete martingale residual 
+
+δk := vψ(tk+1 , x k+1 ) − vψ(tk, x k) + θg (tk, x k, h k, γ k; θ)∆ t − qw(tk, x k, h k, γ k)∆ t. (4.21) This martingale residual is used to evaluate the current policies and update the critic parameters. In implementation, gk = g(tk, x k, h k, γ k; θ) is estimated from the observed data (state, securities prices, and benchmark level), actions, and value function estimates. The critic is updated using the semi-gradient TD rules 
+
+ψ ← ψ + αψξkδk, w ← w + αwζkδk∆t., (4.22) with ξk and ζk defined as in (4.17) and evaluated at ( tk, x k, h k, γ k). The factor ∆ t in the update for w may equivalently be absorbed into the critic learning rate αw.The actor is then updated by a deterministic policy gradient step: 
+
+ϕ(h) ← ϕ(h) − αhη(h) 
+
+> k
+
+, η(h) 
+
+> k
+
+:= 
+
+ ∂h ϕ(tk, x k)
+
+∂ϕ (h)
+
+′
+
+∇hqw(tk, x k, h k, γ k), (4.23) 
+
+ϕ(γ) ← ϕ(γ) + αγ η(γ) 
+
+> k
+
+, η(γ) 
+
+> k
+
+:= 
+
+ ∂γ ϕ(tk, x k)
+
+∂ϕ (γ)
+
+′
+
+∇γ qw(tk, x k, h k, γ k). (4.24) with h and γ evaluated at the current time-state pair ( t, x ) ∈ [0 , T ]×Rn, and where αh, α γ , α ψ, α w >
+
+0 are learning rates. Equation (4.23) contains a minus because the update descends toward the minimizing control h, while equation (4.24) contains a plus because the update ascends toward the maximizing control γ. Note that the actor update separates the policy gradient into two multiplicative components: the Jacobian of the action with respect to the parameter vector Φ and the local action gradients ∇hqw and ∇γ qw. The latter, which represent the gradients of q
+
+with respect to the action h and γ, respectively, are computed once qw has been updated. This separation mirrors the usual actor–critic architecture: the critic is trained by a TD residual, while the actor is improved using the critic’s action-gradient. For implementation, partition [0 , T ] into K intervals of length ∆ t = TK , with grid I =
+
+t0, . . . , t K−1. The strategies H = ( hs)s ∈ I and Γ = ( γs)s ∈ I are then updated on this grid. Algorithm 1 presents the online on-policy q-learning actor–critic method. In the algorithm, the continuous-time increments dv and dt are replaced by vψ(tk+1 , x k+1 ) − vψ(tk, x k) and ∆ t, and the learning decay function ℓ slows the updates across episodes. Section 5 presents an off-policy proof of concept using behavior policies to optimize target policies. 20 Algorithm 1 Episodic Online, On-Policy Actor–Critic via q-Learning 
+
+Require: 
+
+Parametrized functions f h, 1, f h, 2, f γ, 1, f γ, 2, ˜Q, ˜ q, ˜k, and f q, 0, . . . , f q, 9
+
+Input a time sequence 0 = t0 < t 1 < · · · < t k < . . . < t K = T indexed by k ∈ N, k = 1 , . . . , K 
+
+episode ← number of episodes Input learning rates αh, αγ , αψ, αw, risk sensitivity parameter θ, and learning decay function 
+
+ℓ (episode )Initialize the vectors ϕ =
+
+ϕ(h)
+
+ϕ(γ)
+
+
+
+, ψ, w, and the time 0 value of the state process x0
+
+for episode = 1 , . . . , N do for k = 0 , . . . , K − 1 do 
+
+ℓepisode ← ℓ(episode )
+
+// Generate actions and get data: 
+
+Generate actions hk = hϕ(tk, x k) and γk = γϕ(tk, x k)
+
+// Update the environment and compute the performance 
+
+Estimate gk = g(tk, x k, h k, γ k; θ) from observed data (state, securities, and bench-mark), actions, and value function estimates. Compute critic gradients: ξk = ∂ψvψ(tk, x k), ζk = ∂wqw(tk, x k, h k, γ k).
+
+Compute actor gradients: 
+
+η(h) 
+
+> k
+
+=
+
+
+
+∂ϕ(h) hϕ(tk, x k)
+
+′
+
+∇hqw(tk, x k, h k, γ k), η(γ) 
+
+> k
+
+=
+
+
+
+∂ϕ(γ) γϕ(tk, x k)
+
+′
+
+∇γ qw(tk, x k, h k, γ k).
+
+Observe xk+1 .Compute: δk = vψ(tk+1 , x k+1 ) − vψ(tk, x k) + θg k∆t − qw(tk, x k, h k, γ k)∆ t. 
+
+Update critics: ψ ← ψ + ℓepisode αψξkδk, w ← w + ℓepisode αwζkδk∆t. 
+
+Update actors: ϕ(h) ← ϕ(h) − ℓepisode αhη(h) 
+
+> k
+
+, ϕ(γ) ← ϕ(γ) + ℓepisode αγ η(γ) 
+
+> k
+
+.
+
+end for end for 
+
+21 4.4 Ergodic Problem and Actor–Critic via q-Learning for Continuing Tasks 
+
+According to (3.3), the long-run average criterion J∞ associated with the strategies H =(ht)t≥0 ∈ ¯AH , Γ = ( γt)t≥0 ∈ ¯AΓ is 
+
+J∞(x, H, Γ; θ) := lim sup  
+
+> T→∞
+
+T −1EPΓ
+
+> x
+
+
+
+θ
+
+Z T
+
+> 0
+
+g(Xt, h t, γ t; θ) dt 
+
+
+
+, (4.25) where g is defined at (2.9). The corresponding game value is 
+
+ρ = inf  
+
+> H∈¯AH
+
+sup  
+
+> Γ∈¯AΓ
+
+J∞(x, H, Γ; θ). (4.26) In line with (3.14)–(3.18), the value function v, together with the scalar long-run value ρ, solves the ergodic PDE [b + Bx + Λ γ]′ ∂v ∂x + 12 tr 
+
+
+
+ΛΛ ′ ∂2v∂x 2
+
+
+
++ θg (x, h, γ ; θ) = ρ, x ∈ Rn. (4.27) From (3.17), we get a quadratic approximation of the value function v, that, in line with (4.15), we denote by ˜ v(x) = −θ
+
+ 12 x′ ˜Qx + ˜ q′x
+
+
+
+. We also get the following approximation for the ergodic 
+
+q-function: 
+
+q (x, h, γ ; θ) := [ b + Bx + Λ γ]′ ∂v ∂x + 12 tr 
+
+
+
+ΛΛ ′ ∂2v∂x 2
+
+
+
++ θg (x, h, γ ; θ) − ρ. (4.28) An ergodic analogue of Proposition 4.6 follows from the same martingale-characterization ar-gument; see also Jia & Zhou (2023, Theorem 9). The main changes are the admissible classes and the additional long-run scalar value ρ.Algorithm 1 for episodic tasks extends with minor modifications to continuing tasks. The three main differences are: the form of the value functions differs, as discussed above; the algo-rithm for continuing tasks only loops through time; and the time dependence disappears from the parametrization. This last element leads to several simplifications. The policy parametriza-tion is of the form 
+
+h(x; ϕ) = ϕ(h, 1) + ϕ(h, 2) x, γ(x; ϕ) = ϕ(γ, 1) + ϕ(γ, 2) x (4.29) where ϕ(h, 1) ∈ Rm, ϕ (h, 2) ∈ Rm×n, ϕ(γ, 1) ∈ Rd, ϕ (γ, 2) ∈ Rd×n are constants. Now, the param-eterization for the state value and action value functions becomes vψ(x) = −θ   12 x′Ψx + ψ′x,for Ψ ∈ Rn×n, ψ ∈ Rn, and 
+
+qw (x, h, γ ) := w0 + w′
+
+> x
+
+x + x′Wxx x + w′ 
+
+> γ
+
+γ + γ′Wγx x + w′
+
+> h
+
+h + h′Whx x + h′Whγ γ + h′Whh h − γ′Wγγ γ, 
+
+(4.30) where all coefficients have conformable dimensions, with Wxx , Whh , and Wγγ taken symmetric when the corresponding quadratic terms are identified. 22 4.5 The Kelly Criterion and Its Implication for Explainability 
+
+The actor–critic framework also clarifies how the learned allocation can be explained. The Kelly criterion is not only a limiting case of the risk-sensitive benchmarked problem; it provides a natural reference allocation. While reinforcement-learning algorithms produce an allocation for a set of learned parameters, they do not by themselves explain why that allocation is recom-mended. This is especially true for long-term asset allocation algorithms. The structure of the benchmarked risk-sensitive solution provides such an explanation. Assuming we know the value of the model’s coefficients, Lleo & Runggaldier (2026b) estab-lishes that the optimal asset allocation has the form of a fractional Kelly strategy , consisting of a combination of three funds: the Kelly portfolio with allocation hK (s, X s), a benchmark-tracking portfolio with allocation hBench (s, X s), and an Intertemporal Hedging Portfolio (IHP) with allocation hIHP (s, X s). Mathematically, 
+
+h∗(s, X s) = f h K (s, X s) + (1 − f ) hBench  
+
+> s
+
+− (1 − f ) hIHP (s, X s), (4.31) where f := 1 
+
+> θ+1
+
+, hK (s, X s) is given at (2.34), and 
+
+hBench  
+
+> s
+
+=  ΣsΣ′
+
+> s
+
+−1 ΣsΞs, hIHP (s, X s) =  ΣsΣ′
+
+> s
+
+−1 ΣsΛ′ 
+
+> s
+
+(qs + QsXs) , (4.32) where Qs and qs are respectively the Riccati matrix and vector coefficients appearing in the quadratic value function. Importantly, the relative allocation between the three funds is fixed and depends solely on the investor’s risk-sensitivity, a known quantity. Therefore, if we either know or can learn the asset allocation within these three constituent funds, we can decompose the asset allocation hRL s produced by a reinforcement learning algo-rithm, such as the actor–critic algorithm presented above, as: 
+
+hRL s = 1
+
+θ + 1 hK (s, X s) + θθ + 1 hBench (s, X s) − θθ + 1 hIHP (s, X s) + hϵ, (4.33) where hϵ is a residual term capturing approximation, estimation, and numerical errors. The Kelly portfolio can be learned independently using an actor–critic approach, as discussed above. Three simplifications occur: (1) the problem is not a game, so there is no adversarial control γ, (2) we do not need to change measure, and (3) the state is uncontrolled. The allocation to the benchmark-tracking portfolio can be interpreted as the minimum-variance hedge ratio produced by hedging the benchmark L using the m securities Si, i =1, . . . , m from the asset market. Therefore, hBench can be estimated online as the slope vector of a sequential multiple linear regression of the benchmark returns against the securities returns 3.We can use a similar approach for the IHP . Decompose the asset allocation of the IHP, 
+
+hIHP  
+
+> s
+
+into two multiplicative terms, (Σ sΣ′
+
+> s
+
+)−1 ΣsΛ′ 
+
+> s
+
+and ( qs + QsXs). The first term can be interpreted as the minimum-variance hedge ratio obtained by hedging the state variables X
+
+using the m securities Si, i = 1 , . . . , m . So we can learn it using a sequential multiple linear regression of the state variables against the securities returns. The second term involves the     
+
+> 3Alternatively, one could estimate the quadratic variations Σ sΣ′
+> sand cross variation Σ sΞssequentially, and then multiply these two quantities to obtain an estimate for hBench
+> s.
+
+23 learned estimates of the Riccati matrix and vector in the parametrized value function, which are already produced by the actor–critic algorithm. Therefore, for k clients and ℓ ≤ k benchmarks, the explanatory decomposition requires k + 1 actor–critic runs, one per client and one for the Kelly portfolio, together with ℓ + 1 sequential regressions, one per benchmark and one for the common IHP hedge. The additional cost is therefore limited relative to learning the client-specific policies. 
+
+# 5 Implementation 
+
+This section presents a proof of concept for the actor–critic reinforcement-learning framework developed in Section 4, focusing on a continuing task associated with an ergodic investment problem. The aim is not to propose a fully model-free implementation, but to show that the analytical model and its actor–critic formulation lead to a concrete computational procedure. We use financial market data to compute the parameters for the analytical ergodic risk-sensitive benchmarked asset management model derived in Section 3 that will serve as a reference to assess the learning speed and accuracy of the actor–critic algorithm. Specifically, this section tests whether a proof-of-concept algorithm with a reduced critic, that is, a critic reduced to the set of parameters required by the actors, can learn the analytical model’s optimal policies from the ground up, using only data simulated from the analytical model. The implementation is carried out in R. 
+
+5.1 Investment Problem and Financial Data 
+
+We consider a U.S. equity fund with risk-sensitivity parameter θ = 1. The benchmark allocates 90% to the S&P 500 and 10% to the S&P 400. The manager uses a six-factor model consisting of the five Fama–French factors (Fama & French, 2015) and Momentum (Carhart, 1997). The investment universe contains m = 13 U.S. exchange-traded funds. The first 11 ETFs track the S&P 500 GICS sectors, so the S&P 500 can be replicated by holding these ETFs at their sector weights. The remaining two ETFs are the iShares Core S&P 400 Mid-Cap ETF (IJH) and the iShares Core S&P 600 Small-Cap ETF (IJR). Since the S&P 600 is not included in the benchmark, any allocation to small-capitalization stocks is tactical. Model parameters are estimated from daily returns over June 20, 2018, to December 31, 2024, giving T = 1644 observations and ∆ t = 1 /252. June 20, 2018, is the earliest date for which all series are available after the GICS sector revision. The sample spans a volatile period in U.S. equity markets, including the 2019 rise, the COVID-19 crash in March 2020, and the subsequent rally. Factor and money-market returns are obtained from Kenneth French’s data library 4, while ETF returns are taken from the CRSP database 5. 
+
+> 4The data are available online at http://mba.tuck.dartmouth.edu/pages/faculty/ken.french/ Data_Library/f-f_factors.html .
+> 5©2026 Center for Research in Security Prices (CRSP), LLC.
+
+24 5.2 Proof-of-Concept Reinforcement-Learning Algorithm 
+
+The proof-of-concept algorithm focuses on learning the two actors, namely the investment policy 
+
+H and the adversarial policy Γ, rather than on approximating the full scalar action-value func-tion. This choice reflects both the analytical structure of the saddle point and the economic role of the controls. The portfolio allocation h is the economically relevant decision variable, while γ
+
+is the auxiliary adversarial control induced by the duality representation. In this implementa-tion, the ergodic relative value function is fixed at its analytical form, ¯ u(x) = −θ   12 x′ ¯Qx + ¯ q′x,where ¯Q and ¯ q are expressed in standardized coordinates. The critic learns only the actor-relevant gradients of the action-value function. The portfolio and adversarial actors are affine in the augmented standardized state 
+
+xaug = (1 , x ′)′, hϕ(x) = Φ (h)xaug , γϕ(x) = Φ (γ)xaug . (5.1) The corresponding analytical saddle-point actors are denoted by Φ (h),∗ and Φ (γ),∗. Exploration is introduced through behavior controls 
+
+hbeh (x) = hϕ(x) + ϵh, γbeh (x) = γϕ(x) + ϵγ , (5.2) where ϵh and ϵγ are mean-zero perturbations. Since the analytical q-function is quadratic in ( x, h, γ ), its gradients with respect to h and 
+
+γ are affine in z = (1 , x ′, h ′, γ ′)′. We therefore use the reduced critic 
+
+d∇hq(x, h, γ ) = Mhz, d∇γ q(x, h, γ ) = Mγ z, (5.3) where Mh ∈ Rm×(1+ n+m+d), M γ ∈ Rd×(1+ n+m+d).The matrices Mh and Mγ are learned by recursive least squares from behavior-action obser-vations. To this end, we construct the TD scalar target from the fixed relative value function: 
+
+qT D k = ¯u(xk+1 ) − ¯u(xk)∆t + θg (xk, h beh  
+
+> k
+
+, γ beh  
+
+> k
+
+; θ), (5.4) where, n this proof-of-concept implementation, xk+1 is generated from the standardized dynam-ics 
+
+xk+1 = xk +
+
+
+
+b + Bx k + Λ γbeh 
+
+> k
+
+
+
+∆t + Λ εk
+
+√∆t, εk ∼ N (0 , I d). (5.5) and g(xk, h beh  
+
+> k
+
+, γ beh  
+
+> k
+
+; θ) is computed using the analytical formula (2.9). Central finite differences of qT D k , evaluated at the behavior controls, generate targets d∇hq T D k , d∇γ q T D k ,which are used with the behavior feature vector zbeh  
+
+> k
+
+=  1, x ′
+
+> k
+
+, (hbeh  
+
+> k
+
+)′, (γbeh  
+
+> k
+
+)′′ to update Mh
+
+and Mγ .The updated critic is then evaluated at the target controls ( hk, γ k) to update the actors: Φ(h) ← Φ(h) − αh(θΣΣ ′)−1 d∇hqk
+
+x′
+
+> aug ,k
+
+1 + ∥xaug ,k ∥2 , (5.6) 25 Φ(γ) ← Φ(γ) + αγ d∇γ qk
+
+x′
+
+> aug ,k
+
+1 + ∥xaug ,k ∥2 . (5.7) The signs reflect the minimization over h and maximization over γ. The preconditioner ( θΣΣ ′)−1
+
+is consistent with the local curvature of the analytical Hamiltonian in the portfolio direction, and the factor (1 + ∥xaug ,k ∥2)−1 stabilizes the affine actor update. The proof-of-concept implementation learns 2,993 entries: 224 for the two actors, 1,248 for the two gradient critics, and 1,521 for the auxiliary RLS covariance matrix P . The value-function coefficients ¯Q and ¯ q are fixed at their analytical values. Algorithm 2 presents the step-by-step procedure. 
+
+Algorithm 2 Proof-of-concept online off-policy algorithm for the continuing case 
+
+Require: Standardized state sample {xi}; analytical coefficients ¯Q, ¯q; model coefficients 
+
+a, A, b, B, Σ, Λ, Ξ, c, C ; risk-sensitivity θ; learning rates αh, α γ ; time step ∆ t. 
+
+> 1:
+
+Initialize Mh, M γ and the RLS covariance matrix P . 
+
+> 2:
+
+Initialize actors Φ (h) and Φ (γ). 
+
+> 3:
+
+for k = 1 , . . . do  
+
+> 4:
+
+Sample a standardized state xk and set xaug ,k = (1 , x ′
+
+> k
+
+)′. 
+
+> 5:
+
+Compute current actor actions: hk = Φ (h)xaug ,k , γk = Φ (γ)xaug ,k . 
+
+> 6:
+
+Generate exploratory behavior actions from the current actions: hbeh  
+
+> k
+
+= hk +ϵhk , γbeh  
+
+> k
+
+=
+
+γk + ϵγk , with mean-zero exploratory perturbations ϵhk , ϵ γk . 
+
+> 7:
+
+Generate a one-step transition xk+1 = xk +  b + Bx k + Λ γbeh 
+
+> k
+
+ ∆t + Λ εk
+
+√∆t.  
+
+> 8:
+
+Form the TD scalar target at the behavior actions: qT D k = ¯u(xk+1 )−¯u(xk )∆t +
+
+θg (xk, h beh  
+
+> k
+
+, γ beh  
+
+> k
+
+; θ). 
+
+> 9:
+
+Compute central finite-difference approximations from the TD scalar target: 
+
+d∇hq T D k , d∇γ q T D k . 
+
+> 10:
+
+Define the behavior feature vector at the behavior actions: zbeh  
+
+> k
+
+=(1 , x ′
+
+> k
+
+, (hbeh  
+
+> k
+
+)′, (γbeh  
+
+> k
+
+)′)′. 
+
+> 11:
+
+Update Mh and Mγ by RLS using the targets d∇hq T D k and d∇γ q T D k and critic feature vector zbeh  
+
+> k
+
+. 
+
+> 12:
+
+Evaluate learned critic gradients at the target actor actions: 
+
+d∇hqk = Mh(1 , x ′
+
+> k
+
+, h ′
+
+> k
+
+, γ ′
+
+> k
+
+)′, d∇γ qk = Mγ (1 , x ′
+
+> k
+
+, h ′
+
+> k
+
+, γ ′
+
+> k
+
+)′. 
+
+> 13:
+
+Update the portfolio actor: Φ (h) ← Φ(h) − αh(θΣΣ ′)−1 d∇hqkx′  
+
+> aug ,k
+> 1+ ∥xaug ,k ∥2
+
+. 
+
+> 14:
+
+Update the adversarial actor: Φ (γ) ← Φ(γ) + αγ d∇γ qkx′  
+
+> aug ,k
+> 1+ ∥xaug ,k ∥2
+
+. 
+
+> 15:
+
+end for 
+
+5.3 Numerical Outcome 
+
+The following results are obtained from the R implementation of Algorithm 2. Figure 1 shows the convergence of the estimation errors for the critic and actor matrices, and for the corresponding actions. Table 1 reports the final relative errors. The portfolio-gradient critic is learned essentially exactly, whereas the adversarial-gradient critic retains a small residual error. This asymmetry is structural. Under the PΓ-dynamics, the standardized state xt is governed by the adversarial control γ, whereas the portfolio allocation 26 0.00 0.25 0.50 0.75 1.00       
+
+> 05000 10000 15000 20000 25000
+> Step
+> Relative Frobenius error
+> 50−step moving average Raw diagnostic
+
+M h critic error       
+
+> 0.00 0.25 0.50 0.75 1.00
+> 05000 10000 15000 20000 25000
+> Step
+> Relative Frobenius error
+> 50−step moving average Raw diagnostic
+
+Mγ critic error       
+
+> 0.00 0.25 0.50 0.75 1.00
+> 05000 10000 15000 20000 25000
+> Step
+> Relative Frobenius error
+> 50−step moving average Raw diagnostic
+
+Φh actor parameter error       
+
+> 0.00 0.25 0.50 0.75 1.00
+> 05000 10000 15000 20000 25000
+> Step
+> Relative Frobenius error
+> 50−step moving average Raw diagnostic
+
+Φ γ actor parameter error       
+
+> 0.00 0.25 0.50 0.75 1.00
+> 05000 10000 15000 20000 25000
+> Step
+> Relative action error
+> 50−step moving average Raw diagnostic
+
+h action error       
+
+> 0.00 0.25 0.50 0.75 1.00
+> 05000 10000 15000 20000 25000
+> Step
+> Relative action error
+> 50−step moving average Raw diagnostic
+
+γ action error Figure 1: Error diagnostics for the critic and actors 
+
+h does not enter the state equation. Therefore, the TD-generated gradient with respect to h
+
+differentiates only the running reward term and is not affected by transition-gradient effects. By contrast, γ enters the transition dynamics. A one-step TD finite-difference approximation involves Λ ′D¯u(xt+∆ t) rather than the infinitesimal generator term Λ ′D¯u(x). Since D¯u(x) = 
+
+−θ( ¯Qx + ¯ q), the finite-step discrepancy is approximately −θΛ′ ¯Q(xt+∆ t − x). This explains why the γ-actor carries a small residual error even when the h-actor is essentially exact. From an asset-management perspective, this asymmetry is favorable. The economically relevant decision variable is the portfolio allocation h, while γ is the auxiliary adversarial control introduced by the free energy–entropy duality. The diagnostics indicate that the duality-based formulation places the transition-learning burden primarily on γ, while leaving the portfolio actor with a clean and accurate TD learning signal. Overall, these diagnostics provide a proof of concept for the partly model-based actor–critic 27 Diagnostic Formula Portfolio control h Adversarial control γ
+
+Critic matrix error ∥M·−M ∗· ∥F   
+
+> ∥M∗·∥F
+
+1.47 × 10 −6 2.57 × 10 −4
+
+TD gradient-target error d∇·q T D − ∇ ·q 7.02 × 10 −13 1.07 × 10 −3
+
+Actor matrix error ∥Φ(·)−Φ(·),∗∥F
+
+> ∥Φ(·),∗∥F
+
+7.22 × 10 −5 3.35 × 10 −3
+
+Action error ∥· ϕ(x)−· ∗(x)∥∥· ∗(x)∥ 5.69 × 10 −5 3.28 × 10 −3
+
+Table 1: Final diagnostic errors in the proof-of-concept implementation. In the formulas of the ‘Formula’ column, the dot ‘ ·’ is a placeholder for the control and takes the value h for the portfolio control or γ for the adversarial control. The matrices M ∗ 
+
+> h
+
+and M ∗ 
+
+> γ
+
+denote the analytical gradient-critic matrices induced by the optimal q-function in standardized coordinates. For a matrix M , ∥M ∥F = ptr( M ′M ) denotes the Frobenius norm. framework. The reduced gradient critic exploits the quadratic structure of the action-value function, while the affine actors exploit the analytical form of the saddle-point controls. In the data-calibrated ETF allocation problem considered here, the resulting algorithm efficiently learns the optimal policy under the simulated standardized dynamics, thereby supporting the computational relevance of the theoretical actor–critic formulation. 
+
+# 6 Conclusion 
+
+This paper develops a reinforcement-learning approach to a risk-sensitive benchmarked as-set allocation problem in a partly model-based setting. Using free energy–entropy duality, we reformulate the nonstandard benchmarked control problem as a linear–quadratic–Gaussian stochastic differential game under an equivalent probability measure, yielding explicit finite- and infinite-horizon solutions. The actor–critic formulation then uses this analytical structure to de-sign interpretable actor and critic parametrizations while relaxing the assumption that all model coefficients are known. The resulting investment strategy admits a clear economic interpreta-tion through fractional Kelly decompositions. A proof-of-concept implementation calibrated to financial market data illustrates the practical relevance of the approach. It also reveals a favorable structural asymmetry: the portfolio actor receives a clean TD learning signal because the portfolio allocation does not enter the state transition, whereas the auxiliary adversarial actor carries the residual error associated with the finite-step transition approximation. 
+
+# A Proof of Theorem 3.4 
+
+Admissibility of the candidate strategies. We start by establishing that the candidate strategies H∗ and Γ ∗ are Borel-measurable and Markov. For the value function ¯ u(x) in Theo-rem 3.4, the candidate strategies H∗ and Γ ∗ induced by (3.19) and (3.21) become 
+
+h∗(x) = 1
+
+θ + 1 
+
+ ΣΣ ′−1   A − θΣΛ ′ ¯Q x + a + θΣ(Ξ − Λ′ ¯q) (A.1) 
+
+γ∗(x) = 
+
+
+
+− θθ + 1 Σ′  ΣΣ ′−1 A − θP−Λ′ ¯Q
+
+
+
+x − θθ + 1 Σ′  ΣΣ ′−1 a + θP−(Ξ − Λ′ ¯q). (A.2) 28 Therefore, the defining policies h∗(·) and γ∗(·) are Borel-measurable, and the induced strate-gies H∗ and Γ ∗ are Markov. Moreover, under PΓ∗
+
+, the state process X = ( Xt)t≥0 remains Gaussian. To see this, substitute (A.2) into (2.11) to obtain the following dynamics: 
+
+dX t = {(κ − K0 ¯q) + K2Xt} dt + Λ dW Γ∗ 
+
+> t
+
+, (A.3) where K0 is given at (3.5) and we defined K2 := K1 − K0 ¯Q and κ := b − θθ+1 ΛΣ ′ (ΣΣ ′)−1 a +
+
+θΛP−Ξ for compactness. Next, we consider the mean mt and covariance Pt of Xt under PΓ∗
+
+. They solve 
+
+dm t
+
+dt = ( κ − K0 ¯q) + K2mt. dP t
+
+dt = K2Pt + PtK′ 
+
+> 2
+
++ ΛΛ ′, (A.4) For deterministic X0 = x, mt = eK2tx+R t 
+
+> 0
+
+eK2(t−s) (κ − K0 ¯q) ds and Pt = R t 
+
+> 0
+
+eK2(t−s)ΛΛ ′eK′ 
+
+> 2(t−s)
+
+ds .If X0 has covariance P0, the initial condition eK2tP0eK′ 
+
+> 2t
+
+must be added to the solution for Pt.By Theorem 4.2 in Kuroda & Nagai (2002), the matrix K1 − K0QT converges, as T → ∞ ,to the stable matrix K2 = K1 − K0 ¯Q. Consequently, the limits of mT and PT exist as T → ∞ .Moreover, if (3.24) holds, then ( K2, Λ) is controllable. If (3.25) also holds, Lemma 5.1 in Kuroda & Nagai (2002) gives θ ¯Q−1 > ¯P ≥ PT . Thus, the limiting covariance matrix ¯P exists and is nondegenerate. Equations (3.19) and (A.3) show that h∗(x) and γ∗(x) ar affine in x. Since X is Gaussian under PΓ∗
+
+, h∗(Xs) is square-integrable on every interval [0 , T ], and H∗  
+
+> [0 ,T ]
+
+∈ A HT for all T > 0. It remains to check the Girsanov condition for Γ ∗. For convenience, define the density process associated with Γ ∗ on [0 , T ] by 
+
+χΓ∗ 
+
+> t
+
+:= exp 
+
+
+
+− 12
+
+Z t
+
+> 0
+
+∥γ∗(Xs)∥2 ds +
+
+Z t
+
+> 0
+
+γ∗(Xs)′ dW s
+
+
+
+, t ∈ [0 , T ]. (A.5) Since γ∗(x) is affine and the state equation is linear, the stochastic exponential is a true martin-gale on finite horizons by the standard linear-growth martingale criterion for Girsanov densities. Hence χΓ∗
+
+is an exponential martingale on every [0 , T ]. Conditions (i)-(iii) in Definition 2.4 fol-low, so Γ ∗  
+
+> [0 ,T ]
+
+∈ A Γ 
+
+> T
+
+for all T > 0, so Γ ∗ ∈ ¯AΓ.
+
+Verification of the saddle-point inequalities. We next prove the saddle-point inequalities. Let 
+
+F (x, h, γ ) := Lh,γ ¯u(x) + θg (x, h, γ ; θ). (A.6) Since ( ¯h, ¯γ) is a pointwise saddle point of the Hamiltonian, the ergodic Bellman–Isaacs equation implies, for all admissible h and γ,
+
+F (x, ¯h(x), γ ) ≤ ρ ≤ F (x, h, ¯γ(x)) . (A.7) Let Γ ∈ ¯AΓ be arbitrary and fix the minimizing policy H∗. By Itˆ o’s formula under PΓ,
+
+d¯u(Xt) = Lh∗,γ ¯u(Xt) dt + D¯u(Xt)′Λ dW Γ 
+
+> t
+
+. (A.8) 29 Taking expectations and using the martingale property of the stochastic integral gives 
+
+EPΓ
+
+> x
+
+Z T
+
+> 0
+
+Lh∗,γ ¯u(Xt) dt 
+
+
+
+= EPΓ 
+
+> x
+
+[¯ u(XT )] − ¯u(x). (A.9) Since Lh∗,γ ¯u(Xt) + θg (Xt, h ∗ 
+
+> t
+
+, γ t; θ) ≤ ρ, we obtain 1
+
+T EPΓ
+
+> x
+
+
+
+θ
+
+Z T
+
+> 0
+
+g(Xt, h ∗ 
+
+> t
+
+, γ t; θ) dt 
+
+
+
+≤ ρ + ¯u(x)
+
+T − 1
+
+T EPΓ 
+
+> x
+
+[¯ u(XT )] . (A.10) By the definition of ¯AΓ, the first two moments of XT under PΓ remain bounded, and in fact have finite limits as T → ∞ . Since ¯ u is quadratic, it follows that lim T →∞ 1 
+
+> T
+
+EPΓ 
+
+> x
+
+[¯ u(XT )] = 0. Therefore, lim sup  
+
+> T→∞
+
+1
+
+T EPΓ
+
+> x
+
+
+
+θ
+
+Z T
+
+> 0
+
+g(Xt, h ∗ 
+
+> t
+
+, γ t; θ) dt 
+
+
+
+≤ ρ. (A.11) Conversely, let H ∈ ¯AH be arbitrary and fix the maximizing policy Γ ∗. Since 
+
+Lh,γ ∗
+
+¯u(Xt) + θg (Xt, h t, γ ∗ 
+
+> t
+
+; θ) ≥ ρ, (A.12) the same Itˆ o argument under PΓ∗
+
+gives 1
+
+T EPΓ∗
+
+> x
+
+
+
+θ
+
+Z T
+
+> 0
+
+g(Xt, h t, γ ∗ 
+
+> t
+
+; θ) dt 
+
+
+
+≥ ρ + ¯u(x)
+
+T − 1
+
+T EPΓ∗ 
+
+> x
+
+[¯ u(XT )] . (A.13) The admissibility of Γ ∗ implies that the final term again vanishes after division by T . Hence lim inf  
+
+> T→∞
+
+1
+
+T EPΓ∗
+
+> x
+
+
+
+θ
+
+Z T
+
+> 0
+
+g(Xt, h t, γ ∗ 
+
+> t
+
+; θ) dt 
+
+
+
+≥ ρ, (A.14) and hence the corresponding lim sup inequality in Theorem 3.4 also holds. Taking H = H∗ and Γ = Γ ∗, the pointwise saddle-point equality and the same Itˆ o argument give lim  
+
+> T→∞
+
+1
+
+T EPΓ∗
+
+> x
+
+
+
+θ
+
+Z T
+
+> 0
+
+g(Xt, h ∗ 
+
+> t
+
+, γ ∗ 
+
+> t
+
+; θ) dt 
+
+
+
+= ρ. (A.15) 
+
+Optimality. The saddle-point inequalities show that H∗ attains the infimum and Γ ∗ attains the supremum in the ergodic game. Hence the pair ( H∗, Γ∗) is optimal. 
+
+# References 
+
+Carhart, M. (1997). On persistence in mutual fund performance. The Journal of Finance , 52(1), 57–82. Cheng, Z., Guo, X., & Zhang, Y. (2026). Deterministic Policy Gradient for Reinforcement Learning with Continuous Time and State. arXiv:2509.23711 [cs.LG] version: 2. 30 Chopra, V. & Ziemba, W. (1993). The effect of errors in means, variances and covariances on optimal portfolio choice. Journal of Portfolio Management , 19(2), 6–11. Davis, M. & Lleo, S. (2008). Risk-sensitive benchmarked asset management. Quantitative Finance , 8(4), 415–426. Fama, E. & French, K. R. (2015). A five-factor asset pricing model. Journal of Financial Economics , 116(1), 1–22. Halperin, I., Kolm, P. N., & Ritter, G. (2025). Chapter 6: Reinforcement Learning and Inverse Reinforcement Learning: A Practitioner’s Guide for Investment Management. In j. Simonian (Ed.), AI in Asset Management: Tools, Applications, and Frontiers . CFA Institute Research Foundation. Jia, Y. (2026). Continuous-Time Risk-Sensitive Reinforcement Learning via Quadratic Variation Penalty. Applied Mathematics & Optimization , 93(2), 58. Jia, Y. & Zhou, X. (2022a). Policy Evaluation and Temporal-Difference Learning in Continuous Time and Space: A Martingale Approach. Journal of Machine Learning Research , 23(154), 1–55. Jia, Y. & Zhou, X. (2022b). Policy Gradient and Actor–Critic Learning in Continuous Time and Space: Theory and Algorithms. Journal of Machine Learning Research , 23(275), 1–50. Jia, Y. & Zhou, X. Y. (2023). q-Learning in Continuous Time. Journal of Machine Learning Research , 24(161), 1–61. Jiang, R., Saunders, D., & Weng, C. (2022). The reinforcement learning Kelly strategy. Quantitative Finance , 22(8), 1445–1464. Publisher: Routledge eprint: https://doi.org/10.1080/14697688.2022.2049356. Kolm, P. & Ritter, G. (2020). Modern Perspectives on Reinforcement Learning in Finance. The Journal of Machine Learning in Finance , 1(1). Kolm, P. N. & Ritter, G. (2025). Reinforcement Learning for Asset and Portfolio Management. 
+
+Journal of Portfolio Management , 52(2), 81. Kuroda, K. & Nagai, H. (2002). Risk-sensitive portfolio optimization on infinite time horizon. 
+
+Stochastics and Stochastics Reports , 73, 309–331. Lleo, S. & Runggaldier, W. (2024). On the separation of estimation and control in risk-sensitive investment problems under incomplete observation. European Journal of Operational Re-search , 316(1), 200–214. Lleo, S. & Runggaldier, W. (2026a). Exploratory randomization for discrete-time risk-sensitive benchmarked investment management with reinforcement learning. Lleo, S. & Runggaldier, W. (2026b). Risk-sensitive investment management via free energy– entropy duality. Preprint. 31 Silver, D., Lever, G., Heess, N., Degris, T., Wierstra, D., & Riedmiller, M. (2014). Deterministic Policy Gradient Algorithms. In Proceedings of the 31st International Conference on Machine Learning (pp. 387–395).: PMLR. Sutton, R. & Barto, A. (2018). Reinforcement Learning, second edition: An Introduction .Adaptive Computation and Machine Learning series. Bradford Books, 2 edition. Wang, H., Zariphopoulou, T., & Zhou, X. Y. (2020). Reinforcement Learning in Continuous Time and Space: A Stochastic Control Approach. Journal of Machine Learning Research ,21(198), 1–34. 32
