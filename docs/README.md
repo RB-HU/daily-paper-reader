@@ -6,40 +6,40 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-06-24
-- 运行时间：2026-06-24 21:50:35 UTC
+- 最新运行日期：2026-06-25
+- 运行时间：2026-06-25 21:15:33 UTC
 - 运行状态：成功
 - 本次总论文数：6
 - 精读区：4
 - 速读区：2
 
 ### 今日简报（AI）
-今日精读强化学习驱动投资管理与智能体经验学习两篇高分论文，速览大模型金融分析评估。  
-自由能-熵对偶方法为风险敏感投资提供新范式，执行-蒸馏-验证闭环助智能体挣脱自我确认陷阱。  
-建议读者关注这两项突破，探索鲁棒金融决策与持续自适应学习的前沿结合。
-- 详情：[/202606/24/README](/202606/24/README)
+今日聚焦多模态数据与合成数据的智能体应用，精读 DataClaw0 和 Autodata 等 4 篇，速览大规模多智能体可靠性与实时执行引擎2篇。  
+最值得关注的方向是：面向原始流的多模态数据自动裁剪（DataClaw0）与完全自动化的高质量合成数据生成（Autodata），两条路线均在用智能体重构数据生产流程。  
+下游读者可优先将这类“数据智能体”纳入实验管线，加速模型训练迭代，同时关注其对数据质量的系统性提升。
+- 详情：[/202606/25/README](/202606/25/README)
 
 ### 精读区论文标签
-1. [Reinforcement Learning for Risk-Sensitive Investment Management: a Free Energy--Entropy Duality Approach](/202606/24/2606.20903v1-reinforcement-learning-for-risk-sensitive-investment-management-a-free-energy--entropy-duality-approach)  
+1. [DataClaw0: Agentic Tailoring Multimodal Data from Raw Streams](/202606/25/2606.21337v1-dataclaw0-agentic-tailoring-multimodal-data-from-raw-streams)  
    标签：评分：9.0/10、query:fla
-   evidence：采用强化学习进行风险敏感投资管理，符合金融智能体基于强化学习的后训练方法。
-2. [Escaping the Self-Confirmation Trap: An Execute-Distill-Verify Paradigm for Agentic Experience Learning](/202606/24/2606.24428v1-escaping-the-self-confirmation-trap-an-execute-distill-verify-paradigm-for-agentic-experience-learning)  
+   evidence：智能体化数据精炼管道，将原始流精炼为结构数据以用于AI后训练
+2. [Autodata: An agentic data scientist to create high quality synthetic data](/202606/25/2606.25996v1-autodata-an-agentic-data-scientist-to-create-high-quality-synthetic-data)  
    标签：评分：9.0/10、query:fla
-   evidence：提出LLM智能体的可靠经验学习框架，直接对应自主智能体后训练技术
-3. [Scaling Laws for Task-Specific LLM Distillation](/202606/24/2606.24747v1-scaling-laws-for-task-specific-llm-distillation)  
-   标签：评分：9.0/10、query:fla
-   evidence：在量化金融领域推导领域特定LLM压缩的缩放定律
-4. [A Stackelberg Framework for Resource-Aware LLM Agents: Learning, Repair, and Conditional Guarantees](/202606/24/2606.23026v1-a-stackelberg-framework-for-resource-aware-llm-agents-learning-repair-and-conditional-guarantees)  
+   evidence：训练智能体数据科学家以元优化合成数据生成用于后训练
+3. [Skill-MAS: Evolving Meta-Skill for Automatic Multi-Agent Systems](/202606/25/2606.18837v2-skill-mas-evolving-meta-skill-for-automatic-multi-agent-systems)  
    标签：评分：8.0/10、query:fla
-   evidence：提出了一种基于Stackelberg博弈的LLM智能体资源治理框架，通过学习控制器策略实现智能体的后训练。
+   evidence：可演化的元技能作为自动多智能体生成的后训练方法
+4. [Sakana Fugu Technical Report](/202606/25/2606.21228v2-sakana-fugu-technical-report)  
+   标签：评分：8.0/10、query:fla
+   evidence：训练编排模型动态构建LLM智能体团队的智能体支架
 
 ### 速读区论文标签
-1. [IPO Finance Agent: Evaluation of LLM Financial Analysts beyond Finance Agent v2, with Automated Rubric Generation -- the Case of the SpaceX (SPCX) IPO](/202606/24/2606.23032v1-ipo-finance-agent-evaluation-of-llm-financial-analysts-beyond-finance-agent-v2-with-automated-rubric-generation----the-case-of-the-spacex-spcx-ipo)  
+1. [EARS: Explanatory Abstention for Reliable Sub-Agent Modeling in Large-scale Multi-Agent Systems](/202606/25/2606.18668v1-ears-explanatory-abstention-for-reliable-sub-agent-modeling-in-large-scale-multi-agent-systems)  
    标签：评分：7.0/10、query:fla
-   evidence：评估LLM金融分析师在IPO尽职调查任务上的表现，扩展金融代理基准
-2. [IPO Finance Agent: Evaluation of LLM Financial Analysts beyond Finance Agent v2, with Automated Rubric Generation -- the Case of the SpaceX (SPCX) IPO](/202606/24/2606.23032v2-ipo-finance-agent-evaluation-of-llm-financial-analysts-beyond-finance-agent-v2-with-automated-rubric-generation----the-case-of-the-spacex-spcx-ipo)  
+   evidence：通过微调让子智能体在不确定时生成解释性弃权以校准响应
+2. [KineticSim: A Lightweight, High-Performance Execution Engine for Real-Time Market Simulators](/202606/25/2606.21784v1-kineticsim-a-lightweight-high-performance-execution-engine-for-real-time-market-simulators)  
    标签：评分：7.0/10、query:fla
-   evidence：评估LLM金融分析师在IPO尽职调查任务上的表现，扩展金融代理基准
+   evidence：金融市场多智能体模拟与强化学习
 
 
 <div class="dpr-home-promo-card">
