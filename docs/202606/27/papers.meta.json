@@ -1,0 +1,69 @@
+{
+  "label": "2026-06-27",
+  "date": "2026-06-27",
+  "generated_at": "2026-06-27T20:16:21",
+  "count": 4,
+  "papers": [
+    {
+      "paper_id": "202606/27/2606.26787v1-aigp-an-llm-based-framework-for-long-term-value-alignment-in-e-commerce-pricing",
+      "section": "deep",
+      "title_en": "AIGP: An LLM-Based Framework for Long-Term Value Alignment in E-Commerce Pricing",
+      "authors": "Chennan Ma, Yanning Zhang, Siqi Hong, Xiuchong Wang, Fei Xiao, Keping Yang",
+      "date": "2026-06-25",
+      "pdf": "https://arxiv.org/pdf/2606.26787v1",
+      "score": "8.0",
+      "evidence": "采用离线强化学习和监督微调训练基于LLM的智能体以实现长期价值对齐。",
+      "tldr": "传统电商动态定价模型存在解释性差、难以利用非结构化信息、与长期业务目标错位等问题。本文提出AIGP框架，利用大语言模型结合领域知识与上下文进行可解释定价，并通过离线强化学习训练长期价值估计器进行偏好优化，使策略对齐长期目标。在淘工厂在线实验中，GMV提升13.21%，ROI提升7.59%，里程碑达成率提升8.20%。该框架在提升业务指标的同时提供了透明的定价理由，展示了LLM在电商定价中对齐长期价值的潜力。",
+      "tags": "query:fla",
+      "abstract_en": "Traditional dynamic pricing models in large-scale e-commerce suffer from limited interpretability, poor utilization of unstructured information, and misalignment with long-term business objectives such as cumulative Gross Merchandise Value (GMV), Return on Investment (ROI) and milestone achievement. We propose AIGP, a novel framework that leverages a Large Language Model (LLM) prompted with domain knowledge, structured data and textual context to make interpretable, knowledge-aware pricing decisions. For efficient deployment while maintaining high-quality outputs, we employ supervised fine-tuning for knowledge distillation. Central to AIGP is the Long-Term Value Estimator (LTVE), trained via offline reinforcement learning on historical data, which serves as a reward model to score candidate pricing actions and select preference pairs for Direct Preference Optimization (DPO), thereby aligning the pricing policy with long-term business objectives. Extensive offline evaluations and large-scale online A/B tests on Tao Factory demonstrate that AIGP achieves significant improvements: +13.21% in GMV, +7.59% in ROI, and +8.20% in milestone achievement rate over 14 days compared to the production baseline, while simultaneously providing interpretable and transparent pricing rationales.",
+      "source": "arxiv",
+      "selection_source": "fresh_fetch"
+    },
+    {
+      "paper_id": "202606/27/2606.21136v1-horizon-adaptive-offline-policy-learning-via-value-stitching",
+      "section": "quick",
+      "title_en": "Horizon Adaptive Offline Policy Learning via Value Stitching",
+      "authors": "Kexin Zheng, Xianyuan Zhan, Xintao Yan",
+      "date": "2026-06-19",
+      "pdf": "https://arxiv.org/pdf/2606.21136v1",
+      "score": "7.0",
+      "evidence": "离线强化学习价值拼接方法适用于智能体后训练。",
+      "tldr": "长时域离线强化学习中，固定时域建模难以捕捉复杂价值结构，存在估计偏差。VAST方法通过动态时域自适应价值拼接，耦合辅助价值函数与拼接策略，实现可变长度回报的直接估计与组合。在OGBench的50项任务上，VAST显著优于固定步长、扩展时域及生成式离线RL基线，尤其在复杂长时域任务中表现突出。该方法为离线策略学习提供准确且可贪心利用的价值监督，推进了长时域决策能力。",
+      "tags": "query:fla",
+      "abstract_en": "Learning accurate value functions plays a decisive role for reinforcement learning (RL) agents to solve long-horizon, complex tasks. Conventional temporal-difference (TD) learning objectives suffer from value-estimation bias that accumulates over the horizon, while extended-horizon modeling methods, such as n-step TD backups and Q-chunking, adopt a rigid, fixed-horizon value-modeling recipe that is often not flexible enough to capture complex value structures in long-horizon, multi-stage tasks. In this paper, we show that enabling value updates with dynamic horizon composition can yield a strong offline policy learning scheme. Our method, Horizon Adaptive Offline Policy Learning via VAlue STitching (VAST), replaces fixed-horizon backups with recursive, horizon-adaptive value composition. Its key ingredient is to couple value optimization with a future state- and horizon-length-conditioned auxiliary value function that is learned through direct data supervision, and a stitching policy that optimally selects the reward-maximizing horizon length and future sub-goal to achieve horizon-adaptive value stitching. This design enables direct estimation and compositional \"stitching\" of variable-length returns grounded in actionable sub-goal states, providing an accurate and greedily exploitable value-supervision signal for offline policy optimization. Across 50 tasks on OGBench, VAST outperforms fixed-step, extended-horizon methods, and generative-value offline RL baselines, achieving strong performance particularly in high-complexity, long-horizon decision-making tasks.",
+      "source": "arxiv",
+      "selection_source": "fresh_fetch"
+    },
+    {
+      "paper_id": "202606/27/2606.21906v1-deeper-is-not-always-better-mitigating-the-alignment-tax-via-confident-layer-decoding",
+      "section": "quick",
+      "title_en": "Deeper is Not Always Better: Mitigating the Alignment Tax via Confident Layer Decoding",
+      "authors": "Xuanming Zhang, Sining Zhoubian, Yuxuan Chen, Tianyi Tang, An Yang, Sean Du, Chujie Zheng, Fei Huang, Dayiheng Liu, Gao Huang, Jingren Zhou",
+      "date": "2026-06-20",
+      "pdf": "https://arxiv.org/pdf/2606.21906v1",
+      "score": "7.0",
+      "evidence": "通过层解码实现对齐技术，可用于金融智能体对齐。",
+      "tldr": "大型语言模型自回归生成通常从最后一层解码，但研究发现最后层可能引入对齐扰动，损害复杂推理。本文提出Confident Decoding，一种无训练的解码策略，通过熵引导保守后向搜索动态选择可靠近末层，绕过扰动。在GPQA-Diamond等困难推理基准上，方法一致提升密集和MoE模型性能，且零内存开销、延迟增加不足2%。结果表明，动态绕过末层扰动可解锁对齐语言模型的更强推理潜力，为解码优化提供新思路。",
+      "tags": "query:fla",
+      "abstract_en": "Autoregressive generation in large language models (LLMs) conventionally decodes from the final layer, assuming that deeper representations yield more reliable next-token predictions. We revisit this assumption by revealing a recurring Guess-Refine-Perturb dynamic: early layers form coarse guesses, intermediate layers refine reasoning-relevant semantics, and final layers can perturb these refined predictions toward generic or alignment-preferred tokens. We introduce Confident Decoding, a training-free decoding strategy that dynamically selects the most reliable near-final layer through entropy-guided conservative backward search. We further provide a theoretical formulation of layer selection as an optimal stopping problem, showing that under bounded projection noise and dominant late-stage alignment perturbation, our search rule filters perturbation while bounding the loss relative to the oracle refinement layer. Experiments across dense and Mixture-of-Experts LLMs demonstrate consistent gains on challenging reasoning benchmarks, including GPQA-Diamond, Omni-MATH, and HLE, with zero memory overhead and less than 2% latency increase. These results suggest dynamically bypassing final-layer perturbations can unlock stronger reasoning behavior from aligned LLMs.",
+      "source": "arxiv",
+      "selection_source": "fresh_fetch"
+    },
+    {
+      "paper_id": "202606/27/2606.22272v1-mixedpeft-combining-multiple-peft-methods-with-mixed-objectives-for-unsupervised-domain-adaptation",
+      "section": "quick",
+      "title_en": "MixedPEFT: Combining Multiple PEFT Methods with Mixed Objectives for Unsupervised Domain Adaptation",
+      "authors": "Mohammed Rawhani, Dervis Karaboga, Ozkan Ufuk Nalbantoglu, Alper Basturk, Bahriye Akay",
+      "date": "2026-06-20",
+      "pdf": "https://arxiv.org/pdf/2606.22272v1",
+      "score": "7.0",
+      "evidence": "结合多种 PEFT 方法与混合目标的无监督域适应，可迁移至金融智能体微调",
+      "tldr": "预训练语言模型迁移至新领域时，全微调成本高且易遗忘。本文提出混合目标训练的参数高效策略，联合可逆适配器与LoRA，同时优化源分类与目标掩码语言建模。在MNLI 20个领域偏移上，仅用7%可训练参数即超越现有参数高效和全微调方法1个百分点以上。该工作为参数高效无监督领域适应树立了新的性能标杆。",
+      "tags": "query:fla",
+      "abstract_en": "Pre-trained language models struggle when applied to new domains, as full fine-tuning is computationally expensive and prone to catastrophic forgetting. This study addresses this challenge by presenting a novel parameter-efficient strategy for unsupervised domain adaptation that combines custom PEFT architectures with mixed-objective training. Our approach simultaneously optimizes classification performance on labeled source domain data and masked language modeling (MLM) on unlabeled target domain data, preserving target domain knowledge while adapting to source domain tasks. Our method employs a custom union of invertible adapters and Low-Rank Adaptation (LoRA) within a unified parameter-efficient framework. Through comprehensive evaluation on the Multi-Genre Natural Language Inference (MNLI) dataset across 20 domain shifts, our approach achieves significant improvements over existing methods: 1.41 percentage points over the current parameter-efficient state-of-the-art UDapter, 1.26 percentage points over the fully-tuned DANN baseline, and 0.86 percentage points over DSN, while utilizing only 7% of the model's trainable parameters. These results establish new benchmarks for parameter-efficient unsupervised domain adaptation and demonstrate that carefully designed PEFT combinations with concurrent optimization can outperform both existing parameter-efficient methods and traditional fully-tuned approaches.",
+      "source": "arxiv",
+      "selection_source": "fresh_fetch"
+    }
+  ],
+  "errors": []
+}

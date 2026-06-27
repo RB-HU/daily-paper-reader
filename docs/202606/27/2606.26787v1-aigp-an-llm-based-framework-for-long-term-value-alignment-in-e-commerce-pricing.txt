@@ -1,0 +1,857 @@
+Title: AIGP: An LLM-Based Framework for Long-Term Value Alignment in E-Commerce Pricing
+
+URL Source: https://arxiv.org/pdf/2606.26787v1
+
+Published Time: Fri, 26 Jun 2026 00:44:15 GMT
+
+Number of Pages: 12
+
+Markdown Content:
+# AIGP: An LLM-Based Framework for Long-Term Value Alignment in E-Commerce Pricing 
+
+## Chennan Ma ∗
+
+machennan.mcn@alibaba-inc.com Taobao & Tmall Group of Alibaba Hangzhou, Zhejiang, China 
+
+## Yanning Zhang ∗
+
+zhangyanning.zyn@taobao.com Taobao & Tmall Group of Alibaba Hangzhou, Zhejiang, China 
+
+## Siqi Hong 
+
+hongsiqi.hsq@taobao.com Taobao & Tmall Group of Alibaba Hangzhou, Zhejiang, China 
+
+## Xiuchong Wang †
+
+xiuchong.wxc@alibaba-inc.com Taobao & Tmall Group of Alibaba Hangzhou, Zhejiang, China 
+
+## Fei Xiao 
+
+guren.xf@alibaba-inc.com Taobao & Tmall Group of Alibaba Hangzhou, Zhejiang, China 
+
+## Keping Yang 
+
+shaoyao@taobao.com Taobao & Tmall Group of Alibaba Hangzhou, Zhejiang, China 
+
+Abstract 
+
+Traditional dynamic pricing models in large-scale e-commerce suf-fer from limited interpretability, poor utilization of unstructured information, and misalignment with long-term business objectives such as cumulative Gross Merchandise Value (GMV), Return on Investment (ROI) and milestone achievement. We propose AIGP ,a novel framework that leverages a Large Language Model (LLM) prompted with domain knowledge, structured data and textual context to make interpretable, knowledge-aware pricing decisions. For efficient deployment while maintaining high-quality outputs, we employ supervised fine-tuning for knowledge distillation. Cen-tral to AIGP is the Long-Term Value Estimator (LTVE), trained via offline reinforcement learning on historical data, which serves as a reward model to score candidate pricing actions and select preference pairs for Direct Preference Optimization (DPO), thereby aligning the pricing policy with long-term business objectives. Ex-tensive offline evaluations and large-scale online A/B tests on Tao Factory demonstrate that AIGP achieves significant improvements: 
+
++13.21% in GMV, +7.59% in ROI, and +8.20% in milestone achieve-ment rate over 14 days compared to the production baseline, while simultaneously providing interpretable and transparent pricing rationales. 
+
+CCS Concepts 
+
+• Applied computing → Electronic commerce ; • Computing methodologies → Reinforcement learning ; Natural language processing .
+
+Keywords 
+
+E-commerce, Dynamic Pricing, Large Language Model, Reinforce-ment Learning, Long-Term Value  
+
+> ∗Both authors contributed equally to this work.
+> †Corresponding author.
+> This work is licensed under a Creative Commons Attribution 4.0 International License.
+> KDD 2026, Jeju Island, Republic of Korea.
+> ©2026 Copyright held by the owner/author(s). ACM ISBN 979-8-4007-2259-2/2026/08 https://doi.org/10.1145/3770855.3818316
+
+ACM Reference Format: 
+
+Chennan Ma, Yanning Zhang, Siqi Hong, Xiuchong Wang, Fei Xiao, and Keping Yang. 2026. AIGP: An LLM-Based Framework for Long-Term Value Align-ment in E-Commerce Pricing. In Proceedings of the 32nd ACM SIGKDD Conference on Knowledge Discovery and Data Mining V.2 (KDD 2026), August 9–13, 2026, Jeju Island, Republic of Korea. ACM, New York, NY, USA, 12 pages. https://doi.org/10.1145/3770855.3818316 
+
+1 Introduction 
+
+Dynamic pricing is a critical driver of market efficiency across many industries, with established applications in airlines, hotels, and ride-hailing [ 1– 4 ]. In large-scale e-commerce platforms that manage extensive Stock Keeping Units (SKUs) and high-frequency daily interactions [ 5, 6 ], effective dynamic pricing mechanisms are essential for efficiently responding to rapidly changing market conditions and consumer preferences. Traditional solutions fall into two categories: rule-based sys-tems built upon handcrafted heuristics, and data-driven models leveraging price–sales elasticity estimation and mathematical op-timization [ 3 , 4 ]. However, both approaches suffer from limited decision transparency, poor utilization of unstructured informa-tion (e.g., product descriptions, user reviews), and overemphasis on immediate gains. Aggressive discounting to boost short-term sales can erode margins and constrain future operations, making it difficult to optimize long-horizon objectives such as cumulative Gross Merchandise Value (GMV), Return on Investment (ROI), and long-term milestone achievement. Reinforcement learning (RL) has recently been applied to dy-namic pricing, allowing direct optimization for long-term business objectives through value function modeling, which estimates the discounted cumulative return of future outcomes [ 7– 10 ]. Yet RL inherits issues with interpretability and limited use of unstructured data, and introduces further challenges like distributional shift [ 11 –13 ] and reward sparsity [ 14 – 16 ], especially for cold-start or long-tail products [17–19]. Recent advances in large language models (LLMs) offer new pos-sibilities for transparent and knowledge-rich decision making [ 20 –23 ]. LLMs’ chain-of-thought reasoning provides auditable explana-tions for pricing decisions, while their ability to process structured and textual inputs enables richer context integration. Moreover, their reasoning over text and analogical knowledge can improve robustness for cold-start and out-of-distribution products. However,  
+
+> arXiv:2606.26787v1 [cs.LG] 25 Jun 2026 KDD 2026, August 9–13, 2026, Jeju Island, Republic of Korea. Chennan Ma et al.
+
+generic LLM agents lack platform-specific operational knowledge and supervision from expert demonstrations or long-horizon out-come feedback, leading to suboptimal, short-sighted actions that fail to optimize long-term business objectives. We propose AIGP (Artificial Intelligence Generated Pricing), a framework that integrates LLM-based reasoning with long-term business value alignment for dynamic pricing. AIGP employs a care-fully designed prompt incorporating chain-of-thought [ 24 ] (CoT) reasoning, structured signals, domain knowledge, and textual con-text to generate interpretable, actionable pricing decisions. For efficient deployment, we use supervised fine-tuning [ 25 , 26 ] (SFT) with teacher-student distillation [ 27 , 28 ], enabling compact mod-els to produce high-quality reasoning while satisfying business constraints. Central to AIGP is the Long-Term Value Estimator (LTVE) , trained via offline RL on historical trajectories to model the long-horizon business impact of pricing decisions beyond imme-diate sales. By scoring candidate pricing actions, LTVE automates preference pair selection for Direct Preference Optimization [ 29 ](DPO), aligning the pricing mechanism with long-term objectives while preserving interpretability. We deploy AIGP on Tao Factory and validate its performance through comprehensive offline evaluations and large-scale online A/B tests. AIGP consistently outperforms traditional and RL-based baselines, achieving +13.21% in GMV, +7.59% in ROI, and +8.20% 
+
+in milestone achievement rate over 14 days, while providing inter-pretable pricing rationales. 
+
+Our main contributions: (1) We propose AIGP , an LLM-based dynamic pricing framework integrating long-horizon business re-ward modeling for transparent, business-aligned decisions. (2) We develop a preference alignment pipeline, leveraging an offline RL-trained LTVE to automate preference pair generation for DPO. (3) We demonstrate robust, scalable deployment via distillation-based SFT, enabling compact models for large-scale production use. 
+
+2 Related Work 2.1 Traditional and RL-based Pricing Methods 
+
+Early dynamic pricing methods in e-commerce largely rely on rule-based heuristics and demand estimation models using structured historical data [ 1– 4 ]. For example, [ 1] formalizes threshold-based revenue management, while [ 3 ] employs demand curves for inven-tory pricing. These approaches typically focus on short-term profit maximization and struggle with cold-start or long-tail scenarios. More critically, they cannot leverage rich unstructured informa-tion such as product descriptions and user reviews, which contain valuable signals for pricing decisions [30–32]. Reinforcement learning (RL) [ 33 –37 ] has been increasingly ap-plied to dynamic pricing by modeling the problem as a Markov decision process and optimizing policies for long-term business objectives via value functions [ 7– 10 ]. Representative approaches include DDPG [ 7], SAC [ 8], and multi-agent approaches [ 9, 10 ]such as MADDPG [ 38 ], MADQN [ 39 ], and QMIX [ 40 ]. However, RL methods inherit limitations from traditional approaches in handling unstructured data and introduce additional challenges: lack of in-terpretability—critical for production deployment—and instability under distributional shifts in offline settings [11–13]. 
+
+2.2 LLMs for Decision Making and Preference Alignment 
+
+Large language models exhibit strong reasoning capabilities through chain-of-thought prompting [ 24 ], tool augmentation [ 41 ], and pro-gram synthesis [ 42 ], with successful applications in planning and control tasks [ 43 –46 ]. LLMs naturally handle both structured and unstructured inputs while providing interpretable reasoning traces, which are key advantages over black-box approaches. However, their application to dynamic pricing in e-commerce remains unex-plored, and generic LLMs lack domain-specific operational knowl-edge and supervision from long-horizon outcome feedback, often leading to suboptimal, short-sighted decisions. Aligning LLM outputs with task-specific objectives is critical for production deployment. Supervised fine-tuning (SFT) [ 25 , 26 ]improves instruction-following, it does not optimize for long-term outcomes. Direct Preference Optimization (DPO) [ 29 ] enables pref-erence alignment, yet scaling high-quality preference data for long-term value remains challenging [ 47 , 48 ]. We address this by inte-grating offline RL-based value estimation with LLM reasoning for business-aligned dynamic pricing. To our knowledge, this is the first such framework in e-commerce. 
+
+3 Methodology 3.1 Preliminary 
+
+Dynamic pricing in e-commerce is a sequential decision-making problem where pricing actions influence future market states and cumulative business outcomes. We define this at the SKU level, where the agent determines product prices based on market dynam-ics. To ensure ethical compliance, our framework is identity-blind, excluding individual user profiles to preclude price discrimination. We formulate this problem as a Markov decision process (MDP) 
+
+M = (S , A, 𝑃, 𝑟, 𝛾 ), where S denotes the state space, A is the action space, 𝑃 (𝑠 𝑡 +1 | 𝑠 𝑡 , 𝑎 𝑡 ) specifies transition dynamics, 𝑟 : S × A → R is the reward function, and 𝛾 ∈ ( 0, 1) is the discount factor. At timestep 𝑡 , the agent observes 𝑥 𝑡 = 𝜙 (𝑠 𝑡 , 𝑐 𝑡 ) encoding state 𝑠 𝑡 and relevant task context 𝑐 𝑡 (business goals and operational constraints), and selects a pricing action 𝑎 𝑡 from the admissible set 
+
+Asafe (𝑠 𝑡 ) according to business and market rules. The objective is to maximize the expected cumulative discounted reward: 
+
+𝐽 (𝜋 ) = E𝜏 ∼𝜋 
+
+"𝑇 −1∑︁  
+
+> 𝑡 =0
+
+𝛾 𝑡 𝑟 𝑡 
+
+#
+
+, (1) where 𝜏 = (𝑠 0: 𝑇 −1, 𝑎 0: 𝑇 −1, 𝑟 0: 𝑇 −1) is a trajectory generated by policy 
+
+𝜋 .In reinforcement learning, long-term value is modeled via the state-value function 𝑉 𝜋 (𝑠 ) = E𝜋 [Í∞ 
+
+> 𝑡 =0
+
+𝛾 𝑡 𝑟 𝑡 +1 | 𝑠 0 = 𝑠 ] and action-value function 𝑄 𝜋 (𝑠, 𝑎 ) = E𝜋 [Í∞  
+
+> 𝑡 =0
+
+𝛾 𝑡 𝑟 𝑡 +1 | 𝑠 0 = 𝑠, 𝑎 0 = 𝑎 ], satisfy-ing the Bellman equations and are central to subsequent Long-Term Value Estimator (LTVE) modeling. In this work, the pricing policy is parameterized by an LLM: 
+
+𝜋 𝜃 (𝑎 | 𝑥 ) = Ψ(LLM 𝜃 (𝑥 )) , where LLM 𝜃 (𝑥 ) produces chain-of-thought reasoning and a structured decision, and Ψ extracts the pricing action ensuring 𝑎 ∈ A safe (definition in Appendix B.2). Un-like traditional RL policies outputting only actions, the LLM also generates interpretable reasoning traces explaining decisions. AIGP: An LLM-Based Framework for Long-Term Value Alignment in E-Commerce Pricing KDD 2026, August 9–13, 2026, Jeju Island, Republic of Korea. diagnosis prediction 
+
+AIGP  
+
+> discount
+> Structured Data
+> Category
+> historical actions, sales
+> GMV, ROI
+> CTR, CVR
+> …
+> Product description
+> recent reviews
+> Product title
+> …
+
+Data 
+
+> Production
+> Data
+
+Offline 
+
+Data 
+
+> Market
+> Feedback
+> Update
+> Price -sales
+> Model
+> Diagnostic
+> LLM
+
+Sub -models Domain Prompt       
+
+> Generate Response
+> Role : E -commerce Ops expert
+> Goal : 7D/14D milestone, GMV ≥…, ROI ≥…
+> Inputs :
+> structured (GMV, ROI, PV, CTR, CVR, …)
+> unstructured (title, reviews, description, …)
+> knowledge base
+> diagnosis report
+> price -sales prediction
+> CoT instruction : step1…step3… stepN …
+> Business constraints : …
+> Output Formant : JSON …
+> CoT reasoning
+> Step1 : Goal recap
+> Step2 : Diagnosis summary
+> Step3: History review
+> Step4: Sub -model prediction analysis
+> Step5: Strategy synthesis
+> Step6: Decision & validation
+> Final decision (JSON)
+> [{“act”: “discount”, “value”: “0.82”}]
+> Unstructured Data
+> Knowledge Base
+> Taobao
+> Platform
+> Finetune
+
+Figure 1: Overall architecture of AIGP. 
+
+3.2 Domain-Adaptive Supervised Fine-Tuning 
+
+When deploying LLMs as pricing policies, the model generates outputs containing both chain-of-thought (CoT) reasoning pro-cesses and final pricing decisions. This dual-output nature enables separate optimization: Supervised fine-tuning (SFT) [ 25 ] focuses on improving reasoning quality, instruction-following, and format compliance, establishing a foundation for subsequent decision opti-mization. Reasoning quality affects interpretability and trust, while decision accuracy directly impacts business outcomes. The overall workflow is illustrated in Fig. 1. Training data consists of high-quality instruction–response pairs. Each prompt integrates structured product attributes (sales history, exposure and click metrics, historical pricing actions, competitor statistics), business goals (GMV targets, ROI constraints, milestone achievements), and unstructured context (product descriptions, user reviews, domain knowledge). The prompt guides the model to analyze diagnostic insights, incorporate price-sales predictions, apply domain rules from the e-commerce operations knowledge base, and execute stepwise CoT reasoning ending with a compliant JSON-formatted action (see the prompt module and CoT-flow on the right side of Fig. 1). To balance inference efficiency and deployment costs for large-scale production use, we select a 30B parameter student model (Qwen3-30B-A3B [ 49 ]) for deployment. To enhance the student model’s capabilities, we adopt teacher-student distillation where high-quality demonstrations are generated by a larger 235B pa-rameter teacher model (Qwen3-235B-A22B [ 49 ]), which produces more sophisticated reasoning traces and more accurate decisions. We design an LLM-as-Judge module to automatically evaluate and filter teacher-generated responses across multiple quality dimen-sions. The judge model (Qwen3-235B-A22B-Instruct [ 49 ]) assesses each candidate response on four dimensions: (1) Data Accuracy 
+
+verifies correct interpretation of numerical features and business constraints; (2) Content Completeness evaluates coverage of relevant factors and application of domain rules; (3) Reasoning Internal Coherence ensures logical consistency within the CoT process; (4) Reasoning-Decision Consistency checks alignment between reasoning conclusions and final pricing actions. Only re-sponses with perfect scores (5/5) on all dimensions and actions satisfying Asafe constraints (Appendix B.2) are retained. Judge reli-ability is validated via 96.4% agreement with expert annotations on 2000 held-out responses. This workflow is summarized in part (a) of Fig. 2. Filtered high-quality responses are used to fine-tune the student model via parameter-efficient Low-Rank Adaptation (LoRA) [ 50 ]. Model outputs must end with a valid JSON action satisfying plat-form and business criteria. Model optimization minimizes the cross-entropy loss: 
+
+LSFT (𝜃 ) = − 
+
+> |𝑦 ★| − 1
+
+∑︁  
+
+> 𝑡 =0
+
+log 𝜋 𝜃 (𝑦 ★ 
+
+> 𝑡
+
+| 𝑥, 𝑦 ★<𝑡 ). (2) We apply mixed-precision computation, gradient clipping, and early stopping for efficiency and stability. As a result, SFT yields a policy that consistently follows instructions, generates transparent rea-soning traces, and produces compliant pricing actions. However, SFT alone does not guarantee that the final pricing decisions align with long-term business value; further policy optimization through preference-based alignment is addressed in Section 3.4. 
+
+3.3 Long-Term Value Modeling 
+
+Accurately evaluating the long-term business impact of dynamic pricing policies is crucial but challenging due to complex delayed market effects and lack of verifiable correctness criteria. Unlike do-mains such as mathematical reasoning, dynamic pricing lacks deter-ministic quality metrics, making standard Reinforcement Learning from Human Feedback [ 25 , 51 ] (RLHF) or Reinforcement Learning from Verifiable Rewards [ 52 ] (RLVR) difficult to apply. Base LLMs also lack domain-specific business knowledge and alignment with platform objectives. KDD 2026, August 9–13, 2026, Jeju Island, Republic of Korea. Chennan Ma et al. 
+
+To address this, we introduce a Long-Term Value Estimator (LTVE) 𝑄 𝜙 , trained via offline reinforcement learning on over 5 million historical transitions from 6 months of production logs (60% expert trajectories selected as top 30% by cumulative GMV within comparable product groups, 40% diverse non-expert cases for distribution coverage), to estimate expected cumulative reward for action 𝑎 in state 𝑠 and enable automatic preference pair construction for Direct Preference Optimization (Section 3.4). 
+
+State and Action Spaces . Each state 𝑠 consists of structured features, including product attributes, sales statistics, inventory, historical ROI, engagement metrics (click-through rate, conversion rate), and temporal features such as day of week and promotion indicators. The pricing action 𝑎 𝑡 = 𝑑 𝑡 − 𝑑 𝑡 −1 represents the daily discount rate change rather than the absolute discount level 𝑑 𝑡 . This design normalizes across products with heterogeneous baseline discount levels: different categories naturally operate at different price points, and modeling incremental changes allows the policy to learn generalizable adjustment strategies independent of absolute levels. Actions are constrained by business rules for feasible and safe adjustments (definition in Appendix B.2). 
+
+Reward Design . The reward function balances long-term mile-stone achievement (tier thresholds based on 14-day cumulative GMV) and maintaining healthy ROI. To enable effective offline RL training, we adopt a category-normalized relative reward :
+
+𝑟 𝑡 = 𝜆 1 (prog 𝑡 − prog ref  
+
+> 𝑡
+
+) + 𝜆 2 (log (1 + ROI 𝑡 ) − log (1 + ROI ref  
+
+> 𝑡
+
+)) , (3) where prog 𝑡 measures daily contribution toward milestone achieve-ment, and reference values prog ref  
+
+> 𝑡
+
+, ROI ref  
+
+> 𝑡
+
+are category averages from products that successfully reached milestones within 14 days. This relative formulation isolates pricing strategy quality from intrinsic product characteristics: raw GMV and ROI are heavily influenced by category demand and brand recognition beyond the agent’s control, and normalizing against category-level references ensures the reward signal reflects pricing decisions rather than product popularity. Log-transformation handles ROI’s heavy-tailed distribution, and coefficients 𝜆 1, 𝜆 2 balance growth velocity and profitability. 
+
+Offline RL Training . In real-world e-commerce, online explo-ration is highly constrained due to business risks and the lack of reliable simulators. Therefore, we train the Long-Term Value Es-timator (LTVE) using offline RL on logged historical trajectories 
+
+D = {( 𝑠 𝑡 , 𝑎 𝑡 , 𝑟 𝑡 , . . . )} . A critical challenge in e-commerce dynamic pricing is delayed reward propagation : pricing decisions on day 
+
+𝑡 affect not only immediate product performance, but also influence future exposure, traffic, and sales over multiple days through search and recommendation systems. To model such delayed rewards in an offline and risk-controlled manner, we adopt a critic-only architecture with multi-step temporal-difference (TD) targets , learning action values directly from historical data without explicit policy training. We use a critic-only design because LTVE serves to rank candidate actions from a business-constrained set Asafe (𝑠 ) rather than generate uncon-strained actions. Unlike policy-gradient methods that require broad action coverage, value-based ranking only needs accurate relative ordering within Asafe (𝑠 ), which is well-covered in historical logs. 
+
+Algorithm 1 Long-Term Value Estimator (LTVE) Training                                                                                                                                  
+
+> Require: Offline dataset D={ ( 𝑠 𝑡 , 𝑎 𝑡 , 𝑟 𝑡 :𝑡 +𝑛 −1, 𝑠 𝑡 +𝑛 ) }
+> Require: Critics 𝑄 𝜙 1, 𝑄 𝜙 2and target critics 𝑄 ¯𝜙 1, 𝑄 ¯𝜙 2
+> Require: Value network 𝑉 𝜓
+> Require: Discount factor 𝛾 , expectile 𝜏 , soft update rate 𝜂 , clipping bounds
+> [𝑄 min , 𝑄 max ]
+> 1: Initialize 𝜙 1, 𝜙 2,𝜓 ; set ¯𝜙 1←𝜙 1,¯𝜙 2←𝜙 2
+> 2: for each training iteration do
+> 3: Sample batch { ( 𝑠 𝑡 , 𝑎 𝑡 , 𝑟 𝑡 :𝑡 +𝑛 −1, 𝑠 𝑡 +𝑛 ) } from D
+> 4: 𝑞 min ←min (𝑄 ¯𝜙 1(𝑠 𝑡 , 𝑎 𝑡 ), 𝑄 ¯𝜙 2(𝑠 𝑡 , 𝑎 𝑡 ) )
+> 5: 𝛿 ←𝑞 min −𝑉 𝜓 (𝑠 𝑡 );𝑤 ← | 𝜏 −I(𝛿 <0) |
+> 6: Update 𝜓 by minimizing E𝑤 ·𝛿 2
+> 7: 𝑦 (𝑛 )←Í𝑛 −1
+> 𝑘 =0𝛾 𝑘 𝑟 𝑡 +𝑘 +𝛾 𝑛 𝑉 𝜓 (𝑠 𝑡 +𝑛 )
+> 8: 𝑦 (𝑛 )←clip (𝑦 (𝑛 ), 𝑄 min , 𝑄 max )⊲target clipping
+> 9: Update 𝜙 1, 𝜙 2by minimizing E(𝑄 𝜙 𝑖 (𝑠 𝑡 , 𝑎 𝑡 ) − 𝑦 (𝑛 ))2
+> 10: ¯𝜙 1←𝜂𝜙 1+ ( 1−𝜂 )¯𝜙 1;¯𝜙 2←𝜂𝜙 2+ ( 1−𝜂 )¯𝜙 2
+> 11: end for
+> 12: return 𝑄 𝜙 1, 𝑄 𝜙 2, 𝑉 𝜓
+
+We adopt a decoupled value learning framework [53–55] to en-hance training stability and mitigate extrapolation errors. We sep-arate the estimation of the state-value function 𝑉 𝜓 (𝑠 ) from the action-value functions 𝑄 𝜙 1 , 𝑄 𝜙 2 . The state-value network 𝑉 𝜓 (𝑠 ) is trained via expectile regression to approximate the upper quantiles of the action-value distribution: 
+
+L𝑉 (𝜓 ) = E(𝑠,𝑎 )∼D 
+
+𝐿 𝜏 
+
+ 𝑞 min (𝑠, 𝑎 ) − 𝑉 𝜓 (𝑠 ) , (4) where 𝐿 𝜏 (𝑢 ) = |𝜏 − I(𝑢 < 0)| 𝑢 2 is the expectile loss with 𝜏 > 0.5,encouraging 𝑉 𝜓 to generalize toward the best-performing actions without explicit action sampling. To mitigate overestimation bias, we use a clipped double-critic ensemble 𝑞 min = min 
+
+
+
+𝑄 ¯𝜙 1 , 𝑄 ¯𝜙 2
+
+
+
+.The Q-critics are trained with multi-step Temporal Difference (TD) targets bootstrapped directly from 𝑉 𝜓 :
+
+L𝑄 (𝜙 𝑖 ) = ED
+
+
+
+𝑄 𝜙 𝑖 (𝑠 𝑡 , 𝑎 𝑡 ) − 𝑦 (𝑛 )
+
+> 𝑡
+
+2 
+
+, 𝑖 ∈ { 1, 2}, (5) 
+
+𝑦 (𝑛 ) 
+
+> 𝑡
+
+=
+
+> 𝑛 −1
+
+∑︁ 
+
+> 𝑘 =0
+
+𝛾 𝑘 𝑟 𝑡 +𝑘 + 𝛾 𝑛 𝑉 𝜓 (𝑠 𝑡 +𝑛 ). (6) Bootstrapping from 𝑉 𝜓 alleviates the distribution shift problem by avoiding queries to out-of-distribution actions. Target critics are updated softly via ¯𝜙 𝑖 ← 𝜂𝜙 𝑖 + ( 1 − 𝜂 ) ¯𝜙 𝑖 for 𝑖 ∈ { 1, 2}, where 
+
+𝜂 is the soft update rate. For numerical stability, we clip 𝑦 (𝑛 ) 
+
+> 𝑡
+
+to 
+
+[𝑄 min , 𝑄 max ]. The complete training procedure is summarized in Algorithm 1. The trained LTVE serves as a long-term value scorer and facilitates the construction of preference pairs in Section 3.4. 
+
+3.4 Preference Alignment with Long-Term Value Estimator 
+
+While supervised fine-tuning (SFT) improves instruction following, format compliance, and reasoning quality, it does not explicitly optimize pricing decisions for long-term business objectives. We therefore apply preference-based policy alignment with Direct Pref-erence Optimization (DPO), guided by the Long-Term Value Esti-mator (LTVE). We use LTVE to curate preference data by ranking sampled candidate actions and selecting reliable chosen-rejected AIGP: An LLM-Based Framework for Long-Term Value Alignment in E-Commerce Pricing KDD 2026, August 9–13, 2026, Jeju Island, Republic of Korea. discount a#                   
+
+> LLM -as -Judge Teacher LLM Candidate
+> Responses Acc.
+> Com.
+> Int -Coh.
+> RD -Con.
+> SFT Samples Student LLM
+> AIGP t
+> Generate Evaluate Select
+> LoRA
+> SFT
+> Add
+> Training
+> Data
+> Long -Term Value
+> Estimator
+> Offline RL Long -Term
+> Value
+> Select discount a!
+> chosen
+> rejected
+> AIGP t+1
+> DPO
+> Training
+> Online Items
+> ⋯
+> Discount Actions
+> Market Platform Remove
+> [#$% _'()* ]
+> Verify
+> Activate
+> Logged
+> Production Data
+> Iterative Preference
+> Alignment with LTVE
+> Market Feedback
+> Update
+> (a) SFT Finetuning
+> (b) DPO Training
+> (c) LTVE Training (d) Online Inference
+> 235B 30B
+> [#$% _'()* ]
+> ⋯
+> Q(s,a!)
+> Q(s,a")
+> Q(s,a#)
+> rank
+> Candidate
+> Discount Actions
+> ⋱
+
+Figure 2: The finetuning and inference pipeline of AIGP. 
+
+pairs. This reduces the impact of potential value extrapolation er-rors and provides a robust long-term alignment signal. The overall workflow is shown in Fig. 2. 
+
+Decision-only Mode for Preference Learning . To focus pref-erence alignment on action selection, we append a [ACT_ONLY] 
+
+control token during candidate action generation and DPO train-ing, so the model outputs only the structured discount action. This design addresses three challenges. First, constructing reliable prefer-ence pairs from full responses is difficult because reasoning quality is hard to compare and long-form text obscures the action’s contri-bution to long-term value, the decision-only outputs allow LTVE to rank actions and generate preferences that directly reflect deci-sion quality. Second, comparing full responses weakens the DPO signal with irrelevant tokens, whereas [ACT_ONLY] concentrates optimization on the action tokens. Third, it avoids post-hoc action extraction, which can introduce distribution mismatch between preference pair construction and training. During deployment, the control token is removed so the model generates full reasoning traces for transparency. This workflow is illustrated in Fig. 2(b). 
+
+Candidate Action Sampling . For each prompt 𝑥 that encodes state 𝑠 , we sample 𝑀 candidate actions A ( 𝑥 ) = {𝑎 (1) , . . . , 𝑎 (𝑀 ) }
+
+from the decision-only mode using stochastic decoding (tempera-ture sampling with top-𝑘 and top-𝑝 filtering). Each candidate action is validated against business rules to ensure 𝑎 ∈ A safe (𝑠 ) (formal definition in Appendix B.2). 
+
+Preference Pair Construction . We score each valid candidate action with LTVE to obtain 𝑄 (𝑠, 𝑎 ) as an estimate of the pricing action’s long-term business value. Preference pairs are constructed by selecting two actions with sufficient separation in both value and discount magnitude: 
+
+𝑄 (𝑠, 𝑎 +) − 𝑄 (𝑠, 𝑎 − ) ≥ Δ𝑄 , |𝑎 + − 𝑎 − | ≥ Δ𝑎 , (7) where 𝑎 + and 𝑎 − denote the chosen and rejected pricing actions, and Δ𝑄 and Δ𝑎 are thresholds controlling pair clarity. Since LTVE is only used to rank and filter candidates within the business-safe set, we further discard ambiguous pairs with small score gaps to reduce sensitivity to estimation noise. 
+
+DPO Objective and Inference . Given a preference pair (𝑥, 𝑦 +, 𝑦 − ),where 𝑦 + and 𝑦 − are the complete structured outputs (including JSON formatting) corresponding to chosen action 𝑎 + and rejected action 𝑎 − , DPO minimizes: 
+
+LDPO (𝜋 𝜃 ; 𝜋 ref ) = −E(𝑥,𝑦 +,𝑦 − )∼D 
+
+h
+
+log 𝜎 
+
+
+
+𝛽 
+
+
+
+log 𝜋 𝜃 (𝑦 + |𝑥 )   
+
+> 𝜋 ref (𝑦 +|𝑥 )
+
+− log 𝜋 𝜃 (𝑦 − |𝑥 )   
+
+> 𝜋 ref (𝑦 −|𝑥 )
+
+i 
+
+.
+
+(8) where 𝜋 ref is a frozen reference policy (the SFT model), and 𝛽 
+
+is a temperature parameter. Since [ACT_ONLY] outputs only the pricing decision, the log-probabilities in Eq. (8) are computed on action tokens, making optimization focus on action selection. Dur-ing training, [ACT_ONLY] remains enabled to match the candidate generation distribution used for pair construction. For deployment, we remove the control token and prompt the aligned model to gen-erate full reasoning traces together with the final structured action, preserving transparency and interpretability. 
+
+Evaluation and Deployment . We evaluate the policy after pref-erence alignment using offline metrics including LTVE score im-provement, expert-action consistency, and rule compliance. Quali-fied models are deployed via large-scale online A/B testing, with real-time monitoring of cumulative GMV, integrated ROI, and long-term milestone completion against online production baselines. 
+
+4 Experiment 4.1 Experimental Setup 
+
+4.1.1 Platform Deployment & Data Description. Experiments are conducted on Tao Factory, a vertical marketplace on Taobao with full pricing authority, focusing on optimizing daily discount rates for new products to accelerate sales growth and improve marketing ROI. The experimental dataset comprises millions of SKUs from over 180 days of production operations, including key informa-tion such as product attributes (category, brand, price, inventory), historical metrics (GMV, ROI, clic-through rate, conversion rate), temporal features, and unstructured context. The system makes offline decisions for about 200,000 products daily (actions effective next day). For offline evaluation, we employ a time-based split to prevent temporal data leakage. Our online A/B tests have been deployed and monitored for over 60 consecutive days, ensuring the sustained stability and effectiveness of the proposed framework. 
+
+4.1.2 Implementation Details. For LTVE, we train a critic-only double Q model using over 5 million transitions from 6 months of production logs, providing a robust foundation for long-term value estimation. We set the discount factor 𝛾 = 0.95 , TD horizon 
+
+𝑛 = 3, and update soft update rate 𝜂 = 0.01 . All LTVE networks are optimized with Adam (lr = 3 × 10 −4). For the LLM agent, SFT is conducted on 100,000 instruction-response pairs, and DPO uses 50,000 chosen-rejected preference pairs, both via LoRA adaptation on Qwen3-30B-A3B. Please refer to Appendix A for complete im-plementation details. 
+
+4.1.3 Baselines. We compare AIGP against three categories of base-lines: (1) LLM Variants , including base models and ablated versions to isolate the contribution of SFT, DPO, and the [ACT_ONLY] con-trol token; (2) Online Deployed Policies , representing production systems currently serving models; (3) Academic RL Baselines ,KDD 2026, August 9–13, 2026, Jeju Island, Republic of Korea. Chennan Ma et al. 
+
+Table 1: Brief descriptions of baseline methods. Model Brief Description LLM Variants             
+
+> Qwen3-30B-A3B [49] Base Student LLM (30B params, no fine-tuning) Qwen3-235B-A22B [49] Base Teacher LLM (235B params, no fine-tuning) AIGP (SFT-only) Qwen3-30B-A3B with SFT only (w/o DPO) AIGP (DPO-only) Qwen3-30B-A3B with DPO only (base checkpoint as 𝜋 ref , w/o SFT) AIGP (FullSeq) AIGP (SFT+DPO) trained on full sequences (w/o [ACT_ONLY] )AIGP (SFT+DPO) Qwen3-30B-A3B with SFT and DPO (full pipeline)
+> Online Deployed Policies
+> Price-Sales Model Deep Neural Network (DNN)-based Elasticity Model RL-DT Decision Transformer [37] for long-term goal optimization
+> Academic RL Baselines
+> RL-DDPG [7] Deep Deterministic Policy Gradient RL-SAC [8] Soft Actor-Critic with entropy regularization
+
+trained on identical data and reward functions as LTVE for fair comparison. Brief descriptions are provided in Table 1, with com-prehensive technical details in Appendix A.2. 
+
+4.2 Evaluation Metrics 
+
+4.2.1 Offline Evaluation Metrics. Offline evaluation covers decision quality (measured by Q-values and expert alignment) and reasoning quality (assessed by LLM-as-Judge). For decision quality, we use Q-values from LTVE to measure the expected long-term business value of pricing decisions (relia-bility validated in Section 4.3). Additionally, we use Expert Action Matching Accuracy (EAMA) to evaluate alignment with expert strategies: 
+
+EAMA = 1
+
+𝑁 
+
+> 𝑁
+
+∑︁ 
+
+> 𝑖 =1
+
+I
+
+
+
+𝜋 (𝑠 𝑖 ) − 𝑎 expert  
+
+> 𝑖
+
+< 𝜖 
+
+
+
+, (9) where 𝜋 (𝑠 𝑖 ) is the model’s recommended discount, 𝑎 𝑒𝑥𝑝𝑒𝑟𝑡 𝑖 is the expert action, and 𝜖 is a small threshold. For reasoning quality, we employ the LLM-as-Judge module de-scribed in Section 3.2 to evaluate model outputs on four dimensions: Data Accuracy (Acc.), Content Completeness (Com.), Reasoning In-ternal Coherence (Int-Coh.), and Reasoning-Decision Consistency (RD-Con.). 
+
+4.2.2 Online Evaluation Metrics. Business impact is evaluated over 7-day and 14-day horizons after product launch. Key metrics include cumulative Gross Merchandise Value (GMV), integrated Return on Investment (ROI), and Milestone Achievement Rate (MAR). MAR measures the proportion of SKUs reaching joint long-term GMV and ROI targets, ensuring immediate sales growth is balanced with financial sustainability. Significant gains in MAR demonstrate the model’s capacity for stable long-term growth. 
+
+4.3 Evaluation of LTVE 
+
+4.3.1 Offline Evaluation Results. We evaluate the reliability of the Long-Term Value Estimator (LTVE) on a held-out expert set of 30,000 samples. For operational fidelity, we use Expert Action Matching Accuracy (EAMA) as defined in Section 4.2.1. To measure the ability to distinguish optimal decisions, we compute Counter-factual Discrimination Accuracy (CDA): 
+
+CDA = 1
+
+𝑁 
+
+> 𝑁
+
+∑︁ 
+
+> 𝑖 =1
+
+I
+
+
+
+𝑄 (𝑠 𝑖 , 𝑎 expert  
+
+> 𝑖
+
+) > 𝑄 (𝑠 𝑖 , 𝑎 cf  
+
+> 𝑖
+
+)
+
+
+
+, (10) 
+
+Table 2: Comprehensive evaluation of the LTVE with an ab-lation on the 𝑛 -step TD horizon. Online A/B test results are reported for the deployed setting ( 𝑛 = 3). Evaluation Type Metric 𝑛 = 1 𝑛 = 3 𝑛 = 5
+
+Offline Evaluation MAE 0.045 0.027 0.056 EAMA ( 𝜖 = 0.05 ) 87.7% 90.7% 86.4% CDA 91.2% 97.5% 89.7% Online A/B Test MAR – +2.02% –GMV – +8.3% –ROI – +7.2% –
+
+where 𝑄 is the LTVE value function, 𝑎 𝑒𝑥𝑝𝑒𝑟𝑡 𝑖 is the expert action, and 𝑎 𝑐 𝑓 𝑖 is a counterfactual variant. 
+
+n-step TD ablation. We ablate the multi-step TD horizon 𝑛 ∈{1, 3, 5}. As shown in Table 2, 𝑛 = 3 achieves the best overall per-formance (MAE 0.027 , EAMA 90.7% , CDA 97.5% ). We observe that 
+
+𝑛 = 1 provides insufficient credit assignment for delayed pricing effects in e-commerce, while 𝑛 = 5 amplifies off-policy estimation errors under limited action coverage in offline logs. The choice of 
+
+𝑛 = 3 strikes the best balance between capturing long-term impact and maintaining training stability. We thus use 𝑛 = 3 as the default. 
+
+Correlation with long-term outcomes. To validate LTVE’s predictive reliability, we partition 50,000 samples into 10 equal-sized 𝑄 -score deciles and track realized cumulative GMV over sub-sequent 7-day and 14-day periods, excluding the top and bottom 5% of products within each decile to ensure robustness. Fig. 3 shows strong monotonic correlation between 𝑄 -score deciles and realized GMV across both horizons. Quantitatively, LTVE scores exhibit strong Spearman correlations with realized multi-objective out-comes: 𝜌 = 0.93 /0.94 with 7d/14d cumulative GMV, 𝜌 = 0.97 /0.96 
+
+with 7d/14d ROI, and 𝜌 = 0.97 /0.98 with 7d/14d milestone achieve-ment rate (MAR). These high correlations confirm that LTVE effec-tively captures long-term pricing consequences and enables reliable preference pair construction for policy alignment (Section 3.4). 1 2 3 4 5 6 7 8 9 10 
+
+> LTVE Q-Score Deciles (Low to High) Average Cumulative GMV (Scaled)
+> Correlation between LTVE Q-Score and Cum. GMV
+> 7-Day Avg. Cum. GMV 14-Day Avg. Cum. GMV
+
+Figure 3: Positive correlation between Q-score deciles and average cumulative GMV over 7-day and 14-day horizons. 
+
+4.3.2 Online A/B Test. We evaluate LTVE in online deployment by integrating it with a production Decision Transformer (RL-DT) AIGP: An LLM-Based Framework for Long-Term Value Alignment in E-Commerce Pricing KDD 2026, August 9–13, 2026, Jeju Island, Republic of Korea. 
+
+model. For each product, RL-DT model generates multiple candidate discount actions. In the control group, DT’s built-in critic selects the recommended discount. In the experimental group, LTVE replaces the critic and chooses the discount with the highest estimated long-term value. Products are randomly assigned to either group. As shown in Table 2, LTVE consistently improves business met-rics over 7-day horizon: +2.02% in Milestone Achievement Rate (MAR), +8.3% in GMV, and +7.2% in ROI, demonstrating effective-ness for real-world optimization. 
+
+4.4 Evaluation of AIGP 
+
+4.4.1 Offline Evaluation Results. We conduct comprehensive evalu-ations of AIGP across three dimensions: long-term value alignment, operational fidelity, and reasoning quality. To provide evaluation fully independent of LTVE, we introduce two return-weighted metrics that use only realized business outcomes as supervision. 
+
+EAMA-R (Return-weighted EAMA) weights expert action matches by observed 3-day cumulative returns: 
+
+EAMA -R =
+
+Í𝑁 𝑖 =1 I
+
+
+
+𝜋 (𝑠 𝑖 ) − 𝑎 expert  
+
+> 𝑖
+
+< 𝜖 
+
+
+
+· 𝑅 3𝑑 𝑖 
+
+Í𝑁 𝑖 =1 𝑅 3𝑑 𝑖 
+
+, (11) and KIPS (Kernel-weighted Industry Performance Score) replaces the hard threshold with Gaussian kernel proximity ( ℎ=0.05 ): 
+
+KIPS =
+
+Í𝑁 𝑖 =1 exp 
+
+
+
+− (𝜋 (𝑠 𝑖 ) − 𝑎 expert  
+
+> 𝑖 )2
+> 2ℎ2
+
+
+
+· 𝑅 3𝑑 𝑖 
+
+Í𝑁 𝑖 =1 𝑅 3𝑑 𝑖 
+
+, (12) where 𝑅 3𝑑 𝑖 = 𝜆 1 · GMV 3𝑑 𝑖 +𝜆 2 · ROI 3𝑑 𝑖 denotes the realized 3-day com-posite business return, computed entirely from observed platform metrics without any LTVE involvement. Higher values indicate stronger alignment with high-return expert decisions. 
+
+Long-term Value Alignment . Table 3 shows that full AIGP (SFT+DPO) achieves the highest Q-score of 2.836 , significantly exceeding production baselines (Price-Sales: 2.564; RL-DT: 2.694) and LLM variants. Academic RL baselines (RL-DDPG, RL-SAC) yield lower scores, demonstrating AIGP’s superiority in aligning decisions with long-term business value. 
+
+Table 3: Comparison of long-term Q-scores and Expert Tra-jectory Overlap metrics across model variants and baselines. Model Avg. Q-Score MAE EAMA EAMA-R KIPS 
+
+Price-Sales 2.564 0.084 71.08% 11.62 11.68 RL-DT 2.694 0.078 73.89% 11.65 11.71 RL-DDPG 2.364 0.110 56.91% 11.41 11.47 RL-SAC 2.494 0.097 63.95% 11.52 11.57 Qwen3-30B-A3B 2.585 0.085 69.22% 11.74 11.80 Qwen3-235B-A22B 2.556 0.089 67.07% 11.69 11.76 AIGP (SFT-only) 2.554 0.086 68.98% 11.71 11.77 AIGP (DPO-only) 2.794 0.067 79.26% 11.81 11.84 AIGP (FullSeq) 2.591 0.082 71.32% 11.73 11.78 AIGP (SFT+DPO) 2.836 0.062 82.51% 11.83 11.86 Qwen3 -30B       
+
+> (Total: 18.13)
+> Qwen3 -235B
+> (Total: 19.80)
+> AIGP SFT -only
+> (Total: 19.24)
+> AIGP DPO -only
+> (Total: 19.11)
+> AIGP SFT+DPO
+> (Total: 19.52) 4.0 4.2 4.4 4.6 4.8 5.0
+> LLM-as-Judge Score
+> Acc.
+> Com.
+> Int-Coh.
+> RD-Con.
+> 4.52
+> 4.70
+> 4.70
+> 4.21
+> 4.96
+> 5.00
+> 4.99
+> 4.85
+> 4.76
+> 4.97
+> 4.91
+> 4.60
+> 4.74
+> 4.92
+> 4.86
+> 4.59
+> 4.88
+> 4.98
+> 4.95
+> 4.71
+
+Figure 4: LLM-as-judge scores of reasoning quality across model variants. 
+
+Operational Fidelity . We assess operational fidelity by mea-suring alignment of actions with expert trajectories using Mean Absolute Error (MAE), Expert Action Matching Accuracy (EAMA with 𝜖 =0.05 ) and the LTVE-independent metrics EAMA-R and KIPS. Table 3 shows full AIGP pipeline achieves the lowest MAE ( 0.062 ), highest EAMA ( 82.51% ), EAMA-R ( 11.83 ), and KIPS ( 11.86 ). The consistent rankings across LTVE-dependent (Q-Score) and LTVE-independent (EAMA-R, KIPS) metrics confirm that performance gains are genuine rather than artifacts of the value estimator. 
+
+Reasoning quality . Text generation quality is assessed via LLM-as-Judge rubric on data accuracy, content completeness, reasoning internal coherence (Int-Coh.), and reasoning-decision consistency (RD-Con.). As shown in Fig. 4, while Qwen3-235B scores highest (19.80 ), reflecting the well-established correlation between model size and generation quality as described by scaling laws [ 56 , 57 ], both SFT and DPO effectively enhance the reasoning performance of the smaller Qwen3-30B model. SFT alone improves the total score from 18.13 to 19.24, and combining SFT with DPO achieves 19.52 ,approaching the 235B teacher model across all dimensions. This indicates that SFT and DPO facilitate domain-specific knowledge condensation, distilling specialized pricing heuristics into compact architectures. Consequently, targeted alignment significantly closes the size-induced performance gap, enabling deployable models to match the reasoning quality of much larger LLMs. 
+
+4.4.2 Online A/B Test. We conducted large-scale A/B tests on Tao Factory by deploying AIGP alongside baselines. To ensure rigorous evaluation, approximately 200,000 SKUs were randomly assigned to mutually exclusive groups via a Hash-based stable partitioning (Ap-pendix B.1), maintaining policy consistency throughout each SKU’s lifecycle. All groups were verified to be well-balanced across expo-sure, category, and price levels. The experiment ran continuously for over 60 days with daily monitoring to verify stability. Performance is measured over 7-day and 14-day horizons on Milestone Achievement Rate (MAR), cumulative GMV, and inte-grated ROI. Table 4 reports relative improvements over the Price-Sales baseline. AIGP (SFT+DPO) achieves strong and sustained performance across all metrics. Over 7 days, AIGP achieves +6.92% 
+
+MAR, +11.04% GMV, and +8.23% ROI. Over 14 days, gains remain KDD 2026, August 9–13, 2026, Jeju Island, Republic of Korea. Chennan Ma et al. 
+
+Table 4: Online A/B Test Results at 7-Day and 14-Day Horizons (relative improvements over Price-Sales Model). 
+
+Model 7-Day-MAR 7-Day-GMV 7-Day-ROI 14-Day-MAR 14-Day-GMV 14-Day-ROI 
+
+RL-DT +1.33% +4.02% +5.71% +0.88% +9.04% +3.46% 
+
+Qwen3-30B-A3B +0.88% +2.22% +2.29% −2.98% +4.89% +4.33% 
+
+Qwen3-235B-A22B +5.69% +8.67% +8.52% +7.37% +10 .50% +6.62% 
+
+AIGP (SFT-only) +5.59% +4.82% +8.00% +3.34% +7.85% +5.29% 
+
+AIGP (SFT+DPO) +6.92% +11.04% +8.23% +8.20% +13.21% +7.59% 0.025 0.050 0.075 0.100 0.125 0.150 0.175 0.200                  
+
+> Daily adjustment magnitude |at|
+> 0.0
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> 1.0
+> Tail probability Pr (|at | ≥  x)
+> (a) Tail Probability of Daily Adjustments
+> Price-sales RL-DT AIGP 0.00 0.02 0.04 0.06 0.08 0.10 0.12 0.14 0.16 0.18 0.20
+> Adjustment magnitude |at|(bin width = 0.02)
+> 0.00
+> 0.05
+> 0.10
+> 0.15
+> 0.20
+> 0.25
+> 0.30
+> Proportion of adjustments
+> (b) Binned Distribution of |at|
+> Price-sales RL-DT AIGP
+
+Figure 5: Pricing adjustment stability over the first 14 days after launch. (a) Tail probability Pr (| 𝑎 𝑡 | ≥ 𝑥 ). (b) Binned dis-tribution of |𝑎 𝑡 | (bin width = 0.02). 
+
+stable at +8.20% MAR, +13.21% GMV, and +7.59% ROI. These re-sults demonstrate that AIGP drives substantial business value and operational efficiency at scale. 
+
+4.4.3 Pricing Adjustment Stability. Beyond business outcomes, we analyze daily discount adjustments 𝑎 𝑡 = 𝑑 𝑡 − 𝑑 𝑡 −1 to verify AIGP’s pricing stability, which is critical for new products where tradi-tional models often exhibit high pricing volatility. Fig. 5 illustrates the distribution of daily adjustments over the first 14 days after launch. Fig. 5 (a) shows AIGP yields lower tail probabilities at larger thresholds, indicating fewer extreme discount jumps compared to production baselines. Furthermore, Fig. 5 (b) reveals that AIGP as-signs a higher proportion of adjustments to small-magnitude bins (e.g., |𝑎 𝑡 | < 0.04 ), demonstrating a more fine-grained and controlled update pattern. This pricing stability, achieved by integrating un-structured context and analogical reasoning, avoids abrupt price swings while providing merchants with predictable dynamics for inventory planning. Moreover, AIGP’s explicit natural-language rationales enable post-hoc auditing, supporting safer large-scale deployment. 
+
+4.4.4 Ablation Studies. We ablate the core components of AIGP across five LLM variants: Qwen3-30B base, SFT-only, DPO-only, AIGP (FullSeq), and full AIGP. As shown in Table 3, SFT primarily enhances reasoning quality and output consistency, whereas DPO is critical for boosting long-term value alignment and expert matching accuracy. Specifically, DPO-only achieves higher Q-score, EAMA, and KIPS (2.794, 79.26%, 11.84) compared to SFT-only (2.554, 68.98%, 11.77), with consistent gains across all LTVE-independent metrics. To verify the necessity of the [ACT_ONLY] control token, we evaluate the AIGP (FullSeq) variant, which is trained using DPO on the complete output sequences (including both reasoning traces and pricing actions) rather than the action-only mode. The results indicate that without the control token, the Q-Score (2.591) and 
+
+Table 5: Ablation on unstructured inputs: Diagnosis report (Diag) and Knowledge base (KB). 
+
+Model Avg. Q-Score EAMA-R KIPS 
+
+AIGP (SFT-only) 2.554 11.71 11.77 w/o Diag 2.470 (-0.084) 11.66 (-0.05) 11.73 (-0.04) 
+
+w/o KB 2.330 (-0.224) 11.56 (-0.15) 11.63 (-0.14) 
+
+AIGP (DPO-only) 2.794 11.81 11.84 w/o Diag 2.680 (-0.114) 11.68 (-0.13) 11.75 (-0.09) 
+
+w/o KB 2.480 (-0.314) 11.57 (-0.24) 11.69 (-0.15) 
+
+AIGP (SFT+DPO) 2.836 11.83 11.86 
+
+w/o Diag 2.660 (-0.176) 11.67 (-0.16) 11.75 (-0.11) 
+
+w/o KB 2.600 (-0.236) 11.59 (-0.24) 11.73 (-0.13) 
+
+EAMA (71.32%) only marginally outperform the SFT-only baseline and fall significantly short of the full AIGP (2.836). This performance gap confirms that when the pricing action is embedded within long reasoning traces, the DPO signal becomes heavily diluted, making it difficult for the model to isolate and optimize the specific decision tokens. Combining SFT and DPO with the [ACT_ONLY] token delivers the best overall performance across reasoning quality (Judge score 19.52), long-term value (Q-value 2.836), and operational fidelity (EAMA 82.51%). Online testing (Table 4) further confirms that full AIGP achieves superior business outcomes compared to all ab-lated variants. These results highlight that while SFT enables in-terpretable reasoning, the [ACT_ONLY] guided DPO is essential for optimizing long-term outcomes in complex e-commerce scenarios. 
+
+Impact of Unstructured Inputs . To quantify the contribution of unstructured context, we ablate two key sources: the product diagnosis report (Diag) and the domain knowledge base (KB). As shown in Table 5, removing either source causes consistent degra-dation across all metrics and model variants. For the full AIGP (SFT+DPO), removing KB leads to a Q-score drop of 0.236 and KIPS drop of 0.13, while removing Diag causes smaller but consistent declines (Q-score -0.176, KIPS -0.11). KB removal has a uniformly larger impact, indicating that domain knowledge provides critical pricing priors especially for cold-start products. These results con-firm that although LTVE operates solely on structured features, the LLM’s reasoning over unstructured inputs substantially improves decision quality. 
+
+Comparison with Strong Open-Source LLMs . To contextual-ize AIGP’s gains, we compare against recent open-source LLMs AIGP: An LLM-Based Framework for Long-Term Value Alignment in E-Commerce Pricing KDD 2026, August 9–13, 2026, Jeju Island, Republic of Korea. 
+
+Table 6: Comparison with other strong open-source LLMs. 
+
+Model Avg. Q-Score EAMA-R KIPS 
+
+Qwen3-30B-A3B 2.585 11.74 11.80 Qwen3.5-35B-A3B 2.730 11.75 11.81 DeepSeek-R1-32B 2.550 11.72 11.78 DeepSeek-R1-14B 2.450 11.71 11.76 AIGP (SFT+DPO) 2.836 11.83 11.86 
+
+Table 7: Counterfactual Discrimination Accuracy across sce-narios. AIGP (SFT+DPO) combines LTVE with LLM reasoning. 
+
+Scenario LTVE CQL AIGP (SFT+DPO) 
+
+Overall 97.5% 93.1% 96.9% Cold-start (on-shelf ≤3 days) 89.3% 83.5% 94.6% 
+
+Boundary action ( |𝑎 𝑡 | ≥ 0.15) 91.2% 80.7% 94.1% 
+
+deployed on-premise under identical prompts and evaluation proto-cols. Due to data sensitivity (proprietary pricing/sales data), exter-nal closed-source APIs are excluded. As shown in Table 6, stronger base models (Qwen3.5-35B) perform competitively but still fall short of AIGP’s aligned pipeline. General-purpose reasoning models (DeepSeek-R1 [ 52 ]) do not transfer well to domain-specific pricing, underscoring the necessity of task-specific alignment over scaling alone. 
+
+4.4.5 Robustness Analysis. To identify potential fragility of LTVE and evaluate how AIGP (SFT+DPO) compensates, we measure Coun-terfactual Discrimination Accuracy (CDA) across challenging sce-narios, comparing against Conservative Q-Learning (CQL) [ 11 ]. As shown in Table 7, two primary fragility scenarios emerge from out-of-distribution (OOD) challenges: (1) Cold-start products with limited history degrade both LTVE and CQL, but AIGP (SFT+DPO) compensates via LLM reasoning over unstructured context (94.6%); (2) Boundary actions (large adjustments rarely seen in logs) where LTVE’s dual-critic clipping mitigates OOD suppression, and AIGP (SFT+DPO) further improves through generalization (94.1%). 
+
+4.4.6 Case Study. We present two scenarios demonstrating AIGP’s advantages: (1) leveraging unstructured information, and (2) cold-start generalization. As shown in Fig. 6, Case 1 shows AIGP pricing a children’s desk by integrating reviews (Excellent quality) and seasonal context (back-to-school). CoT reasoning identifies that seasonal demand increases willingness-to-pay while positive re-views reduce price sensitivity. Unlike traditional price-sales models that rely solely on historical transaction density and often over-discount during peak seasons, AIGP recognizes the intrinsic value signaled by textual feedback. This allows it to yield a discount rate of 0.85 compared to the baseline’s 0.71, successfully preserving 14% margin without sacrificing sales velocity. Case 2 shows AIGP handling a cold-start 3-layer steamer with minimal historical data. AIGP leverages its internal knowledge base, which contains pricing benchmarks for related products such as 1-layer ( ¥38) and 2-layer (¥44) steamers. It applies analogical reasoning to recommend a more balanced discount rate of 0.76 versus baseline’s 0.68. While black-box RL models often exhibit high volatility or conservative Structured 
+
+> Data
+> Unstructured
+> Data
+> discount: 0.85
+> (Price -Sales: 0.71)
+> Domain Prompt
+
+AIGP           
+
+> Generate Response
+> Role : E -commerce Ops expert
+> Goal : 7D/14D milestone, GMV ≥…, ROI ≥…
+> Inputs :structured (GMV, ROI, PV, CTR, CVR, …) unstructured( Product
+> title: Children's study desk; Reviews: "Excellent quality", "Easy
+> installation", "Good value”; Seasonal context: Mid -Autumn + National
+> Day period, back -to -school timing, promotional period),…) ,knowledge
+> base (…), diagnosis report (…), price -sales prediction (…)
+> CoT instruction : step1…step3… stepN …
+> Business constraints : …
+> Output Formant : JSON …
+> CoT reasoning
+> Step1: Goal recap…….. Seasonal demand (holiday gifting + back -to -
+> school) increases consumers' willingness -to -pay (WTP), reducing price
+> sensitivity. …Sub -agent's 0.71 overly aggressive —recommend 0.85 to
+> balance conversion + margin …… Step6: Decision & validation
+> Final decision : [{“act”: “discount”, “value”: “0.85”}]
+> Structured
+> Data
+> Unstructured
+> Data
+> discount: 0.76
+> (Price -Sales: 0.68)
+> Domain Prompt
+
+AIGP                             
+
+> Generate Response
+> Role : E -commerce Ops expert
+> Goal : 7D/14D milestone, GMV ≥…, ROI ≥…
+> Inputs :structured (GMV, ROI, PV, CTR, CVR, …) unstructured (28cm 304
+> steel 3 -layer Steamer Pot …), knowledge base ( “3 -layer trending in
+> family” ,“No direct comparable SK Uson Tao Factory ”,“Top sales 28cm,
+> 304 teel : 1 -layer avg. ¥38, 2 -layer avg. ¥ 44”, “ original price :¥70” ),
+> diagnosis report (…), price -sales prediction (…)
+> CoT instruction : step1…step3… stepN …
+> Business constraints : …
+> Output Formant : JSON …
+> CoT reasoning
+> Step1: Goal recap…….. 3-layer steamer offers functional upgrade over
+> 2-layer …structurally innovative kitchen tools exhibit low price
+> elasticity …adding one layer supports 16% price uplift …… Step6: Decision
+> & validation
+> Final decision : [{“act”: “discount”, “value”: “0.76”}]
+
+Figure 6: AIGP compared to traditional models. (Left) Case 1: Utilizing unstructured information; (Right) Case 2: Cold-start adaptation. 
+
+bias in data-sparse scenarios, AIGP’s reasoning module bridges the gap via logical extrapolation from category-level heuristics. Both cases highlight three core strengths: (1) Unstructured data utilization , where AIGP converts qualitative signals into quanti-tative pricing. (2) Cold-start robustness , which overcomes data sparsity through analogical knowledge transfer. (3) Interpretabil-ity , provided via explicit CoT traces that justify decisions to ensure merchant trust and auditable deployment. 
+
+5 Conclusion & Future Work 
+
+We propose AIGP , a novel framework integrating LLM-based rea-soning with offline reinforcement learning for interpretable and business-aligned dynamic pricing. By combining supervised fine-tuning with Direct Preference Optimization guided by a Long-Term Value Estimator (LTVE), AIGP facilitates a synergy between gener-ative reasoning and long-term business value optimization. This approach enables domain-specific knowledge condensation, allow-ing compact, deployable models to achieve decision quality and reasoning depth competitive with much larger LLMs while ensuring policy transparency. Extensive evaluations on Tao Factory demon-strate that AIGP significantly outperforms established baselines in cumulative GMV and milestone achievement, validating its ability to drive sustainable growth at scale. Future work will pursue two directions: (1) exploring the cross-domain extensibility of the AIGP framework to broader e-commerce decision tasks; and (2) refining alignment strategies to develop a unified, efficient framework that simultaneously enhances symbolic reasoning and strategic decision-making capabilities. 
+
+References 
+
+[1] Kalyan T. Talluri and Garrett J. Van Ryzin. 2006. The Theory and Practice of Revenue Management . Springer. [2] Jeffrey I. McGill and Garrett J. Van Ryzin. 1999. Revenue Management: Research Overview and Prospects. Transportation Science 33, 2 (1999), 233–256. [3] Guillermo Gallego and Garrett J. Van Ryzin. 1994. Optimal Dynamic Pricing of Inventories with Stochastic Demand Over Finite Horizons. Management Science 
+
+40, 8 (1994), 999–1020. KDD 2026, August 9–13, 2026, Jeju Island, Republic of Korea. Chennan Ma et al. 
+
+[4] Kris Johnson Ferreira, Bin Hong Alex Lee, and David Simchi-Levi. 2016. Analytics for an Online Retailer: Demand Forecasting and Price Optimization. Manufactur-ing and Service Operations Management 18, 1 (2016), 69–88. [5] Le Chen, Alan Mislove, and Christo Wilson. 2016. An empirical analysis of algo-rithmic pricing on amazon marketplace. In Proceedings of the 25th international conference on World Wide Web . 1339–1349. [6] Le Chen, Alan Mislove, and Christo Wilson. 2016. An Empirical Analysis of Algorithmic Pricing on Amazon Marketplace. Proceedings of the 25th International Conference on World Wide Web (2016). https://api.semanticscholar.org/CorpusID: 9570936 [7] Jiaxi Liu, Yidong Zhang, Xiaoqing Wang, Yuming Deng, and Xingyu Wu. 2019. Dynamic Pricing on E-Commerce Platform with Deep Reinforcement Learning: A Field Experiment. arXiv preprint arXiv:1912.02572. [8] Chenyao Zhu, Caiqian Cheng, and Sisi Meng. 2024. DRL PricePro: A Deep Reinforcement Learning Framework for Personalized Dynamic Pricing in E-Commerce Platforms with Supply Constraints. Spectrum of Research 4, 1 (2024). [9] Thomas Hazenberg, Yao Ma, Seyed Sahand Mohammadi Ziabari, and Marijn van Rijswijk. 2025. Multi-Agent Reinforcement Learning for Dynamic Pricing in Supply Chains: Benchmarking Strategic Agent Behaviours Under Realistically Simulated Market Conditions. arXiv preprint arXiv:2507.02698. [10] Enrique Adrian Villarrubia-Martin, Luis Rodriguez-Benitez, David Mu noz Valero, Giovanni Montana, and Luis Jimenez-Linares. 2025. Dynamic Pricing in High-Speed Railways Using Multi-Agent Reinforcement Learning. arXiv preprint arXiv:2501.08234. [11] Aviral Kumar, Aurick Zhou, George Tucker, and Sergey Levine. 2020. Conser-vative Q-Learning for Offline Reinforcement Learning. In Neural Information Processing Systems (NeurIPS) .[12] Sergey Levine, Aviral Kumar, George Tucker, and Justin Fu. 2020. Offline rein-forcement learning: Tutorial, review, and perspectives on open problems. arXiv preprint arXiv:2005.01643 (2020). [13] Scott Fujimoto, David Meger, and Doina Precup. 2019. Off-Policy Deep Rein-forcement Learning without Exploration. In International Conference on Machine Learning . PMLR, 2052–2062. [14] Marcin Andrychowicz, Filip Wolski, Alex Ray, Jonas Schneider, Rachel Fong, Peter Welinder, Bob McGrew, Josh Tobin, OpenAI Pieter Abbeel, and Wojciech Zaremba. 2017. Hindsight experience replay. Advances in neural information processing systems 30 (2017). [15] Deepak Pathak, Pulkit Agrawal, Alexei A Efros, and Trevor Darrell. 2017. Curiosity-driven exploration by self-supervised prediction. In International con-ference on machine learning . PMLR, 2778–2787. [16] Yuri Burda, Harrison Edwards, Amos Storkey, and Oleg Klimov. 2018. Exploration by random network distillation. arXiv preprint arXiv:1810.12894 (2018). [17] Hongzhi Yin, Bin Cui, Jing Li, Junjie Yao, and Chen Chen. 2012. Challenging the long tail recommendation. arXiv preprint arXiv:1205.6700 (2012). [18] Luo Ji, Qi Qin, Bingqing Han, and Hongxia Yang. 2021. Reinforcement learning to optimize lifetime value in cold-start recommendation. In Proceedings of the 30th ACM international conference on information & knowledge management . 782–791. [19] Lu Wang, Chengyu Wang, Keqiang Wang, and Xiaofeng He. 2017. Biucb: A contextual bandit algorithm for cold-start and diversified recommendation. In 
+
+2017 IEEE international conference on big knowledge (ICBK) . IEEE, 248–253. [20] Hugo Touvron, Thibaut Lavril, Gautier Izacard, Xavier Martinet, Marie-Anne Lachaux, Timothée Lacroix, Baptiste Rozière, Naman Goyal, Eric Hambro, Faisal Azhar, et al . 2023. Llama: Open and efficient foundation language models. arXiv preprint arXiv:2302.13971 (2023). [21] Xuezhi Wang, Jason Wei, Dale Schuurmans, Quoc Le, Ed Chi, Sharan Narang, Aakanksha Chowdhery, and Denny Zhou. 2022. Self-consistency improves chain of thought reasoning in language models. arXiv preprint arXiv:2203.11171 (2022). [22] Sébastien Bubeck, Varun Chandrasekaran, Ronen Eldan, Johannes Gehrke, Eric Horvitz, Ece Kamar, Peter Lee, Yin Tat Lee, Yuanzhi Li, Scott Lundberg, et al . 2023. Sparks of artificial general intelligence: Early experiments with gpt-4. arXiv preprint arXiv:2303.12712 (2023). [23] Stephen Casper, Xander Davies, Claudia Shi, Thomas Krendl Gilbert, Jérémy Scheurer, Javier Rando, Rachel Freedman, Tomasz Korbak, David Lindner, Pedro Freire, et al . 2023. Open problems and fundamental limitations of reinforcement learning from human feedback. arXiv preprint arXiv:2307.15217 (2023). [24] Jason Wei, Xuezhi Wang, Dale Schuurmans, Maarten Bosma, Brian Ichter, Fei Xia, Ed H. Chi, Quoc V. Le, and Denny Zhou. 2022. Chain-of-Thought Prompting Elicits Reasoning in Large Language Models. In Neural Information Processing Systems (NeurIPS) .[25] L. Ouyang, J. Wu, X. Jiang, D. Almeida, C. L. Wainwright, P. Mishkin, C. Zhang, S. Agarwal, K. Slama, A. Ray, et al . 2022. Training Language Models to Follow Instructions with Human Feedback. In Neural Information Processing Systems (NeurIPS) .[26] Rohan Taori, Ishaan Gulrajani, Tianyi Zhang, Yann Dubois, Xuechen Li, Carlos Guestrin, Percy Liang, and Tatsunori B. Hashimoto. 2023. Stanford Alpaca: An Instruction-Following LLaMA Model. arXiv preprint arXiv:2304.04487. [27] Geoffrey Hinton, Oriol Vinyals, and Jeff Dean. 2015. Distilling the knowledge in a neural network. arXiv preprint arXiv:1503.02531 (2015). [28] Xiaohan Xu, Ming Li, Chongyang Tao, Tao Shen, Reynold Cheng, Jinyang Li, Can Xu, Dacheng Tao, and Tianyi Zhou. 2024. A survey on knowledge distillation of large language models. arXiv preprint arXiv:2402.13116 (2024). [29] Rafael Rafailov, Archit Sharma, Eric Mitchell, Christopher D. Manning, Stefano Ermon, and Chelsea Finn. 2023. Direct Preference Optimization: Your Language Model is Secretly a Reward Model. In Neural Information Processing Systems (NeurIPS) .[30] Robert L. Phillips. 2021. Pricing and Revenue Optimization . Stanford University Press. [31] N. Bora Keskin and Assaf Zeevi. 2014. Dynamic Pricing with an Unknown De-mand Model: Asymptotically Optimal Semi-Myopic Policies. Operations Research 
+
+62, 5 (2014), 1142–1167. [32] Omar Besbes and Assaf Zeevi. 2009. Dynamic Pricing Without Knowing the De-mand Function: Risk Bounds and Near-Optimal Algorithms. Operations Research 
+
+57, 6 (2009), 1407–1420. [33] Volodymyr Mnih, Koray Kavukcuoglu, David Silver, Andrei A. Rusu, Joel Veness, Marc G. Bellemare, Alex Graves, Martin Riedmiller, Andreas K. Fidjeland, Georg Ostrovski, et al . 2015. Human-Level Control Through Deep Reinforcement Learning. Nature 518, 7540 (2015), 529–533. [34] Timothy P. Lillicrap, Jonathan J. Hunt, Alexander Pritzel, Nicolas Heess, Tom Erez, Yuval Tassa, David Silver, and Daan Wierstra. 2016. Continuous Control with Deep Reinforcement Learning. In International Conference on Learning Representations (ICLR) .[35] Tuomas Haarnoja, Aurick Zhou, Pieter Abbeel, and Sergey Levine. 2018. Soft Actor-Critic: Off-Policy Maximum Entropy Deep Reinforcement Learning with a Stochastic Actor. In International Conference on Machine Learning (ICML) . 1856– 1865. [36] Siqi Shen, Chennan Ma, Chao Li, Weiquan Liu, Yongquan Fu, Songzhu Mei, Xinwang Liu, and Cheng Wang. 2023. RiskQ: Risk-sensitive Multi-Agent Reinforcement Learning Value Factorization. In Advances in Neu-ral Information Processing Systems , A. Oh, T. Naumann, A. Globerson, K. Saenko, M. Hardt, and S. Levine (Eds.), Vol. 36. Curran Associates, Inc., 34791–34825. https://proceedings.neurips.cc/paper_files/paper/2023/file/ 6d3040941a2d57ead4043556a70dd728-Paper-Conference.pdf [37] Lili Chen, Kevin Lu, Aravind Rajeswaran, Kimin Lee, Aditya Grover, Michael Laskin, Pieter Abbeel, Aravind Srinivas, and Igor Mordatch. 2021. Decision Trans-former: Reinforcement Learning via Sequence Modeling. In Neural Information Processing Systems (NeurIPS) . 15084–15097. [38] Ryan Lowe, Yi I Wu, Aviv Tamar, Jean Harb, OpenAI Pieter Abbeel, and Igor Mordatch. 2017. Multi-agent actor-critic for mixed cooperative-competitive environments. Advances in neural information processing systems 30 (2017). [39] Mohammad Feizabadi, Arman Hosseini, and Zakaria Yahouni. 2024. Multi-Agent Deep Q-Network with Layer-based Communication Channel for Autonomous Internal Logistics Vehicle Scheduling in Smart Manufacturing. In International Conference on Innovative Intelligent Industrial Production and Logistics . Springer, 3–22. [40] Tabish Rashid, Mikayel Samvelyan, Christian Schroeder De Witt, Gregory Far-quhar, Jakob Foerster, and Shimon Whiteson. 2020. Monotonic value function factorisation for deep multi-agent reinforcement learning. Journal of Machine Learning Research 21, 178 (2020), 1–51. [41] Timo Schick, Jane Dwivedi-Yu, Roberto Dessì, Roberta Raileanu, Maria Lomeli, Eric Hambro, Luke Zettlemoyer, Nicola Cancedda, and Thomas Scialom. 2023. Toolformer: Language Models Can Teach Themselves to Use Tools. In Neural Information Processing Systems (NeurIPS) , Vol. 36. 68539–68551. [42] Maxwell Nye, Anders Johan Andreassen, Guy Gur-Ari, Henryk Michalewski, Ja-cob Austin, David Bieber, David Dohan, Aitor Lewkowycz, Maarten Bosma, David Luan, et al . 2021. Show Your Work: Scratchpads for Intermediate Computation with Language Models. arXiv preprint arXiv:2112.00114. [43] Wenlong Huang, Pieter Abbeel, Deepak Pathak, and Igor Mordatch. 2022. Lan-guage models as zero-shot planners: Extracting actionable knowledge for embod-ied agents. In International conference on machine learning . PMLR, 9118–9147. [44] Shunyu Yao, Jeffrey Zhao, Dian Yu, Nan Du, Izhak Shafran, Karthik R. Narasimhan, and Yuan Cao. 2022. ReAct: Synergizing Reasoning and Acting in Language Models. In International Conference on Learning Representations (ICLR) .[45] Weiyu Ma, Qirui Mi, Yongcheng Zeng, Xue Yan, Runji Lin, Yuqiao Wu, Jun Wang, and Haifeng Zhang. 2024. Large language models play starcraft ii: Bench-marks and a chain of summarization approach. Advances in Neural Information Processing Systems 37 (2024), 133386–133442. [46] Guanzhi Wang, Yuqi Xie, Yunfan Jiang, Ajay Mandlekar, Chaowei Xiao, Yuke Zhu, Linxi Fan, and Anima Anandkumar. 2023. Voyager: An open-ended embodied agent with large language models. arXiv preprint arXiv:2305.16291 (2023). [47] Daniel M. Ziegler, Nisan Stiennon, Jeffrey Wu, Tom B. Brown, Alec Radford, Dario Amodei, Paul F. Christiano, and Geoffrey Irving. 2019. Fine-Tuning Language Models from Human Preferences. CoRR abs/1909.08593 (2019). [48] Nisan Stiennon, Long Ouyang, Jeffrey Wu, Daniel M. Ziegler, Ryan Lowe, Chelsea Voss, Alec Radford, Dario Amodei, and Paul F. Christiano. 2020. Learning to Summarize with Human Feedback. In Neural Information Processing Systems (NeurIPS) .AIGP: An LLM-Based Framework for Long-Term Value Alignment in E-Commerce Pricing KDD 2026, August 9–13, 2026, Jeju Island, Republic of Korea.                              
+
+> [49] AA. Yang, A. Li, B. Yang, B. Zhang, B. Hui, B. Zheng, B. Yu, C. Gao, C. Huang, C. Lv, et al .2025. Qwen3 Technical Report. arXiv:2505.09388 [cs.CL] https: //arxiv.org/abs/2505.09388 [50] Edward J Hu, Yelong Shen, Phillip Wallis, Zeyuan Allen-Zhu, Yuanzhi Li, Shean Wang, Lu Wang, Weizhu Chen, et al .2022. Lora: Low-rank adaptation of large language models. ICLR 1, 2 (2022), 3. [51] Josef Dai, Xuehai Pan, Ruiyang Sun, Jiaming Ji, Xinbo Xu, Mickel Liu, Yizhou Wang, and Yaodong Yang. 2024. Safe RLHF: Safe Reinforcement Learning from Human Feedback. In The Twelfth International Conference on Learning Represen-tations .https://openreview.net/forum?id=TyFrPOKYXw [52] Daya Guo, Dejian Yang, Haowei Zhang, Junxiao Song, Ruoyu Zhang, Runxin Xu, Qihao Zhu, Shirong Ma, Peiyi Wang, Xiao Bi, et al .2025. Deepseek-r1: Incentivizing reasoning capability in llms via reinforcement learning. arXiv preprint arXiv:2501.12948 (2025). [53] Volodymyr Mnih, Adria Puigdomenech Badia, Mehdi Mirza, Alex Graves, Timo-thy Lillicrap, Tim Harley, David Silver, and Koray Kavukcuoglu. 2016. Asynchro-nous methods for deep reinforcement learning. In International Conference on Machine Learning . PMLR, 1928–1937. [54] Ziyu Wang, Tom Schaul, Matteo Hessel, Hado Hasselt, Marc Lanctot, and Nando Freitas. 2016. Dueling network architectures for deep reinforcement learning. In
+> International Conference on Machine Learning . PMLR, 1995–2003. [55] Ilya Kostrikov, Ashvin Nair, and Sergey Levine. 2021. Offline reinforcement learning with implicit q-learning. In International Conference on Learning Repre-sentations .[56] Jared Kaplan, Sam McCandlish, Tom Henighan, Tom B Brown, Benjamin Chess, Rewon Child, Scott Gray, Alec Radford, Jeffrey Wu, and Dario Amodei. 2020. Scaling laws for neural language models. arXiv preprint arXiv:2001.08361 (2020). [57] Jordan Hoffmann, Sebastian Borgeaud, Arthur Mensch, Elena Buchatskaya, Trevor Cai, Eliza Rutherford, Diego de Las Casas, Lisa Anne Hendricks, Johannes Welbl, Aidan Clark, et al .2022. Training compute-optimal large language models.
+> arXiv preprint arXiv:2203.15556 (2022).
+
+A Extended Experimental Configuration A.1 Detailed Hyper-parameters 
+
+Table 8 lists the detailed configurations for the LTVE training, SFT, and DPO alignment stages. 
+
+Table 8: Comprehensive Hyper-parameters for AIGP.   
+
+> Category Parameter / Value
+> Long-Term Value Estimator (LTVE)
+> Discount Factor
+
+𝛾 0.95 
+
+𝑛 -step Horizon 3Expectile 𝜏 0.8 Learning Rate 3 × 10 −4 (Adam) Soft Update Rate 𝜂 0.01 Batch Size 512 Reward Milestone Weight 𝜆 1 0.8 Reward ROI Weight 𝜆 2 0.2  
+
+> LLM Supervised Fine-Tuning (SFT)
+> Learning Rate
+
+5 × 10 −5 (Cosine Scheduler) LoRA Target o_proj, q_proj, k_proj, v_proj Cutoff Length 8192 Epochs 2 
+
+> LLM Preference Alignment (DPO)
+> Learning Rate
+
+1 × 10 −5 
+
+> DPO
+
+𝛽 0.1 LoRA Target o_proj, q_proj, k_proj, v_proj Cutoff Length 4096 Epochs 3
+
+A.2 Baseline Implementation and Descriptions 
+
+Price-Sales Model. This is the current production baseline de-ployed online. It utilizes a deep neural network to model price-sales elasticity, specifically predicting the uplift of sales relative to price adjustments. However, it lacks the ability to incorporate unstruc-tured context (like user reviews) and fails to optimize for long-term objectives such as milestone achievement. Due to commercial con-fidentiality, further technical specifics of the neural architecture are omitted, but it represents a high-performing point-estimate approach widely used in large-scale e-commerce. 
+
+RL-DT (Decision Transformer). RL-DT model the daily dy-namic pricing task as a sequence-to-sequence decision-making problem via Decision Transformer [ 37 ] architecture. Unlike tra-ditional RL, RL-DT leverages the transformer’s ability to process long-range historical sequences, predicting the next pricing action conditioned on the Return-to-go (the expected cumulative reward). This makes it a strong baseline for long-term goal optimization. The model uses the same historical transitions and reward signals as our framework to ensure comparability. 
+
+RL-DDPG. We implement a continuous control baseline based on the Deep Deterministic Policy Gradient [ 7] algorithm. It follows an Actor-Critic architecture where the actor network outputs de-terministic discount rates and the critic estimates the Q-value. To ensure a fair comparison, the dataset and reward construction are strictly identical to those used for training our LTVE. 
+
+RL-SAC. We also adapt the Soft Actor-Critic [ 8] algorithm, which incorporates an entropy-regularized Actor-Critic framework. This baseline is designed to improve robustness and exploration by maximizing both the expected reward and the policy entropy. To ensure a fair comparison, the dataset and reward construction are strictly identical to those used for training our LTVE. 
+
+Base LLMs. We include base Qwen3-30B-A3B and Qwen3-235B-A22B [ 49 ] models that receive the same structured and unstruc-tured inputs but make pricing decisions based solely on their pre-trained general knowledge. This baseline quantifies the specific gains achieved through our long-term value alignment and super-vised domain adaptation. 
+
+B Deployment Details of Online A/B Test B.1 Hash-based Partitioning 
+
+To ensure the statistical validity of our online A/B tests and maintain policy consistency for each product, we implement a Hash-based Stable Partitioning mechanism. The core objective is to map each Stock Keeping Unit (SKU) into mutually exclusive experimental or control groups based on its unique identifier, ensuring that ap-proximately 200,000 SKUs are assigned consistently throughout the testing period. The partitioning process follows these technical steps: 
+
+Identifier Selection. We use the unique SKU_ID as the primary key for partitioning to ensure that the same product is always processed by the same pricing policy throughout its lifecycle. 
+
+Salted Hashing. To prevent potential bucket coupling (where products are always grouped together across different indepen-dent experiments), we append a specific Experiment_Salt to the 
+
+SKU_ID before hashing. This salted approach also mitigates selec-tion bias that might arise from semi-semantic SKU_ID structures by ensuring high entropy in the hash space. 
+
+Modulo Mapping. The salted ID is processed using a crypto-graphic hash function, and the resulting integer is mapped to a set of discrete buckets via a modulo operation. This mapping ensures a KDD 2026, August 9–13, 2026, Jeju Island, Republic of Korea. Chennan Ma et al. 
+
+deterministic and uniform distribution of SKUs across experimental cohorts. 
+
+Group Assignment. Based on pre-defined traffic allocation ratios, SKUs falling into specific numeric buckets are assigned to their respective treatment groups, such as the AIGP (SFT+DPO) cohort or the production baseline. This method guarantees policy stability . Since the platform makes daily decisions for a vast number of products, any fluctua-tion in group assignment would lead to erratic pricing signals and destabilize merchant inventory planning. By using Hash-based Par-titioning, we ensure that experimental groups remain well-balanced across exposure, category, and price levels, thereby isolating the true business impact of the AIGP framework. 
+
+B.2 Safety and Compliance Mechanisms 
+
+To ensure business stability and regulatory compliance during on-line deployment, we formally define the admissible action space 
+
+Asafe (𝑠 𝑡 ). In our framework, a pricing action 𝑎 𝑡 represents the daily change in the discount rate, i.e., 𝑎 𝑡 = 𝑑 𝑡 − 𝑑 𝑡 −1, where 𝑑 𝑡 is the absolute discount rate applied at time 𝑡 .The safety space Asafe is governed by the following operational constraints: 
+
+Daily Adjustment Constraints. To prevent abrupt price swings that may destabilize market expectations or merchant inventory planning, the daily adjustment magnitude is restricted to a fixed range: 
+
+𝑎 𝑡 ∈ [− 0.2, 0.2] (13) This ensures that the discount rate cannot fluctuate by more than 20% within a single 24-hour cycle. 
+
+Absolute Discount Boundaries. To maintain brand value and protect minimum profit margins, the resultant absolute discount rate 𝑑 𝑡 must remain within a predefined sustainable interval: 
+
+𝑑 𝑡 ∈ [ 0.5, 1.0] (14) where 𝑑 𝑡 = 1.0 represents the original listing price. Any discount exceeding 50% ( 𝑑 𝑡 < 0.5) is prohibited to prevent erosion of Return on Investment (ROI). Formally, given the previous state’s discount 𝑑 𝑡 −1, the set of admissible actions at time 𝑡 is defined as: 
+
+Asafe (𝑠 𝑡 ) = {𝑎 𝑡 | − 0.2 ≤ 𝑎 𝑡 ≤ 0.2 and 0.5 ≤ 𝑑 𝑡 −1 + 𝑎 𝑡 ≤ 1.0} (15) As illustrated in our inference pipeline in Fig 2(d), any action 𝑎 𝑡 
+
+generated by the pricing policy that violates these boundaries is projected back to the nearest feasible point in Asafe before platform execution. This mechanism guarantees that the agent’s exploration remains within the safe operational manifold of the e-commerce platform. 
+
+B.3 Infrastructure and Deployment Efficiency 
+
+Hardware Constraints and Model Selection. To ensure the prac-tical feasibility of the AIGP framework in a large-scale production environment, we conducted all model alignment and experimental evaluations using a cluster of 16 GPUs. While the 235B teacher model exhibits superior general-purpose reasoning, its parame-ter scale poses prohibitive computational demands for fine-tuning within our available infrastructure. Specifically, the 16-GPU cluster is insufficient to support even parameter-efficient fine-tuning (e.g., LoRA) for a 235B-scale model due to severe memory bottlenecks and excessive training latency. In contrast, the 30B student model (Qwen3-30B-A3B) allows for high-quality SFT and DPO alignment under these hardware constraints, effectively internalizing domain-specific pricing knowledge. 
+
+Operational Pipeline and Inference Capacity. The AIGP system serves a vertical marketplace with approximately 200,000 active SKUs per day. Instead of real-time price adjustments, our framework follows a daily offline execution pipeline. Decisions are computed in batch during nightly processing windows, with the resulting pricing strategies synchronized to the production environ-ment for execution on the subsequent day (T+1). This operational design prioritizes total throughput for massive SKU volumes over immediate response latency. Utilizing the 30B model significantly optimizes this pipeline: 
+
+• Total Inference Duration. The average end-to-end infer-ence time, including comprehensive Chain-of-Thought rea-soning traces, is approximately 60s per SKU. By utilizing a batch size of 32 across the 16-GPU cluster, the system can process the entire catalog of 200,000 SKUs in approximately 7 hours. 
+
+• Efficiency Comparison. Under the same hardware con-straints, the 235B model would require nearly 6 × the com-puting time to achieve equivalent throughput, far exceeding the allocated 7-hour production window and hindering the feasibility of daily T+1 updates. 
+
+Task-Specific Superiority. Our results confirm that the 30B model, after SFT and DPO alignment, outperforms the 235B base model in pricing accuracy (EAMA 82.51% vs. 67.07%) and business value alignment (Q-Score 2.836 vs. 2.556). This confirms that for specialized e-commerce dynamic pricing task, a task-aligned com-pact model is more effective and resource-efficient than a massive general-purpose base model.
