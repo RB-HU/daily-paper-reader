@@ -6,34 +6,38 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-06-27
-- 运行时间：2026-06-27 20:16:15 UTC
+- 最新运行日期：2026-06-28
+- 运行时间：2026-06-28 20:11:14 UTC
 - 运行状态：成功
-- 本次总论文数：4
-- 精读区：1
-- 速读区：3
+- 本次总论文数：5
+- 精读区：5
+- 速读区：0
 
 ### 今日简报（AI）
-今日速递：精读电商定价长期价值对齐框架AIGP，速读覆盖离线策略学习、层级解码降对齐税与多PEFT混合方法。
-核心亮点：大模型定价可从“瞬时收益”转向“长期用户价值”对齐（AIGP）；更深的模型不一定更好——自信层解码可缓解对齐税。
-读者建议：关注电商AI定价策略的落地瓶颈，可优先复看AIGP中的价值评估模块设计。
-- 详情：[/202606/27/README](/202606/27/README)
+1) 今日精读两篇新作，聚焦智能体模型的数据配方与训练后链路设计。
+2) 值得关注的方向：针对智能体的专用数据集构建方法，以及工具编排与后训练如何协同影响模型表现。
+3) 如果你想上手打造更强的智能体，建议从数据配比和训练后对齐策略入手，参考今天的全满分解读。
+- 详情：[/202606/28/README](/202606/28/README)
 
 ### 精读区论文标签
-1. [AIGP: An LLM-Based Framework for Long-Term Value Alignment in E-Commerce Pricing](/202606/27/2606.26787v1-aigp-an-llm-based-framework-for-long-term-value-alignment-in-e-commerce-pricing)  
+1. [OpenThoughts-Agent: Data Recipes for Agentic Models](/202606/28/2606.24855v1-openthoughts-agent-data-recipes-for-agentic-models)  
+   标签：评分：10.0/10、query:fla
+   evidence：用于训练智能体模型的开源数据策划流程
+2. [The Interplay of Harness Design and Post-Training in LLM Agents](/202606/28/2606.25447v1-the-interplay-of-harness-design-and-post-training-in-llm-agents)  
+   标签：评分：10.0/10、query:fla
+   evidence：研究脚手架设计与LLM智能体后训练的交互
+3. [Neglected Free Lunch from Post-training: Progress Advantage for LLM Agents](/202606/28/2606.26080v1-neglected-free-lunch-from-post-training-progress-advantage-for-llm-agents)  
+   标签：评分：10.0/10、query:fla
+   evidence：从RL后训练中推导出进度优势用于LLM智能体的步骤级评分，无需单独训练奖励模型。
+4. [Semantic Consistency Policy Optimization for Reinforcement Learning of LLM Agents](/202606/28/2606.25852v1-semantic-consistency-policy-optimization-for-reinforcement-learning-of-llm-agents)  
+   标签：评分：9.0/10、query:fla
+   evidence：基于RL的LLM智能体后训练，解决语义信用不一致
+5. [Offline Multi-agent Continual Cooperation via Skill Partition and Reuse](/202606/28/2606.25389v1-offline-multi-agent-continual-cooperation-via-skill-partition-and-reuse)  
    标签：评分：8.0/10、query:fla
-   evidence：采用离线强化学习和监督微调训练基于LLM的智能体以实现长期价值对齐。
+   evidence：提出COMAD框架用于持续离线多智能体技能发现，实现智能体的后训练。
 
 ### 速读区论文标签
-1. [Horizon Adaptive Offline Policy Learning via Value Stitching](/202606/27/2606.21136v1-horizon-adaptive-offline-policy-learning-via-value-stitching)  
-   标签：评分：7.0/10、query:fla
-   evidence：离线强化学习价值拼接方法适用于智能体后训练。
-2. [Deeper is Not Always Better: Mitigating the Alignment Tax via Confident Layer Decoding](/202606/27/2606.21906v1-deeper-is-not-always-better-mitigating-the-alignment-tax-via-confident-layer-decoding)  
-   标签：评分：7.0/10、query:fla
-   evidence：通过层解码实现对齐技术，可用于金融智能体对齐。
-3. [MixedPEFT: Combining Multiple PEFT Methods with Mixed Objectives for Unsupervised Domain Adaptation](/202606/27/2606.22272v1-mixedpeft-combining-multiple-peft-methods-with-mixed-objectives-for-unsupervised-domain-adaptation)  
-   标签：评分：7.0/10、query:fla
-   evidence：结合多种 PEFT 方法与混合目标的无监督域适应，可迁移至金融智能体微调
+- 本次无速读推荐。
 
 
 <div class="dpr-home-promo-card">
