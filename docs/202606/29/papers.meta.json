@@ -1,0 +1,54 @@
+{
+  "label": "2026-06-29",
+  "date": "2026-06-29",
+  "generated_at": "2026-06-29T21:26:52",
+  "count": 3,
+  "papers": [
+    {
+      "paper_id": "202606/29/2606.27814v1-atod-annealed-turn-aware-on-policy-distillation-for-multi-turn-autonomous-agents",
+      "section": "deep",
+      "title_en": "ATOD: Annealed Turn-aware On-policy Distillation for Multi-turn Autonomous Agents",
+      "authors": "Qitai Tan, Zefang Zong, Yang Li, Peng Chen",
+      "date": "2026-06-26",
+      "pdf": "https://arxiv.org/pdf/2606.27814v1",
+      "score": "9.0",
+      "evidence": "提出一种面向多轮自主代理的混合在线蒸馏算法",
+      "tldr": "针对多轮自主智能体训练中，在线策略蒸馏（OPD）起步快但天花板低，强化学习（RL）上限高但早期低效的矛盾，本文提出ATOD算法。ATOD采用退火式混合调度：初期以OPD为主快速逼近教师，后期逐步增强RL驱动探索；同时辅以回合级不一致-不确定性重加权（T-DUR），智能提升长轨迹中高效用交互的监督强度。在ALFWorld、WebShop与Search-QA三个多轮交互任务上，对于三种学生模型尺寸，ATOD平均成功率相较OPD分别提升3.03点，相较GRPO提升23.62点，且超过原教师模型2.16点，成功突破了模仿蒸馏的性能上限，实现了高效高上限的在线学习。",
+      "tags": "query:fla",
+      "abstract_en": "Training small language-model agents for long-horizon interactive tasks requires both fast imitation and reward-driven improvement. On-policy distillation (OPD) provides dense teacher guidance and typically improves rapidly in the early stage, but its gains saturate once the student approaches the teacher, limiting the final performance ceiling. Reinforcement learning (RL) directly optimizes environment rewards and encourages exploratory improvement toward a higher reward-defined ceiling, but sparse and delayed feedback makes early-stage learning much less efficient than OPD. In this paper, we propose ATOD (Annealed Turn-aware On-policy Distillation), a hybrid online distillation algorithm that explicitly exploits this complementarity. (1) ATOD uses an annealed OPD-RL schedule: OPD dominates early training to approach teacher-level behavior, while RL is gradually strengthened to drive reward-based exploration. (2) ATOD introduces Turn-level Disagreement-Uncertainty Reweighting (T-DUR), which softly amplifies high-utility turns and improves dense supervision in long trajectories. Experiments on ALFWorld, WebShop, and Search-QA show that ATOD consistently outperforms competing post-training baselines: across the three student sizes, ATOD improves average success rate by 3.03 points over OPD and 23.62 points over GRPO, while surpassing the corresponding teacher models by 2.16 points.",
+      "source": "arxiv",
+      "selection_source": "fresh_fetch"
+    },
+    {
+      "paper_id": "202606/29/2606.28187v1-gbc-gradient-based-connections-for-optimizing-multi-agent-systems",
+      "section": "deep",
+      "title_en": "GBC: Gradient-Based Connections for Optimizing Multi-Agent Systems",
+      "authors": "Xiaocheng Yang, Abdulrahman Alrabah, Dilek Hakkani-Tür, Gokhan Tur",
+      "date": "2026-06-26",
+      "pdf": "https://arxiv.org/pdf/2606.28187v1",
+      "score": "9.0",
+      "evidence": "提出基于梯度的多智能体系统后训练优化",
+      "tldr": "多智能体系统性能常受限于协调不佳与细粒度信用分配缺失，现有粗粒度反馈难以定位错误源。本文提出梯度连接(GBC)，将多智能体系统视为计算图，引入token级梯度连接权重量化智能体间影响，通过反向传播任务损失构建归因图，实现精准错误溯源与提示优化。基于前缀梯度的AgentChord高效实现，在MultiWOZ和τ-bench上GBC性能超越强基线，且归因质量与优化效果正相关。",
+      "tags": "query:fla",
+      "abstract_en": "Multi-agent systems (MAS) built on large language models (LLMs) provide a promising framework for solving complex tasks through role specialization and structured interaction. However, their performance is often limited by miscoordination and, more fundamentally, the lack of fine-grained credit assignment across agents. Existing approaches typically rely on coarse-grained feedback, making it difficult to identify which agents or interaction steps are responsible for errors. We propose Gradient-Based Connections (GBC), an approach for fine-grained attribution and optimization of multi-agent systems. GBC models a MAS as a computational graph and introduces gradient-based connection weights to quantify the influence of each agent's output on downstream agents at the token level. By constructing an attribution graph and propagating task-specific loss signals backward, our method enables precise identification of error sources and targeted prompt optimization. We further develop AgentChord, an efficient implementation that leverages prefix-based gradient computation. Experiments on MultiWOZ and τ-bench show that GBC improves multi-agent performance and outperforms strong single-agent and multi-agent baselines, and higher attribution quality is associated with greater optimization effectiveness. Code is available at: https://github.com/yxc-cyber/AgentChord.",
+      "source": "arxiv",
+      "selection_source": "fresh_fetch"
+    },
+    {
+      "paper_id": "202606/29/2606.27446v1-causal-connections-leveraging-multilingual-fine-tuning-for-financial-qafincausal-2026",
+      "section": "quick",
+      "title_en": "Causal Connections: Leveraging Multilingual Fine-Tuning for Financial QA@FinCausal 2026",
+      "authors": "Akash Kumar Gautam, Serhii Hamotskyi, Christian Hänig",
+      "date": "2026-06-25",
+      "pdf": "https://arxiv.org/pdf/2606.27446v1",
+      "score": "7.0",
+      "evidence": "微调LLM进行金融因果问答；面向金融任务的指令微调/监督微调",
+      "tldr": "面向金融叙事的因果关系抽取，FinCausal 2026要求从英文和西班牙语财务报告中判别因果链。本文对比了三种技术路线：基于多语言BERT的token标注；多语言BART的生成式问答；以及仅解码器大模型（Llama 3.1、GPT-4.1 Mini）的提示构造、少样本示例及监督微调。结果显示，无需微调的提示和少样本方案已具竞争力，但监督微调带来最大提升；英西双语联合微调的GPT-4.1 Mini在英文子任务上并列冠军（得分4.814），西班牙文子任务第三（4.7753），均基于LLM评判。这突显了任务特化适应和多语言联合学习对跨语言金融因果推理的显著增益。",
+      "tags": "query:fla",
+      "abstract_en": "This paper describes team HSA_CORAL's submission to the FinCausal 2026 shared task on extracting cause-effect relations from financial narratives via extractive question answering in English and Spanish. We compare three modeling families: (i) encoder-only token tagging with multilingual BERT, (ii) encoder-decoder generation with multilingual BART, and (iii) decoder-only LLMs (Llama 3.1 and GPT variants) using prompt refinement, few-shot demonstrations, and supervised fine-tuning. Across settings, prompting and few-shot examples yield competitive performance, while supervised fine-tuning provides the largest gains. Our best system, GPT-4.1 Mini fine-tuned on combined English and Spanish training data, achieves a tied highest score on the English subtask (score 4.8140) and ranks third on Spanish (score 4.7753) under the shared task's LLM-as-a-judge metric. Overall, the results highlight the value of task-specific adaptation and multilingual fine-tuning for cross-lingual transfer in financial causality QA.",
+      "source": "arxiv",
+      "selection_source": "fresh_fetch"
+    }
+  ],
+  "errors": []
+}
