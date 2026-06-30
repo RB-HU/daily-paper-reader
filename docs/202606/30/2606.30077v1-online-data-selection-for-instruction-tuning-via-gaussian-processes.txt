@@ -1,0 +1,1401 @@
+Title: Online Data Selection for Instruction Tuning via Gaussian Processes
+
+URL Source: https://arxiv.org/pdf/2606.30077v1
+
+Published Time: Tue, 30 Jun 2026 02:02:47 GMT
+
+Number of Pages: 22
+
+Markdown Content:
+# Online Data Selection for Instruction Tuning via Gaussian Processes 
+
+Jun Wang Quoc Phong Nguyen Julien Monteil Vu Nguyen 
+
+Amazon 
+
+{junwc, qphong, jul, vutngn}@amazon.com 
+
+Abstract 
+
+With Large Language Model (LLM) pre-training and fine-tuning shifting its focus from data volume to data quality, quality data selection has emerged as a critical research topic. Existing online data selection methods for LLM training are typ-ically “batch-constrained”, limiting optimization to local utility within random batches. To overcome this, we propose GAIA (Global Adaptive Instruction tuning via G Aussian processes), a framework that formulates data valuation as a global es-timation process. GAIA employs Gaussian Process regression to model continuous utility manifolds across the semantic space, utilizing an adaptive strategy fusion mechanism to dynamically prioritize high-utility samples. By casting the strategy-posterior update as an instance of the classical fixed-share Hedge framework for tracking the best expert, we inherit a dynamic-regret guarantee that characterizes GAIA’s robustness under non-stationary quality scores during training. Empirical evaluations on three datasets demonstrate that GAIA significantly outperforms state-of-the-art baselines like GREATS , establishing our method as a scalable and robust solution for efficient instruction tuning. 
+
+1 Introduction 
+
+Modern Large Language Models (LLMs) owe their remarkable success to large-scale pretraining on massive, heterogeneous datasets [ 1]. These models are typically adapted to specialized downstream tasks—ranging from dialogue generation to multimodal reasoning—via fine-tuning or instruction alignment [ 2 , 3]. Despite their empirical prowess, LLMs remain susceptible to factual hallucinations, spurious correlations, and ingrained social biases [ 4]. These vulnerabilities are often traceable to noisy, redundant, or unrepresentative training samples. Consequently, a fundamental challenge in LLM alignment is data valuation : identifying which samples meaningfully enhance model generalization and which act as detrimental noise. Data valuation frameworks, such as influence functions and Shapley value-based methods, provide principled mechanisms for estimating the contribution of individual data points to model performance [ 5, 6 ]. While theoretically robust for tasks like mislabeled data detection and bias diagnosis, these classical approaches often struggle with the practical scalability and high-dimensional gradients inherent in modern LLM fine-tuning pipelines. To address these scalability constraints, recent works such as GREATS [ 7] have pioneered online data selection. However, we observe that existing methods are fundamentally hindered by a batch-constrained paradigm . Specifically, these approaches dynamically evaluate data quality to select an optimal mini-batch from a larger candidate pool . Crucially, because this candidate pool is still constructed via uniform random sampling, the selection mechanism can only achieve local optimality .This design introduces a critical stochastic vulnerability: an unfavorable draw may yield a candidate pool saturated with low-quality samples, forcing the model to choose the “best of the worst.” Thus, the efficacy of online selection is inherently upper-bounded by the quality of the stochastic candidate pool, making it limited by the very randomness it seeks to mitigate. 
+
+> Preprint.
+> arXiv:2606.30077v1 [cs.LG] 29 Jun 2026
+
+In this paper, we propose GAIA (Global Adaptive Instruction Tuning via G Aussian Processes), a novel framework that transcends the batch-constrained limitation by transforming data valuation into a proactive global guidance mechanism. Instead of treating quality scores as passive filters within a batch, GAIA leverages them to steer the construction of the candidate pools themselves. Our contributions are three-fold: • We model the latent quality function over the entire training corpus using a Gaussian Process (GP) , enabling principled generalization of valuation signals to unseen examples throughout the training process. • To ensure computational feasibility at scale, we discretize the GP into a finite set of strategies 
+
+(function samples from the GP prior) and maintain a posterior distribution over them using a fixed-share Hedge update with a top-k likelihood. Casting this update as an instance of the classical framework for tracking the best expert, we inherit a dynamic-regret guarantee that characterizes 
+
+GAIA ’s robustness to the non-stationarity of quality scores as model parameters evolve during training. • We demonstrate that GAIA can be seamlessly integrated with existing selection methods (e.g., 
+
+GREATS ). In this hybrid configuration, GAIA biases the global sampling toward high-quality regions, while subsequent selection refines the batch for optimal quality and diversity. By bridging theoretical data valuation with practical scalability, GAIA provides a principled, com-putationally efficient framework that explicitly optimizes for downstream generalization, offering a more robust alternative to existing data selection paradigms. 
+
+2 Related Works 
+
+Offline Data Valuation. Most offline methods estimate data importance post-training or via re-peated retraining [ 8–10 ]. While recent works scale Shapley-value [ 11 ] and influence-function [ 12 ]approaches to LLMs, high computational costs remain. Related fields like dataset distillation and coreset construction [ 13 , 14 ] similarly rely on expensive bilevel optimization. Furthermore, influence-function techniques [ 6, 15 ] assume local linearity around fixed parameters, failing to capture the evolving data utility in the highly non-convex landscapes of LLMs. The static nature of offline selection—performing pruning only once prior to training—often yields suboptimal results as data informativeness shifts across training stages [ 16 ]. Additionally, many offline pipelines require heavy preprocessing or auxiliary models [ 17 ], increasing system complexity. These limitations necessitate adaptive strategies that evolve alongside the model. 
+
+Online Data Valuation. Online methods perform adaptive selection at the batch level, identifying informative examples based on the model’s current state. Unlike static approaches [ 18 , 19 ], this dynamic strategy allows data value to evolve with learning progress, capturing stage-specific relevance for faster convergence and better generalization. By operating on small batches, online selection also reduces preprocessing overhead; for instance, [ 7 ] uses a greedy Taylor-expansion-based batch optimization. Recent lightweight proxies use signals like loss, gradient norms, or forgetting events [ 20 , 21 ]. While efficient, these heuristics are often noisy, hyperparameter-sensitive, and lack a unified, task-aware definition of value, making it difficult to align selection with downstream objectives [22]. 
+
+3 Preliminaries 
+
+We use Dtr , Dv for the training and validation sets, respectively, z = ( x, y ) for examples, and θt for model parameters at iteration t. When the source is relevant, we write z(tr ) ∈ D tr and z(v) ∈ D v.Training minimizes the empirical loss L(Dtr ; θ) ≜ 1/|D tr | P 
+
+> z∈D tr
+
+l(z; θ) via SGD: at iteration t, a mini-batch Bt ⊂ D tr is drawn and θt+1 = θt − ηt
+
+P 
+
+> z∈B t
+
+gt(z), where ηt > 0 is the learning rate and gt(z) ≜ ∇l(z; θt). Full notation is summarized in Table 1 (Appendix A.1). This work addresses online data selection : adaptively choosing Bt at each iteration. We first review score-based online selection methods, then motivate the need for a surrogate model over training-set quality scores. In Section 4, we instantiate this surrogate as a Gaussian process, which enables 2Training & Updating 
+
+> Emb Model
+> Data Pool
+> GP Prior Embed dings
+> Initial Scores
+
+Warm-up & GP Training 
+
+> Batch Sampling
+> Strategy Selection
+> Score & Update
+> Initial Model
+> Warm-up Training
+> Initial Model
+> Strategy Bank
+> Ranking Update
+> Optimal Batch
+
+Figure 1: Workflow. Our framework operates in two distinct phases to decouple valuation from training: (1) Warm-up & GP Training : A lightweight Emb eding Model maps the raw data pool into a semantic embedding space. Concurrently, a warm-up training phase on a small dataset set collects initial utility scores. These scores and embeddings are used to fit the Gaussian Process (GP) model, establishing an initial global utility manifold. (2) Iterative Training & Adaptive Updating :In the main loop, an adaptive strategy mechanism selects the optimal strategy from the Strategy Bank based on real-time feedback. This selected strategy guides the sampling of high-utility batches from the global pool for model updates. The resulting feedback is used to dynamically update the strategy selection probabilities, ensuring robust and efficient data selection. principled generalization of observed quality scores to unseen examples. A self-contained background, including the kernel definition and the cost of exact inference, is provided in Appendix A.2. Given a randomly sampled candidate batch ˜Bt ⊂ D tr at iteration t, online data selection methods select a refined training batch Bt ⊆ ˜Bt (used for the SGD update) by evaluating a quality score q(z)
+
+for each z ∈ ˜Bt. Proposed scores include gradient alignment with validation data [ 7 ], gradient norms, per-sample loss, and embedding similarity (see Section 5), and our framework is agnostic to this choice. As a representative example, GREATS [7] uses q(z) ≜ gt(z) · gt(z(v)) and greedily selects Bt
+
+to balance quality and diversity, computed efficiently via the ghost inner-product technique. However, such methods sample ˜Bt uniformly at random, ignoring historical quality information. This motivates our central question: can online data selection be improved by using observed quality scores to guide the sampling of ˜Bt?Remark 1. If ˜Bt is already sampled from high-quality regions of Dtr , the refinement step (select-ing Bt ⊆ ˜Bt via quality/diversity criteria, e.g. GREATS ) may be skipped, using Bt = ˜Bt directly. While computing q(z) per example is cheap, doing so across all of Dtr every iteration is prohibitive. We address this with a surrogate model that predicts scores without explicit gradient computation. 
+
+4 GAIA framework: Strategy-Guided Online Data Selection 
+
+Our goal is to improve online data selection by leveraging historical quality scores of training data to guide the sampling of candidate batches. Specifically, rather than sampling ˜Bt uniformly at random as in GREATS [ 7], we use observed quality scores from previous iterations to construct an informed sampling distribution over Dtr . The resulting candidate batch ˜Bt can then be refined using existing selection methods (e.g., GREATS ) to produce the final training batch Bt.Recall that at each iteration, we evaluate quality scores for all examples in the training batch. By iteration t, we have accumulated observations Dt ≜ {(z, q (z)) }z∈St−1  
+
+> t′=1 Bt′
+
+. Since Dt covers only a subset of Dtr , we cannot directly evaluate q(z) for arbitrary training examples. 34.1 Strategy-Guided Batch Sampling 
+
+To address this, we model the latent quality function as a random draw from a GP: s ∼ GP (0 , κ )
+
+where κ denotes the SE kernel (see Appendix A.2). We refer to each function sample s as a strategy ,as it provides a complete scoring over Dtr for candidate batch sampling. Given a strategy s, we sample each element of ˜Bt independently from Dtr according to the categorical distribution 
+
+p(z | s) ≜ exp( s(z)/τ )
+
+. X 
+
+> z′∈D tr
+
+exp( s(z′)/τ ) , (1) where τ > 0 controls the sampling temperature. 
+
+Remark 2. The temperature τ governs the exploration-exploitation trade-off: lower values concentrate sampling on high-scoring examples, while higher values encourage broader exploration. In practice, 
+
+τ can be adapted during training, e.g., gradually increasing to promote exploration as the model converges (see Section 5). A key challenge remains: how to efficiently obtain s from the GP posterior at each training iteration. As noted in Appendix A.2, updating the GP with new observations at every iteration is computationally prohibitive. 
+
+4.2 Efficient Strategy Generation via GP Discretization 
+
+To enable efficient posterior updates and strategy sampling, we discretize the GP by drawing a finite set of function samples from the prior. Specifically, we sample m/ 2 functions f1, . . . , f m/ 2 from GP (0 , κ ) and set S ≜ {f1, −f1, . . . , f m/ 2, −fm/ 2}, so that for every strategy f ∈ S its negation −f
+
+is also in S. Since these functions are drawn from the prior, we initialize with a uniform distribution: 
+
+p(s) = 1 /|S| for all s ∈ S . This discretization preserves the key property encoded by the kernel: similar training examples have similar latent quality scores under each strategy. 
+
+Remark 3 (Symmetry of the strategy set) . The pairing {f, −f } ensures that the strategy set has no directional bias along any sampled function: for any two points z, z′ ∈ D tr , the pair ranks z above z′
+
+under f if and only if it ranks z below z′ under −f , with equal weight. The pair thus averages out directional preferences, producing a joint marginal 12 [p(z | f ) + p(z | − f )] that is strictly closer to uniform than either p(· | f ) or p(· | − f ) individually. This property supports the interpretation of the uniform mixing step introduced below as a return toward unbiased exploration: when the mixing weight dominates, the algorithm samples from an ensemble that treats high-score and low-score regions symmetrically. 
+
+Motivation for a non-stationary posterior update. A standard Bayesian posterior update over S
+
+presumes that observations are generated by a single time-invariant strategy. This assumption does not hold in our setting. The observed quality score q(z) depends on the current model parameters 
+
+θt, which change throughout training, so the strategy that best explains recent batches can differ from the one that best explained earlier batches. Under a standard Bayesian update, the posterior concentrates on whichever strategy accumulated the most evidence in the past and cannot recover once a different strategy becomes more informative. To address this, we adopt the fixed-share Hedge 
+
+update of Herbster and Warmuth [23] , which tempers each batch’s evidence by a learning rate λ and re-mixes the posterior with a uniform distribution at every step. The uniform mixing ensures a strictly positive floor on every strategy’s probability, so no strategy is permanently ruled out. This update admits an exact Bayesian interpretation as the filtering distribution under a Markovian switching prior over strategies. Given observations Dt, the resulting update reduces to an O(|S| ) incremental two-step procedure: 
+
+∀s ∈ S , ˆp(s|D t) ∝ p(s|D t−1) p q(Bt)|sλ , p(s|D t) = αm + (1 − α) ˆ p(s|D t) , (2) where q(Bt) ≜ {q(z)}z∈B t , λ > 0 is a learning rate controlling how strongly each batch’s evidence shifts the posterior, and α ∈ [0 , 1) is the mixing rate . The uniform floor α/m propagates into the next iteration’s Hedge step, allowing a previously down-weighted strategy to regain mass once it starts producing high-likelihood batches. Setting α = 0 recovers pure Hedge, which corresponds to a stationary Bayesian posterior. Section 4.4 states the dynamic-regret guarantee that this update inherits from fixed-share Hedge. Under the Gaussian likelihood in Equation (6) , the likelihood factorizes as 
+
+pGauss 
+
+ q(Bt)|s ≜ Y
+
+> z∈B t
+
+N  q(z); s(z), σ 2
+
+> n
+
+ , (3) 4Algorithm 1 Strategy-Guided Online Data Selection 
+
+Require: Dtr , Dv, #strategies m, Hedge learning rate λ, mixing rate α, temperatures τ, β , k , target model parameters θ 
+
+> 1:
+
+Initialization:  
+
+> 2:
+
+Obtain embeddings {e(z)}z∈D tr  
+
+> 3:
+
+Fit GP kernel hyperparameters on warm-up data  
+
+> 4:
+
+Sample strategies S = {f1, −f1, . . . , f m/ 2, −fm/ 2} with fj ∼ GP (0 , κ ) 
+
+> 5:
+
+Initialize p(s) ← 1/m for all s ∈ S  
+
+> 6:
+
+for t = 1 , 2, . . . , T do  
+
+> 7:
+
+Strategy Selection:  
+
+> 8:
+
+Sample strategy s ∼ p(·|D t−1) 
+
+> 9:
+
+Candidate Batch Sampling (see Remark 2) : 
+
+> 10:
+
+Sample ˜Bt ⊂ D tr where each z ∈ ˜Bt is drawn with p(z|s) ∝ exp( s(z)/τ ) 
+
+> 11:
+
+Batch Refinement (optional, see Remark 1) : 
+
+> 12:
+
+Compute {q(z)}z∈ ˜Bt using Dv 
+
+> 13:
+
+Refine ˜Bt to Bt ⊆ ˜Bt 
+
+> 14:
+
+Training:  
+
+> 15:
+
+Update θt → θt+1 using Bt 
+
+> 16:
+
+Strategy Posterior Update (fixed-share Hedge):  
+
+> 17:
+
+∀s ∈ S : ˆp(s|D t) ∝ p(s|D t−1) × ptop-k(q(Bt)|s)λ 
+
+> 18:
+
+∀s ∈ S : p(s|D t) ← α/m + (1 − α) ˆ p(s|D t) 
+
+> 19:
+
+end for  
+
+> 20:
+
+return θT
+
+where pGauss highlights the use of the Gaussian likelihood. 
+
+4.3 Top-k Likelihood 
+
+While the Gaussian likelihood in Equation (6) is commonly employed in GP modeling, it is not well-suited to our setting: the range of observed quality scores can vary drastically across iterations as the model parameters evolve. To address this, we propose a top-k likelihood that depends only on the relative ordering of quality scores within each batch. Let z(1) , . . . , z(|B t|) denote the examples in Bt sorted by observed quality score in descending order, i.e., q(z(1) ) ≥ q(z(2) ) ≥ · · · ≥ q(z(|B t|)). We define the top-k likelihood as the probability that strategy s ranks the same k examples highest: 
+
+ptop-k
+
+ q(Bt)|s ≜ Ykj=1 
+
+
+
+exp( s(z(j))/β )
+
+. X |B t| 
+
+> i=1
+
+exp( s(z(i))/β )
+
+
+
+, (4) where β > 0 is a temperature parameter. Algorithm 1 summarizes the framework for GAIA .
+
+4.4 Dynamic-Regret Guarantee 
+
+The posterior update in Section 4.1 is designed to be robust to non-stationarity, and fixed-share Hedge is the canonical online-learning algorithm with this property. This subsection makes the robustness precise. For a sequence of loss functions ℓt(s) ≜ − log ptop-k(q(Bt)|s), the natural non-stationary baseline is a comparator sequence s∗ = ( s∗
+
+> 1
+
+, . . . , s ∗ 
+
+> T
+
+) that may use a different strategy at each iteration, subject to switching between strategies at most K times. Fixed-share Hedge is known to track such a comparator with sublinear regret. 
+
+Theorem 1 (Dynamic regret; cf. 23 , 24 ). As shown in Appendix A.3, the update in Section 4.1 is exactly fixed-share Hedge applied to ℓt with learning rate λ and mixing rate α. Let L be a uniform bound on ℓt over S. For any comparator s∗ ∈ S T with at most K switches, there exist choices of λ
+
+and α such that 
+
+> T
+
+X
+
+> t=1
+
+Es∼pt [ℓt(s)] −
+
+> T
+
+X
+
+> t=1
+
+ℓt(s∗ 
+
+> t
+
+) ≤ O 
+
+
+
+L
+
+q
+
+T  K log m + K log( T /K ) + log m
+
+. (5) 5The bound is sublinear in T for any K sublinear in T (i.e., K ≤ √T ), so the algorithm remains 
+
+no-regret as long as the optimal strategy does not switch too frequently. This justifies the algorithmic form of our posterior update as a response to non-stationarity: it is the mechanism by which the algorithm avoids committing irreversibly to a strategy that may become suboptimal later. 
+
+Interpretation. The bound is O LpT (K log m + K log( T /K ) + log m) in T , sublinear when-ever K is sublinear in T , and it decomposes into three interpretable cost terms. The factor √T log m
+
+captures the cost of discretizing the GP into m strategies, which is the classical Hedge penalty. The factor pT K log( T /K ) is the additional cost of tracking a comparator that switches up to K
+
+times. The loss bound L = k(log b + 2 S/β ) ties the bound to GAIA ’s design parameters: the top-k
+
+truncation k enters linearly, the likelihood temperature β appears via 1/β (trading the regret bound against the sharpness of the likelihood signal), and the scale S is the maximum absolute value of strategy scores on the training set, a finite constant determined by the sampled strategies. Setting 
+
+K = 0 recovers the standard static-regret bound O L√T log m with α∗ = 0 , which corresponds to pure Hedge, and the regret grows with K only through the slowly growing factor pK log( T /K ), so the algorithm remains no-regret as long as the number of switches is o(T / log m).
+
+Practical remarks on tuning λ and α. The optimal λ∗ and α∗ in Theorem 1 depend on the horizon 
+
+T , the loss bound L, and the number of switches K. Since K is not observable and characterizes how much the identity of the optimal strategy changes as training progresses, setting λ and α from the theoretical expressions requires either an estimate of K or an adaptive procedure such as the doubling trick over candidate values of K, which incurs an additional logarithmic factor. In our experiments, we bypass this estimation problem and tune λ and α empirically on a small grid, using the theoretical bound only as qualitative guidance (small α for sharp exploitation, larger α for broader tracking). 
+
+5 Experiments 
+
+We follow the settings of [ 7]. We evaluated our method on three instruction tuning tasks, MMLU [ 25 ], SAM SUM [ 26 ] and T YDIQA [ 27 ], and on four backbone models, L LAMA -2-7 B [28 ], L LAMA -3.1-8B [ 29 ], Q WEN -3-4 B [ 30 ] and M ISTRAL -7 B [31 ]. Training details are presented in Appendix A.4. We evaluate GAIA against a diverse set of representative methods that also serve as our score functions, including gradient-based ( GradNorm ), loss-prioritizing ( MaxLoss , RHOLoss ), semantic-aware ( SBERT ), and greedy optimization ( GREATS ) methods; detailed descriptions are provided in Appendix A.6. 
+
+5.1 Efficient Gaussian Process Construction 
+
+To make GP inference computationally feasible for LLMs, we introduce a decoupled pipeline. 
+
+Proxy Semantic Space. Rather than using evolving hidden states, we extract static features e(x) via a sentence transformer [ 32 ] (robustness evaluated in Appendix A.17) . To further accelerate inference, SVD projects these embeddings into a lower-dimensional manifold (dimensionality analysis in Appendix A.16) .
+
+Warm-up Initialization. To address label scarcity, we evaluate true utility scores on a small subset (N = 500 ) during early training (size sensitivity analyzed in Appendix A.18) . The GP is then fitted to these observations to generalize predictions across the remaining data pool. Implementation details are in Appendix A.5. 
+
+5.2 Results and Analysis 
+
+Figure 2 depicts the comparative training dynamics of GAIA -GREATS (where our GAIA framework leverages the GREATS scoring function) against baselines on MMLU-Sociology and S AM SUM .Additional MMLU subjects, T YDIQA and Qwen model results are reported in Appendix A.11, Appendix A.9 and Appendix A.10, respectively. Notably, these performance gains come with negligible computational overhead: for instance, on MMLU ( ≈13k samples), it adds only ≈23 seconds for GP training. A detailed efficiency analysis is provided in Appendix A.12. 
+
+Training Dynamics. As shown in the perplexity plots, GAIA -GREATS (red line) exhibits a sig-nificantly faster convergence rate than the baselines on both evaluation and test sets. Among the 60 500 1000 1500 
+
+Steps 
+
+4
+
+6
+
+8
+
+10 
+
+> Perplexity
+
+Eval Perplexity 
+
+> Regular
+> GradNorm
+> SBERT
+> RHOLoss
+> MaxLoss
+> GREATS
+> GAIA-GREATS
+
+0 500 1000 1500 
+
+Steps 
+
+4
+
+6
+
+8
+
+> Perplexity
+
+Test Perplexity 
+
+> Regular
+> GradNorm
+> SBERT
+> RHOLoss
+> MaxLoss
+> GREATS
+> GAIA-GREATS
+
+0 500 1000 1500 
+
+Steps 
+
+0.55 
+
+0.60 
+
+0.65 
+
+> Accuracy
+
+Test Accuracy 
+
+> Regular
+> GradNorm
+> SBERT
+> RHOLoss
+> MaxLoss
+> GREATS
+> GAIA-GREATS
+
+(a) MMLU - Sociology: Validation Perplexity, Test Perplexity, and Accuracy (from left to right) 0 2000 4000 6000 
+
+Steps 
+
+4.25 
+
+4.50 
+
+4.75 
+
+5.00 
+
+5.25 
+
+> Perplexity
+
+Eval Perplexity 
+
+> Regular
+> GradNorm
+> SBERT
+> RHOLoss
+> MaxLoss
+> GREATS
+> GAIA-GREATS
+
+0 2000 4000 6000 
+
+Steps 
+
+4.25 
+
+4.50 
+
+4.75 
+
+5.00 
+
+5.25 
+
+5.50 
+
+> Perplexity
+
+Test Perplexity 
+
+> Regular
+> GradNorm
+> SBERT
+> RHOLoss
+> MaxLoss
+> GREATS
+> GAIA-GREATS
+
+0 2000 4000 6000 
+
+Steps 
+
+0.15 
+
+0.20 
+
+0.25 
+
+0.30 
+
+0.35 
+
+> Rouge
+
+Rouge 
+
+> Regular
+> GradNorm
+> SBERT
+> RHOLoss
+> MaxLoss
+> GREATS
+> GAIA-GREATS
+
+(b) SAMSum: Validation Perplexity, Test Perplexity, and Rouge (from left to right) 
+
+Figure 2: Training dynamics on MMLU-Sociology (top row) and S AM SUM (bottom row). We benchmark GAIA -GREATS against full-data training ( Regular ) and various selection baselines. The left and middle columns report validation and test perplexity (lower is better), while the right column presents downstream task performance (Accuracy for MMLU, ROUGE for S AM SUM ). GAIA -
+
+GREATS demonstrates superior convergence speed and robust generalization, consistently achieving the lowest perplexity levels and highest task scores across both datasets. All results are reported as the average of three independent runs. 0 500 1000 1500 
+
+> Steps
+> 4
+> 6
+> 8
+> 10
+> Perplexity
+> Test Perplexity
+> Regular
+> GREATS
+> SBERT
+> GAIA-SB-w/o BR
+> GAIA-SB-w/o TA
+> GAIA-SB
+
+(a) GAIA -SBERT 0 50 100 150  
+
+> Steps
+> 4
+> 6
+> 8
+> Perplexity
+> Test Perplexity
+> Regular
+> GREATS
+> MaxLoss
+> GAIA-ML-w/o BR
+> GAIA-ML-w/o TA
+> GAIA-ML
+
+(b) GAIA -MaxLoss 0 500 1000 1500  
+
+> Steps
+> 4
+> 6
+> 8
+> Perplexity
+> Test Perplexity
+> Regular
+> GREATS
+> GradNorm
+> GAIA-GN-w/o BR
+> GAIA-GN-w/o TA
+> GAIA-GN
+
+(c) GAIA -GradNorm 0 50 100 150  
+
+> Steps
+> 4
+> 5
+> 6
+> 7
+> 8
+> 9
+> Perplexity
+> Test Perplexity
+> Regular
+> GREATS
+> RHOLoss
+> GAIA-RL-w/o BR
+> GAIA-RL-w/o TA
+> GAIA-RL
+
+(d) GAIA -RHOLoss 
+
+Figure 3: Performance comparison of four different scoring functions on MMLU-Sociology. All results are reported as the average of three independent runs. The annotation w/o BR denotes the exclusion of the Batch Refinement step, while w/o TA indicates the removal of the Temperature Adaptation mechanism. competitors, GREATS proves to be the strongest baseline; however, our method demonstrates distinct advantages depending on the task. On MMLU-Sociology, GAIA -GREATS consistently maintains a lower perplexity throughout training, achieving a minimum of 3.75 ±0.33 compared to 4.37 ±0.64 for 
+
+GREATS , representing a substantial 14.13% reduction . This indicates a more precise estimation of data utility. To illustrate this behavior, we visualize the specific GP data sampling dynamics for the MMLU-Sociology task in Appendix A.13. On the S AM SUM task, while both methods eventually reach a comparable performance floor, GAIA -GREATS distinguishes itself with a much sharper descent in the initial phase. This rapid drop indicates that our Gaussian Process model effectively identifies high-value data points immediately at the start, significantly accelerating the early learning process compared to the gradient-based selection in GREATS .
+
+Downstream Performance. Our method consistently outperforms or matches the best competitors. For MMLU-Sociology, GAIA -GREATS achieves a peak accuracy of 66.50% ±1.92 , surpassing the second-best method GREATS (64.34% ±1.02) with a clear gain of +3.57% . On the S AM SUM 
+
+summarization task, we evaluate performance using the ROUGE score. While standard methods 7suffer from overfitting, evidenced by increasing test perplexity after 2000 steps, both GREATS and our method maintain robustness. Notably, although the final ROUGE scores of GREATS and our method are similar, GAIA -GREATS achieves higher ROUGE scores in the early training stages. This further validates that our strategy successfully prioritizes the most informative samples early on, leading to a more efficient optimization path without sacrificing generalization capability. 
+
+Comparison of Cumulative Data Value Scores. We analyze the learning dynamics by compar-ing the cumulative data value scores of data selected by GAIA versus uniform random sampling. 0 500 1000 1500 
+
+> Step
+> 0
+> 40
+> 80
+> 120
+> Cumulative Mean Score
+> Uniform
+> GAIA
+
+Figure 4: Cumulative data value scores (L LAMA -2-7 B, MMLU-Sociology). As illustrated in Figure 4, GAIA consistently pri-oritizes high-value samples throughout the training process, resulting in a cumulative score that signifi-cantly outpaces the baseline. This gap demonstrates that while random sampling inevitably consumes re-dundant or low-utility data, GAIA effectively steers the model toward the most informative regions of the data distribution, maintaining a high selection quality across all training stages. 
+
+Robustness across Scoring Functions. To assess the universality of our framework, we integrate our GP-based sampling mechanism with diverse scoring func-tions, including SBERT , GradNorm , MaxLoss , and 
+
+RHOLoss . The results in Figure 3 demonstrate that our method functions as a robust performance ampli-fier dependent on signal fidelity. For high-quality met-rics like SBERT , our framework significantly boosts convergence, achieving results comparable to the strong GREATS baseline. Conversely, for weaker metrics ( GradNorm , MaxLoss , RHOLoss )—where standard selection strategies often fail to outperform regular training—our method yields limited additional gains. However, it consistently maintains performance parity or achieves slight im-provements over the baselines. This confirms that our framework acts as a safe enhancement: it effectively exploits informative signals to accelerate learning while ensuring that the training stability is not compromised, even when the underlying utility estimation is noisy. 
+
+Efficacy of Global Selection. To isolate the intrinsic contribution of our global selection mechanism, we conducted an ablation study by disabling the batch refinement step. In this w/o BR configuration, the model is trained directly on the raw batch sampled via the GP framework, bypassing any local sub-selection. Remarkably, as illustrated in Figure 3, this simplified approach achieves performance superior to the full pipeline. This finding provides compelling empirical evidence for the inherent effectiveness of our framework: it demonstrates that the data points identified through global utility estimation are of high quality by themselves. Furthermore, it confirms that the primary driver of our method’s success is its capacity to locate globally informative samples, rather than a reliance on local, batch-constrained optimization. 0 500 1000 1500 
+
+> Steps
+> 4
+> 6
+> 8
+> Perplexity
+> Test Perplexity
+> Regular
+> GREATS
+> m=2
+> m=10
+> m=20
+> m=50
+> m=100
+> m=200
+
+(a) m on MMLU-Sociology 0 1000 2000 3000  
+
+> Steps
+> 4.2
+> 4.4
+> 4.6
+> 4.8
+> 5.0
+> Perplexity
+> Test Perplexity
+> Regular
+> GREATS
+> m=2
+> m=10
+> m=20
+> m=50
+> m=100
+> m=200
+
+(b) m on S AM SUM 0 500 1000 1500  
+
+> Steps
+> 4
+> 6
+> 8
+> Perplexity
+> Test Perplexity
+> Regular
+> GREATS
+> Alpha-0.1
+> Alpha-0.2
+> Alpha-0.3
+> Alpha-0.4
+> Alpha-0.5
+
+(c) α on MMLU-Sociology 
+
+Figure 5: Impact of strategy number on test perplexity for MMLU-Sociology and S AM SUM and 
+
+α for MMLU-Sociology. We benchmark GAIA -GREATS against Regular training and the GREATS 
+
+baseline. All results are averaged over three independent runs. 
+
+Effect of Strategy Pool Size. Results in Figure 5 show that the optimal strategy pool size m varies with the size of the dataset. For the smaller MMLU-Sociology, a compact pool ( m = 20 ) is optimal, as excessive strategies tend to dilute the utility signal toward uniform sampling ( Regular baseline). Conversely, the larger S AM SUM dataset demands greater strategic diversity; while m ≥ 50 yields 8strong convergence, a constrained pool ( m < 50 ) results in a noticeably higher perplexity floor due to insufficient utility coverage. Therefore, m must be adaptively scaled: we should prioritize focused selection for small datasets and expand the ensemble for larger datasets, and more complex tasks. 
+
+Impact of Sampling Temperature. The sampling temperature τ serves as a critical control for the exploration-exploitation trade-off within our GP sampling framework. Our analysis reveals a distinct tension: lower temperatures accelerate early-stage convergence via aggressive exploitation of high-utility samples, whereas higher temperatures ensure batch diversity but slow down the identification of informative data (See Appendix A.14 for details experiments). To reconcile these objectives, 
+
+GAIA -GREATS employs an adaptive temperature mechanism that dynamically transitions from focused exploitation to broader exploration. The necessity of this schedule is empirically confirmed by the w/o TA ablation results (Figure 3), where using a fixed temperature leads to significant training instability and mid-stage performance corruption. We provide a detailed discussion of the adaptive mechanism in Appendix A.15. 
+
+Effect of Mixing Rate α. The fixed-share mixing rate α enforces a uniform floor on every strategy’s probability, allowing the posterior to recover when a previously down-weighted strategy becomes more informative. Sweeping α ∈ { 0.1, 0.2, 0.3, 0.4, 0.5} on MMLU-Sociology with L LAMA -2-7 B,we find that α = 0 .1 achieves the lowest validation and test perplexity, and is among the highest test accuracies. This finding supports two complementary design choices. First, non-zero mixing is essential: it prevents the posterior from irreversibly committing to an early-favored strategy, empirically validating the fixed-share update over pure Hedge. Second, the optimal mixing is small, indicating that the GP-informed posterior signal should be largely preserved rather than diluted toward the uniform prior. A sharp posterior anchored to the Gaussian process does the heavy lifting of identifying high-utility regions, while a modest mixing floor maintains robustness under the non-stationarity of quality scores. 
+
+6 Conclusion 
+
+Limitations. Despite its effectiveness, our method has several limitations: first, its performance is tied to the fidelity of the base scoring function, acting as an amplifier rather than a corrective mechanism for suboptimal data utility signals; second, the method exhibits sensitivity to hyperparameters such as the strategy pool size m and sampling temperature τ , which require calibration based on dataset size to effectively balance exploration and exploitation; and finally, our current evaluation focuses exclusively on instruction tuning, leaving the application of global data valuation in large-scale pre-training as future work. 
+
+Conclusion. We have presented an adaptive data selection framework for LLM fine-tuning that moves beyond conventional batch-constrained approaches. By modeling global utility distributions with Gaussian Process regression and dynamically fusing multiple valuation strategies, our method ensures consistent delivery of high-quality training batches. Casting the strategy-posterior update as an instance of the classical fixed-share Hedge framework for tracking the best expert, GAIA 
+
+inherits a dynamic-regret guarantee that characterizes its robustness under non-stationary quality scores. Empirical results across MMLU, T YDIQA, and S AM SUM benchmarks demonstrate that our approach accelerates convergence and improves final task performance compared to state-of-the-art baselines. Beyond improving efficiency and accuracy, our framework provides a scalable, robust, and principled solution for data-efficient instruction tuning, highlighting the importance of intelligent data selection in large-scale model training. 
+
+References 
+
+[1] Josh Achiam, Steven Adler, Sandhini Agarwal, Lama Ahmad, Ilge Akkaya, Florencia Leoni Aleman, Diogo Almeida, Janko Altenschmidt, Sam Altman, Shyamal Anadkat, et al. Gpt-4 technical report. arXiv preprint arXiv:2303.08774 , 2023. [2] Daya Guo, Dejian Yang, Haowei Zhang, Junxiao Song, Ruoyu Zhang, Runxin Xu, Qihao Zhu, Shirong Ma, Peiyi Wang, Xiao Bi, et al. Deepseek-r1: Incentivizing reasoning capability in llms via reinforcement learning. arXiv preprint arXiv:2501.12948 , 2025. 9[3] Juncheng Wu, Wenlong Deng, Xingxuan Li, Sheng Liu, Taomian Mi, Yifan Peng, Ziyang Xu, Yi Liu, Hyunjin Cho, Chang-In Choi, et al. Medreason: Eliciting factual medical reasoning steps in llms via knowledge graphs. arXiv preprint arXiv:2504.00993 , 2025. [4] Emilio Ferrara. Should chatgpt be biased? challenges and risks of bias in large language models. 
+
+Challenges and Risks of Bias in Large Language Models (October 26, 2023) , 2023. [5] Amirata Ghorbani and James Zou. Data shapley: Equitable valuation of data for machine learning. In ICML , 2019. [6] Pang Wei Koh and Percy Liang. Understanding black-box predictions via influence functions. In ICML , 2017. [7] Jiachen T Wang, Tong Wu, Dawn Song, Prateek Mittal, and Ruoxi Jia. Greats: Online selection of high-quality data for llm training in every iteration. Advances in Neural Information Processing Systems , 37:131197–131223, 2024. [8] Hoang Anh Just, Feiyang Kang, Tianhao Wang, Yi Zeng, Myeongseob Ko, Ming Jin, and Ruoxi Jia. Lava: Data valuation without pre-specified learning algorithms. In The Eleventh International Conference on Learning Representations . OpenReview, 2023. [9] Samuel Kessler, Tam Le, and Vu Nguyen. Sava: Scalable learning-agnostic data valuation. In 
+
+The Thirteenth International Conference on Learning Representations , 2025. [10] Jiongli Zhu, Parjanya Prajakta Prashant, Alex Cloninger, and Babak Salimi. Kairos: Scalable model-agnostic data valuation. Advances in Neural Information Processing Systems , 2025. [11] Guangyi Zhang, Qiyu Liu, and Aristides Gionis. Shapley-based data valuation for weighted 
+
+k-nearest neighbors. In The Thirty-ninth Annual Conference on Neural Information Processing Systems .[12] Sang Keun Choe, Hwijeen Ahn, Juhan Bae, Kewen Zhao, Minsoo Kang, Youngseog Chung, Adithya Pratapa, Willie Neiswanger, Emma Strubell, Teruko Mitamura, et al. What is your data worth to gpt? llm-scale data valuation with influence functions. 2025. [13] Tongzhou Wang, Jun-Yan Zhu, Antonio Torralba, and Alexei A Efros. Dataset distillation. In 
+
+ICML , 2018. [14] Baharan Mirzasoleiman, Jeff Bilmes, and Jure Leskovec. Coresets for data-efficient training of machine learning models. In International Conference on Machine Learning , pages 6950–6960. PMLR, 2020. [15] Garima Pruthi, Frederick Liu, Satyen Kale, and Mukund Sundararajan. Estimating training data influence by tracing gradient descent. Advances in Neural Information Processing Systems , 33: 19920–19930, 2020. [16] Jiachen T Wang, Tianji Yang, James Zou, Yongchan Kwon, and Ruoxi Jia. Rethinking data shapley for data selection tasks: Misleads and merits. In International Conference on Machine Learning , pages 52033–52063. PMLR, 2024. [17] Sang Michael Xie, Hieu Pham, Xuanyi Dong, Nan Du, Hanxiao Liu, Yifeng Lu, Percy S Liang, Quoc V Le, Tengyu Ma, and Adams Wei Yu. Doremi: Optimizing data mixtures speeds up language model pretraining. Advances in Neural Information Processing Systems , 36: 69798–69818, 2023. [18] Mengzhou Xia, Sadhika Malladi, Suchin Gururangan, Sanjeev Arora, and Danqi Chen. Less: selecting influential data for targeted instruction tuning. In Proceedings of the 41st International Conference on Machine Learning , pages 54104–54132, 2024. [19] Alexander Wettig, Aatmik Gupta, Saumya Malik, and Danqi Chen. Qurating: Selecting high-quality data for training language models. In Forty-first International Conference on Machine Learning .10 [20] Mariya Toneva, Alessandro Sordoni, Remi Tachet des Combes, Adam Trischler, Yoshua Bengio, and Geoffrey J Gordon. An empirical study of example forgetting during deep neural network learning. In International Conference on Learning Representations , 2019. [21] Mansheej Paul, Surya Ganguli, and Gintare Karolina Dziugaite. Deep learning on a data diet: Finding important examples early in training. Advances in neural information processing systems , 34:20596–20607, 2021. [22] Ben Sorscher, Robert Geirhos, Shashank Shekhar, Surya Ganguli, and Ari Morcos. Beyond neural scaling laws: beating power law scaling via data pruning. Advances in Neural Information Processing Systems , 35:19523–19536, 2022. [23] Mark Herbster and Manfred K Warmuth. Tracking the best expert. Machine Learning , 32(2): 151–178, 1998. [24] Nicolò Cesa-Bianchi and Gábor Lugosi. Prediction, Learning, and Games . Cambridge University Press, 2006. [25] Dan Hendrycks, Collin Burns, Steven Basart, Andy Zou, Mantas Mazeika, Dawn Song, and Jacob Steinhardt. Measuring massive multitask language understanding. Proceedings of the International Conference on Learning Representations (ICLR) , 2021. [26] Bogdan Gliwa, Iwona Mochol, Maciej Biesek, and Aleksander Wawer. SAMSum corpus: A human-annotated dialogue dataset for abstractive summarization. In Proceedings of the 2nd Workshop on New Frontiers in Summarization , pages 70–79. Association for Computational Linguistics, November 2019. [27] Jonathan H. Clark, Eunsol Choi, Michael Collins, Dan Garrette, Tom Kwiatkowski, Vitaly Nikolaev, and Jennimaria Palomaki. Tydi qa: A benchmark for information-seeking question answering in typologically diverse languages. Transactions of the Association for Computational Linguistics , 2020. [28] Hugo Touvron, Louis Martin, Kevin Stone, Peter Albert, Amjad Almahairi, Yasmine Babaei, Nikolay Bashlykov, Soumya Batra, Prajjwal Bhargava, Shruti Bhosale, et al. Llama 2: Open foundation and fine-tuned chat models. arXiv preprint arXiv:2307.09288 , 2023. [29] Aaron Grattafiori, Abhimanyu Dubey, Abhinav Jauhri, Abhinav Pandey, Abhishek Kadian, Ahmad Al-Dahle, Aiesha Letman, Akhil Mathur, Alan Schelten, Alex Vaughan, et al. The llama 3 herd of models. arXiv preprint arXiv:2407.21783 , 2024. [30] An Yang, Anfeng Li, Baosong Yang, Beichen Zhang, Binyuan Hui, Bo Zheng, Bowen Yu, Chang Gao, Chengen Huang, Chenxu Lv, et al. Qwen3 technical report. arXiv preprint arXiv:2505.09388 , 2025. [31] Albert Q. Jiang, Alexandre Sablayrolles, Arthur Mensch, Chris Bamford, Devendra Singh Chap-lot, Diego de Las Casas, Florian Bressand, Gianna Lengyel, Guillaume Lample, Lucile Saulnier, Lélio Renard Lavaud, Marie-Anne Lachaux, Pierre Stock, Teven Le Scao, Thibaut Lavril, Thomas Wang, Timothée Lacroix, and William El Sayed. Mistral 7b. CoRR , abs/2310.06825, 2023. doi: 10.48550/ARXIV.2310.06825. [32] Nils Reimers and Iryna Gurevych. Sentence-bert: Sentence embeddings using siamese bert-networks. In Proceedings of the 2019 Conference on Empirical Methods in Natural Language Processing . Association for Computational Linguistics, 11 2019. [33] Christopher KI Williams and Carl Edward Rasmussen. Gaussian processes for machine learning ,volume 2. MIT press Cambridge, MA, 2006. [34] Artem Artemev, David R Burt, and Mark van der Wilk. Tighter bounds on the log marginal likelihood of gaussian process regression using conjugate gradients. In International Conference on Machine Learning , pages 362–372. PMLR, 2021. [35] Rohan Taori, Ishaan Gulrajani, Tianyi Zhang, Yann Dubois, Xuechen Li, Carlos Guestrin, Percy Liang, and Tatsunori B. Hashimoto. Stanford alpaca: An instruction-following llama model. 
+
+https://github.com/tatsu-lab/stanford_alpaca , 2023. 11 [36] Shayne Longpre, Le Hou, Tu Vu, Albert Webson, Hyung Won Chung, Yi Tay, Denny Zhou, Quoc V Le, Barret Zoph, Jason Wei, et al. The flan collection: Designing data and methods for effective instruction tuning. In International Conference on Machine Learning , pages 22631–22648. PMLR, 2023. [37] Jason Wei, Xuezhi Wang, Dale Schuurmans, Maarten Bosma, Fei Xia, Ed Chi, Quoc V Le, Denny Zhou, et al. Chain-of-thought prompting elicits reasoning in large language models. 
+
+Advances in neural information processing systems , 35:24824–24837, 2022. [38] Conover Mike, Hayes Matt, Mathur Ankit, Xie Jianwei, Wan Jun, Shah Sam, Ghodsi Ali, Wendell Patrick, Zaharia Matei, and Xin Reynold. Free dolly: Introducing the world’s first truly open instruction-tuned llm, 2023. [39] Andreas Köpf, Yannic Kilcher, Dimitri Von Rütte, Sotiris Anagnostidis, Zhi Rui Tam, Keith Stevens, Abdullah Barhoum, Duc Nguyen, Oliver Stanley, Richárd Nagyfi, et al. Openassistant conversations-democratizing large language model alignment. Advances in neural information processing systems , 36:47669–47681, 2023. [40] Jacob Gardner, Geoff Pleiss, Kilian Q Weinberger, David Bindel, and Andrew G Wilson. Gpytorch: Blackbox matrix-matrix gaussian process inference with gpu acceleration. Advances in neural information processing systems , 31, 2018. [41] Angelos Katharopoulos and François Fleuret. Not all samples are created equal: Deep learning with importance sampling. In Jennifer G. Dy and Andreas Krause, editors, Proceedings of the 35th International Conference on Machine Learning, ICML 2018 , volume 80, pages 2530–2539. PMLR, 2018. [42] Ilya Loshchilov and Frank Hutter. Online batch selection for faster training of neural networks. 
+
+CoRR , abs/1511.06343, 2015. [43] Sören Mindermann, Jan Markus Brauner, Muhammed Razzak, Mrinank Sharma, Andreas Kirsch, Winnie Xu, Benedikt Höltgen, Aidan N. Gomez, Adrien Morisot, Sebastian Farquhar, and Yarin Gal. Prioritized training on points that are learnable, worth learning, and not yet learnt. In International Conference on Machine Learning, ICML 2022 , volume 162, pages 15630–15649. PMLR, 2022. 12 A Appendix 
+
+A.1 Notation 
+
+Table 1: Summary of notation. 
+
+Symbol Description 
+
+Dtr , Dv Training and validation sets 
+
+z ≜ (x, y ) Training example (input, target) 
+
+θt Model parameters at iteration tl(z; θt) Loss for example z at iteration t
+
+gt(z) Gradient ∇l(z; θt)˜Bt ⊂ D tr Candidate batch 
+
+Bt ⊂ ˜Bt Refined training batch 
+
+q(z) Observed quality score 
+
+e(z) = e(x) Embedding of example z
+
+s(z) Latent quality (GP sample) 
+
+S Set of m strategies 
+
+T ∈ N Total number of training iterations 
+
+κ GP kernel 
+
+λ ∈ R∗ 
+
+> +
+
+Hedge learning rate 
+
+α ∈ [0 , 1) Mixing rate (fixed-share) 
+
+τ ∈ R∗ 
+
+> +
+
+Sampling temperature 
+
+β ∈ R∗ 
+
+> +
+
+Likelihood temperature 
+
+k ∈ R∗ 
+
+> +
+
+Number of top positions in likelihood 
+
+ηt ∈ R∗ 
+
+> +
+
+SGD learning rate 
+
+A.2 Gaussian Process Background 
+
+We model the latent quality function using a Gaussian process (GP) [ 33 ]. Let s : Dtr → R denote the GP prior over quality scores, where s(z) represents the intrinsic, long-term quality of example z. As a simple modeling choice, we assume the observed quality score q(z) is a noisy realization of s(z):
+
+q(z) = s(z) + ϵ , ϵ ∼ N (0 , σ 2
+
+> n
+
+) , (6) where σ2 
+
+> n
+
+denotes the observation noise variance. The noise term captures iteration-specific fluctua-tions: since q(z) depends on the current model parameters θt, which evolve during training, the same example may yield different quality scores at different iterations. We revisit this likelihood model in Section 4 to better capture the relationship between observed scores and the latent quality function. Under the GP prior, {s(z)}z∈D tr follows a multivariate Gaussian distribution fully specified by a prior mean and a covariance kernel κz,z′ ≜ cov (q(z), q (z′)) . The kernel encodes the assumption that similar training examples have similar quality scores. To evaluate κz,z′ , we embed the input component x of each example z = ( x, y ) using a pre-trained model and apply random projection to obtain a low-dimensional representation e(z) ≜ e(x). Note that the embedding depends only on the input, not the label. Following standard practice in GP modeling, we employ the squared exponential 
+
+(SE) kernel, though other kernels may also be used: 
+
+κz,z′ ≜ σ2 
+
+> s
+
+exp 
+
+
+
+− 12
+
+e(z) − e(z′)
+
+l2
+
+> 2
+
+
+
+, (7) where σs and l denote the signal variance and lengthscales, respectively. These hyperparameters can be estimated directly from the data by maximizing the GP log marginal likelihood [ 33 , 34 ]. Let Dt ≜
+
+{(z, q (z)) }z∈St−1  
+
+> t′=1 Bt′
+
+denote the set of observed quality scores from previous iterations. Given Dt,the posterior distribution of s(z∗) for any z∗ ∈ D tr is Gaussian with closed-form mean μt(z∗)
+
+and variance σ2 
+
+> t
+
+(z∗) [ 33 ]. However, exact GP inference requires O(n3) time, where n is the number of observations, rendering it impractical for per-iteration evaluation. Even sparse GP approximations with nind inducing points require O(nn 2
+
+> ind
+
+) time. Our approach (Section 4) addresses this computational bottleneck while preserving the expressiveness of the GP framework for online data selection. 13 A.3 Dynamic-Regret Guarantee via Fixed-Share Hedge 
+
+This appendix supports Theorem 1 of the main text. We state the posterior update of Section 4 as an instance of the fixed-share Hedge algorithm of Herbster and Warmuth [23] and instantiate the standard fixed-share Hedge regret bound for our setting. We condition on the set of strategies S
+
+constructed at initialization by paired sampling from GP (0 , κ ) (see Section 4) and analyze the regret of the posterior update over these fixed strategies, which is the component of the algorithm that is updated online. The GP sampling step is a one-time offline operation whose analysis is orthogonal to the regret argument. 
+
+Setup. Let S be the finite strategy set of size m constructed in Section 4 by paired sampling from GP (0 , κ ), and let T denote the total number of training iterations. At iteration t ∈ { 1, . . . , T },the algorithm holds a distribution pt over S (defined as pt(s) ≜ p(s | D t−1), the posterior from Section 4), samples a strategy, uses it to construct the candidate batch, and observes the per-strategy loss 
+
+ℓt(s) ≜ − log ptop-k
+
+ q(Bt) | s . (8) Note that ℓt(s) can be computed for every s ∈ S from the pre-computed values {s(z)}z∈B t , so the algorithm operates in the full-information setting rather than the bandit setting. Because Bt is itself generated using the sampled strategy st ∼ pt, the loss function ℓt is a random object determined by the algorithm’s own trajectory; Theorem 2 therefore bounds regret along this realized trajectory rather than against a counterfactual trajectory driven by the comparator. 
+
+Loss boundedness. Let b ≜ |B t|. For a fixed set of strategies S sampled at initialization, define 
+
+S ≜ sup  
+
+> s∈S ,z∈D tr
+
+|s(z)| , (9) which is a finite deterministic quantity that can be computed once after the strategies are drawn. We bound ℓt(s) by direct calculation. Let ai ≜ s(z(i))/β . Then 
+
+ℓt(s) = 
+
+> k
+
+X
+
+> j=1
+
+log 
+
+> b
+
+X
+
+> i=1
+
+eai−aj . (10) The lower bound ℓt(s) ≥ 0 follows because the inner sum includes the term i = j, which equals 
+
+1, so each log term is non-negative. The upper bound uses ai − aj ∈ [−2S/β, 2S/β ], giving 
+
+P 
+
+> i
+
+eai−aj ≤ b · e2S/β and therefore ℓt(s) ≤ L with 
+
+L ≜ k log b + 2 S/β  . (11) 
+
+Connection to fixed-share Hedge. We show that the posterior update of Section 4 is a particular instance of fixed-share Hedge. 
+
+Proposition 1 (Equivalence to fixed-share Hedge) . The two-step posterior update of Section 4, 
+
+ˆp(s|D t) ∝ p(s|D t−1) ptop-k
+
+ q(Bt) | sλ , (12) 
+
+p(s|D t) = α/m + (1 − α) ˆ p(s|D t) , (13) 
+
+where ˆp(s|D t) denotes the intermediate post-Hedge distribution and p(s|D t) is the final poste-rior carried into the next iteration, is equivalent to the fixed-share Hedge algorithm of Herb-ster and Warmuth [23] with learning rate λ and mixing rate α, applied to the loss sequence 
+
+ℓt(s) = − log ptop-k(q(Bt) | s).Proof. Substituting ptop-k(q(Bt) | s) = exp( −ℓt(s)) into the first step gives ˆp(s|D t) ∝
+
+p(s|D t−1) exp( −λℓ t(s)) , which is the exponential-weights (Hedge) update with learning rate λ
+
+on the loss ℓt. The second step is the uniform mixing step of fixed-share Hedge with mixing rate α
+
+and uniform prior 1/m .14 Dynamic-regret comparator. To capture non-stationarity of the optimal strategy, we compare the algorithm’s cumulative loss to that of an arbitrary comparator sequence s∗ = ( s∗
+
+> 1
+
+, . . . , s ∗ 
+
+> T
+
+) ∈ S T that is allowed to switch up to K times, i.e. |{ t : s∗
+
+> t+1
+
+̸ = s∗ 
+
+> t
+
+}| ≤ K. The dynamic regret against s∗ is 
+
+Reg T (s∗) ≜
+
+> T
+
+X
+
+> t=1
+
+Es∼pt [ℓt(s)] −
+
+> T
+
+X
+
+> t=1
+
+ℓt(s∗ 
+
+> t
+
+) . (14) 
+
+Statement of the bound. Theorem 2 (Dynamic regret bound, instantiation of 23 for GAIA ). Fix the set of strategies S sampled at initialization, which determines S and hence L. Let s∗ ∈ S T be any comparator sequence with at most K switches. Running the posterior update of Section 4 with learning rate 
+
+λ∗ =
+
+s
+
+8 K log m + K log( T /K ) + log m
+
+L2T (15) 
+
+and mixing rate α∗ = K/ (T − 1) yields 
+
+Reg T (s∗) ≤ L
+
+r T
+
+2
+
+ K log m + K log( T /K ) + log m , (16) 
+
+where L = k(log b + 2 S/β ) is the loss bound from Equation (11) .Proof. By Proposition 1, the posterior update of Section 4 is fixed-share Hedge applied to the loss sequence (ℓt)Tt=1 . The losses satisfy ℓt(s) ∈ [0 , L ] per Equation (11) , and the algorithm operates in the full-information setting because ℓt(s) is computable for every s ∈ S from {s(z)}z∈B t . The bound then follows from the standard dynamic-regret analysis for fixed-share Hedge with bounded losses (see Herbster and Warmuth [23] for the algorithm and Cesa-Bianchi and Lugosi [24] for the 
+
+[0 , L ]-loss analysis via Hoeffding-type exponential-weights bounds), instantiated with the stated choices of λ∗ and α∗.
+
+A.4 Training Tasks 
+
+We follow the experimental setting in GREATS , reported our method on three instruction finetuning tasks: • MMLU Finetuning L LAMA -2-7 B and Q WEN -3-4 B on 5% L ESS data, and evaluate on MMLU, we target the query, key, value, and output projections, setting the LoRA rank to 128, LoRA α to 1.0, and dropout to 0.1. The learning rate is set to 2e-5. • SAM SUM Finetuning L LAMA -3.1-8 B and Q WEN -3-4 B on A LPACA dataset, and evaluate on S AM SUM , we target the the query, value, and output projections within the self-attention layers, as well as the gate, up, and down projections of the feed-forward networks, setting the LoRA rank to 8, LoRA α to 16.0, and dropout to 0.1. The learning rate is set to 2e-5. • TYDIQA Finetuning M ISTRAL -7 B on 40% L ESS data, and evaluate on T YDIQA, we target the query and key attention projections, setting the LoRA rank to 128, LoRA α to 1.0, and dropout to 0.1. The learning rate is set to 1e-5. 
+
+Training Dataset There are two primary instruction tuning datasets are involved in our experiments: LESS [18] and A LPACA [35]. • LESS : A composite dataset combining four instruction tuning sources: F LAN V2 [ 36 ], COT [37], D OLLY [38], and O PEN ASSISTANT [39]. • ALPACA : An instruction-following dataset comprising 52k examples, covering a diverse range of user-oriented tasks. 
+
+Evaluation Dataset To ensure a comprehensive evaluation, we assess performance on three distinct benchmarks: MMLU, T YDIQA, and S AM SUM . We report perplexity for all tasks • MMLU consists of multiple-choice questions across 57 subjects. While our main exper-iments focus on the Sociology subject, we report accuracy across 5 different subjects to demonstrate robustness. 15 • TYDIQA is a multilingual question-answering benchmark covering 11 diverse languages, where the objective is to extract an answer from a provided passage. For evaluation, we randomly select a held-out set of 500 test samples. • SAM SUM involves summarizing dialogues. For this task, we report Perplexity, and ROUGE scores to measure generation quality. 
+
+A.5 Implementation Details GP Training and Hyperparameters Our Gaussian Process model is implemented using the 
+
+GPyTorch library [ 40 ]. We optimize the kernel hyperparameters—specifically the signal variance σs
+
+and lengthscales l—by maximizing the marginal log-likelihood (MLL) of the warm-up observations. The GP training involves 200 iterations with an initial noise standard deviation of 0.1 and a Hedge learning rate of λ = 0 .8. For the adaptive temperature schedule, we update the temperature every 
+
+100 training steps with an increment of 0.01 per interval. The semantic embeddings are projected into a 10 -dimensional subspace using SVD to ensure efficient posterior sampling. 
+
+Task-Specific Configurations We provide the detailed strategy pool sizes and temperature settings for each benchmark in Table 2. Table 2: Hyperparameter settings for GAIA across different tasks. 
+
+Task Strategy Pool Size ( m) Sampling Temp ( τ ) Likelihood Temp ( β)
+
+MMLU 20 0.2 0.1 Samsum 100 0.1 0.01 TyDiQA 150 0.1 0.01 
+
+A.6 Baselines and Scoring Functions 
+
+We compare GAIA against several representative data selection and valuation methods: • GREATS : [7 ] An efficient online batch selection method that employs a greedy algorithm to optimize data batch quality, approximated via Taylor expansion. • GradNorm : [ 41 ] A selection strategy that prioritizes training data points exhibiting the highest gradient norms. • MaxLoss : [42 ] A strategy that selects training data points with the highest loss values, focusing on "hard" examples. • SBERT : [7] A semantic selection method that curates training batches based on their embed-ding similarity to the validation set, utilizing Sentence-BERT [32]. • RHOLoss : [ 43 ] A selection strategy that selects data points by maximizing the difference between the target model’s loss and a reference model’s loss, thereby filtering out noise while prioritizing learnable examples. 
+
+A.7 The Other Surrogate Models: Why Gaussian Processes? 
+
+To demonstrate the superiority of Gaussian Processes for guiding data sampling, Figure 6 evaluates the downstream performance of alternative sampling pipelines driven by standard parametric models (Linear Regression, MLP, and Transformer). We trained these alternative surrogates on the 500 warm-up samples to predict global utility scores, followed by data selection using either a deterministic curriculum (Curric) or probabilistic (Prob) sampling strategy. The results clearly show that these alternative sampling methods fall short. GAIA significantly and consistently outperforms all baseline sampling configurations across all downstream metrics, achieving substantially lower validation and test perplexity, as well as higher test accuracy. This confirms that our GP-based framework provides a much more robust and effective utility signal for data selection, translating directly to superior downstream task performance 16 0 500 1000 1500       
+
+> Steps
+> 4
+> 6
+> 8
+> 10
+> Perplexity
+> Eval Perplexity
+> Transf-Curric
+> Transf-Prob
+> LR-Curric
+> LR-Prob
+> MLP-Curric
+> MLP-Prob
+> GREATS
+> GAIA
+> 0500 1000 1500
+> Steps
+> 4
+> 6
+> 8
+> Perplexity
+> Test Perplexity
+> Transf-Curric
+> Transf-Prob
+> LR-Curric
+> LR-Prob
+> MLP-Curric
+> MLP-Prob
+> GREATS
+> GAIA
+> 0500 1000 1500
+> Steps
+> 0.55
+> 0.60
+> 0.65
+> Accuracy
+> Test Accuracy
+> Transf-Curric
+> Transf-Prob
+> LR-Curric
+> LR-Prob
+> MLP-Curric
+> MLP-Prob
+> GREATS
+> GAIA
+
+Figure 6: Training dynamics on MMLU-Sociology using the L LAMA -2-7 B backbone, comparing downstream performance when using alternative surrogate models for data sampling. Table 3: Comparison of Test Perplexity on MMLU subsets. AVG denotes the mean performance across all five subjects. Bold values indicate the best performance (lower is better). 
+
+Method Anat. Astro. B. Ethics Clin. Know. Abs. Alg. AVG 
+
+Regular 7.4797 7.7748 8.0511 7.5611 8.5603 7.8854 
+
+GREATS 7.2278 6.1785 6.5014 6.1407 7.4420 6.6981 
+
+GAIA 5.8763 6.2896 5.5351 5.2791 6.6205 5.9201 
+
+A.8 MMLU-Others 
+
+As shown in Table 3, GAIA achieves the lowest average perplexity (5.9201), significantly outperform-ing the baseline (7.8854) and GREATS (6.6981). These results confirm that GAIA ’s data selection strategy more effectively captures specialized knowledge than existing approaches. 
+
+A.9 Performance on T YDIQA 
+
+Figure 7 illustrates the convergence and downstream performance on the T YDIQA dataset. Although 
+
+GP-GREATS exhibits a slightly more gradual decline in evaluation and test perplexity during the initial training phase, it eventually achieves a superior convergence floor compared to GREATS . Specifically, the final perplexity levels (both eval and test) of our method are marginally lower than those of the strongest baseline. Furthermore, in terms of downstream task performance, our method maintains an F1 score that is on par with GREATS . This suggests that while our global selection strategy may take longer to identify optimal data patterns on certain datasets, it ultimately reaches a more refined state of model alignment, demonstrating competitive generalization capabilities across diverse linguistic tasks. 
+
+A.10 Qwen model 
+
+To verify that our framework is architecture-agnostic, we extend our evaluation to the Qwen model family. As illustrated in Figure 8, GAIA -GREATS consistently maintains its performance superiority 0 2000 4000     
+
+> Steps
+> 1.2
+> 1.3
+> 1.4
+> Perplexity
+> Eval Perplexity
+> Regular
+> SBERT
+> RHOLoss
+> GREATS
+> GAIA-GREATS
+> 02000 4000
+> Steps
+> 1.30
+> 1.35
+> 1.40
+> 1.45
+> Perplexity
+> Test Perplexity
+> Regular
+> SBERT
+> RHOLoss
+> GREATS
+> GAIA-GREATS
+> 01000 2000
+> Steps
+> 52
+> 53
+> 54
+> 55
+> 56
+> Accuracy
+> Test Accuracy
+> Regular
+> SBERT
+> RHOLoss
+> GREATS
+> GAIA-GREATS
+
+Figure 7: Training dynamics on the T YDIQA benchmark. Our method achieves better perplexity on the test set. All results are averaged over three independent runs. 17 0 500 1000 1500       
+
+> Steps
+> 1.85
+> 1.90
+> 1.95
+> 2.00
+> 2.05
+> Perplexity
+> Eval Perplexity
+> Regular
+> GREATS
+> GAIA-GREATS
+> 0500 1000 1500
+> Steps
+> 2.00
+> 2.05
+> 2.10
+> Perplexity
+> Test Perplexity
+> Regular
+> GREATS
+> GAIA-GREATS
+> 0500 1000 1500
+> Steps
+> 0.825
+> 0.830
+> 0.835
+> Accuracy
+> Test Accuracy
+> Regular
+> GREATS
+> GAIA-GREATS
+
+(a) MMLU - Sociology: Validation Perplexity, Test Perplexity, and Accuracy (from left to right) 0 2000 4000 6000       
+
+> Steps
+> 3.8
+> 4.0
+> 4.2
+> 4.4
+> Perplexity
+> Eval Perplexity
+> Regular
+> GREATS
+> GAIA-GREATS
+> 02000 4000 6000
+> Steps
+> 4.0
+> 4.2
+> 4.4
+> 4.6
+> Perplexity
+> Test Perplexity
+> Regular
+> GREATS
+> GAIA-GREATS
+> 02000 4000 6000
+> Steps
+> 0.275
+> 0.300
+> 0.325
+> 0.350
+> 0.375
+> Rouge
+> Rouge
+> Regular
+> GREATS
+> GAIA-GREATS
+
+(b) SAMSum: Validation Perplexity, Test Perplexity, and Rouge (from left to right) 
+
+Figure 8: Training dynamics on MMLU-Sociology and S AM SUM using the Qwen3-4B backbone. We compare GAIA -GREATS against Regular training and the GREATS baseline to evaluate cross-architecture generalization. over both Regular training and the strong GREATS baseline. On the MMLU-Sociology task, GAIA 
+
+achieves a noticeably faster reduction in both evaluation and test perplexity, which directly translates to a higher and more stable downstream accuracy. Similarly, on the S AM SUM summarization task, 
+
+GAIA exhibits a sharper initial descent in perplexity and secures a higher ROUGE score during the early training stages. These results confirm that the global utility manifold modeled by our Gaussian Process effectively captures intrinsic data quality independently of the underlying LLM architecture, ensuring robust generalization across different foundation models. 
+
+A.11 Performance on Additional MMLU Subjects 
+
+Figure 9 presents a detailed performance comparison across various MMLU subjects, including 
+
+Abstract Algebra, Anatomy, US Foreign Policy, and Astronomy . Our method substantially outpaces 
+
+both the Regular training and GREATS baselines, establishing significantly faster convergence and achieving a noticeably lower convergence floor in terms of test perplexity (PPL). This decisive advantage in PPL underscores our method’s superior efficiency in identifying and learning from high-utility data points. Regarding downstream accuracy, we observe a higher degree of variance compared to the baselines. This phenomenon stems from our framework’s inherent mechanism: by utilizing GREATS as the scoring function—which is fundamentally designed for loss maximization— our approach amplifies the optimization of PPL . While this leads to a superior state of language modeling, it simultaneously introduces instability in accuracy, a metric further sensitized by the discrete nature of multiple-choice tasks. Nevertheless, the overall results demonstrate that our framework possesses formidable convergence capabilities and robust generalization, maintaining highly competitive performance across all benchmarks. 
+
+A.12 Computational Efficiency. 
+
+The computational overhead of our framework is negligible compared to the overall training time. As shown in Table 4, the additional latency introduced by our method consists solely of embedding ac-quisition and GP training. Even on our largest dataset (T YDIQA, N =108,271), these steps combined require less than 80 seconds, while on MMLU, the total overhead is merely ≈23 seconds. Further-more, given that subsequent sampling and probability update operations are of O(1) complexity, these processes impose a marginal burden relative to the backpropagation costs of Large Language Models. Since the GREATS baseline already maintains a training time comparable to standard full-data 18 0 500 1000 1500    
+
+> Steps
+> 6
+> 8
+> 10
+> 12
+> 14
+> Perplexity
+> Test Perplexity
+> Regular
+> GREATS
+> GAIA-GREATS
+> 0500 1000 1500
+> Steps
+> 0.25
+> 0.30
+> 0.35
+> Accuracy
+> Test Accuracy
+> Regular
+> GREATS
+> GAIA-GREATS
+
+(a) Abstract Algebra 0 500 1000 1500     
+
+> Steps
+> 6
+> 8
+> 10
+> 12
+> Perplexity
+> Test Perplexity
+> Regular
+> GREATS
+> GAIA-GREATS
+> 0500 1000 1500
+> Steps
+> 0.30
+> 0.35
+> 0.40
+> 0.45
+> 0.50
+> Accuracy
+> Test Accuracy
+> Regular
+> GREATS
+> GAIA-GREATS
+
+(b) Anatomy 0 500 1000 1500    
+
+> Steps
+> 4
+> 6
+> 8
+> 10
+> Perplexity
+> Test Perplexity
+> Regular
+> GREATS
+> GAIA-GREATS
+> 0500 1000 1500
+> Steps
+> 0.50
+> 0.55
+> 0.60
+> 0.65
+> 0.70
+> Accuracy
+> Test Accuracy
+> Regular
+> GREATS
+> GAIA-GREATS
+
+(c) US Foreign Policy 0 500 1000 1500     
+
+> Steps
+> 6
+> 8
+> 10
+> Perplexity
+> Test Perplexity
+> Regular
+> GREATS
+> GAIA-GREATS
+> 0500 1000 1500
+> Steps
+> 0.38
+> 0.40
+> 0.42
+> 0.44
+> 0.46
+> 0.48
+> Accuracy
+> Test Accuracy
+> Regular
+> GREATS
+> GAIA-GREATS
+
+(d) Astronomy 
+
+Figure 9: Performance comparison on additional MMLU subjects ( Abstract Algebra, Anatomy, US Foreign Policy, Astronomy ). We evaluate GAIA -GREATS against Regular training and the GREATS 
+
+baseline, reporting both test perplexity (PPL) and accuracy. Notably, our method achieves a significant and consistent reduction in PPL across all tasks. While the accuracy metrics exhibit some variance, typical for the inherent stochasticity of multiple-choice tasks, GAIA -GREATS maintains competitive performance. Table 4: Analysis of the additional computational overhead introduced by our method across different benchmarks. We report the training set size and the specific incremental costs: embedding acquisition and Gaussian Process training. All time measurements are reported in seconds. 
+
+TASK SIZE EMB . T IME (S) GP T IME (S)
+
+MMLU 13,533 11.68 11.20 SAM SUM 52,002 17.73 10.54 TYDIQA 108,271 67.33 11.55 
+
+training [ 7], and GAIA -GREATS operates as a lightweight wrapper over these signals, our method achieves superior data selection without introducing significant latency. 
+
+A.13 Visualization of Sampling Dynamics. 
+
+Figure 10 visualizes the indices of sampled data points and their corresponding source strategies to illustrate the sampling behavior of our framework. We observe that the sampling distribution evolves significantly throughout the training process. In the initial phase, the framework exhibits a strong concentration on specific data regions, most notably the dense clusters sampled from strategies 2 and 10, facilitating rapid targeted learning on high-utility samples. As training progresses, however, the sampling pattern naturally shifts towards a more dispersed distribution, covering a broader range of the dataset. This temporal evolution demonstrates that our framework effectively prioritizes efficient convergence through focused exploitation in the early stages, before seamlessly transitioning to broader exploration to ensure sufficient data diversity for robust model generalization. 
+
+A.14 Effectiveness of Adaptive Sampling Temperature. 
+
+To balance exploration and exploitation during the sampling process, we introduce an adaptive temperature mechanism (See Section 4.1). In the early stages of training, a lower temperature is employed to prioritize high-utility samples, facilitating rapid model alignment. As training progresses, the temperature is gradually increased to incorporate greater data diversity and prevent overfitting. To verify its importance, we conduct an ablation study by disabling the adaptive schedule and using a fixed temperature instead. As shown in Figure 3, w/o TA results indicate the absence of adaptive temperature leads to significant training instability, with the model often experiencing performance 19 0 200 400 600 800 1000 1200 1400 1600 
+
+Training Steps 
+
+0
+
+2000 
+
+4000 
+
+6000 
+
+8000 
+
+10000 
+
+12000  
+
+> Data Index
+> 0
+> 1
+> 2
+> 3
+> 4
+> 5
+> 6
+> 7
+> 8
+> 9
+> 10
+> 11
+> 12
+> 13
+> 14
+> 15
+> 16
+> 17
+> 18
+> 19 Strategy ID
+
+Figure 10: Visualization of sampling dynamics on MMLU-Sociology over the course of training. The scatter plot maps sampled data indices (y-axis) against training steps (x-axis), with colors representing the distinct strategies from which samples were drawn. The distinct clustering observed in the initial phase demonstrates that our method prioritizes high-value data first. As training progresses, the selection becomes increasingly broad, thereby achieving greater diversity in the later stages. 0 500 1000 1500 
+
+> Steps
+> 4
+> 6
+> 8
+> Perplexity
+> Test Perplexity
+> Regular
+> GREATS
+> =0.01
+> =0.02
+> =0.03
+> =0.04
+> =0.05
+> =0.1
+> =0.2
+> =0.15
+> =0.3
+
+(a) MMLU-Sociology 0 500 1000 1500  
+
+> Steps
+> 6
+> 8
+> 10
+> 12
+> Perplexity
+> Test Perplexity
+> Regular
+> GREATS
+> =0.01
+> =0.02
+> =0.03
+> =0.04
+> =0.05
+> =0.1
+> =0.2
+> =0.15
+> =0.3
+
+(b) MMLU-Anatomy 
+
+Figure 11: Impact of sampling temperature on test perplexity for MMLU-Sociology and MMLU-Anatomy. 
+
+corruption during the middle stages of training. This empirical evidence confirms that the adaptive temperature mechanism is vital for maintaining a stable optimization trajectory. It effectively prevents the model from over-focusing on a narrow subset of data early on, while ensuring sufficient diversity in later stages to mitigate overfitting and ensure robust convergence. 
+
+A.15 Effect of sampling temperature. 
+
+The sampling temperature, τ , plays a critical role in governing the sharpness of the sampling distribution derived from the Gaussian Process. As illustrated in Figure 11, results on MMLU-Sociology and MMLU-Anatomy, we observe a consistent pattern across different subjects. A lower temperature (e.g., τ = 0 .1) leads to a significantly steeper and more rapid decline in test perplexity during the initial training phase. This is because a lower temperature amplifies the differences between data valuation scores, encouraging the model to aggressively exploit high-utility samples. 20 0 500 1000 1500 
+
+> Steps
+> 4
+> 6
+> 8
+> Perplexity
+> Test Perplexity
+> GREATS
+> all-mpnet-base-v2
+> multi-qa-mpnet-base-dot-v1
+> all-MiniLM-L6
+
+(a) Effect of different pre-trained embedding models on test perplexity (MMLU-Sociology) 0 500 1000 1500 
+
+> Steps
+> 4
+> 6
+> 8
+> Perplexity
+> Test Perplexity
+> 2
+> 4
+> 8
+> 32
+> 64
+> 128
+> 256
+
+(b) Effect of SVD projection dimensionality ( d) on test perplexity (MMLU-Sociology) 
+
+In contrast, a higher temperature results in a more gradual and flatter convergence curve. By smoothing the probability distribution, a larger τ increases the diversity of the selected batches but slows down the identification of the most informative data points. While lower temperatures accelerate early-stage convergence, they require a reliable valuation signal to avoid over-focusing on a narrow data subset. These results demonstrate that the sampling temperature serves as a vital trade-off parameter between aggressive exploitation of perceived data utility and the maintenance of batch diversity. 
+
+A.16 Embedding methods 
+
+We ablate the proxy semantic space using three different sentence transformers in Figure 12a. While all models successfully guide optimization, richer extractors like all-mpnet-base-v2 and 
+
+multi-qa yield a lower test perplexity floor than the lightweight all-MiniLM-L6 . This confirms 
+
+GAIA ’s robustness to embedding choices, though higher-quality semantic representations explicitly improve the final optimization bounds. 
+
+A.17 Embedding Dimension 
+
+To accelerate GP inference, GAIA uses SVD to project high-dimensional embeddings into a compact space. As shown in Figure 12b, we observe that the model’s performance consistently improves as the projection dimension increases. Higher dimensions preserve more comprehensive semantic information from the raw embeddings, leading to faster convergence and lower test perplexity. 
+
+A.18 Warm-up: Impact of Initial Observation Size 
+
+Figure 13 illustrates warm-up dataset size impact on our framework. Extreme undersampling (e.g., N = 100 ) fails to accurately model the utility manifold, while N=200 brings a noticeable improvement. Performance plateaus across N ∈ { 300 , 500 , 1000 }, indicating that our default N=500 achieves an optimal balance between sample efficiency and computational overhead. Further scaling to N = 2000 yields another performance leap, suggesting that a larger initial budget enables higher-resolution manifold modeling for better downstream optimization. 21 0 500 1000 1500 
+
+Steps 
+
+4
+
+6
+
+8
+
+> Perplexity
+
+Test Perplexity 
+
+> GREATS
+> 100
+> 200
+> 300
+> 500
+> 1000
+> 2000
+
+Figure 13: Impact of warm-up dataset size on test perplexity (MMLU-Sociology). We evaluate the effect of varying the number of initial samples used to fit the Gaussian Process prior. 22
