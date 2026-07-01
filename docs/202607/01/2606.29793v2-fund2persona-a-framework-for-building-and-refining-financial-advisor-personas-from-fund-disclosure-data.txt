@@ -1,0 +1,595 @@
+Title: Fund2Persona: A Framework for Building and Refining Financial Advisor Personas from Fund Disclosure Data
+
+URL Source: https://arxiv.org/pdf/2606.29793v2
+
+Published Time: Wed, 01 Jul 2026 01:01:01 GMT
+
+Number of Pages: 17
+
+Markdown Content:
+## Fund2Persona : A Framework for Building and Refining Financial Advisor Personas from Fund Disclosure Data 
+
+Suhwan Park 1,∗, Hoyoung Lee 1,2,∗, Zhangyang Wang 3, Alejandro Lopez-Lira 4,Young Cha 5, Chanyeol Choi 2, Jaewon Choi 6,†, Yongjae Lee 1,2,†
+
+> 1
+
+UNIST 2LinqAlpha 
+
+> 3
+
+University of Texas at Austin 4University of Florida 
+
+> 5
+
+Blackstone 6Hanwha Life 
+
+Abstract 
+
+Demand for personalized financial advising is growing, but consistent advisor expertise is difficult to obtain, scale, and encode in LLM systems. Simple persona prompts rarely specify how a financial advisor should reason and often drift toward generic recommenda-tions. We propose Fund2Persona , a frame-work that grounds financial-advisor personas in fund disclosures, holdings transitions, market context, and manager commentary, then refines them through an agentic actor–scorer–patcher loop. We evaluate the resulting personas on held-out holdings-transition reconstruction and manager-commentary alignment, where they better recover portfolio decisions and grounded manager interpretation than generic baselines. We further study two downstream diagnostics: market-scenario generation, where persona re-trieval broadens plausible investment views be-yond repeated generic rollouts, and advisory dialogues grounded in investor profiles, where matched personas give more specific and use-ful advice than a generic advisor. These re-sults suggest that fund-data-grounded financial-advisor personas can make manager-specific in-vestment expertise portable rather than merely changing an LLM’s surface style. 
+
+1 Introduction 
+
+Large language models (LLMs) are increasingly deployed not only as general-purpose assistants but as domain personas that take on a specific role or expertise. This is especially appealing for financial advising, where users want guidance that reflects coherent views about risk, horizon, and investment style, but access to consistent specialized expertise is limited. A common way to emulate such exper-tise is persona prompting, where a short label or system prompt assigns the model an identity and 
+
+> *Equal contribution
+> †Corresponding authors: jaewonch@hanwha.com; yong-jaelee@unist.ac.kr
+
+the model is expected to answer in character. Yet such persona conditioning is often under-specified: personas placed in system prompts do not reliably improve task behavior (Zheng et al., 2024), and au-tomatically generated personas struggle to capture the multi-dimensional, subjective attributes they are meant to represent (Li et al., 2025a). This limitation is acute in finance, where LLMs are increasingly used as financial advisors and in-vesting agents (Ross et al., 2024; Ross and Lo, 2026; Li et al., 2025b; Miyazaki et al., 2026). For users, financial-advisor identity is not cosmetic; it shapes how risk, horizon, and conviction are trans-lated into an actionable recommendation. Users need advice that reflects coherent investment logic rather than generic heuristics, yet LLM financial advisors often collapse to average recommenda-tions driven by a dominant factor (Ross and Lo, 2026). This raises a need for financial advisors that express a specific and consistent investment style grounded in fund disclosure data, holdings changes, and manager commentary rather than coarse labels. We argue that a fund is a natural source for such grounding: it concentrates a manager’s investment philosophy in disclosure filings and repeated deci-sions in holdings snapshots, providing both stated objectives and revealed holdings changes, and can thus stand in for a financial advisor. We propose 
+
+Fund2Persona , a framework that synthesizes a financial-advisor persona from fund disclosure data and holdings snapshots, refines it with past hold-ings transitions, market context, and manager com-mentary, and validates it before held-out evaluation. Figure 1 summarizes the overall pipeline. In summary, our contributions are as follows. • We propose Fund2Persona , a novel framework that turns a fund’s disclosures and holdings into a reusable financial-advisor persona. • We design a fund-data-grounded refinement and evaluation protocol that measures whether 
+
+> arXiv:2606.29793v2 [cs.CL] 30 Jun 2026 Figure 1: Framework overview. Fund2Persona builds an initial persona from fund evidence, performs fund-data-grounded refinement with replay transitions and manager commentary, selects a checkpoint by validation, and evaluates it on a held-out period.
+
+the persona matches the original fund in both holdings-transition decisions and manager com-mentary. • We evaluate downstream utility in two diagnos-tic settings: market-scenario generation, where retrieved fund personas broaden plausible views, and multi-turn advisory dialogue, where matched personas give more specific and useful advice than a generic advisor. 
+
+2 Related Work 
+
+Financial Personas. Financial advice is user-facing and relationship-dependent: investors of-ten rely on trusted financial advisors (Gennaioli et al., 2015), and user studies of generative-AI fi-nancial advisors show that preference elicitation, investment style, and financial-advisor personality shape both suitability and trust (Takayanagi et al., 2025). Recent LLM finance work studies financial decision making, investment advice, and invest-ing agents (Ross et al., 2024; Ross and Lo, 2026; Ross et al., 2026; Li et al., 2025b; Miyazaki et al., 2026), but these systems can be unstable, prompt-sensitive, or prone to generic recommendations. This motivates financial-advisor personas that ex-press distinct investment expertise; we ground such a persona in fund disclosure data, holdings changes, and manager commentary. 
+
+Behavioral Persona Modeling. Persona prompting is a common way to specialize LLM behavior, but short role labels and system-prompt personas do not reliably improve task behavior (Zheng et al., 2024), and LLM-generated personas can fail to capture the multi-dimensional attributes they are meant to represent (Li et al., 2025a; Wang et al., 2025). Prior work constructs richer personas from interviews with real individuals (Park et al., 2024), demographic survey profiles or backstories (Argyle et al., 2023; Moon et al., 2024), and large synthetic persona collections (Castricato et al., 2024; Ge et al., 2024). These approaches broaden persona construction, but often require costly elicitation or indirect grounding. We instead refine personas from existing fund data using iterative, agentic methods (Madaan et al., 2023; Yao et al., 2023; Shinn et al., 2023). 
+
+3 Framework 
+
+Our framework converts fund disclosures and hold-ings snapshots into a financial-advisor persona that reflects the manager’s investment decision policy, refines it with holdings-transition feedback and manager commentary, and evaluates the fixed per-sona on a held-out period. The whole process is summarized in Figure 1. 
+
+3.1 Problem Setup: Fund as a Policy Object 
+
+A fund F provides disclosure text D and quarterly holdings snapshots {Ht}Tt=0 . We synthesize from them a financial-advisor persona θ.To prevent leakage, we split the timeline into replay, validation, and evaluation spans. Replay transitions Ht−1 → Ht refine the persona, vali-dation selects checkpoints, and evaluation is held out. At each transition, the candidate universe is restricted to the starting snapshot’s top-10 holdings. We compare the following methods. • Buy-and-Hold : a deterministic no-trade port-folio baseline that only lets weights drift with returns. • Generic LLM : a negative control answered by a generic actor without a persona. • Disclosure-Only Persona : uses only disclosure 
+
+D, with no holdings or feedback. • Initial Fund Persona (θ0): a persona built from disclosure and initial holdings, used without re-finement. • Random-Fund Persona : uses a randomly se-lected final persona from another fund while eval-uating on the target fund. • Fund2Persona (ours) (θ∗): θ0 refined with holdings-transition feedback and selected by val-idation. 
+
+3.2 Initial Persona Construction 
+
+An initializer LLM first builds θ0 from disclosure 
+
+D and initial holdings H0. The persona captures the fund’s investment beliefs, portfolio structure, trading style, responses to market events, and risk posture in a fixed format that supports targeted updates. At this stage, it combines what the fund says with what it initially holds, but does not yet reflect how its holdings change over time. 
+
+3.3 Holdings-Transition Reconstruction and Active-Delta Labels 
+
+Both refinement and evaluation run through the same persona actor . For a transition Ht−1 → Ht,the actor predicts the end-of-period portfolio over the candidates given the persona θ, starting hold-ings and weights, the candidate universe, the real-ized fund/ticker returns for the period, and market context. This setup tests whether the persona can reconstruct the fund’s portfolio decisions, rather than forecast returns. The actor outputs a target weight, an active-delta label, and a rationale for each candidate. An increase in portfolio weight does not neces-sarily mean that the manager increased exposure: the weight may have risen simply because the asset outperformed. To separate price movement from active positioning, we first compute the weight that each holding would have reached with no trading: 
+
+wBH  
+
+> i
+
+= w0     
+
+> i(1+ Ri)
+> P
+> jw0
+> j(1+ Rj)
+
+, (1) where Ri is the holding’s return during the period. This lets us decompose the observed weight change into a price-driven component and a manager-action component: 
+
+∆price  
+
+> i
+
+= wBH  
+
+> i
+
+− w0 
+
+> i
+
+,
+
+∆active  
+
+> i
+
+= wgt  
+
+> i
+
+− wBH  
+
+> i
+
+,wgt  
+
+> i
+
+− w0 
+
+> i
+
+= ∆ price  
+
+> i
+
++ ∆ active  
+
+> i
+
+.
+
+(2) The active delta is the behavioral object we score: it is positive when the reported end weight is above price drift, negative when it is below price drift, and near zero when the manager largely lets price drift operate. The actor’s prediction is judged on the same buy-and-hold-adjusted scale, 
+
+b∆active  
+
+> i
+
+= ˆwi − wBH  
+
+> i
+
+. These labels are inferred from reported holdings, not transaction records. Our 5-class labels are active increase for positive active deltas, drift-following when the manager al-lows drift, target-maintaining when the reported weight offsets drift to preserve the starting weight, 
+
+active decrease for negative active deltas, and exit 
+
+when the position is removed. Since the candidate universe is the start-snapshot top-10, entry is not a reported label in this evaluation. On this buy-and-hold-adjusted scale, a 0.25 percentage-point thresh-old filters negligible residual changes; we also re-port a 3-class version: active increase , maintain ,and active decrease .
+
+3.4 Reward: Buy-and-Hold-Adjusted Improvement 
+
+Let d(·, ·) denote the portfolio distance between two weight vectors. Because buy-and-hold already captures price-driven weight changes, the reward measures how much the actor improves on this baseline: 
+
+r = d(wBH , w gt ) − d( ˆ w, w gt )
+
+d(wBH , w gt ) . (3) 
+
+r > 0 means the actor is closer to the fund’s re-ported end holdings than buy-and-hold. For refine-ment, we combine this reward with active-delta label errors and the actor’s rationales to identify why a decision was wrong. 
+
+3.5 Data-Grounded Patch Update 
+
+A deterministic scorer converts replay predictions into buy-and-hold-adjusted reward, active-delta confusions, and top-10 predicted-vs-actual weight tables. The patcher LLM uses these diagnos-tics, actor rationales, and retrospective shareholder-commentary digests to update the persona. Repeating this process yields the checkpoint se-quence θ0 → θ1 → θ2.Quantitative Qualitative                                                  
+
+> Portfolio reconstruction Commentary alignment
+> method 3-acc ↑3-F1 ↑5-acc ↑5-F1 ↑rank-1 (%) ↑avg rank ↓
+> No-persona baselines
+> Buy-and-Hold 0.416 0.196 0.303 0.093 ––Generic LLM 0.349 0.347 0.287 0.182 17.5 3.625
+> Persona-conditioned methods
+> Disclosure-Only Persona 0.375 0.372 0.303 0.209 15.0 3.150 Initial Fund Persona 0.384 0.380 0.309 0.248 20.0 2.600 Random-Fund Persona 0.407 0.382 0.317 0.209 17.5 3.175
+> Fund2Persona (ours) 0.428 0.402 0.339 0.259 30.0 2.450
+
+Table 1: Held-out fund-faithfulness results. Buy-and-Hold is a deterministic no-trade baseline, and Random-Fund Persona uses a final persona from another fund. Portfolio reconstruction uses 69 funds and 690 records; commentary alignment uses the 40 funds with available shareholder commentary from the held-out period. 
+
+3.6 Validation-Based Checkpoint Selection 
+
+We select the final persona on a separate validation period rather than by replay fit. The actor evaluates each checkpoint {θ0, θ 1, θ 2} on the same valida-tion transitions, and we choose the checkpoint with the highest mean buy-and-hold-adjusted reward; checkpoint order breaks ties. The selected persona is then fixed for held-out evaluation. 
+
+4 Data 
+
+We construct a 69-fund universe so that every method sees the same evidence boundary. 497K disclosures state each fund’s mandate, risk pos-ture, and opportunity set, and initialize the stated persona. N-PORT holdings provide nine quar-terly snapshots, which define H0, replay/valida-tion transitions, held-out ground truth, and each top-10 candidate universe. Fund and ticker returns turn those holdings into buy-and-hold drift, active deltas, rewards, and tracking error. 
+
+Monthly market-context digests give the actor period-level macro, sector, and event context. N-CSR/N-CSRS shareholder commentary provides manager-written rationale for persona patching and qualitative evaluation. Appendix A describes the data sources and construction. 
+
+5 Experiments 
+
+We use Fund2Persona ’s persona θ∗ fixed in §3 only on the held-out period, along two axes: a quan-titative axis measuring how well held-out holdings-transition decisions are reconstructed, and a qual-itative axis measuring how close the output is to the actual manager’s market interpretation. GPT-5.4 Mini is used for persona construction, patch-ing, and judging; Gemini 3.1 Flash-Lite is used for replay, validation, held-out actor evaluation, and dialogue/scenario generation. Held-out evaluation occurs after the actor model’s knowledge cutoff. 
+
+5.1 Evaluation Metrics 
+
+The quantitative evaluation uses active-delta label metrics reused from §3.3–3.4. • Accuracy (↑): prediction accuracy of active-delta labels, reported for K ∈ { 3, 5} classes, Acc K =
+
+> 1
+> N
+
+P 
+
+> i
+
+1[ˆ y(K) 
+
+> i
+
+= y(K) 
+
+> i
+
+].• Macro-F1 (↑): the mean per-class F1, robust to label imbalance, reported for K ∈ { 3, 5} classes. 
+
+5.2 Quantitative: Post-Period Copy-Trading Reconstruction Task. We simulate the 2025Q3–2026Q1 held-out transition as a monthly copy-trading problem. Start-ing from the evaluation-period top-10 holdings, each method receives the same candidate universe, current predicted weights, compact monthly mar-ket context, and realized fund/ticker returns for that month, then outputs next-month target weights. The predicted portfolio is rolled forward month by month and compared with the next reported hold-ings. 
+
+Results. Table 1 reports the held-out reconstruc-tion metrics. Buy-and-Hold remains a strong no-trade portfolio baseline because top-10 weights move slowly. Given the same holdings and market context, Fund2Persona (ours) achieves the best active-delta label scores across the deterministic and persona baselines, suggesting that refinement better captures how managers increase, maintain, reduce, or exit positions. Figure 2: Scenario-space coverage for market forecasting. For the same open-ended market query, generic LLM rollouts concentrate around a narrow funding-and-buildout thesis, while agentically retrieved fund personas generate a broader set of persona-conditioned scenarios. The resolved outcome lies near a persona scenario that anticipates a slowdown in OpenAI’s infrastructure spending plans. 
+
+5.3 Qualitative: Manager-Commentary Alignment Task. For the same 2025Q3–2025Q4 held-out pe-riod, we evaluate the 40 funds among the 69-fund universe with available N-CSR/N-CSRS share-holder commentary. Each method’s persona gen-erates manager-style commentary from the same market and portfolio context, which is compared against actual manager commentary. We evaluate manager-specific investment lens, risk posture, and market interpretation, not surface style. 
+
+Results. A blind judge ranks the five methods’ anonymized memos against the actual manager commentary by closeness to the manager’s view. We report each method’s rank-1 rate (↑) and av-erage rank (↓). Because memos and commentary differ in available information, this measures align-ment with the manager’s perspective, not whether the model used the manager’s exact decision pro-cess. Table 1 shows that Fund2Persona (ours) 
+
+achieves the highest rank-1 rate (30.0%) and best average rank (2.450). 
+
+6 Case Study 
+
+6.1 Case Study 1: Persona-Guided Scenario Diversification 
+
+The first case study evaluates scenario generation through a diversity lens: if fund-data-grounded personas encode distinct investment logic, re-trieving different personas should broaden the set of plausible market scenarios for the same query. We use OpenForesight, a news-grounded forecasting dataset built to evaluate future-event reasoning (Chandak et al., 2025). We filter the dataset to 95 economic and business-related market-event queries; for each query, the Generic LLM baseline answers 20 times without a per-sona, while Fund2Persona retrieves 20 relevant fund personas and each retrieved persona gener-ates one scenario. We embed the generated sce-narios with all-MiniLM-L6-v2 and measure scenario-space spread by the mean pairwise cosine distance within each 20-scenario set.        
+
+> Metric Generic Personas Win Pairwise dist. ↑0.313 ±0.070 0.381 ±0.038 91.6%
+> Table 2: Aggregate scenario-space diversity over 95 OpenForesight market-event queries, measured by mean pairwise cosine distance among scenario embeddings. Both methods use 20 generated scenarios per query.
+
+Result. Table 2 shows that persona-conditioned generation expands the scenario space on aggregate. Under the same 20-scenario budget, retrieved per-sonas increase the mean pairwise cosine distance from 0.313 to 0.381 and outperform the generic baseline on 91 .6% of the 95 queries. This indi-cates that the gain is not driven by producing more samples, but by conditioning generation on dis-tinct fund decision logics. Figure 2 visualizes the corresponding scenario embeddings after UMAP projection and provides a qualitative example of this aggregate pattern. Figure 3: Example multi-turn advisory dialogue com-paring a generic financial advisor with a matched fund-data-grounded financial advisor for the same investor profile. The bottom panel shows the blinded judge’s pairwise judgment result. 
+
+6.2 Case Study 2: Investor-Specific Persona Advice 
+
+Individual investors differ in risk attitudes, con-straints, holdings, and preferences, and they seek advice that translates those personal conditions into specialized investment guidance. We therefore ask whether matching each investor with a fund-data-grounded financial-advisor persona leads to more personalized and specialized financial advice. To run this user-specific task, we need realistic investor profiles rather than synthetic preference lists. We use FAR-Trans customer attributes, transaction his-tories, and asset metadata to synthesize each profile and initial investment query (Sanz-Cruzado et al., 2024). From the eligible persona-expressive cases where the grounded facts imply a clear investment preference or tension, we randomly sample 50 in-vestors. We then test whether the matched financial-advisor persona provides more personalized and useful advice than a generic financial advisor or an unrelated persona. For each investor, we use an LLM-based agen-tic search over the final fund-persona pool. The search reads the investor’s grounded profile and initial query, derives search cues, and retrieves candidate personas whose manager decision logic matches those cues. It then selects the persona ex-pected to provide the most useful investment lens for that concern. We also assign an intentionally mismatched persona whose decision logic conflicts with the investor’s risk attitude, preferences, or anti-preferences. The user simulator is initialized with the same profile and preference summary, then conducts a five-turn advisory dialogue with a matched persona-conditioned financial advisor, a generic financial advisor, and a mismatched persona-conditioned financial advisor. Dialogue generation uses Gemini 3.1 Flash-Lite. We use GPT-5.4 Mini as the judge. It makes pairwise comparisons at turns 3 and 5, and sepa-rately assigns 1–5 rubric scores for preference fit and practical usefulness.                      
+
+> Pairwise win rate Rubric score financial advisor Turn 3 ↑Turn 5 ↑pref. ↑useful ↑
+> Generic LLM 49.0 31.0 3.34 3.14 Mismatched Persona 18.0 13.0 2.46 2.40 Matched Persona 66.5 78.0 3.60 3.26
+> Table 3: Pairwise win rates and 1–5 rubric scores on 50 persona-expressive investors. Pairwise judgments are run twice with swapped advisor order to reduce position bias.
+
+Result. Table 3 shows that matched financial-advisor personas are preferred over both generic and mismatched advisors. They achieve the strongest pairwise preferences, reaching a 78.0% turn-5 win rate, and receive the highest preference-fit and usefulness scores. 
+
+7 Conclusion 
+
+We presented Fund2Persona , which converts manager-grounded evidence–fund disclosures, holdings transitions, market context, and man-ager commentary–into reusable financial-advisor personas refined through an agentic actor–scorer– patcher loop. On held-out holdings-transition reconstruction, the refined personas better re-cover portfolio decisions and manager interpreta-tion than generic baselines. In case studies, re-trieved personas broaden market-scenario views, and matched financial-advisor personas are pre-ferred in grounded advisory dialogues. These re-sults suggest that data-grounded financial-advisor personas make manager expertise portable, helping financial systems reason with distinct investment perspectives rather than generic advice. Limitations 
+
+Our evaluation has several limitations. First, the framework uses specific LLMs: GPT-5.4 Mini for persona construction, patching, and judging, and Gemini 3.1 Flash-Lite for replay, validation, held-out evaluation, and dialogue/scenario generation. Fund2Persona is model-agnostic, so practitioners can substitute models for their use case, but results may vary across models because different LLMs can exhibit different tendencies in financial anal-ysis (Lee et al., 2025). Second, the commentary-alignment and advisory-dialogue evaluations rely on a single LLM judge. Future work should add evaluations by fund-domain experts and measure agreement between human expert judgments and LLM judgments. Third, the fund-level study uses strict evidence-complete screens–aligned disclo-sures, holdings snapshots, price coverage, mar-ket context, and manager commentary–which im-proves comparability but limits the sample to 69 funds. 
+
+References 
+
+Lisa P. Argyle, Ethan C. Busby, Nancy Fulda, Joshua R. Gubler, Christopher Rytting, and David Wingate. 2023. Out of one, many: Using language mod-els to simulate human samples. Political Analysis ,31(3):337–351. Louis Castricato, Nathan Lile, Rafael Rafailov, Jan-Philipp Fränken, and Chelsea Finn. 2024. PER-SONA: A reproducible testbed for pluralistic align-ment. Preprint , arXiv:2407.17387. Nikhil Chandak, Shashwat Goel, Ameya Prabhu, Moritz Hardt, and Jonas Geiping. 2025. Scaling open-ended reasoning to predict the future. Preprint ,arXiv:2512.25070. Tao Ge, Xin Chan, Xiaoyang Wang, Dian Yu, Haitao Mi, and Dong Yu. 2024. Scaling synthetic data creation with 1,000,000,000 personas. Preprint ,arXiv:2406.20094. Nicola Gennaioli, Andrei Shleifer, and Robert Vishny. 2015. Money doctors. The Journal of Finance ,70(1):91–114. Hoyoung Lee, Junhyuk Seo, Suhwan Park, Junhyeong Lee, Wonbin Ahn, Chanyeol Choi, Alejandro Lopez-Lira, and Yongjae Lee. 2025. Your AI, not your view: The bias of LLMs in investment analysis. In Pro-ceedings of the 6th ACM International Conference on AI in Finance .Ang Li, Haozhe Chen, Hongseok Namkoong, and Tianyi Peng. 2025a. LLM generated persona is a promise with a catch. Preprint , arXiv:2503.16527. Weixian Waylon Li, Hyeonjun Kim, Mihai Cucuringu, and Tiejun Ma. 2025b. Can LLM-based financial investing strategies outperform the market in long run? Preprint , arXiv:2505.07078. Aman Madaan, Niket Tandon, Prakhar Gupta, Skyler Hallinan, Luyu Gao, Sarah Wiegreffe, Uri Alon, Nouha Dziri, Shrimai Prabhumoye, Yiming Yang, Shashank Gupta, Bodhisattwa Prasad Majumder, Katherine Hermann, Sean Welleck, Amir Yazdan-bakhsh, and Peter Clark. 2023. Self-refine: Itera-tive refinement with self-feedback. In Advances in Neural Information Processing Systems , volume 36, pages 46534–46594. Curran Associates, Inc. Kunihiro Miyazaki, Takanobu Kawahara, Stephen Roberts, and Stefan Zohren. 2026. Toward ex-pert investment teams: A multi-agent LLM sys-tem with fine-grained trading tasks. Preprint ,arXiv:2602.23330. Suhong Moon, Marwa Abdulhai, Minwoo Kang, Joseph Suh, Widyadewi Soedarmadji, Eran Kohen Behar, and David M. Chan. 2024. Virtual personas for language models via an anthology of backstories. In Proceedings of the 2024 Conference on Empiri-cal Methods in Natural Language Processing , pages 19864–19897. Joon Sung Park, Carolyn Q. Zou, Jonne Kamphorst, Niles Egan, Aaron Shaw, Benjamin Mako Hill, Car-rie Cai, Meredith Ringel Morris, Percy Liang, Robb Willer, and Michael S. Bernstein. 2024. LLM agents grounded in self-reports enable general-purpose sim-ulation of individuals. Preprint , arXiv:2411.10109. Jillian Ross, Yoon Kim, and Andrew W. Lo. 2024. LLM economicus? mapping the behavioral biases of LLMs via utility theory. In Conference on Language Mod-eling (COLM) .Jillian Ross and Andrew W. Lo. 2026. One size fits none: Heuristic collapse in LLM investment advice. 
+
+Preprint , arXiv:2604.23837. Jillian Ross, Eric So, and Andrew W. Lo. 2026. Breaking bad financial habits: How LLM conver-sations correct financial misconceptions. Preprint ,arXiv:2604.27022. Javier Sanz-Cruzado, Nikolaos Droukas, and Richard McCreadie. 2024. FAR-Trans: An investment dataset for financial asset recommendation. In IJ-CAI 2024 Workshop on Recommender Systems in Finance (Fin-RecSys) , Jeju, Republic of Korea. Noah Shinn, Federico Cassano, Ashwin Gopinath, Karthik Narasimhan, and Shunyu Yao. 2023. Re-flexion: Language agents with verbal reinforcement learning. In Advances in Neural Information Process-ing Systems , volume 36, pages 8634–8652. Curran Associates, Inc. Takehiro Takayanagi, Kiyoshi Izumi, Javier Sanz-Cruzado, Richard McCreadie, and Iadh Ounis. 2025. Are generative AI agents effective personalized fi-nancial advisors? In Proceedings of the 48th Inter-national ACM SIGIR Conference on Research and Development in Information Retrieval , pages 286– 295. Angelina Wang, Jamie Morgenstern, and John P. Dick-erson. 2025. Large language models that replace human participants can harmfully misportray and flatten identity groups. Nature Machine Intelligence ,7(3):400–411. Shunyu Yao, Jeffrey Zhao, Dian Yu, Nan Du, Izhak Shafran, Karthik R. Narasimhan, and Yuan Cao. 2023. ReAct: Synergizing reasoning and acting in language models. In International Conference on Learning Representations .Mingqian Zheng, Jiaxin Pei, Lajanugen Logeswaran, Moontae Lee, and David Jurgens. 2024. When “a helpful assistant” is not really helpful: Personas in system prompts do not improve performances of large language models. In Findings of the Associ-ation for Computational Linguistics: EMNLP 2024 ,pages 15126–15154. A Data Construction 
+
+A.1 Fund Universe 
+
+We construct a strict evidence-complete validation universe rather than a broad census of all funds. Each screen keeps funds for which the persona, buy-and-hold baseline, active-delta labels, and tracking-error calculation can all be measured cleanly. Table 4 summarizes the screen and the reason for using it. 
+
+Screen Rationale Funds SEC fund series Start from SEC series identifiers so filings, disclosures, and tickers can be joined at the fund level. 11,858 
+
+Nine N-PORT snapshots Require 2024Q1–2026Q1 history so the same fund can support replay, validation, and held-out evaluation. 9,932 
+
+ETF-like public ticker Keep standard 2–4 letter fund tickers and exclude mostly five-letter mutual-fund share classes, which are less comparable to the active/thematic traded vehicles we evaluate. 2,345 
+
+Trackable U.S. equity fund Keep funds whose behavior is visible in stock holdings: at least 80% equity, at least 80% U.S. exposure, and less than 5% derivatives. 936 
+
+Usable 497K disclosure Require enough prospectus text to initialize a stated investment mandate and risk posture. 908 
+
+LLM mandate filter Keep manager-driven active or thematic equity strategies; remove passive index trackers, formulaic rules-only products, and non-equity vehicles. 118 
+
+Complete price coverage Require fund and top-10 holding prices so buy-and-hold drift, active deltas, and tracking error are defined for every evaluation record. 69 
+
+Table 4: Fund universe construction. The final 69 funds form a strict evidence-complete validation set; the same pipeline can be expanded by relaxing coverage screens or adding missing disclosure and price data. 
+
+The retained sample contains 69 funds. Each fund has nine holdings snapshots, a disclosure excerpt used for persona initialization, price series for the fund and top holdings, market-context digests, and shareholder-report digests where available. We use this strict set for validation so that all methods are compared on the same evidence boundary rather than on heterogeneous data availability. 
+
+Ticker Fund name Ticker Fund name ACGR American Century Sustainable Growth ETF ACLC American Century Sustainable Equity ETF 
+
+ACVF American Conservative Values ETF AMID Argent Mid Cap ETF 
+
+AMOM QRAFT AI-Enhanced U.S. Large Cap Momentum ETF AOTG AOT Growth and Innovation ETF 
+
+ARKQ ARK Autonomous Technology & Robotics ETF AVIE Avantis Inflation Focused Equity ETF 
+
+AVLV Avantis U.S. Large Cap Value ETF AVSU Avantis Responsible U.S. Equity ETF 
+
+AVUS Avantis U.S. Equity ETF BCHP Principal Focused Blue Chip ETF 
+
+BDVG iMGP Berkshire Dividend Growth ETF BEEZ Honeytree U.S. Equity ETF 
+
+BUYZ Franklin Disruptive Commerce ETF DIVL Madison Dividend Value ETF 
+
+DSTL Distillate U.S. Fundamental Stability & Value ETF DUSA Davis Select U.S. Equity ETF 
+
+DVND Touchstone ETF Trust-Touchstone Dividend Select ETF EMLP First Trust North American Energy Infrastructure Fund 
+
+FBCG Fidelity Blue Chip Growth ETF FBCV Fidelity Blue Chip Value ETF 
+
+FDG American Century Focused Dynamic Growth ETF FDV Federated Hermes U.S. Strategic Dividend ETF 
+
+FFLC Fidelity New Millennium ETF FFLG Fidelity Growth Opportunities ETF 
+
+FLV American Century Focused Large Cap Value ETF FMAG Fidelity Magellan ETF 
+
+FPWR First Trust EIP Carbon Impact ETF GK AdvisorShares Gerber Kawasaki ETF 
+
+HFGO Hartford Large Cap Growth ETF ITAN Sparkline Intangible Value ETF 
+
+IWFG IQ Winslow Focused Large Cap Growth ETF IWLG IQ Winslow Large Cap Growth ETF 
+
+JHAC John Hancock Fundamental All Cap Core ETF JTEK JPMorgan U.S. Tech Leaders ETF 
+
+LCF Trust-Touchstone US Large Cap Focused ETF LGRO Level Four Large Cap Growth Active ETF 
+
+LRGC AB US Large Cap Strategic Equities ETF LSGR Natixis Loomis Sayles Focused Growth ETF 
+
+MDLV Morgan Dempsey Large Cap Value ETF MID American Century Mid Cap Growth Impact ETF 
+
+MMLG First Trust Multi-Manager Large Growth ETF NDVG Nuveen Dividend Growth ETF 
+
+NUGO Nuveen Growth Opportunities ETF NWLG Nuveen Winslow Large-Cap Growth ESG ETF 
+
+OALC ONEASCENT LARGE CAP CORE ETF PJFG PGIM Jennison Focused Growth ETF 
+
+PJFV PGIM Jennison Focused Value ETF QLTY GMO U.S. Quality ETF 
+
+QRFT QRAFT AI-Enhanced U.S. Large Cap ETF RFFC ALPS Active Equity Opportunity ETF 
+
+SEMI Columbia Seligman Semiconductor and Technology ETF SMRI Bushido Capital US Equity ETF 
+
+STNC Hennessy Stance ESG ETF TBG TBG Dividend Focus ETF 
+
+TCAF T. Rowe Price Capital Appreciation Equity ETF TCHP T. Rowe Price Blue Chip Growth ETF 
+
+TEQI T. Rowe Price Equity Income ETF TGLR LAFFER TENGLER Equity Income ETF 
+
+TGRT T. Rowe Price Growth ETF TGRW T. Rowe Price Growth Stock ETF 
+
+TSME Thrivent Small-Mid Cap ESG ETF VNSE Natixis Vaughan Nelson Select ETF 
+
+VSLU Applied Finance Valuation Large Cap ETF WUGI AXS Esoterica NextG Economy ETF 
+
+XDAT Franklin Exponential Data ETF YALL God Bless America ETF 
+
+ZECP Zacks Earnings Consistent Portfolio ETF 
+
+Table 5: Ticker and fund-name list for the final evidence-complete fund universe. A.2 Temporal Coverage and Splits 
+
+The nine aligned snapshots span 2024Q1–2026Q1 and are split into replay, validation, and held-out evaluation blocks.         
+
+> Block Transitions Use
+> Replay 2024Q1 →2024Q2 through 2024Q4 →2025Q1 Persona refinement feedback
+> Validation 2025Q1 →2025Q2; 2025Q2 →2025Q3 Checkpoint selection
+> Held-out evaluation 2025Q3 →2025Q4; 2025Q4 →2026Q1 Reported test metrics
+
+A.3 Disclosure, Quarterly Holdings, and Prices 
+
+The stated fund profile comes from 497K prospectus filings retrieved from SEC EDGAR at the fund series/class level and converted from filing HTML into plain text. Quarterly N-PORT holdings are parsed from SEC source archives, aligned by series identifier, and reduced to each snapshot’s reported top-10 equity holdings. Daily prices are matched for each fund ticker and top-10 holding. 
+
+A.4 Market and News Context 
+
+For each calendar month, we build one public market digest from the news/article pool. Each digest summarizes the month arc, macro backdrop, policy and regulation, sector events, cross-cutting themes, source-domain annotations, and boundary notes. The runner attaches the relevant monthly digests to replay, validation, and evaluation transitions as public context; they contain no shareholder-report evidence, end holdings, labels, or scorer output. 
+
+A.5 Shareholder Commentary Digests 
+
+N-CSR and N-CSRS are annual and semiannual shareholder-report filings. We collect relevant filings from SEC EDGAR, retain passages with manager interpretation or portfolio response, and discard holdings-only, administrative, or boilerplate material. The quarter-aligned digests record timing caveats when annual or semiannual commentary overlaps multiple quarters, support patcher feedback and commentary references, and are not exposed to the evaluation actor. 
+
+A.6 Case-Study Diagnostic Queries 
+
+For the scenario-diversity case study, we filter the OpenForesight HuggingFace release (Chandak et al., 2025) to economic, business, and market-relevant records. Each selected record provides a source question and metadata. We ask the same query to a generic generator and to generators conditioned on retrieved fund personas.     
+
+> QID Raw source question
+> 155813 Which group will be cited as expecting U.S. soybean farmers to have a third straight year of losses in 2025, by December 31, 2025?
+> 35 Which partner group will face a 15% baseline U.S. tariff on autos, pharmaceuticals, and semiconductors?
+> 733 Which nuclear power plant will receive GBP 14.2 billion in funding under the 2025 Spending Review?
+
+Table 6: Examples of raw OpenForesight records used to build the scenario-diversity query set. 
+
+B Experiment Details 
+
+B.1 Model Usage        
+
+> Model Used for Knowledge cutoff GPT-5.4 Mini Persona construction, persona patching Aug. 31, 2025 Gemini 3.1 Flash-Lite Replay, validation, held-out evaluation, commentary and sce-nario generation Jan. 2025
+> all-MiniLM-L6-v2 Scenario embeddings N/A Table 7: Model roles in the experiments. Knowledge cutoffs are provider-reported for the LLMs.
+
+B.2 Buy-and-Hold Drift and Active-Delta Examples 
+
+For each transition, buy-and-hold first converts the starting weight w0
+
+i into the return-drifted weight wBH 
+
+i .The price-driven change and the inferred behavior change are 
+
+∆price 
+
+i = wBH 
+
+i − w0
+
+i , ∆active 
+
+i = wgt 
+
+i − wBH 
+
+i .
+
+The portfolio reward compares model error to the buy-and-hold error: 
+
+DBH = 12
+
+X
+
+i
+
+|wgt 
+
+i − wBH 
+
+i |, Dmodel = 12
+
+X
+
+i
+
+|wgt 
+
+i − ˆwi|, R = DBH − Dmodel 
+
+DBH 
+
+.
+
+Table 8 shows the same arithmetic on three actual held-out positions. Here w0 is the starting weight, wBH 
+
+is the return-drifted buy-and-hold weight, wgt is the next reported weight, and ˆw is the model prediction; Price, Active, and Pred. are the corresponding deltas relative to w0 or wBH . The final column is the position-level analogue of the reward term; the portfolio reward uses the active-share sums above. 
+
+Case w0 wBH wgt ˆw Price Active Pred. Ri
+
+Active increase: GK–LLY 3.68 4.68 7.19 7.29 +0.99 +2.52 +2.61 0.96 Maintain: BEEZ–LRCX 4.96 8.03 4.32 4.28 +3.07 -3.71 -3.75 0.99 Active decrease: FLV–JNJ 5.55 6.77 3.46 4.00 +1.22 -3.31 -2.77 0.84 
+
+Table 8: Examples of price drift, active delta, and buy-and-hold-adjusted reward arithmetic. Case names use fund ticker–holding ticker notation, e.g., GK–LLY is LLY within fund GK. Weights and deltas are percentage points of fund weight. Price = wBH − w0; Active = wgt − wBH ; Pred. = ˆ w − wBH .
+
+B.3 Validation Checkpoints 
+
+(a) Validation trajectory (b) Selected checkpoint distribution 
+
+Figure 4: Validation diagnostics across the 69 funds. Additional refinement is not always better on validation: θ0 is the initial persona, while θ1 and θ2 are after one and two refinement rounds; the selected checkpoints are 16, 34, and 19 funds, respectively. 
+
+B.4 Persona Refinement Feedback Examples 
+
+Table 9 gives qualitative examples of the feedback signal used by the patcher. Each row summarizes the replay mismatch, the shareholder-commentary signal, and the policy language added to the persona.      
+
+> Fund Replay mismatch Shareholder-commentary signal Persona refinement
+> AVIE The actor over-interpreted short-term price moves and sometimes treated style underperformance as a reason to rebalance away from the portfolio’s inflation-sensitive stance. Commentary attributed underperformance to overweight inflation-sensitive sectors and underweight mega-cap growth, but did not frame this as a mandate change. The persona was revised to treat such commentary as attribution rather than a trading signal: stay patient when technology/growth leads, and change exposure only when inflation sensitivity, valuation, or financial health materially changes.
+> EMLP The actor chased strong energy-infrastructure winners, missed some core adds, and confused passive drift with deliberate target maintenance. Manager commentary repeatedly emphasized natural-gas pipeline and infrastructure exposure, conservative balance sheets, stable cash flows, and underweight crude-oil MLP exposure. The persona added a persistent natural-gas infrastructure tilt, clarified that trimming winners can be position-size discipline rather than conviction loss, and made target maintenance a deliberate active decision.
+
+Fund Replay mismatch Shareholder-commentary signal Persona refinement 
+
+FBCV The actor often held positions that the manager trimmed for risk control, while also trimming some holdings merely because prices weakened. Commentary described detractors in utilities, communication services, and health care, reductions in challenged names such as PG&E and Centene, and selective adding after temporary risk shocks. The persona was updated to separate fundamental trims from price weakness: trim sector overweights when identifiable headwinds crystallize, hold through reversible drawdowns, and add only when a high-conviction name becomes undervalued after temporary pressure. 
+
+Table 9: Examples of replay and shareholder-commentary feedback translated into persona revisions. 
+
+B.5 Generated Persona Examples 
+
+Persona Style Generated persona excerpt (shortened) 
+
+ARKQ Robotics and automation growth I target long-term capital appreciation in companies leading automation, AI, energy transformation, and advanced materials. My approach is conviction-driven but disciplined: in market stress, policy uncertainty, or liquidity shocks, I trim high-beta or overvalued names more proactively to manage concentration and tracking error. In accommodative or pro-innovation regimes, I am more willing to maintain or add to high-conviction names, but I still avoid chasing positions that have already drifted far above their intended role. 
+
+SEMI Semiconductor stack and AI infrastructure I focus on the semiconductor stack and adjacent technology enablers, favoring product leadership, strong execution, and durable franchises across compute, chip design, manufacturing, test, and packaging. In strong AI-led or semiconductor-led tapes, I can add where the manager is intentionally leaning into leadership, but I still distinguish a true active increase from ordinary drift. When leadership becomes crowded, rates stay restrictive, or a winner is overextended, I prefer disciplined maintenance or trimming rather than reflexive winner-chasing. 
+
+EMLP Energy infrastructure income I specialize in North American energy infrastructure, emphasizing fee-for-service assets, pipelines, utilities, storage, and stable cash flows while limiting commodity-price cyclicality. I react to regime shifts only when they affect cash-flow stability or financing conditions: rising-rate or sticky-inflation backdrops push me toward pricing power, conservative balance sheets, and long-term contracts. In a falling-rate environment, I look for companies that could benefit from lower financing costs and demand growth, but I do not abandon the conservative quality posture. 
+
+AMOM AI-enhanced momentum I am an AI-enhanced active manager seeking large-cap momentum, using expected price-appreciation signals while keeping strict size controls. During volatility spikes from tariffs, geopolitical shocks, or hawkish policy surprises, I tighten de-risking and reduce exposure to names that have run up the most. In technology-led rallies or monetary easing cycles, I keep momentum exposure to AI and large-cap growth winners, but I avoid adding to already crowded positions and use broad rallies to rebalance the largest active exposures. 
+
+AVIE Inflation-focused equity I build around sectors that historically perform well during rising or elevated inflation: financials, energy, healthcare, consumer staples, and metals and mining. I accept that the portfolio can lag when market leadership shifts toward mega-cap growth or non-inflation-sensitive technology, and I do not change posture just because of short-term relative underperformance. I make larger changes only when the inflation regime itself, or a holding’s pricing power, inflation sensitivity, valuation, or financial health, materially changes. 
+
+DIVL Dividend growth and value Sustainable dividend growth, not yield alone, drives my process; I screen for balance-sheet strength, free cash flow, payout coverage, and dividend sustainability. Rising rates, trade uncertainty, or volatility make me re-check refinancing risk, payout ratios, and cash-flow durability, especially for high-debt issuers. Market rallies led by non-dividend-paying growth stocks do not by themselves make me abandon the dividend-quality thesis; I reduce exposure only when dividend support or business quality deteriorates. 
+
+YALL Domestic shareholder value I use a shareholder-value lens for domestic listed businesses, but I do not treat public posture as a substitute for fundamentals, valuation, and capital-allocation discipline. In sticky-inflation, restrictive-rate, or policy-uncertain regimes, I lean on quality, pricing power, and balance-sheet strength. In broader risk-on markets, I stay invested and can keep broad active exposure, but I still add only where the company-specific case earns it and avoid blanket beta-chasing. 
+
+Table 10: Representative selected personas. The table reports shortened versions of the generated personas. 
+
+B.6 Additional Scenario-Diversification Diagnostics 
+
+The main text shows one OpenAI funding example. Figure 5 shows three additional records. Each panel compares 20 generic scenarios with 20 responses from personas selected for the same query by the agentic retrieval step. The 2D embedding projections are only a visual summary of coverage; the qualitative comparison below reports the query, resolved outcome, and nearest generated texts. 
+
+(a) EU-US tariff agreement (b) UK nuclear-energy funding (c) Strategic mineral stockpiling Figure 5: Additional scenario-diversification diagnostics using 20 generic scenarios and 20 retrieved-persona scenarios. Case Qualitative comparison EU-US tariff agreement Query: From the perspective of an investor on 2025-07-28, describe one plausible market scenario for how EU-US tariff agreement implementation could evolve by 2025-07-31. 
+
+Resolved: The EU and US reached a framework trade deal that avoided a threatened 30% tariff but imposed a 15% baseline US tariff on most EU exports, including autos, pharmaceuticals, and semiconductors, alongside EU energy-purchase and US-investment commitments. 
+
+Nearest generic: The EU and U.S. finalize a “mini-deal” focused on suspending retaliatory duties on steel and aluminum in exchange for shared regulatory standards on green technology subsidies. 
+
+Nearest retrieved-persona: A narrow EU-US tariff agreement on high-tech components provides a reprieve for consumer electronics supply chains and prompts tactical re-entry into ground transportation and logistics providers previously sidelined by trade uncertainty. 
+
+Interpretation: The generic nearest neighbor captures de-escalation, but the retrieved-persona scenario moves the case toward sector incidence, high-tech components, supply chains, and portfolio re-entry decisions. UK nuclear-energy funding 
+
+Query: From the perspective of an investor on 2025-06-01, describe one plausible market scenario for how UK nuclear-energy funding could evolve by 2025-06-10. 
+
+Resolved: The UK government announced a definitive GBP 14.2bn Spending Review funding commitment to build the Sizewell C nuclear plant, ending years of delay and uncertainty around the project. 
+
+Nearest generic: The UK government announces a strategic partnership with private equity consortia to fast-track the Final Investment Decision for Sizewell C, triggering a surge in domestic infrastructure bonds. 
+
+Nearest retrieved-persona: The UK government secures a definitive multi-billion pound funding commitment for Sizewell C, signaling a transition from state-led development to a private-public infrastructure financing model and rerating the nuclear supply chain. 
+
+Interpretation: Both nearest scenarios identify Sizewell C, but the retrieved-persona scenario is more specific about a definitive funding commitment, financing certainty, and the infrastructure-investment channel. US strategic mineral stockpiling 
+
+Query: From the perspective of an investor on 2026-01-09, describe one plausible market scenario for how US strategic mineral stockpiling policy could evolve by 2026-02-01. 
+
+Resolved: The US strategic minerals stockpile initiative was identified as Project Vault, reflecting a policy push around critical mineral security. 
+
+Nearest generic: The US government formalizes a “Critical Mineral Security Pact” with subsidies and expedited permitting for domestic rare earth processing, triggering a rally in mid-cap miners. 
+
+Nearest retrieved-persona: A multi-year “Strategic Mineral Resiliency Act” prioritizes domestic or allied-sourced critical minerals and stockpiles gallium, germanium, and battery-grade lithium, creating a valuation floor for mining and processing infrastructure. 
+
+Interpretation: The retrieved-persona neighbor is closer to the resolved event because it frames the outcome as a named stockpiling program and connects policy design to critical-mineral security and portfolio exposure. 
+
+Table 11: Text comparison for the additional scenario-diversification diagnostics. All query dates fall after the Gemini 3.1 Flash-Lite January 2025 cutoff. 
+
+B.7 Investor-Profile Matching Examples 
+
+Table 12 shows well-aligned examples from the 50-investor advisory study, where the synthesized query intent and the matched fund persona share a clear investment style or constraint. Each profile is synthesized from FAR-Trans risk information, transaction history, exposure mix, concentration, and asset metadata (Sanz-Cruzado et al., 2024). 
+
+Case Grounded FAR-Trans signals Initial query Matched persona 
+
+far_u003 :concentration control Aggressive; EUR 80k–300k capacity; 8 trades in 1 asset; 100% stock exposure and 100% financial-services exposure. The synthesized profile asks for upside without adding to the dominant exposure. “I have historically concentrated heavily in one equity exposure and can tolerate risk, but I want a fund strategy that keeps upside while reducing single-name or sector concentration.” 
+
+MMLG : a conviction-budget large-cap growth lens with explicit hold, trim, and add rules for concentration control. 
+
+far_u156 : active growth discipline Aggressive; below EUR 30k capacity; 108 trades across 21 assets; 100% stock exposure; financials, industrials, and cyclicals are the largest sectors. The query asks for growth exposure with process discipline. “I am comfortable with aggressive equity exposure and active rotation, but I do not want random trading to dominate my portfolio.” 
+
+TCAF : a quality growth/value core with controlled turnover and position-sizing discipline. 
+
+far_u009 :defensive income Income risk profile; below EUR 30k capacity; 157 trades in 2 assets; 100% mutual-fund exposure, mostly bond-like funds; sell-to-buy ratio 0.95. The profile asks whether modest equity exposure can fit an income objective. “I want my portfolio to remain income-oriented, but I am considering whether to add a modest equity fund allocation.” 
+
+FDV : a defensive income-oriented decision lens for adding risk without turning the advice into aggressive growth. 
+
+far_u143 :diversified core replacement Balanced risk profile; below EUR 30k capacity; 19 trades across 6 assets; nearly all exposure is a single financial-services equity position. The query asks for a low-maintenance complement to the dominant exposure. “I want to keep upside while reducing single-name or sector concentration, as a replacement or complement rather than another correlated bet.” 
+
+QRFT : a diversified core-equity lens with concentration-aware active tilts and low-maintenance portfolio discipline. 
+
+far_u155 :income-aware value Income risk profile; below EUR 30k capacity; 272 trades across 20 assets; 100% stock exposure tilted to utilities, energy, and financials. The query asks for an equity sleeve that remains risk-budgeted and income-aware. “My risk profile is defensive, but my actual behavior is equity-heavy and active. How can I use a risk-budgeted equity sleeve without destabilizing behavior?” 
+
+TEQI : an income-aware value and shareholder-return lens suited to utilities, energy, and financials exposure. 
+
+Table 12: Examples of FAR-Trans-grounded investor profiles, initial queries, and matched fund personas used in Case Study 2 (Sanz-Cruzado et al., 2024). C Prompt Templates 
+
+This section records the core prompts used in the framework and case studies. Bracketed fields denote run-specific content inserted by the script. 
+
+C.1 Fund Universe Active/Thematic Filter 
+
+Decide whether the fund is suitable for a fund-derived investment-advisor persona. Keep funds that are discretionary, active, thematic, growth, value, quality, dividend, sector, or otherwise manager-driven equity strategies. Reject funds that are passive index trackers, purely rules-based, leveraged, inverse, derivative-heavy, options-overlay products, non-equity vehicles, empty or insufficient filings, or administrative/supplement-only disclosures. Return strict JSON: {"decision": "keep|reject", "reason": "one concise reason" }
+
+C.2 Initial Persona Construction 
+
+You are the persona initializer for an investment-advisor simulation. Use only the target fund’s initial disclosure excerpt and initial holdings. Write an advisor persona, not a product description. Do not retrieve other funds. Do not use future holdings. Do not include exact tickers, fund names, issuer names, class ids, or benchmark names in the persona. Return exactly one JSON object with keys personaMarkdown and notesMarkdown. 
+
+C.3 Disclosure-Only Persona 
+
+You are the disclosure-only persona distiller for an investment-advisor simulation. Use only the target fund’s disclosure excerpt. Do not use holdings, replay feedback, validation feedback, market returns, or other funds. Write a reusable PM-policy advisor persona, not a product summary and not raw disclosure. Do not include exact fund names, fund tickers, issuers, class ids, CIKs, or benchmark names in the persona. Return exactly one JSON object with keys personaMarkdown and notesMarkdown. 
+
+C.4 Portfolio Actor 
+
+You are a portfolio rebalancing actor. Constrained reweighting task: - Choose target weights only for the allowed candidate ids. - Do not add outside tickers. - Do not mention or infer hidden end holdings. - Use realized fund and candidate returns as period context, not hidden answers. - Use marketContext as public period context. - Separate price drift from active PM decision. - The active_delta_label is judged versus buy-and-hold drift. - Use the five labels from the paper: active increase, drift-following, target-maintaining, active decrease, and exit. Entry is not a label because the candidate universe is restricted to starting top-10 holdings. Return JSON with: {"actionSheet": [{"candidate_id": "...", "target_weight": 0.0, "action": "increase|hold|decrease|remove", "active_delta_label": "active increase|drift-following|target-maintaining|active decrease|exit", "rationale": "..." }], "portfolioCommentary": "..." }Persona card: [PERSONA] 
+
+C.5 Label/Shareholder-Guided Patch You are the shareholder-guided persona patch optimizer. Inputs: replay-buffer feedback, class-confusion counts, and the full top-10 predicted-vs-ground-truth weight tables. Some transitions also include shareholder-report digest snippets, which are retrospective manager-rationale feedback provided only after actor prediction and scoring; do not treat them as actor input, live forecasting context, or trades to memorize. Use the digests to understand why the manager interpreted the period as they did, then convert that rationale into general PM policy. Respect timing-specificity caveats: period-level or annual-overlap evidence may only become qualified general policy. Do not let market context or shareholder commentary override the portfolio-control feedback; overlap, active deltas, confusion counts, and the top-10 weight table remain the primary constraints. Use market context only as an interpretation layer to diagnose whether errors came from misreading the regime, the manager’s response, or the buy-hold-relative active move. Prefer edits that fix active-label behavior (missed trims, missed buys, overtraded holds, target maintenance, exit discipline, drift chasing), and preserve existing sizing, turnover, core-preservation, and risk-control rules unless replay evidence repeatedly contradicts them. Treat any ticker or issuer only as a diagnostic example; do not add exact tickers, issuers, fund identifiers, benchmark names, or one-off trades to the persona. Preserve the required markdown sections. Return exactly one JSON object with keys personaMarkdown and notesMarkdown. 
+
+C.6 Commentary Task Filter 
+
+Given a candidate shareholder-commentary paragraph for one fund-quarter, decide whether it should be included in a commentary-alignment task. Include only if the paragraph contains usable manager-level interpretation: - performance attribution - contributor/detractor logic - sector or theme exposure - portfolio positioning or action rationale - risk/opportunity interpretation - strategy-level market interpretation that reflects the manager’s view Reject if it is empty, holdings-only, administrative, boilerplate, purely legal, or a generic market recap with no fund-specific manager view. Return strict JSON: {"decision": "include|reject", "reason": "one sentence", "digest": "compact manager-rationale summary if included, else empty" }
+
+C.7 Manager Commentary Generation 
+
+Write one concise manager commentary for [TICKER] for [QUARTER]. Use the portfolio context and market context to infer likely substantive content: - likely performance drivers - relevant holdings or themes - sector or theme exposure - positioning rationale - key risks or opportunities Do not write a market recap. Do not invent exact returns or trades. Keep it around 150-220 words. [PORTFOLIO CONTEXT] Market context: [MARKET CONTEXT] 
+
+C.8 Commentary Alignment Judge 
+
+Rank the five anonymous generated manager commentaries by content alignment with the actual shareholder commentary. Actual shareholder commentary: [REFERENCE] Generator-visible market context: [MARKET CONTEXT] Generated commentaries: [MEMO A-E] Focus on whether each memo captures the same substantive claims and manager perspective as the reference: - main performance drivers - contributor and detractor logic - sector or theme exposures - portfolio positioning or action rationale - manager’s interpretation of risks and opportunities The generated memos were written with access to the market context above, but without access to the actual shareholder commentary. Use the market context to distinguish unsupported hallucination from generator-visible background information. Do not reward similar writing style, tone, vocabulary, length, or generic shareholder-report polish. Do not infer or mention which method produced any memo. Return strict JSON only with ranking, best_reason, worst_reason, and confidence. 
+
+C.9 Scenario Generation 
+
+Given the forecasting question below, write exactly one plausible future scenario or hypothesis. Rules: - Return one scenario only, not a list. - Keep it concise: 1-2 sentences. - Focus on one coherent outcome path or one narrow cluster of related topics. - Do not mention that multiple scenarios are possible. - Do not assign a probability. - Do not mention that you are an AI model. Forecasting question: [QUERY] 
+
+C.10 Advisory Persona System Prompt 
+
+You provide financial guidance using the following fund-derived decision lens. Use this decision lens as guidance, not as a product advertisement. Use only the conversation so far to understand the client’s situation and preferences. Do not mention fund names, tickers, internal method names, hidden evaluation labels, or that you are using a persona. Do not override explicit client preferences. Fund-derived decision lens: [PERSONA] 
+
+C.11 Advisory Generic System Prompt 
+
+You provide financial guidance in a conversation with a client. Use only the conversation so far to understand the client’s situation and preferences. Do not mention internal method names, hidden evaluation labels, or fund tickers. Give decision-oriented guidance with concrete criteria, warning signs, and next-step guidance. 
+
+C.12 Advisory User Simulator 
+
+You are role-playing a synthetic investor seeking investment advice in a research case study. Stay in character as the client asking for guidance. Do not answer as an advisor. Do not mention fund tickers, internal labels, hidden mappings, or evaluation criteria. Keep each user message concise but specific enough to reflect your situation and preferences. You are seeking investment advice that feels suitable for your own situation. Your questions should naturally reflect your preferences, risk attitude, portfolio history, and concerns. [CLIENT PROFILE] 
+
+C.13 Advisory Pairwise Judge 
+
+The following prompt is used for the turn-3 and turn-5 pairwise comparisons; the next subsection gives the rubric prompt for the 1–5 preference-fit and usefulness scores. 
+
+You are judging two anonymous multi-turn investment-advice dialogues for the same client. Client preference profile: [PROFILE] Dialogue A: [DIALOGUE A] Dialogue B: [DIALOGUE B] Choose the dialogue whose advisor gives advice that better fits this client’s investment preferences and situation across the conversation. Focus on fit with the client’s stated risk attitude and observed investment behavior, consistency with the client’s preferences and anti-preferences, depth of investment reasoning, explanation of tradeoffs and risks, turn-to-turn responsiveness, and practical usefulness. Penalize dialogues where the advisor changes the investor’s objective, recommends an anti-preference, ignores a follow-up concern, or gives generic financial planning advice that is not clearly connected to this client’s profile. Return strict JSON only: {"reasoning": "brief comparison of which dialogue better fits this investor", "winner": "A|B|tie", "confidence": "low|medium|high", "reason": "brief reason" }
+
+C.14 Advisory Rubric Judge 
+
+You are evaluating one anonymous multi-turn investment-advice dialogue. Investor preference profile: [PROFILE] Dialogue: [DIALOGUE] Score the advisor on a 1-5 integer scale for each criterion: 1. preference_fit: How well the advice reflects the investor’s stated risk attitude, observed investment behavior, positive preferences, anti-preferences, constraints, and concerns. 2. decision_concreteness: How concrete the investment decision logic is, including position sizing, add/ trim/rebalance rules, monitoring rules, portfolio role, and failure conditions. 3. practical_usefulness: How actionable and usable the advice is for this investor, including tradeoffs, implementation constraints, concentration, turnover, tax/transaction-cost concerns, and follow-up responsiveness. Do not compare this dialogue against another dialogue. Do not infer or reward any hidden method identity. Judge only the advice shown here and its fit to the investor profile. Return strict JSON only with preference_fit, decision_concreteness, practical_usefulness, and overall_reason.
