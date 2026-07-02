@@ -6,40 +6,31 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-07-01
-- 运行时间：2026-07-01 21:33:00 UTC
+- 最新运行日期：2026-07-02
+- 运行时间：2026-07-02 21:37:15 UTC
 - 运行状态：成功
-- 本次总论文数：6
-- 精读区：5
-- 速读区：1
+- 本次总论文数：3
+- 精读区：1
+- 速读区：2
 
 ### 今日简报（AI）
-今日聚焦金融LLM代理能力评估与角色构建，精读闭环诊断基准和顾问人格提炼框架，并速览合成数据工具。  
-最值得看：CLQT提出闭环、成本感知且策略一致的评估方法，Fund2Persona从基金公开披露数据提炼出可用理财顾问人格。  
-建议金融应用开发者从Fund2Persona学习用真实披露构建合规顾问，再用CLQT基准做策略闭环验证。
-- 详情：[/202607/01/README](/202607/01/README)
+今日精读角色训练蒙特卡洛法，用一群人格化神经网络机器人模拟限价订单簿的市场分布；速读则关注金融代理的心理稳定性基准与自适应上下文弹性器。  
+最值得看：注入人格的代理群体可以更稳健地估算市场结果分布，同时纵向心理稳定性成为评估金融代理的新维度。  
+建议普通人关注代理“性格”是否稳定，模拟交易前不妨先跑一份人格基准测试。
+- 详情：[/202607/02/README](/202607/02/README)
 
 ### 精读区论文标签
-1. [CLQT: A Closed-Loop, Cost-Aware, Strategy-Consistent Benchmark for Diagnostic Evaluation of LLM Portfolio-Management Agents](/202607/01/2606.29771v1-clqt-a-closed-loop-cost-aware-strategy-consistent-benchmark-for-diagnostic-evaluation-of-llm-portfolio-management-agents)  
-   标签：评分：9.0/10、query:fla
-   evidence：用于LLM投资组合管理智能体的闭环诊断评估基准
-2. [Fund2Persona: A Framework for Building and Refining Financial Advisor Personas from Fund Disclosure Data](/202607/01/2606.29793v2-fund2persona-a-framework-for-building-and-refining-financial-advisor-personas-from-fund-disclosure-data)  
+1. [Persona-Trained Monte Carlo: Estimating Market-Outcome Distributions via Swarms of Persona-Conditioned Neural Policy Bots in a Limit Order Book](/202607/02/2606.29556v1-persona-trained-monte-carlo-estimating-market-outcome-distributions-via-swarms-of-persona-conditioned-neural-policy-bots-in-a-limit-order-book)  
    标签：评分：8.0/10、query:fla
-   evidence：智能体驱动循环优化金融顾问角色以实现大模型对齐
-3. [A Three-Phase Foundation Model for Tax-Aware Personalized Portfolio Management](/202607/01/2606.30997v1-a-three-phase-foundation-model-for-tax-aware-personalized-portfolio-management)  
-   标签：评分：8.0/10、query:fla
-   evidence：三阶段深度强化学习用于金融投资组合管理智能体
-4. [FinPersona-Bench: A Benchmark for Longitudinal Psychometric Stability of Autonomous Financial Agents](/202607/01/2606.31522v1-finpersona-bench-a-benchmark-for-longitudinal-psychometric-stability-of-autonomous-financial-agents)  
-   标签：评分：8.0/10、query:fla
-   evidence：为自主金融智能体行为稳定性提供基准评估
-5. [Think in English, Answer in Korean: Efficient Adaptation of Multilingual Tool-Using Agents](/202607/01/2606.31648v1-think-in-english-answer-in-korean-efficient-adaptation-of-multilingual-tool-using-agents)  
-   标签：评分：8.0/10、query:fla
-   evidence：采用多语言监督微调和可验证奖励的强化学习进行工具使用智能体后训练
+   evidence：通过强化学习训练具有人格条件的神经网络策略交易机器人，用于市场模拟
 
 ### 速读区论文标签
-1. [Autodata: An agentic data scientist to create high quality synthetic data](/202607/01/2606.25996v2-autodata-an-agentic-data-scientist-to-create-high-quality-synthetic-data)  
+1. [FinPersona-Bench: A Benchmark for Longitudinal Psychometric Stability of Autonomous Financial Agents](/202607/02/2606.31522v2-finpersona-bench-a-benchmark-for-longitudinal-psychometric-stability-of-autonomous-financial-agents)  
    标签：评分：7.0/10、query:fla
-   evidence：智能体自我指令方法创建高质量合成训练数据
+   evidence：衡量金融智能体的行为漂移，与对齐相关
+2. [ACE: Pluggable Adaptive Context Elasticizer across Agents](/202607/02/2606.31564v1-ace-pluggable-adaptive-context-elasticizer-across-agents)  
+   标签：评分：6.0/10、query:fla
+   evidence：为多轮智能体提供自适应上下文管理，提升后训练效率
 
 
 <div class="dpr-home-promo-card">
