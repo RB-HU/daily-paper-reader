@@ -6,31 +6,31 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-07-02
-- 运行时间：2026-07-02 21:37:15 UTC
+- 最新运行日期：2026-07-03
+- 运行时间：2026-07-03 21:32:20 UTC
 - 运行状态：成功
 - 本次总论文数：3
 - 精读区：1
 - 速读区：2
 
 ### 今日简报（AI）
-今日精读角色训练蒙特卡洛法，用一群人格化神经网络机器人模拟限价订单簿的市场分布；速读则关注金融代理的心理稳定性基准与自适应上下文弹性器。  
-最值得看：注入人格的代理群体可以更稳健地估算市场结果分布，同时纵向心理稳定性成为评估金融代理的新维度。  
-建议普通人关注代理“性格”是否稳定，模拟交易前不妨先跑一份人格基准测试。
-- 详情：[/202607/02/README](/202607/02/README)
+今日精读《KbSD》用自蒸馏校准智能体搜索行为，速读覆盖了AI工作流的查询优化与多目标探索。  
+最值得关注的方向：通过知识边界感知的自蒸馏，能让搜索智能体在遇到知识盲区时更克制、更准确地拒答与求助，显著降低“幻觉”风险。  
+建议动手验证时，先在你的Agent流程里标记出模型已知/未知的边界，再用置信度蒸馏改善决策质量，比盲目拼模型规模更见效。
+- 详情：[/202607/03/README](/202607/03/README)
 
 ### 精读区论文标签
-1. [Persona-Trained Monte Carlo: Estimating Market-Outcome Distributions via Swarms of Persona-Conditioned Neural Policy Bots in a Limit Order Book](/202607/02/2606.29556v1-persona-trained-monte-carlo-estimating-market-outcome-distributions-via-swarms-of-persona-conditioned-neural-policy-bots-in-a-limit-order-book)  
+1. [KbSD: Knowledge Boundary aware Self-Distillation for Behavioral Calibration in Agentic Search](/202607/03/2606.29863v1-kbsd-knowledge-boundary-aware-self-distillation-for-behavioral-calibration-in-agentic-search)  
    标签：评分：8.0/10、query:fla
-   evidence：通过强化学习训练具有人格条件的神经网络策略交易机器人，用于市场模拟
+   evidence：通过密集token级监督与稀疏奖励的自蒸馏进行智能体搜索知识边界校准
 
 ### 速读区论文标签
-1. [FinPersona-Bench: A Benchmark for Longitudinal Psychometric Stability of Autonomous Financial Agents](/202607/02/2606.31522v2-finpersona-bench-a-benchmark-for-longitudinal-psychometric-stability-of-autonomous-financial-agents)  
+1. [Query-Centric Optimization of AI Workflows via Approximate Query Processing and Proxy Models](/202607/03/2607.00254v1-query-centric-optimization-of-ai-workflows-via-approximate-query-processing-and-proxy-models)  
    标签：评分：7.0/10、query:fla
-   evidence：衡量金融智能体的行为漂移，与对齐相关
-2. [ACE: Pluggable Adaptive Context Elasticizer across Agents](/202607/02/2606.31564v1-ace-pluggable-adaptive-context-elasticizer-across-agents)  
+   evidence：优化LLM后训练流程
+2. [Multi-Objective Exploration and Preference Optimization via Mutual Information](/202607/03/2607.01392v1-multi-objective-exploration-and-preference-optimization-via-mutual-information)  
    标签：评分：6.0/10、query:fla
-   evidence：为多轮智能体提供自适应上下文管理，提升后训练效率
+   evidence：基于互信息的LLM多目标对齐方法
 
 
 <div class="dpr-home-promo-card">

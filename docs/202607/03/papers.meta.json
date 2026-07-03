@@ -1,0 +1,54 @@
+{
+  "label": "2026-07-03",
+  "date": "2026-07-03",
+  "generated_at": "2026-07-03T21:32:32",
+  "count": 3,
+  "papers": [
+    {
+      "paper_id": "202607/03/2606.29863v1-kbsd-knowledge-boundary-aware-self-distillation-for-behavioral-calibration-in-agentic-search",
+      "section": "deep",
+      "title_en": "KbSD: Knowledge Boundary aware Self-Distillation for Behavioral Calibration in Agentic Search",
+      "authors": "Tao Feng, Xinke Jiang, Chao Wu",
+      "date": "2026-06-29",
+      "pdf": "https://arxiv.org/pdf/2606.29863v1",
+      "score": "8.0",
+      "evidence": "通过密集token级监督与稀疏奖励的自蒸馏进行智能体搜索知识边界校准",
+      "tldr": "Agentic搜索中，LLM需动态校准知识边界（何时信任记忆、检索或拒绝），但强化学习存在奖励稀疏问题。KbSD通过提示增强教师注入边界信号，利用信息不对称自蒸馏实现稠密token级监督；并设计象限自适应KL目标（逆KL、前向KL、双向KL）处理异质推理分布。实验表明KbSD在多个基准上提升准确率并降低幻觉，尤其在挑战性象限增益最大，为知识边界校准提供了有效自蒸馏范式。",
+      "tags": "query:fla",
+      "abstract_en": "Agentic search equips large language models with dynamic retrieval abilities, but existing reinforcement learning methods remain limited by reward sparsity in knowledge boundary calibration -- deciding when to trust parametric memory, when to rely on retrieved evidence, and when to abstain. Binary rewards can penalize undesirable outcomes, but provide little guidance on the reasoning process required to make calibrated decisions across different knowledge states. To address this, we propose KbSD (Knowledge boundary Self-Distillation), a framework that tackles this limitation through dense token-level supervision, outcome-level sparse rewards, and quadrant-adaptive optimization. KbSD constructs a hint-augmented teacher, architecturally identical to the student, that receives explicit knowledge boundary signals -- including parametric certainty, retrieval quality, and ground-truth answers -- to generate calibrated reasoning demonstrations. This information-asymmetric self-distillation enables dense supervision without requiring a larger external model. To further account for the heterogeneous reasoning distributions across knowledge states, we introduce a quadrant-adaptive distillation objective: reverse KL for concentrated integration, forward KL for diverse refusal, and Pareto-optimal bidirectional KL for asymmetric quadrants requiring both precision and coverage. Experiments on multiple benchmarks show that KbSD consistently improves both task accuracy and hallucination mitigation over strong baselines, with the largest gains appearing in the challenging quadrants where sparse rewards are least informative.",
+      "source": "arxiv",
+      "selection_source": "fresh_fetch"
+    },
+    {
+      "paper_id": "202607/03/2607.00254v1-query-centric-optimization-of-ai-workflows-via-approximate-query-processing-and-proxy-models",
+      "section": "quick",
+      "title_en": "Query-Centric Optimization of AI Workflows via Approximate Query Processing and Proxy Models",
+      "authors": "Huayi Wang, Jun Xu, Gromit Yeuk-Yin Chan",
+      "date": "2026-06-30",
+      "pdf": "https://arxiv.org/pdf/2607.00254v1",
+      "score": "7.0",
+      "evidence": "优化LLM后训练流程",
+      "tldr": "现代AI工作流常依赖大模型评估谓词，成本高昂。本文将工作流建模为声明式查询，引入近似查询处理（AQP）与代理模型（PM）两种数据库优化技术，无需改动模型即可大幅减少昂贵调用。在TPC-DS及LLM后训练任务上，AQP可减少85-90%的调用并保持误差低于10%，PM减少60-70%调用；LLM结构化任务中调用减少20-80%，准确率损失控制在10%以内。该查询中心优化为低成本、高保真AI工作流提供了实用方案。",
+      "tags": "query:fla",
+      "abstract_en": "Many modern AI workflows, ranging from LLM post-training pipelines to agentic reasoning tasks, can be expressed as declarative queries whose expensive predicate is evaluated by a large model or reward function. We propose a query-centric formulation of these workflows and show that classical database techniques, namely approximate query processing (AQP) and proxy-model (PM) based filtering, can substantially reduce the number of expensive model invocations without requiring changes to the underlying models or pipelines. Our first strategy treats the workflow as an online aggregation problem: it progressively samples records, maintains a running aggregate estimate with a confidence interval, and terminates early once the interval stabilizes, accepting the estimate when it falls within a user-specified error bound. Our second strategy trains a lightweight, CPU-resident decision tree on a small set of oracle-labeled examples and uses it to pre-filter records whose outcome can be predicted with high confidence, routing only uncertain records to the expensive model. We evaluate both strategies on TPC-DS aggregate queries and on real LLM post-training pipelines including math reasoning, general instruction following, and code generation. On TPC-DS, Strategy AQP keeps aggregate error under 10% while reaching its adaptive stopping point at 10-15% of oracle calls under balanced distributions, an 85-90% reduction, and Strategy PM reduces oracle calls by 60-70%. On LLM pipelines, Strategy AQP reaches its adaptive stopping point at 20-50% of oracle calls with less than 5% accuracy loss on the structured math and code tasks; open-ended instruction following, scored by a reward model, shows a larger but bounded reduction. Strategy PM reduces reward-model scoring time by up to 19x on structured tasks with less than 10% accuracy loss.",
+      "source": "arxiv",
+      "selection_source": "fresh_fetch"
+    },
+    {
+      "paper_id": "202607/03/2607.01392v1-multi-objective-exploration-and-preference-optimization-via-mutual-information",
+      "section": "quick",
+      "title_en": "Multi-Objective Exploration and Preference Optimization via Mutual Information",
+      "authors": "Hongyan Xie, Yikun Ban, Ruiyu Fang, Zixuang Huang, Deqing Wang, Jianxin Li, Shuangyong Song",
+      "date": "2026-07-01",
+      "pdf": "https://arxiv.org/pdf/2607.01392v1",
+      "score": "6.0",
+      "evidence": "基于互信息的LLM多目标对齐方法",
+      "tldr": "针对大型语言模型在多目标对齐中因探索不确定性导致响应奖励分布重叠的问题，本文提出了基于互信息的多目标探索与偏好优化框架MI-EPO。该方法通过最大化生成响应、偏好反馈与偏好向量间的联合条件互信息，并设计概率路由机制，解耦目标对齐与偏好感知探索，促使模型生成可区分且对齐的响应。实验表明，MI-EPO显著提升响应与偏好向量对齐度，增强输出可控性，实现多目标稳定权衡。",
+      "tags": "query:fla",
+      "abstract_en": "Aligning large language models with diverse and heterogeneous human values requires multi-objective alignment methods to effectively trade off conflicting preference dimensions. Current methods achieve this trade-off by training policies conditioned on preference vectors and leveraging online direct preference optimization. However, exploration uncertainty can cause the reward distributions of responses generated under different preference vectors to overlap, and the generated responses may fail to effectively align with the corresponding preference vectors. In this paper, we propose Multi-Objective Exploration and Preference Optimization via Mutual Information (MI-EPO), an information-theoretic framework. It unifies multi-objective exploration and alignment by maximizing the joint conditional mutual information among generated responses, preference feedback, and preference vectors. By incorporating a probabilistic routing mechanism, MI-EPO naturally decomposes objective alignment and preference-aware exploration, encouraging the model to generate responses that are distinguishable and aligned with different preference conditions. Experiments on safe alignment and helpful assistant tasks show that MI-EPO significantly improves the alignment between generated responses and preference vectors, makes the outputs more controllable, and achieves stable trade-offs across multiple objectives.",
+      "source": "arxiv",
+      "selection_source": "fresh_fetch"
+    }
+  ],
+  "errors": []
+}
