@@ -6,31 +6,40 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-07-03
-- 运行时间：2026-07-03 21:32:20 UTC
+- 最新运行日期：2026-07-04
+- 运行时间：2026-07-04 20:05:17 UTC
 - 运行状态：成功
-- 本次总论文数：3
-- 精读区：1
-- 速读区：2
+- 本次总论文数：6
+- 精读区：3
+- 速读区：3
 
 ### 今日简报（AI）
-今日精读《KbSD》用自蒸馏校准智能体搜索行为，速读覆盖了AI工作流的查询优化与多目标探索。  
-最值得关注的方向：通过知识边界感知的自蒸馏，能让搜索智能体在遇到知识盲区时更克制、更准确地拒答与求助，显著降低“幻觉”风险。  
-建议动手验证时，先在你的Agent流程里标记出模型已知/未知的边界，再用置信度蒸馏改善决策质量，比盲目拼模型规模更见效。
-- 详情：[/202607/03/README](/202607/03/README)
+三篇精读揭示大模型能自主训练并改进自身，智能体也进入“训练-评估-发布”的闭环管控时代。  
+最值得关注的方向是：让语言模型像导师一样训练其他模型，以及为领域智能体设计带安全阈值的发布控制。  
+普通读者可优先精读《AutoTrainess》和《CLAP》，理解模型自我演进与安全发布的基础逻辑。
+- 详情：[/202607/04/README](/202607/04/README)
 
 ### 精读区论文标签
-1. [KbSD: Knowledge Boundary aware Self-Distillation for Behavioral Calibration in Agentic Search](/202607/03/2606.29863v1-kbsd-knowledge-boundary-aware-self-distillation-for-behavioral-calibration-in-agentic-search)  
+1. [AutoTrainess: Teaching Language Models to Improve Language Models Autonomously](/202607/04/2606.31551v1-autotrainess-teaching-language-models-to-improve-language-models-autonomously)  
+   标签：评分：9.0/10、query:fla
+   evidence：利用智能体-计算机接口实现语言模型的自主后训练
+2. [CLAP: Closed-Loop Training, Evaluation, and Release Control for Domain Agent Post-training](/202607/04/2607.01846v1-clap-closed-loop-training-evaluation-and-release-control-for-domain-agent-post-training)  
+   标签：评分：9.0/10、query:fla
+   evidence：面向领域智能体的闭环后训练方法，使用SFT和偏好样本
+3. [DiPS: Dialogue Policy Selection for High-Stakes Persuasion Agents](/202607/04/2607.01557v1-dips-dialogue-policy-selection-for-high-stakes-persuasion-agents)  
    标签：评分：8.0/10、query:fla
-   evidence：通过密集token级监督与稀疏奖励的自蒸馏进行智能体搜索知识边界校准
+   evidence：DiPS使用Q学习训练用于说服型多轮对话的策略选择，可应用于金融对话智能体。
 
 ### 速读区论文标签
-1. [Query-Centric Optimization of AI Workflows via Approximate Query Processing and Proxy Models](/202607/03/2607.00254v1-query-centric-optimization-of-ai-workflows-via-approximate-query-processing-and-proxy-models)  
+1. [TACO: Tool-Augmented Credit Optimization for Agentic Tool Use](/202607/04/2606.30251v1-taco-tool-augmented-credit-optimization-for-agentic-tool-use)  
    标签：评分：7.0/10、query:fla
-   evidence：优化LLM后训练流程
-2. [Multi-Objective Exploration and Preference Optimization via Mutual Information](/202607/03/2607.01392v1-multi-objective-exploration-and-preference-optimization-via-mutual-information)  
+   evidence：引入TACO，一种通过自监督工具贡献优势对代码工具智能体进行后训练微调的GRPO变体。
+2. [Learning from Failure: Inference-Time Self-Improvement for Computer-Use Agents](/202607/04/2606.31270v1-learning-from-failure-inference-time-self-improvement-for-computer-use-agents)  
+   标签：评分：7.0/10、query:fla
+   evidence：提出基于失败轨迹微调的自改进循环，一种后训练技术。
+3. [Bayesian Sparse Low-Rank Adaptation for Large Language Model Uncertainty Estimation](/202607/04/2607.02182v1-bayesian-sparse-low-rank-adaptation-for-large-language-model-uncertainty-estimation)  
    标签：评分：6.0/10、query:fla
-   evidence：基于互信息的LLM多目标对齐方法
+   evidence：用于LLM微调的贝叶斯稀疏LoRA方法，提供不确定性估计，适用于金融模型微调
 
 
 <div class="dpr-home-promo-card">
