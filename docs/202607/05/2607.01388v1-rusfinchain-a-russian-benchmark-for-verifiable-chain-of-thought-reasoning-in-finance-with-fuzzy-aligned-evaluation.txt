@@ -1,0 +1,522 @@
+Title: RusFinChain: A Russian Benchmark for Verifiable Chain-of-Thought Reasoning in Finance with Fuzzy-Aligned Evaluation
+
+URL Source: https://arxiv.org/pdf/2607.01388v1
+
+Published Time: Fri, 03 Jul 2026 00:08:44 GMT
+
+Number of Pages: 17
+
+Markdown Content:
+# RusFinChain: A Russian Benchmark for Verifiable Chain-of-Thought Reasoning in Finance with Fuzzy-Aligned Evaluation 
+
+A Preprint 
+
+M. K. Arabov 
+
+Kazan Federal University Institute of Computational Mathematics and Information Technologies Department of Data Analysis Kazan, Russia 
+
+MKArabov@kpfu.ru 
+
+July 3, 2026 
+
+# Abstract 
+
+Multi-step symbolic reasoning is essential for robust financial analysis, yet most existing benchmarks focus solely on final numerical answers, neglecting the intermediate reasoning steps required for transparency and verification. While recent work introduced FINCHAIN—the first verifiable Chain-of-Thought (CoT) benchmark for finance—it is limited to English and US-centric conventions, leaving a gap for non-English financial ecosystems. Concurrently, FINESSE-Bench introduced a hierarchical suite of exam-oriented tasks with a Russian-language block, but it relies on multiple-choice questions and does not provide step-level supervision. We present RusFinChain , the first Russian-language symbolic benchmark for verifiable CoT reasoning in finance. Our benchmark spans 17 financial domains , 172 topics , and comprises 5,280 unique parameterized examples generated from executable Python templates, ensuring contamination-free evaluation. Each example includes a gold-standard reasoning chain with intermediate numeric values, enabling automatic verification at both the step and final-answer levels. Beyond the dataset, we introduce enhanced evaluation metrics that improve upon the original ChainEval framework: (1) Fuzzy Numeric Alignment using a Gaussian membership function for smooth deviation penalization, and (2) Soft-Attention Alignment using temperature-scaled softmax for robust step matching. We evaluate 8 open-weight LLMs (DeepSeek-R1, Llama 3.1, Qwen 2.5, Mistral, Gemma, Aya, and Phi) on RusFinChain, generating 8,100 model responses across a stratified sample of 1,000 examples. Our results reveal a substantial reasoning gap : while models achieve Hard F1 scores of approximately 0.65 for step-level alignment, only about 29% of final answers are numerically correct. Moreover, our fuzzy and soft metrics show stronger correlation with final-answer correctness (Spearman 𝜌 ≈ 0.48 )than the original ChainEval ( 𝜌 ≈ 0.38 –0.46 ), demonstrating their superior diagnostic power. We release our dataset, code, and evaluation framework to foster research in verifiable financial AI for the Russian-speaking community. 
+
+Keywords Financial Reasoning · Chain-of-Thought · Benchmark · Russian Language · LLM Evaluation · Fuzzy Logic ·
+
+Natural Language Processing 
+
+# 1 Introduction 
+
+Large Language Models (LLMs) have demonstrated substantial capabilities across a wide range of financial applications, including automated reporting, sentiment analysis, investment decision support, and risk assessment [Chen et al., 2024a], 
+
+> arXiv:2607.01388v1 [cs.CL] 1 Jul 2026
+
+RusFinChain A Preprint 
+
+[Xie et al., 2026a]. However, the high-stakes nature of financial decision-making requires not only accurate predictions but also transparency and verifiability of the reasoning process. Regulators, auditors, and end-users need to understand 
+
+why a model arrived at a particular conclusion, especially when multi-step numerical reasoning is involved. To address this need, recent work has introduced benchmarks for evaluating Chain-of-Thought (CoT) reasoning in finance. Xie et al. [2026b] proposed FinChain, the first symbolic benchmark with executable Python templates that enable automatic verification of intermediate reasoning steps and final answers. FinChain spans 58 topics across 12 financial domains and introduces ChainEval, a Dynamic Time Warping (DTW) based metric for step-level evaluation. However, FinChain is limited to English and US-centric financial conventions, leaving a gap for non-English financial ecosystems. Concurrently, Stanishevskii et al. [2026] introduced FINESSE-Bench, a hierarchical suite of exam-oriented financial tasks inspired by professional certifications (CFA-like, CMT-like, CFTe-like), which includes a Russian-language olympiad block (VLigaBench-ru). While FINESSE-Bench provides strong discriminative power and covers professional financial knowledge, its tasks are predominantly multiple-choice and do not provide step-level supervision or verifiable reasoning traces. More recently, Safder et al. [2026] introduced FinPersona-Bench, a simulation benchmark for evaluating longitudinal behavioral stability of LLM-based financial agents, highlighting that even frontier models exhibit performance degradation in extended financial scenarios. In this work, we present RusFinChain , the first Russian-language symbolic benchmark for verifiable Chain-of-Thought reasoning in finance. Our benchmark spans 17 financial domains , 172 topics , and comprises 5,280 unique parameterized examples generated from executable Python templates, ensuring contamination-free evaluation. Each example includes a gold-standard reasoning chain with intermediate numeric values, enabling automatic verification at both the step and final-answer levels. Beyond the dataset, we introduce enhanced evaluation metrics that improve upon the original ChainEval framework. Specifically, we propose: 1. Fuzzy Numeric Alignment : Instead of a hard threshold ( 𝜖 = 0.05 ) for numeric matching, we use a Gaussian membership function that smoothly penalizes deviations, reflecting real-world materiality concepts. 2. Soft-Attention Alignment : We replace hard Dynamic Time Warping with a temperature-scaled softmax alignment, which is more robust to step reordering, insertions, and paraphrasing. We evaluate 8 open-weight LLMs (DeepSeek-R1, Llama 3.1, Qwen 2.5, Mistral, Gemma, Aya, and Phi) on RusFinChain, using a stratified sample of 1,000 examples and generating 8,100 model responses. Our results reveal a substantial 
+
+reasoning gap : while models achieve Hard F1 scores of approximately 0.65 for step-level alignment, only about 29% of final answers are numerically correct. This confirms that even state-of-the-art open models struggle with multi-step financial computations. Moreover, we show that our fuzzy and soft metrics correlate more strongly with final-answer correctness (Spearman 𝜌 up to 0.48) than the original ChainEval ( 𝜌 ∼ 0.38 –0.46 ), demonstrating their superior diagnostic power. Our main contributions are: 1. RusFinChain — the first Russian-language, verifiable CoT benchmark for finance, with 5,280 unique examples across 17 domains and 3 difficulty levels. 2. Fuzzy and Soft-Alignment Metrics — novel evaluation measures that provide smoother, more human-aligned assessment of reasoning quality. 3. Comprehensive Benchmarking — evaluation of 8 open-weight models, generating 8,100 model responses across 17 domains, revealing performance gaps across domains, difficulty levels, and reasoning quality. We release our dataset, code, and evaluation framework under an open license to foster research in verifiable and interpretable financial AI for the Russian-speaking community. The dataset is available at https://huggingface. co/datasets/RusNLPWorld/RusFinanceBenchmark , and the full evaluation results are available at https:// huggingface.co/datasets/RusNLPWorld/RusFinanceBenchmark-Eval .
+
+# 2 Related Work 
+
+2.1 Financial Reasoning Benchmarks 
+
+Early financial benchmarks focused on question answering over financial reports. Chen et al. [2021] introduced FinQA, an expert-annotated dataset of numerical reasoning questions with executable reasoning programs. Chen et al. [2022] 2RusFinChain A Preprint 
+
+extended this to conversational financial QA, where longer chains of numerical reasoning are required. Zhu et al. [2021] proposed TAT-QA, a hybrid format combining tabular and textual sources. Islam et al. [2023] introduced FinanceBench for question answering over public-company documents. Chen et al. [2024b] introduced long-form financial questions from textbooks and regulatory sources. Zhao et al. [2022] presented MultiHiertt for numerical reasoning over multi-hierarchical data. More comprehensive evaluation frameworks emerged with Xie et al. [2023a], who introduced PIXIU, a financial ecosystem including a model, instruction data, and a benchmark component. Xie et al. [2024] aggregated dozens of datasets across multiple financial domains. Matlin et al. [2025] continued this line with a broader platform for financial language model evaluation. Krumdick et al. [2024] introduced BizBench, a quantitative reasoning benchmark for business and finance. Large financial language models include Wu et al. [2023] and Liu et al. [2023], which advanced in-domain and open-source adaptability respectively. Tang et al. [2025] introduced executable Python solutions for answer verification but did not provide systematic step-level alignment. Zhao et al. [2024a] focused on knowledge-intensive math reasoning in finance, while Zhao et al. [2024b] evaluated math reasoning over long and specialized documents. 
+
+2.2 Verifiable Chain-of-Thought Evaluation 
+
+Xie et al. [2026b] proposed FinChain, the first symbolic benchmark for verifiable Chain-of-Thought reasoning in finance. FinChain spans 58 topics across 12 domains and introduces ChainEval, a DTW-based metric that jointly evaluates step-level consistency and final-answer correctness. Each example is generated from parameterized symbolic templates with executable Python code, enabling machine-verifiable reasoning and contamination-free data generation. FinChain successfully establishes the paradigm of controlled symbolic reasoning evaluation. However, its scope is constrained to English and US-centric financial conventions, leaving a natural gap for non-English financial ecosystems that require localized terminology and regional compliance. Concurrently, Stanishevskii et al. [2026] introduced FINESSE-Bench, a hierarchical suite of eight specialized benchmarks comprising 3,993 questions for evaluating financial competencies in LLMs. FINESSE-Bench combines exam-oriented datasets inspired by professional certifications (CFA-like Levels 1–3, CMT-like Level 2, CFTe-like Level 1), applied trading tasks, and a Russian-language olympiad benchmark (VLigaBench-ru). This work makes a valuable contribution by broadening domain coverage and providing strong discriminative power through a multiple-choice (MCQ) format. Notably, it includes a dedicated Russian-language block (VLigaBench-ru) consisting of 324 olympiad-style questions. However, the MCQ format is designed to test recognition and theoretical knowledge rather than the generation of structured, multi-step arithmetic chains. Furthermore, the reliance on an LLM-as-a-judge for scoring, while practical for large-scale MCQ evaluation, cannot provide the exact, deterministic verification of intermediate numerical values that is essential for auditing computational reasoning. To complement these existing resources, our work builds on the symbolic template paradigm introduced in mathematical reasoning [Mirzadeh et al., 2025]. We adapt this paradigm to the financial domain and, crucially, extend it to the Russian language. Unlike the MCQ format, RusFinChain requires open-ended generation of step-by-step solutions and provides fully deterministic, Python-executable gold traces. This allows for a controlled testbed that is specifically designed to diagnose errors in multi-step arithmetic computations, a capability that complements the theoretical breadth offered by exam-oriented benchmarks like FINESSE-Bench. 
+
+2.3 Metrics for Reasoning Evaluation 
+
+Beyond surface-level metrics such as ROUGE [Lin, 2004] and BERTScore [Zhang et al., 2020], recent work has proposed specialized metrics for evaluating reasoning chains. Golovneva et al. [2023] introduced ROSCOE, a suite of metrics for scoring step-by-step reasoning that evaluates semantic coherence, logical consistency, and factual accuracy. Lyu et al. [2023] proposed methods for evaluating faithfulness in Chain-of-Thought reasoning. Xie et al. [2023b] introduced DeltaScore, a fine-grained evaluation approach using perturbations. These works highlight the importance of evaluating the reasoning process itself, not just the final answer. Zheng et al. [2023] showed that strong language models can serve as judges for scalable evaluation of open-ended responses. Li et al. [2024] demonstrated that LLM-based evaluation can be useful for constructing more discriminative benchmarks. While we acknowledge the practicality of LLM-judges for evaluating fluency and plausibility, RusFinChain addresses a different requirement: the need for a mathematically-grounded, deterministic evaluation framework that correlates strongly with exact numerical correctness rather than linguistic plausibility. The financial domain taxonomy in this work is informed by standard financial literature [Bodie et al., 2025] and educational resources on solving financial problems using computational tools [Arabov et al., 2019]. 3RusFinChain A Preprint 
+
+Table 1: Domains, topic coverage, and task distribution in RusFinChain. 
+
+Domain (English) # Topics # Tasks 
+
+Securities 12 540 Financial Regulation 10 420 Taxation 10 360 Annuities and Deposits 10 330 Financial Markets 10 330 Personal Finance 10 330 Crypto Finance 10 300 ESG and Sustainable Finance 10 300 Financial Ratios 10 300 Interest Rates 10 300 Loans and Borrowings 10 300 Mergers & Acquisitions 10 300 Risk Management 10 300 Depreciation 10 270 Investment Projects 10 240 Insurance and Actuarial Science 10 180 Corporate Finance 10 180 
+
+# 3 RusFinChain: Dataset Construction 
+
+3.1 Taxonomy and Domain Coverage 
+
+We begin by identifying and defining financial domains based on established financial literature [Bodie et al., 2025] and expert input from finance professionals within our team. This process resulted in 17 distinct financial domains . Within each domain, we propose candidate financial topics with LLM assistance and subsequently curate them with domain experts, yielding a total of 172 topics with a mean of 10.1 topics per domain. The resulting taxonomy spans traditional areas such as Corporate Finance, Financial Reporting, Securities, and Taxation, as well as emerging fields including Crypto Finance, ESG and Sustainable Finance, and Risk Management. This hierarchical structure enables fine-grained evaluation of symbolic reasoning across diverse financial subfields. Table 1 lists all 17 domains with their respective topic counts and the number of tasks per domain. The distribution reflects our effort to balance coverage across classical and contemporary financial disciplines while maintaining sufficient topic depth within each domain for meaningful evaluation. Following the symbolic template paradigm introduced in mathematical reasoning [Mirzadeh et al., 2025], we instantiate each topic through parameterized symbolic templates that define both the question structure and an executable Chain-of-Thought solution grounded in domain-specific formulas. We implement these templates as executable Python programs that generate both intermediate reasoning steps and final answers, thereby enabling fully machine-verifiable evaluation. For each topic, we design five templates spanning three difficulty levels: two basic, two intermediate, and one advanced. Difficulty is controlled by two factors: (1) the number of required reasoning steps, and (2) the complexity of the underlying financial operations. Basic tasks typically involve 2-step solutions with straightforward arithmetic operations such as multiplication, division, or percentage calculations. Intermediate tasks require 3-step solutions with more complex operations including exponentiation, discounting, or multi-period compounding. Advanced tasks involve 4-step solutions with nested operations, iterative calculations, or conditional logic. 
+
+3.2 Data Generation and Validation 
+
+Each instantiated example consists of a scenario card specifying the topic, difficulty level, and input parameters, together with an executable reasoning chain. The generation process follows a structured pipeline: 1. Parameter Sampling : Numeric parameters are randomly sampled within domain-specific constraints (e.g., principal amounts between 1,000 and 10,000, interest rates between 2% and 8%, time periods between 1 and 10 years); 4RusFinChain A Preprint 
+
+2. Question Construction : Natural language questions are generated with variable placeholders replaced by sampled values, using Russian financial terminology and realistic business scenarios (e.g., company names, investor names); 3. Step Generation : A structured step-by-step solution is produced with intermediate numerical values, where each step corresponds to a distinct computational operation grounded in the domain formula; 4. Final Computation : The final answer is computed via executable Python code, ensuring numerical consistency across the entire reasoning chain. We generated a variable number of instances per template (ranging from 3 to 10, with an average of approximately 6.1) to achieve a total of 5,280 examples with balanced coverage across domains and difficulty levels. Each generated example is stored as a JSON object with the following fields: 
+
+• seed : Random seed used for reproducible generation; 
+
+• id : Unique template identifier; 
+
+• level : Difficulty level (Basic, Intermediate, or Advanced); 
+
+• domain : Financial domain (e.g., Securities, Taxation); 
+
+• topic : Specific topic within the domain; 
+
+• question : Natural language question in Russian; 
+
+• steps : Array of reasoning steps, each containing step (index), description (textual explanation), and 
+
+value (intermediate numeric result or null); 
+
+• final_answer : Final numeric answer; 
+
+• solution : Human-readable step-by-step solution; 
+
+• details : Additional input parameters (e.g., principal, rate, time), or an empty dictionary if none are required; 
+
+• formula_latex : LaTeX representation of the key formula; 
+
+• python_computation : Executable Python expression for computing the answer. To ensure data quality and consistency, we apply a set of validation constraints covering numerical precision, unit consistency, input completeness, and reasoning step informativeness. Templates that fail validation are revised prior to expert review. Financial experts, comprising both industry professionals with experience in quantitative finance and academic researchers specializing in financial analysis and auditing, reviewed all validated templates following a calibrated annotation protocol. All reviewers first participated in a pilot calibration phase, during which they jointly reviewed a shared subset of templates and discussed discrepancies to align on annotation standards. After this calibration phase, reviewers independently assessed the remaining templates, evaluating both the correctness of reasoning steps and the final numerical results under the agreed-upon criteria. The expert review process ensures that the templates are not only computationally correct but also financially sound and pedagogically coherent. 
+
+3.3 Data Sources 
+
+The financial problems in RusFinChain are derived from multiple authoritative sources to ensure domain authenticity, pedagogical soundness, and practical relevance. Approximately 50% of the task templates are based on problems adapted from the textbook Arabov et al. [2019], which provides a comprehensive collection of financial and economic problems solved using computational tools such as spreadsheets. This textbook covers a wide range of topics including compound interest, annuities, loan amortization, investment appraisal, depreciation methods, taxation, and financial ratio analysis. The remaining templates are adapted from widely used financial mathematics textbooks, university-level finance courses, and the authors’ professional experience in the financial industry. Particular emphasis was placed on problems encountered in practical financial analysis, risk management, investment decision-making, and insurance mathematics. The financial professionals on our team contributed domain expertise, ensuring that the problem types reflect realistic scenarios encountered in Russian financial practice, including appropriate use of ruble denominations, Russian company names, and local regulatory contexts. All templates were subsequently reviewed and refined by domain experts to ensure correctness, consistency, and appropriate difficulty calibration. While the underlying problem types and formulas are drawn from established financial 5RusFinChain A Preprint 
+
+Table 2: Dataset statistics of RusFinChain. 
+
+Statistic Basic Intermediate Advanced 
+
+# Templates 344 344 172 Avg. steps 2.01 2.97 3.90 # Examples 1,710 2,340 1,230 literature, all specific numeric instances in RusFinChain are generated synthetically via the templating mechanism described in Section 3.2. This hybrid approach preserves the pedagogical and domain relevance of the source materials while ensuring that the benchmark is free from data contamination, as each generated instance uses randomly sampled parameters rather than copying existing textbook problems verbatim. The problem taxonomy (Section 3.1) was further validated against standard financial curricula to ensure comprehensive coverage of core financial competencies expected of finance professionals. 
+
+3.4 Dataset Statistics 
+
+Our final dataset comprises 5,280 parameterized examples distributed across 17 domains and 172 topics. Table 2 summarizes the dataset statistics across difficulty levels. The final example counts were determined by the instance generation process: we generated a variable number of instances per template, ranging from 3 to 10. This resulted in an average of 4.97, 6.80, and 7.15 instances per template for Basic, Intermediate, and Advanced levels, respectively. The overall average was approximately 6.1 instances per template, ensuring balanced coverage across domains and difficulty levels. This design provides sufficient coverage of both simple and complex reasoning scenarios while maintaining balanced representation across topics. The average question length is approximately 148 characters, and the average solution length is approximately 72 charac-ters. The dataset includes full coverage (100%) of the steps , solution , formula_latex , and python_computation 
+
+fields. The details field is present in 84.7% of tasks that require additional input parameters. Additionally, 99.8% of examples contain a valid numerical final_answer , ensuring the vast majority of tasks are fully machine-verifiable. Our design isolates financial reasoning ability from document parsing challenges, positioning RusFinChain as a controlled testbed for verifiable financial reasoning, complementary to benchmarks centered on real-world document understanding [Xie et al., 2026b]. The synthetic nature of the data ensures contamination-free evaluation and enables systematic variation of problem parameters for robustness analysis. The dataset is released under the MIT License and is available at https://huggingface.co/datasets/ RusNLPWorld/RusFinanceBenchmark . All code for template generation and evaluation is publicly available in the project repository. 
+
+# 4 Evaluation Framework 
+
+We propose a multi-faceted evaluation framework that jointly assesses reasoning-step alignment and final-answer correctness. Building on prior work on reasoning consistency [Lyu et al., 2023, Golovneva et al., 2023] and the ChainEval framework introduced in FinChain [Xie et al., 2026b], we extend the evaluation methodology with two novel components: Fuzzy Numeric Alignment and Soft-Attention Alignment . These extensions provide smoother, more human-aligned assessment of reasoning quality compared to hard threshold-based approaches. Our framework is implemented as a Python evaluation pipeline that processes model-generated reasoning traces and computes multiple complementary metrics. The pipeline consists of three main components: (1) a parser that extracts structured reasoning steps from model outputs, (2) a set of hard metrics implementing the original ChainEval-style evaluation, and (3) novel fuzzy and soft metrics that provide continuous assessment of reasoning quality. The complete implementation is publicly available in the project repository. 
+
+4.1 Preliminaries 
+
+We define the gold solution 𝑆 ∗ and the predicted solution ˆ𝑆 as sequences of 𝑚 and 𝑛 reasoning steps, respectively: 
+
+𝑆 ∗ = (𝑠 ∗
+
+> 1
+
+, . . . , 𝑠 ∗
+
+> 𝑚
+
+), ˆ𝑆 = ( ˆ𝑠 1, . . . , ˆ𝑠 𝑛 ),
+
+6RusFinChain A Preprint 
+
+where 𝑠 ∗ 
+
+> 𝑖
+
+and ˆ𝑠 𝑗 denote individual reasoning steps in the gold and predicted solutions. Each step 𝑠 𝑖 produces an intermediate result: 
+
+StepRes (𝑠 𝑖 ) = 𝑎 𝑖 ,
+
+representing the numerical or symbolic value computed at that step. To evaluate reasoning faithfulness, we compare these sequences both semantically and numerically. Our framework comprises three complementary families of metrics: Hard (threshold-based), Fuzzy (continuous), and Soft (attention-based). Each family captures different aspects of reasoning quality. 
+
+4.2 Hard Metrics (Original ChainEval) 
+
+We implement the original ChainEval-style evaluation [Xie et al., 2026b] as a baseline. For semantic sim-ilarity, each step is encoded using a sentence encoder Enc (·) (we use the multilingual sentence transformer 
+
+sentence-transformers/all-MiniLM-L6-v2 ), and the pairwise semantic similarity between gold and predicted steps is computed as: 
+
+SS (𝑠 ∗ 
+
+> 𝑖
+
+, ˆ𝑠 𝑗 ) = cos (Enc (𝑠 ∗ 
+
+> 𝑖
+
+), Enc ( ˆ𝑠 𝑗 )) ,
+
+where cos (· , ·) denotes cosine similarity and SS ∈ [ 0, 1].For numeric consistency, we define an answer-matching function: 
+
+AM (𝑠 ∗ 
+
+> 𝑖
+
+, ˆ𝑠 𝑗 ) =
+
+(
+
+I
+
+ | ˆ𝑎 𝑗 −𝑎 ∗    
+
+> 𝑖 ||𝑎 ∗
+> 𝑖 |
+
+≤ 0.15 
+
+
+
+, if both are numeric ,
+
+I( ˆ𝑎 𝑗 = 𝑎 ∗ 
+
+> 𝑖
+
+), otherwise ,
+
+where I(·) is the indicator function. We use a 15% tolerance for intermediate step matching, which is more permissive than the 5% tolerance used for final answers (Section 4.5), reflecting the fact that intermediate numerical deviations may accumulate across steps. The gated step-level similarity is defined as: 
+
+Score gate (𝑖, 𝑗 ) = SS (𝑠 ∗ 
+
+> 𝑖
+
+, ˆ𝑠 𝑗 ) × AM (𝑠 ∗ 
+
+> 𝑖
+
+, ˆ𝑠 𝑗 ).
+
+We then apply Dynamic Time Warping (DTW) to align the two step sequences, accommodating insertions, deletions, and small reorderings. The alignment cost uses a gap penalty of 0.25 . The DTWGate alignment score is normalized as: 
+
+DTWGate (𝑆 ∗, ˆ𝑆 ) = 1 − Cost DTW 
+
+𝐿 path 
+
+,
+
+where Cost DTW is the total alignment cost and 𝐿 path is the length of the optimal alignment path. From these components, we compute Hard Precision, Hard Recall, and Hard F1: Hard Precision = # matched predicted steps # predicted steps , Hard Recall = # matched gold steps # gold steps , Hard F1 = 2× Precision × Recall Precision + Recall .
+
+We additionally compute two DTW variants: bonus (weighted combination of semantic and numeric similarity with 
+
+𝛼 = 0.85 and 𝛽 = 0.15 ) and gate (multiplicative combination). These variants provide different perspectives on step alignment quality. 
+
+4.3 Fuzzy Numeric Alignment 
+
+Instead of a hard threshold for numeric matching, we introduce a Gaussian membership function that smoothly penalizes deviations: 7RusFinChain A Preprint 
+
+𝜇 (𝛿 ) = exp 
+
+
+
+− 𝛿 2
+
+2𝜎 2
+
+
+
+,
+
+where 𝛿 is the relative error and 𝜎 = 0.15 is the standard deviation. This formulation reflects real-world materiality concepts where small deviations are tolerated gracefully, and larger deviations are penalized increasingly. For each pair of gold and predicted values, we compute the Fuzzy Numeric Score: 
+
+FNS (𝑎, 𝑏 ) =
+
+(0.5, if 𝑎 or 𝑏 is None ,
+
+exp 
+
+
+
+− 𝛿 2
+
+> 2𝜎 2
+
+
+
+, otherwise ,
+
+where 𝛿 = | 𝑎 −𝑏 |   
+
+> max ( | 𝑎 |,|𝑏 | )
+
+.We then combine semantic similarity and fuzzy numeric agreement using a Fuzzy T-norm (algebraic product): 
+
+Fuzzy 𝑖 𝑗 = SS (𝑠 ∗ 
+
+> 𝑖
+
+, ˆ𝑠 𝑗 ) × FNS (𝑎 ∗ 
+
+> 𝑖
+
+, ˆ𝑎 𝑗 ).
+
+Fuzzy Recall, Precision, and F1 are computed as the mean of row-wise and column-wise maxima: Fuzzy Recall = 1
+
+𝑚 
+
+> 𝑚
+
+∑︁ 
+
+> 𝑖 =1
+
+max  
+
+> 𝑗
+
+Fuzzy 𝑖 𝑗 , Fuzzy Precision = 1
+
+𝑛 
+
+> 𝑛
+
+∑︁ 
+
+> 𝑗 =1
+
+max  
+
+> 𝑖
+
+Fuzzy 𝑖 𝑗 ,
+
+Fuzzy F1 = 2 × Fuzzy Precision × Fuzzy Recall Fuzzy Precision + Fuzzy Recall .
+
+This fuzzy approach provides a continuous assessment of numeric correctness, making it more sensitive to partial correctness than binary threshold-based matching. 
+
+4.4 Soft-Attention Alignment 
+
+As an alternative to DTW-based hard alignment, we introduce a Soft-Attention Alignment mechanism inspired by Transformer attention [Vaswani et al., 2017]. Instead of finding a single optimal path, we compute a soft alignment distribution over all possible step pairs using temperature-scaled softmax: 
+
+𝛼 𝑖 𝑗 = exp (Fuzzy 𝑖 𝑗 /𝜏 )
+
+Í𝑛 𝑘 =1 exp (Fuzzy 𝑖𝑘 /𝜏 ) ,
+
+where 𝜏 = 0.1 is the temperature parameter controlling the sharpness of the distribution. This formulation naturally handles step reordering, insertions, and duplicates without forcing a rigid monotonic alignment. Soft Recall and Soft Precision are computed as: Soft Recall = 1
+
+𝑚 
+
+> 𝑚
+
+∑︁ 
+
+> 𝑖 =1
+> 𝑛
+
+∑︁ 
+
+> 𝑗 =1
+
+𝛼 𝑖 𝑗 · Fuzzy 𝑖 𝑗 , Soft Precision = 1
+
+𝑛 
+
+> 𝑛
+
+∑︁ 
+
+> 𝑗 =1
+> 𝑚
+
+∑︁ 
+
+> 𝑖 =1
+
+𝛽 𝑗𝑖 · Fuzzy 𝑖 𝑗 ,
+
+where 𝛽 𝑗𝑖 is the attention distribution from predicted steps to gold steps. Soft F1 is then computed as the harmonic mean of Soft Precision and Soft Recall. This attention-based approach is particularly effective when models produce reasoning steps in a different order or with slight paraphrasing, as it allows for soft matching rather than forcing a strict one-to-one alignment. 
+
+4.5 Final Answer Scoring 
+
+For the final answer, we compute two complementary scores: 
+
+Hard Final Answer Match (FAM) :8RusFinChain A Preprint 
+
+Table 3: Summary of evaluation metrics in RusFinChain. 
+
+Family Metric Description 
+
+Hard Hard Recall % gold steps matched (DTW + threshold) Hard Precision % predicted steps matched (DTW + threshold) Hard F1 Harmonic mean of recall and precision Fuzzy Fuzzy Recall Mean of row-wise maxima (continuous) Fuzzy Precision Mean of column-wise maxima (continuous) Fuzzy F1 Harmonic mean (continuous) Soft Soft Recall Attention-weighted recall Soft Precision Attention-weighted precision Soft F1 Harmonic mean of soft scores Soft Score Mean of max similarities Final FAM Hard final answer match (5% threshold) Fuzzy FAS Fuzzy final answer score (continuous) BERTScore Semantic similarity of full responses 
+
+FAM =
+
+(
+
+1, if | ˆ𝑎 𝑛 −𝑎 ∗    
+
+> 𝑚 ||𝑎 ∗
+> 𝑚 |
+
+≤ 0.05 ,
+
+0, otherwise .
+
+This 5% tolerance is motivated by financial auditing standards where deviations below 5% are generally considered immaterial. 
+
+Fuzzy Final Answer Score :
+
+FuzzyFAS = FNS (𝑎 ∗
+
+> 𝑚
+
+, ˆ𝑎 𝑛 ) = exp 
+
+
+
+− 𝛿 2
+
+2𝜎 2
+
+
+
+,
+
+where we use 𝜎 = 0.05 for the final answer to align with the strict 5% materiality threshold used in Hard FAM. 
+
+4.6 Summary of Metrics 
+
+Table 3 summarizes all metrics implemented in our evaluation framework. The framework supports both hard (threshold-based) and continuous (fuzzy and soft) evaluation, providing a comprehensive assessment of reasoning quality. We evaluate all models using this comprehensive framework, reporting both hard and soft metrics to provide a complete picture of reasoning quality. Our analysis in Section ?? demonstrates that fuzzy and soft metrics correlate more strongly with final-answer correctness than hard metrics alone, validating their utility for diagnostic evaluation. 
+
+# 5 Experiments and Results 
+
+5.1 Experimental Setup 
+
+We conducted our evaluation on a stratified sample of 1,000 examples drawn from the full RusFinChain dataset (5,280 examples), preserving the proportional distribution of domains and difficulty levels. The resulting sample comprised 323 Basic, 442 Intermediate, and 235 Advanced tasks, corresponding to the approximate distribution of the full benchmark ( 32%, 44%, and 24%, respectively). This sampling strategy ensures computational efficiency while maintaining representativeness across the benchmark’s diverse financial topics. The sample was generated using a fixed random seed (42) for reproducibility. We evaluate 8 open-weight language models in a zero-shot setting: phi-4-mini:3.8b , llama3.2:3b ,
+
+qwen2.5:7b-instruct , mistral:7b-instruct , deepseek-r1:7b , gemma3:4b , llama3.1:8b , and 
+
+aya-expanse:8b . These models were selected to cover a range of parameter sizes (3B to 8B) and architectural families, including both dense and MoE-based models. All models were accessed via Ollama [Team, 2025] with temperature 0.1, top-p 0.9, and a maximum of 1,024 tokens per response. While most models generated responses for all 1,000 examples, one model ( llama3.2:3b ) yielded 1,100 9RusFinChain A Preprint 
+
+Table 4: Aggregated performance metrics across all models. 
+
+Metric Mean Std Median 
+
+Hard F1 0.6538 0.2956 0.6667 Fuzzy F1 0.4810 0.1676 0.5036 Soft F1 0.4594 0.1648 0.4778 DTW F1 (Bonus) 0.5681 0.2317 0.5714 DTW F1 (Gate) 0.3895 0.2443 0.4000 BERTScore 0.6711 0.0667 0.6724 ROUGE-L 0.2424 0.1845 0.2083 Final Answer Match 0.2936 0.4554 0.0000 Final Answer Fuzzy 0.3777 0.4561 0.0023 Table 5: Performance metrics by difficulty level. 
+
+Level Count Hard F1 Fuzzy F1 Soft F1 DTW F1 BERTScore Match 
+
+Basic 2,610 0.7535 0.5255 0.5056 0.6131 0.6881 0.3682 Intermediate 3,582 0.6573 0.4663 0.4439 0.5557 0.6704 0.2856 Advanced 1,908 0.6493 0.4477 0.4252 0.5298 0.6492 0.2065 evaluated records due to a technical re-run of a subset of examples, resulting in a total of 8,100 model responses that form the basis of our analysis. All evaluations were performed on a single NVIDIA L4 GPU in Google Colab. To ensure reproducibility, we release all model outputs, evaluation metrics, and analysis scripts. The complete evaluation results are available at https://huggingface.co/datasets/RusNLPWorld/RusFinanceBenchmark-Eval .
+
+5.2 Overall Model Performance 
+
+Table 4 reports the aggregated performance metrics across all models and examples. The results reveal several key observations. First, we observe a substantial reasoning gap : while models achieve a Hard F1 score of 0.65 for step-level alignment, only 29.4% of final answers are numerically correct. This gap indicates that models can reproduce the structure of reasoning chains reasonably well but frequently fail in the final numerical computation. Second, our proposed fuzzy and soft metrics consistently yield lower scores than Hard F1 (0.481 and 0.459, respectively), reflecting their more stringent and continuous evaluation of numeric consistency. This stricter assessment better captures subtle numerical errors that the hard threshold-based metric might overlook. Third, traditional surface-level metrics such as ROUGE-L (0.242) and BERTScore (0.671) show limited correlation with reasoning quality. BERTScore in particular, while numerically high, does not capture the structural and numeric consistency of reasoning chains, underscoring the need for specialized reasoning metrics. 
+
+5.3 Performance Across Difficulty Levels 
+
+Table 5 reports model performance across the three difficulty levels: Basic, Intermediate, and Advanced. Performance degrades monotonically from Basic to Advanced across all metrics. The drop is most pronounced for Final Answer Match, which decreases from 36.8% on Basic tasks to 20.7% on Advanced tasks, a relative decline of 44%. This confirms that increasing reasoning complexity significantly challenges model performance. Notably, the difference between Intermediate and Advanced is less pronounced than between Basic and Intermediate, suggesting that the difficulty gap between these levels may be smaller, or that models reach a performance plateau on more complex tasks. 
+
+5.4 Performance Across Domains 
+
+Table 6 presents the top-performing domains by Hard F1. The results reveal substantial variation across financial domains. 10 RusFinChain A Preprint 
+
+Table 6: Top-15 domains by Hard F1. 
+
+Domain Count Hard F1 Fuzzy F1 Soft F1 Match 
+
+Financial Regulation 659 0.7682 0.5661 0.5451 0.3308 Financial Ratios 456 0.7471 0.5879 0.5708 0.6601 Taxation 555 0.7316 0.5174 0.4987 0.3748 Securities 835 0.7234 0.5090 0.4860 0.2060 Insurance and Actuarial Science 272 0.7564 0.5610 0.5394 0.2418 ESG and Sustainable Finance 459 0.7189 0.5159 0.4952 0.3442 Annuities and Deposits 508 0.7049 0.4609 0.4311 0.1614 Personal Finance 504 0.6988 0.5122 0.4935 0.3988 Risk Management 448 0.6632 0.4828 0.4604 0.2433 Mergers & Acquisitions 456 0.6551 0.5164 0.4959 0.4342 Interest Rates 475 0.6235 0.4629 0.4345 0.2968 Financial Markets 507 0.6219 0.4840 0.4607 0.2722 Loans and Borrowings 475 0.5209 0.3687 0.3437 0.0800 Depreciation 400 0.4954 0.3623 0.3476 0.2175 Crypto Finance 459 0.4685 0.3414 0.3265 0.2484 Financial Regulation, Financial Ratios, and Taxation emerge as the strongest domains, with Hard F1 exceeding 0.73. These domains typically involve straightforward formula-based calculations with minimal ambiguity, making them more amenable to current LLM capabilities. In contrast, Crypto Finance (0.4685), Investment Projects (0.4616), and Depreciation (0.4954) show the lowest performance. These domains often involve more complex reasoning, including multi-step calculations with conditional logic, iterative processes, or specialized domain knowledge, which pose greater challenges for the evaluated models. The Financial Ratios domain shows the highest Final Answer Match rate (66.0%), suggesting that models are particularly accurate in computing standard financial ratios such as ROA, ROE, and EBITDA multiples. Conversely, Loans and Borrowings shows the lowest match rate (8.0%), reflecting the difficulty of amortization calculations and interest rate computations. 
+
+# 6 Discussion 
+
+The experimental results reveal several critical patterns in how current LLMs handle multi-step symbolic financial reasoning. In this section, we interpret these patterns, examine the diagnostic utility of our proposed metrics, and discuss the broader implications for the evaluation of financial AI. 
+
+6.1 The Reasoning Gap 
+
+The most prominent empirical finding of our study is the substantial discrepancy between step-level reasoning quality and final answer numerical correctness. Across all evaluated models, the average Hard F1 for step-level alignment reaches 0.654, indicating that models can, to a large extent, reproduce the semantic and structural logic of the reference Chain-of-Thought. However, the average Final Answer Match is only 0.294, meaning that fewer than one in three predicted responses yields a numerically correct final result. This gap is not uniform across difficulty levels. On Basic tasks, the difference between Hard F1 (0.754) and Final Answer Match (0.368) stands at 0.386. On Advanced tasks, the difference widens to 0.443 (0.649 vs. 0.206). This growing disparity suggests that as task complexity increases, models primarily struggle with the exact numerical execution of the final computational step, rather than with the structural construction of the reasoning chain itself. This observation carries significant practical implications. In high-stakes financial environments—such as auditing, compliance, or portfolio risk management—a model that generates a plausible, coherent reasoning trace but fails on the final numerical output is not merely unreliable; it is potentially hazardous. Such behavior creates a false sense of trustworthiness, as non-expert users may inspect the intermediate logic and assume the conclusion is correct. 11 RusFinChain A Preprint 
+
+6.2 Diagnostic Utility of Continuous Metrics 
+
+Our proposed Fuzzy and Soft metrics demonstrate a stronger alignment with actual task success than traditional hard threshold-based metrics. The Spearman correlation with Final Answer Match is 0.479 for Soft F1 and 0.469 for Fuzzy F1, compared to 0.385 for Hard F1 and 0.331 for BERTScore. This indicates that continuous metrics, which apply a smooth penalization for numerical deviations rather than a binary threshold, offer a more faithful proxy for genuine numerical competence. The high correlation between Fuzzy F1 and Final Answer Match (Pearson 𝑟 = 0.433 ) is particularly valuable. It implies that the fuzzy alignment score can serve as an effective estimator of answer quality even in settings where the gold final answer is not explicitly available, such as semi-supervised intermediate evaluations or inference-time diagnostics. Crucially, this also highlights a limitation of scoring systems that rely solely on semantic overlap (e.g., BERTScore) or binary step-matching. While such metrics are widely used for general reasoning evaluation, they often overstate a model’s competence in computational finance. Our continuous metrics provide a more honest and reliable assessment by penalizing subtle numerical drift that accumulates across a reasoning chain. 
+
+6.3 Domain-Specific Performance Patterns 
+
+The evaluation across 17 financial domains reveals a clear performance stratification. Domains with the strongest results—Financial Regulation, Financial Ratios, and Taxation—typically involve direct applications of well-defined formulas with linear procedural steps. These tasks are well-aligned with the structured pattern-matching and arithmetic capabilities of current LLMs. Conversely, the weakest domains—Crypto Finance, Investment Projects, Depreciation, and Loans and Borrow-ings—expose underlying model shortcomings. These domains often involve: 
+
+• multi-step calculations with branching logic or conditional choices; 
+
+• iterative computational processes (e.g., amortization schedules, net present value calculations); 
+
+• context-specific financial instruments or lesser-known valuation methods. This suggests a key takeaway for future research: while LLMs are increasingly capable of handling structured, textbook-style financial tasks, they still struggle with the iterative, open-ended computational reasoning that is prevalent in applied industrial finance. Enhancing model performance in these challenging domains will require not only larger scale, but also specific training regimens targeting procedural numerical execution. 
+
+6.4 Statistical Validation of Experimental Trends 
+
+To rigorously validate our observations, we performed a one-way ANOVA on the performance differences across difficulty levels. The analysis confirms that difficulty level significantly affects model performance ( 𝐹 = 110 .53 , 𝑝 < 0.001 ). Pairwise t-tests revealed significant differences between Basic and Intermediate tasks ( 𝑡 = 13 .74 , 𝑝 < 0.001 ) and between Basic and Advanced tasks ( 𝑡 = 12 .61 , 𝑝 < 0.001 ). Notably, the performance difference between Intermediate and Advanced tasks did not reach statistical significance ( 𝑡 = 0.986 , 𝑝 = 0.324 ). This suggests that performance saturation often occurs at the Intermediate level for many current open-weight models; the jump from Intermediate to Advanced may require qualitative changes in reasoning capability rather than merely a quantitative extension of the reasoning chain length. Furthermore, paired t-tests between metric families confirmed that Hard F1 differs significantly from Fuzzy F1 (𝑡 = 88 .94 , 𝑝 < 0.001 ) and from Soft F1 ( 𝑡 = 99 .64 , 𝑝 < 0.001 ), with mean differences of 0.173 and 0.194, respectively. These differences confirm that hard and soft metrics capture qualitatively distinct aspects of reasoning quality, reinforcing the necessity of a multi-faceted evaluation approach. 
+
+6.5 Synthesis: Toward a Combined Evaluation Paradigm 
+
+Our evaluation framework’s capacity to distinguish between Hard, Fuzzy, and Soft metrics offers a uniquely nuanced view of model behavior. The gap between Hard F1 and Fuzzy F1 (0.173) encapsulates the prevalence of semantically correct but numerically flawed reasoning steps—cases where models "talk the talk" but fail to "walk the walk" computationally. Similarly, the smaller gap between Fuzzy F1 and Soft F1 (0.022) highlights a minor correction for flexible step ordering, which is particularly relevant for models that rephrase intermediate logic without sacrificing numerical consistency. 12 RusFinChain A Preprint 
+
+These observations lead to a practical recommendation for the community: **future evaluations of financial reasoning should adopt a combined metric strategy**. Hard metrics remain useful for coarse filtering and quick model comparisons, while Fuzzy and Soft metrics are indispensable for deep diagnostic evaluation. Relying solely on hard metrics risks overstating model capabilities, whereas exclusively using soft metrics may penalize structurally correct but slightly paraphrased responses. More broadly, our results underline the inherent limitations of evaluating financial LLMs purely through multiple-choice question answering (MCQ) or semantic similarity. As demonstrated by the significant reasoning gap, benchmarks that fail to enforce *exact numerical verifiability* may obscure genuine model deficits. By providing fully deterministic Python-executable traces and continuous alignment scoring, RusFinChain offers the community a more transparent and rigorous testbed for advancing trustworthy computational reasoning in finance. 
+
+# 7 Limitations 
+
+Despite the contributions of this work, several limitations should be acknowledged. 
+
+7.1 Synthetic Data Generation 
+
+Our dataset is entirely synthetic and generated from symbolic templates. While this design enables controllable, contamination-free generation and automatic verification of both the reasoning chain and the final answer, it may lack the linguistic diversity and contextual richness of real-world financial texts. Real financial documents contain ambiguities, inconsistencies, and implicit assumptions that are not captured by our templated approach. Future work could incorporate real financial documents as seed inputs for semi-structured generation while preserving symbolic grounding. 
+
+7.2 Focus on Numerical Reasoning 
+
+The benchmark focuses on symbolic numerical reasoning and does not capture qualitative or strategic aspects of financial decision-making, such as risk assessment, market sentiment analysis, or regulatory interpretation. Thus, RusFinChain does not cover the full spectrum of financial reasoning, and extending it to higher-level reasoning remains an open challenge. 
+
+7.3 Language and Regional Scope 
+
+RusFinChain is limited to Russian-language problems and Russian financial conventions, including ruble denominations, local company names, and Russian regulatory contexts. While this focus enables targeted evaluation for the Russian-speaking community, it limits the benchmark’s applicability to multilingual and cross-regional settings. Extending it to other languages and financial systems is an important direction for future work. 
+
+7.4 Model Selection and Generalizability 
+
+We evaluated only 8 open-weight LLMs, all with parameter sizes between 3B and 8B. While these models are widely used and accessible, they do not include larger frontier models (e.g., GPT-4, Claude, Gemini) or specialized financial models. The generalizability of our findings to larger or proprietary models remains an open question. Future work should extend the evaluation to a broader range of models, including commercial APIs and models with different architectural designs. 
+
+7.5 Evaluation and Parsing Limitations 
+
+Our evaluation relies on parsing model-generated reasoning chains, which is sensitive to formatting variations and extraneous text. Models that deviate from the expected "Step X: ..." format may be penalized even when their reasoning is correct. Our Soft-Attention Alignment metric partially mitigates this issue by being more robust to step reordering and paraphrasing compared to the original DTW-based alignment. Nevertheless, improving step-level alignment via more structured outputs or tighter integration with symbolic execution remains a promising direction for future work. Additionally, while our Fuzzy and Soft metrics are more tolerant of paraphrasing and slight reordering, they still rely on the semantic embeddings of the step descriptions. In extreme cases where models use vastly different terminology or combine several steps into one, manual inspection may still be required for full assessment. 13 RusFinChain A Preprint 
+
+# 8 Ethical Statement and Broad Impact 
+
+We use only synthetic data generated via templated code, without any private, sensitive, or copyrighted content. The dataset is released under the MIT License. The full evaluation results, including all model outputs and computed met-rics, are publicly available at https://huggingface.co/datasets/RusNLPWorld/RusFinanceBenchmark-Eval .This promotes transparency and reproducibility in financial AI research. However, caution is needed when deploying LLMs in real-world financial decision-making, especially where correctness and regulatory compliance are critical. We hope RusFinChain supports research toward more interpretable, verifiable, and safe reasoning systems in high-stakes domains. 
+
+# 9 Conclusion and Future Work 
+
+In this work, we introduced RusFinChain , the first Russian-language symbolic benchmark for verifiable Chain-of-Thought reasoning in finance. Our benchmark spans 17 financial domains , 172 topics , and comprises 5,280 unique parameterized examples generated from executable Python templates, ensuring contamination-free evaluation. Each example includes a gold-standard reasoning chain with intermediate numeric values, enabling automatic verification at both the step and final-answer levels. Beyond the dataset, we proposed enhanced evaluation metrics that improve upon the original ChainEval framework: 
+
+Fuzzy Numeric Alignment using a Gaussian membership function for smooth deviation penalization, and Soft-Attention Alignment using temperature-scaled softmax for robust step matching. These metrics show stronger correlation with final-answer correctness (Spearman 𝜌 ≈ 0.48 ) than the original ChainEval ( 𝜌 ≈ 0.38 –0.46 ), demonstrating their superior diagnostic power. We evaluated 8 open-weight LLMs on a stratified sample of 1,000 examples from RusFinChain, generating 8,100 model responses. Our results revealed a substantial reasoning gap : while models achieve Hard F1 scores of approximately 0.65 for step-level alignment, only about 29% of final answers are numerically correct. Domain-level analysis showed substantial variation, with Financial Regulation, Financial Ratios, and Taxation emerging as the strongest domains, while Crypto Finance, Investment Projects, and Depreciation posed the greatest challenges. Statistical tests confirmed significant differences in performance across difficulty levels and metric families. Our findings have several practical implications. First, the reasoning gap highlights that models should not be trusted solely based on the coherence of their reasoning traces; final answer verification remains essential. Second, continuous fuzzy and soft metrics provide more reliable assessment of reasoning quality than hard threshold-based metrics. Third, domain-specific performance variation suggests that financial LLM evaluation should be fine-grained rather than aggregated. Future work will focus on four directions: 1. extending RusFinChain to multilingual and region-specific settings; 2. incorporating problems grounded in real-world financial documents; 3. expanding model evaluation to include larger frontier models and specialized financial LLMs; 4. integrating symbolic execution engines (e.g., SymPy) for more rigorous verification. Additionally, an exciting direction is the **hybridization of benchmark paradigms**: combining the *professional exam-style breadth* of resources like FINESSE-Bench with the *executable, step-level verifiability* of RusFinChain. This would allow us to transform static multiple-choice certification questions into computationally auditable Chain-of-Thought tasks. We release our dataset, code, and evaluation framework under an open license to foster research in verifiable and interpretable financial AI for the Russian-speaking community. The dataset is available at https://huggingface. co/datasets/RusNLPWorld/RusFinanceBenchmark , and the full evaluation results are available at https:// huggingface.co/datasets/RusNLPWorld/RusFinanceBenchmark-Eval . All code for template generation and evaluation is publicly available in the project repository. 
+
+# References 
+
+Zhiyu Zoey Chen, Jing Ma, Xinlu Zhang, Nan Hao, An Yan, Armineh Nourbakhsh, Xianjun Yang, Julian McAuley, Linda Petzold, and William Yang Wang. A survey on large language models for critical societal domains: Finance, 14 RusFinChain A Preprint 
+
+healthcare, and law. Transactions on Machine Learning Research , 2024a. URL https://openreview.net/ forum?id=0VZNxYjM9G .Zhuohan Xie, Rania Elbadry, Fan Zhang, Georgi Georgiev, Xueqing Peng, Lingfei Qian, Jimin Huang, Dimitar Dimitrov, Vanshikaa Jani, Yuyang Dai, et al. The CLEF-2026 FinMMEval lab: Multilingual and multimodal evaluation of financial AI systems. In Proceedings of the 46th European Conference on Information Retrieval (ECIR 2026) , Rome, Italy, 2026a. Springer. To appear. Zhuohan Xie, Daniil Orel, Rushil Thareja, Dhruv Sahnan, Hachem Madmoun, Fan Zhang, Debopriyo Banerjee, Georgi Nenkov Georgiev, Xueqing Peng, Lingfei Qian, Jimin Huang, Jinyan Su, Aaryamonvikram Singh, Rui Xing, Rania Elbadry, Chen Xu, Haonan Li, Fajri Koto, Ivan Koychev, Tanmoy Chakraborty, Yuxia Wang, Salem Lahlou, Veselin Stoyanov, Sophia Ananiadou, and Preslav Nakov. FinChain: A symbolic benchmark for verifiable chain-of-thought financial reasoning. Proceedings of the 64th Annual Meeting of the Association for Computational Linguistics (ACL 2026), Volume 1: Long Papers , pages 14529–14553, 2026b. URL https://aclanthology.org/ 2026.acl-long.662/ . ACL 2026, to appear. Dmitry Stanishevskii, Nini Kamkia, Alexey Khoroshilov, Dmitry Zmitrovich, Denis Kokosinskii, Zhirayr Hayrapetyan, and Andrei Kalmykov. FINESSE-Bench: A hierarchical benchmark suite for financial domain knowledge and technical analysis in large language models. arXiv preprint , arXiv:2605.15482, 2026. URL https://arxiv.org/ abs/2605.15482 . Version v2, 21 May 2026. Muhammad Usman Safder, Ayesha Gull, Rania Elbadry, Fan Zhang, Yankai Chen, Xueqing Peng, Xue (Steve) Liu, Preslav Nakov, and Zhuohan Xie. FinPersona-Bench: A benchmark for longitudinal psychometric stability of autonomous financial agents. arXiv preprint , arXiv:2606.31522, 2026. URL https://arxiv.org/abs/2606.31522 . Submitted 30 June 2026. Zhiyu Chen, Wenhu Chen, Charese Smiley, Sameena Shah, Iana Borova, Dylan Langdon, Reema Moussa, Matt Beane, Ting-Hao Huang, Bryan Routledge, and William Yang Wang. FinQA: A dataset of numerical reasoning over financial data. In Proceedings of the 2021 Conference on Empirical Methods in Natural Language Processing (EMNLP 2021) ,pages 3697–3711, Online and Punta Cana, Dominican Republic, 2021. Association for Computational Linguistics. URL https://aclanthology.org/2021.emnlp-main.300/ .Zhiyu Chen, Shiyang Li, Charese Smiley, Zhiqiang Ma, Sameena Shah, and William Yang Wang. ConvFinQA: Exploring the chain of numerical reasoning in conversational finance question answering. In Proceedings of the 2022 Conference on Empirical Methods in Natural Language Processing (EMNLP 2022) , pages 6279–6292, Abu Dhabi, United Arab Emirates, 2022. Association for Computational Linguistics. URL https://aclanthology. org/2022.emnlp-main.421/ .Fengbin Zhu, Wenqiang Lei, Youcheng Huang, Chao Wang, Shuo Zhang, Jiancheng Lv, Fuli Feng, and Tat-Seng Chua. TAT-QA: A question answering benchmark on a hybrid of tabular and textual content in finance. In Proceedings of the 59th Annual Meeting of the Association for Computational Linguistics and the 11th International Joint Conference on Natural Language Processing (ACL-IJCNLP 2021) , pages 3277–3287, Online, 2021. Association for Computational Linguistics. URL https://aclanthology.org/2021.acl-long.254/ .Pranab Islam, Anand Kannappan, et al. FinanceBench: A new benchmark for financial question answering. arXiv preprint , arXiv:2311.11944, 2023. URL https://arxiv.org/abs/2311.11944 .Jian Chen, Peilin Zhou, Yining Hua, Loh Xin, Kehui Chen, Ziyuan Li, Bing Zhu, and Junwei Liang. FinTextQA: A dataset for long-form financial question answering. In Proceedings of the 62nd Annual Meeting of the Association for Computational Linguistics (ACL 2024) , pages 6025–6047, Bangkok, Thailand, 2024b. Association for Computational Linguistics. URL https://aclanthology.org/2024.acl-long.326/ .Yilun Zhao, Yunxiang Li, Chenying Li, and Rui Zhang. MultiHiertt: Numerical reasoning over multi-hierarchical tabular and textual data. In Proceedings of the 60th Annual Meeting of the Association for Computational Linguistics (ACL 2022) , pages 6588–6600, Dublin, Ireland, 2022. Association for Computational Linguistics. URL 
+
+https://aclanthology.org/2022.acl-long.455/ .Qianqian Xie, Weiguang Han, Xiao Zhang, Yanzhao Lai, Min Peng, Alejandro Lopez-Lira, and Jimin Huang. PIXIU: A comprehensive benchmark, instruction dataset and large language model for finance. In Proceedings of the 36th International Conference on Neural Information Processing Systems (NeurIPS 2023) , New Orleans, LA, USA, 2023a. Curran Associates, Inc. URL https://arxiv.org/abs/2306.05443 .Qianqian Xie, Weiguang Han, Zhengyu Chen, Ruoyu Xiang, Xiao Zhang, Yueru He, Mengxi Xiao, Dong Li, Yongfu Dai, Duanyu Feng, Yijing Xu, Haoqiang Kang, Ziyan Kuang, Chenhan Yuan, Kailai Yang, Zheheng Luo, Tianlin Zhang, Zhiwei Liu, Guojun Xiong, et al. FinBen: A holistic financial benchmark for large language models. In Proceedings of the 38th International Conference on Neural Information Processing Systems (NeurIPS 2024) , Vancouver, BC, Canada, 2024. Curran Associates, Inc. URL https://arxiv.org/abs/2402.12659 .15 RusFinChain A Preprint 
+
+Glenn Matlin, Mika Okamoto, et al. Finance language model evaluation (FLaME). arXiv preprint , arXiv:2506.15846, 2025. URL https://arxiv.org/abs/2506.15846 .Michael Krumdick, Rik Koncel-Kedziorski, Viet Dac Lai, Varshini Reddy, Charles Lovering, and Chris Tanner. BizBench: A quantitative reasoning benchmark for business and finance. In Proceedings of the 62nd Annual Meeting of the Association for Computational Linguistics (ACL 2024) , pages 8309–8332, Bangkok, Thailand, 2024. Association for Computational Linguistics. URL https://aclanthology.org/2024.acl-long.452/ .Shijie Wu, Ozan Irsoy, Steven Lu, Vadim Dabravolski, Mark Dredze, Sebastian Gehrmann, Prabhanjan Kambadur, David Rosenberg, and Gideon Mann. BloombergGPT: A large language model for finance. arXiv preprint , arXiv:2303.17564, 2023. URL https://arxiv.org/abs/2303.17564 .Xiao-Yang Liu, Guoxuan Wang, Hongyang Yang, and Daochen Zha. FinGPT: Democratizing internet-scale data for financial large language models. arXiv preprint , arXiv:2307.10485, 2023. URL https://arxiv.org/abs/2307. 10485 .Zichen Tang, Haihong E, Ziyan Ma, Haoyang He, Jiacheng Liu, Zhongjun Yang, Zihua Rong, Rongjin Li, Kun Ji, Qing Huang, Xinyang Hu, Yang Liu, and Qianhe Zheng. FinanceReasoning: Benchmarking financial numerical reasoning more credible, comprehensive and challenging. In Proceedings of the 63rd Annual Meeting of the Association for Computational Linguistics (ACL 2025) , pages 15721–15749, Vienna, Austria, 2025. Association for Computational Linguistics. URL https://aclanthology.org/2025.acl-long.876/ .Yilun Zhao, Hongjun Liu, Yitao Long, Rui Zhang, Chen Zhao, and Arman Cohan. FinanceMATH: Knowledge-intensive math reasoning in finance domains. In Proceedings of the 62nd Annual Meeting of the Association for Computational Linguistics (ACL 2024) , pages 12841–12858, Bangkok, Thailand, 2024a. Association for Computational Linguistics. URL https://aclanthology.org/2024.acl-long.695/ .Yilun Zhao, Yitao Long, Hongjun Liu, Ryo Kamoi, Linyong Nan, Lyuhao Chen, Yixin Liu, Xiangru Tang, Rui Zhang, and Arman Cohan. DocMath-Eval: Evaluating math reasoning capabilities of llms in understanding long and specialized documents. In Proceedings of the 62nd Annual Meeting of the Association for Computational Linguistics (ACL 2024) , pages 16103–16120, Bangkok, Thailand, 2024b. Association for Computational Linguistics. URL 
+
+https://aclanthology.org/2024.acl-long.849/ .Iman Mirzadeh, Keivan Alizadeh, Hooman Shahrokhi, Oncel Tuzel, Samy Bengio, and Mehrdad Farajtabar. GSM-Symbolic: Understanding the limitations of mathematical reasoning in large language models. In Proceedings of the International Conference on Learning Representations (ICLR 2025) , Singapore, 2025. OpenReview.net. URL 
+
+https://openreview.net/forum?id=4jqF8zYQSe .Chin-Yew Lin. ROUGE: A package for automatic evaluation of summaries. In Text Summarization Branches Out: Proceedings of the ACL-04 Workshop , pages 74–81, Barcelona, Spain, 2004. Association for Computational Linguistics. URL https://aclanthology.org/W04-1013/ .Tianyi Zhang, Varsha Kishore, Felix Wu, Kilian Q. Weinberger, and Yoav Artzi. BERTScore: Evaluating text generation with BERT. In Proceedings of the International Conference on Learning Representations (ICLR 2020) , Addis Ababa, Ethiopia, 2020. OpenReview.net. URL https://openreview.net/forum?id=SkeHuCVFDr .Olga Golovneva, Moya Chen, Spencer Poff, Martin Corredor, Luke Zettlemoyer, Maryam Fazel-Zarandi, and Asli Celikyilmaz. ROSCOE: A suite of metrics for scoring step-by-step reasoning. In Proceedings of the International Conference on Learning Representations (ICLR 2023) , Kigali, Rwanda, 2023. OpenReview.net. URL 
+
+https://openreview.net/forum?id=Jyh5jp5G5b .Qing Lyu, Shreya Havaldar, Adam Stein, Li Zhang, Delip Rao, Eric Wong, Marianna Apidianaki, and Chris Callison-Burch. Faithful chain-of-thought reasoning. In Proceedings of the 13th International Joint Conference on Natural Language Processing and the 3rd Conference of the Asia-Pacific Chapter of the Association for Computational Linguistics (IJCNLP-AACL 2023) , pages 305–329, Nusa Dua, Bali, Indonesia, 2023. Association for Computational Linguistics. URL https://aclanthology.org/2023.ijcnlp-main.20/ .Zhuohan Xie, Miao Li, Trevor Cohn, and Jey Han Lau. DeltaScore: Fine-grained story evaluation with perturbations. In Findings of the Association for Computational Linguistics: EMNLP 2023 , pages 5317–5331, Singapore, 2023b. Association for Computational Linguistics. URL https://aclanthology.org/2023.findings-emnlp.354/ .Lianmin Zheng, Wei-Lin Chiang, Ying Sheng, Siyuan Zhuang, Zhanghao Wu, Yonghao Zhuang, Zi Lin, Zhuohan Li, Dacheng Li, Eric P. Xing, Hao Zhang, Joseph E. Gonzalez, and Ion Stoica. Judging LLM-as-a-Judge with MT-Bench and chatbot arena. arXiv preprint , arXiv:2306.05685, 2023. URL https://arxiv.org/abs/2306.05685 .Tianle Li, Wei-Lin Chiang, et al. From crowdsourced data to high-quality benchmarks: Arena-hard and benchbuilder pipeline. arXiv preprint , arXiv:2406.11939, 2024. URL https://arxiv.org/abs/2406.11939 .16 RusFinChain A Preprint 
+
+Zvi Bodie, Robert C. Merton, and Richard T. Thakor. Principles of Finance . Cambridge University Press, Cambridge, UK, 2025. M. K. Arabov, A. A. Mamatkulov, and L. F. Solieva. Reshenie finansovo-ekonomicheskikh zadach posredstvom Excel: Uchebno-metodicheskoe posobie . RTSU, Dushanbe, 2019. Ashish Vaswani, Noam Shazeer, Niki Parmar, Jakob Uszkoreit, Llion Jones, Aidan N. Gomez, Łukasz Kaiser, and Illia Polosukhin. Attention is all you need. In Proceedings of the 31st International Conference on Neural Information Processing Systems (NeurIPS 2017) , pages 5998–6008, Long Beach, CA, USA, 2017. Curran Associates, Inc. URL 
+
+https://papers.nips.cc/paper/7181-attention-is-all-you-need .Ollama Team. Ollama: Get up and running with large language models locally , 2025. Version 0.5.0, available at 
+
+https://ollama.com/ .17
