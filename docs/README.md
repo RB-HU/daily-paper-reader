@@ -6,31 +6,29 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-07-05
-- 运行时间：2026-07-05 21:05:33 UTC
+- 最新运行日期：2026-07-06
+- 运行时间：2026-07-06 21:25:52 UTC
 - 运行状态：成功
 - 本次总论文数：3
-- 精读区：1
-- 速读区：2
+- 精读区：2
+- 速读区：1
 
 ### 今日简报（AI）
-今日精读一款社区虚拟资产交易测试平台 CSTrader，并速览知识蒸馏与金融推理评估两项研究。  
-最值得关注 CSTrader 如何结合大语言模型与市场模拟，测试智能体的主动交易策略。  
-建议普通读者从这篇虚拟市场实验切入，理解语言驱动交易的潜力与风险。
-- 详情：[/202607/05/README](/202607/05/README)
+今日深入评测了两个前沿框架：EvoPolicyGym 让智能体在交互环境中自主进化策略，而 CRISTAL 方法则用神经符号分析解构 AI 生成的“世界模型”。最值得关注的方向是：让 AI 自己搭建并理解虚拟世界的物理法则，以及如何确保 AI 金融摘要不扭曲决策。下次建议普通读者先看《EvoPolicyGym》，它直观演示了 AI 如何像生物一样试错成长。
+- 详情：[/202607/06/README](/202607/06/README)
 
 ### 精读区论文标签
-1. [CSTrader: A Testbed for Language-Grounded Trading in a Community-Driven Virtual Asset Market](/202607/05/2606.31461v1-cstrader-a-testbed-for-language-grounded-trading-in-a-community-driven-virtual-asset-market)  
+1. [EvoPolicyGym: Evaluating Autonomous Policy Evolution in Interactive Environments](/202607/06/2607.02440v1-evopolicygym-evaluating-autonomous-policy-evolution-in-interactive-environments)  
+   标签：评分：9.0/10、query:fla
+   evidence：评估自主策略演化，即智能体部署后改进策略，直接针对后训练评估
+2. [The CRISTAL Method: Neurosymbolic analysis from AI-synthesized world models](/202607/06/2606.29799v1-the-cristal-method-neurosymbolic-analysis-from-ai-synthesized-world-models)  
    标签：评分：8.0/10、query:fla
-   evidence：面向虚拟市场交易的多智能体框架，属于任务导向型金融智能体系统
+   evidence：神经符号智能体自动化基本面投资分析
 
 ### 速读区论文标签
-1. [ARKD: Adaptive Reinforcement Learning-Guided Bidirectional KL Divergence Distillation for Text Generation](/202607/05/2606.29869v1-arkd-adaptive-reinforcement-learning-guided-bidirectional-kl-divergence-distillation-for-text-generation)  
+1. [When Summaries Distort Decisions: Information Fidelity in LLM-Compressed Financial Analysis](/202607/06/2606.29251v1-when-summaries-distort-decisions-information-fidelity-in-llm-compressed-financial-analysis)  
    标签：评分：6.0/10、query:fla
-   evidence：基于强化学习的自适应蒸馏方法，作为LLM的后训练技术，可应用于智能体模型
-2. [RusFinChain: A Russian Benchmark for Verifiable Chain-of-Thought Reasoning in Finance with Fuzzy-Aligned Evaluation](/202607/05/2607.01388v1-rusfinchain-a-russian-benchmark-for-verifiable-chain-of-thought-reasoning-in-finance-with-fuzzy-aligned-evaluation)  
-   标签：评分：6.0/10、query:fla
-   evidence：俄语金融可验证思维链推理基准，为金融LLM后训练提供数据
+   evidence：研究智能体系统中LLM压缩金融分析的信息保真度，与金融智能体决策相关
 
 
 <div class="dpr-home-promo-card">
