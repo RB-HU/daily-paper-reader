@@ -6,55 +6,37 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-07-08
-- 运行时间：2026-07-08 22:02:57 UTC
+- 最新运行日期：2026-07-09
+- 运行时间：2026-07-09 22:05:53 UTC
 - 运行状态：成功
-- 本次总论文数：11
-- 精读区：5
-- 速读区：6
+- 本次总论文数：5
+- 精读区：3
+- 速读区：2
 
 ### 今日简报（AI）
-今日精读聚焦LLM谈判博弈与数据进化训练，速览预测市场信念层与信用策略优化。  
-最值得关注的是大语言模型在多买方市场中的强化议价能力和智能体后训练的数据策展进化框架。  
-建议读者从可验证奖励的谈判实验入手，结合数据进化思路探索自己的智能体应用。
-- 详情：[/202607/08/README](/202607/08/README)
+今日精读两篇高分强化学习论文，分别用细粒度熵重塑信用分配，用解耦对话动力学打开全双工语音交互。
+最值得关注：ACPO 通过自适应信用策略让智能体学会“分清好坏因果”，全双工模型则用 RL 把听和说的纠缠动态成功解开。
+读者可顺着信用分配与对话解耦两条线索，重点关注 RL 在复杂交互场景下的细粒度优化实验。
+- 详情：[/202607/09/README](/202607/09/README)
 
 ### 精读区论文标签
-1. [Strategic Bargaining in Multi-Buyer Markets: Reinforcement Learning from Verifiable Rewards for LLM Negotiations](/202607/08/2607.05863v1-strategic-bargaining-in-multi-buyer-markets-reinforcement-learning-from-verifiable-rewards-for-llm-negotiations)  
+1. [ACPO: Adaptive Credit Policy Optimization via Fine-Grained Surrogate Entropy](/202607/09/2607.03126v1-acpo-adaptive-credit-policy-optimization-via-fine-grained-surrogate-entropy)  
    标签：评分：9.0/10、query:fla
-   evidence：使用可验证奖励的强化学习对LLM智能体进行后训练，用于多买方谈判这一金融场景
-2. [CurateEvo: Data-Curation Evolving for Agentic Post-Training](/202607/08/2607.06140v1-curateevo-data-curation-evolving-for-agentic-post-training)  
+   evidence：提出ACPO，一种用于LLM后训练的强化学习令牌级信用分配方法，提升推理能力
+2. [Decoupling Conversational Dynamics in Full-Duplex Spoken Models through Reinforcement Learning](/202607/09/2607.07148v1-decoupling-conversational-dynamics-in-full-duplex-spoken-models-through-reinforcement-learning)  
    标签：评分：9.0/10、query:fla
-   evidence：面向智能体后训练数据管理的失败驱动动态演化框架
-3. [Beyond Static Evaluation: Building Simulation Environments for Scalable Agentic Reinforcement Learning](/202607/08/2607.05773v1-beyond-static-evaluation-building-simulation-environments-for-scalable-agentic-reinforcement-learning)  
-   标签：评分：8.0/10、query:fla
-   evidence：用于智能体后训练的强化学习环境
-4. [TurnOPD: Making On-Policy Distillation Turn-Aware for Efficient Long-Horizon Agent Training](/202607/08/2607.05804v1-turnopd-making-on-policy-distillation-turn-aware-for-efficient-long-horizon-agent-training)  
-   标签：评分：8.0/10、query:fla
-   evidence：提出轮次级策略蒸馏方法，用于长程智能体训练，是一种后训练技术
-5. [Information Gain-based Rollout Policy Optimization: An Adaptive Tree-Structured Rollout Approach for Multi-Turn LLM Agents](/202607/08/2607.06223v1-information-gain-based-rollout-policy-optimization-an-adaptive-tree-structured-rollout-approach-for-multi-turn-llm-agents)  
-   标签：评分：8.0/10、query:fla
-   evidence：提出基于信息增益的强化学习策略优化方法，用于多轮LLM智能体，是一种后训练方法
+   evidence：提出用于训练对话智能体交互动态的强化学习框架
+3. [Single-Rollout Asynchronous Optimization for Agentic Reinforcement Learning](/202607/09/2607.07508v1-single-rollout-asynchronous-optimization-for-agentic-reinforcement-learning)  
+   标签：评分：9.0/10、query:fla
+   evidence：提出SAO，一种用于长程智能体任务LLM后训练的异步RL优化方法
 
 ### 速读区论文标签
-1. [Beyond Forecasting: The Belief-to-Trade Layer in Prediction-Market Agents](/202607/08/2607.03015v1-beyond-forecasting-the-belief-to-trade-layer-in-prediction-market-agents)  
+1. [Multi-Objective Exploration and Preference Optimization via Mutual Information](/202607/09/2607.01392v2-multi-objective-exploration-and-preference-optimization-via-mutual-information)  
    标签：评分：7.0/10、query:fla
-   evidence：首个面向预测市场的自主交易智能体属于金融任务导向型智能体
-2. [ACPO: Adaptive Credit Policy Optimization via Fine-Grained Surrogate Entropy](/202607/08/2607.03126v2-acpo-adaptive-credit-policy-optimization-via-fine-grained-surrogate-entropy)  
+   evidence：可应用于金融AI智能体对齐的多目标对齐框架
+2. [Spectral Rewiring for Exploration, Purification, and Model Merging](/202607/09/2607.03065v1-spectral-rewiring-for-exploration-purification-and-model-merging)  
    标签：评分：7.0/10、query:fla
-   evidence：基于RL的LLM后训练token级信用分配
-3. [Demonstrating TOFFEE: A Learned System for Synthesizing Data Agent Trajectories at Scale](/202607/08/2607.06233v1-demonstrating-toffee-a-learned-system-for-synthesizing-data-agent-trajectories-at-scale)  
-   标签：评分：7.0/10、query:fla
-   evidence：用于合成智能体轨迹以生成适配特定领域的监督微调和上下文学习数据的系统
-4. [Human-Machine Collaboration on Generative Meta-Learning: Model and Algorithm](/202607/08/2607.00926v1-human-machine-collaboration-on-generative-meta-learning-model-and-algorithm)  
-   标签：评分：6.0/10、query:fla
-   evidence：类RLHF方法：生成式元学习与人类反馈，用于领域自适应
-5. [DiPS: Dialogue Policy Selection for High-Stakes Persuasion Agents](/202607/08/2607.01557v2-dips-dialogue-policy-selection-for-high-stakes-persuasion-agents)  
-   标签：评分：6.0/10、query:fla
-   evidence：用于多轮说服对话的Q学习策略选择
-6. [Can Reinforcement Learning Efficiently Discover Price Manipulation?](/202607/08/2607.06121v1-can-reinforcement-learning-efficiently-discover-price-manipulation)  
-   标签：评分：6.0/10、query:fla
-   evidence：无模型强化学习智能体用于发现金融价格操纵，展示金融任务中的RL后训练
+   evidence：频谱编辑方法SAR改善大语言模型的强化学习后训练，保留推理能力
 
 
 <div class="dpr-home-promo-card">
