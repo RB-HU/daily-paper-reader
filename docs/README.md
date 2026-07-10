@@ -6,37 +6,37 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-07-09
-- 运行时间：2026-07-09 22:05:53 UTC
+- 最新运行日期：2026-07-10
+- 运行时间：2026-07-10 21:26:43 UTC
 - 运行状态：成功
 - 本次总论文数：5
-- 精读区：3
-- 速读区：2
+- 精读区：2
+- 速读区：3
 
 ### 今日简报（AI）
-今日精读两篇高分强化学习论文，分别用细粒度熵重塑信用分配，用解耦对话动力学打开全双工语音交互。
-最值得关注：ACPO 通过自适应信用策略让智能体学会“分清好坏因果”，全双工模型则用 RL 把听和说的纠缠动态成功解开。
-读者可顺着信用分配与对话解耦两条线索，重点关注 RL 在复杂交互场景下的细粒度优化实验。
-- 详情：[/202607/09/README](/202607/09/README)
+今日精读了两篇关于AI代理的高分研究，聚焦于直通式承保与离线模仿学习对齐。  
+最值得关注的是检索增强代理如何优化承保决策，以及通过反馈操纵正则化实现无需在线交互的代理对齐。  
+建议先读这两篇，快速掌握代理AI在金融自动化和安全训练上的最新思路。
+- 详情：[/202607/10/README](/202607/10/README)
 
 ### 精读区论文标签
-1. [ACPO: Adaptive Credit Policy Optimization via Fine-Grained Surrogate Entropy](/202607/09/2607.03126v1-acpo-adaptive-credit-policy-optimization-via-fine-grained-surrogate-entropy)  
+1. [Agentic AI and Retrieval-Augmented Models in Straight-Through Underwriting](/202607/10/2607.07858v1-agentic-ai-and-retrieval-augmented-models-in-straight-through-underwriting)  
    标签：评分：9.0/10、query:fla
-   evidence：提出ACPO，一种用于LLM后训练的强化学习令牌级信用分配方法，提升推理能力
-2. [Decoupling Conversational Dynamics in Full-Duplex Spoken Models through Reinforcement Learning](/202607/09/2607.07148v1-decoupling-conversational-dynamics-in-full-duplex-spoken-models-through-reinforcement-learning)  
+   evidence：为直通式核保（精算/金融）开发智能体AI框架
+2. [Feedback Manipulation Regularization: Enabling Offline Agent Alignment for Imitation Learning](/202607/10/2607.07859v1-feedback-manipulation-regularization-enabling-offline-agent-alignment-for-imitation-learning)  
    标签：评分：9.0/10、query:fla
-   evidence：提出用于训练对话智能体交互动态的强化学习框架
-3. [Single-Rollout Asynchronous Optimization for Agentic Reinforcement Learning](/202607/09/2607.07508v1-single-rollout-asynchronous-optimization-for-agentic-reinforcement-learning)  
-   标签：评分：9.0/10、query:fla
-   evidence：提出SAO，一种用于长程智能体任务LLM后训练的异步RL优化方法
+   evidence：通过反馈正则化实现离线智能体对齐
 
 ### 速读区论文标签
-1. [Multi-Objective Exploration and Preference Optimization via Mutual Information](/202607/09/2607.01392v2-multi-objective-exploration-and-preference-optimization-via-mutual-information)  
+1. [SelfMem: Self-Optimizing Memory for AI Agents](/202607/10/2607.03726v1-selfmem-self-optimizing-memory-for-ai-agents)  
    标签：评分：7.0/10、query:fla
-   evidence：可应用于金融AI智能体对齐的多目标对齐框架
-2. [Spectral Rewiring for Exploration, Purification, and Model Merging](/202607/09/2607.03065v1-spectral-rewiring-for-exploration-purification-and-model-merging)  
+   evidence：自优化记忆框架让AI智能体探索和改进记忆策略
+2. [DeepSearch-World: Self-Distillation for Deep Search Agents in a Verifiable Environment](/202607/10/2607.07820v1-deepsearch-world-self-distillation-for-deep-search-agents-in-a-verifiable-environment)  
    标签：评分：7.0/10、query:fla
-   evidence：频谱编辑方法SAR改善大语言模型的强化学习后训练，保留推理能力
+   evidence：自蒸馏框架用于训练工具使用智能体从自身经验中改进
+3. [AgentGym2: Benchmarking Large Language Model Agents in De-Idealized Real-World Environments](/202607/10/2607.05174v1-agentgym2-benchmarking-large-language-model-agents-in-de-idealized-real-world-environments)  
+   标签：评分：6.0/10、query:fla
+   evidence：在真实环境中评估LLM智能体，可用于后训练反馈
 
 
 <div class="dpr-home-promo-card">
