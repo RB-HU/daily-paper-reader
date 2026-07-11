@@ -6,37 +6,26 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-07-10
-- 运行时间：2026-07-10 21:26:43 UTC
+- 最新运行日期：2026-07-11
+- 运行时间：2026-07-11 21:12:40 UTC
 - 运行状态：成功
-- 本次总论文数：5
-- 精读区：2
-- 速读区：3
+- 本次总论文数：1
+- 精读区：1
+- 速读区：0
 
 ### 今日简报（AI）
-今日精读了两篇关于AI代理的高分研究，聚焦于直通式承保与离线模仿学习对齐。  
-最值得关注的是检索增强代理如何优化承保决策，以及通过反馈操纵正则化实现无需在线交互的代理对齐。  
-建议先读这两篇，快速掌握代理AI在金融自动化和安全训练上的最新思路。
-- 详情：[/202607/10/README](/202607/10/README)
+今日精读一篇高分研究《Harness-Aware Self-Evolving》，探索模型权重、任务适配组件与解决方案三者协同进化的新范式。  
+核心结论：让模型在进化中感知并优化任务 harness，能突破固定流水线的局限，显著提升多任务泛化与自我改进能力。  
+下一步建议：如果你正构建 self-improving 系统，不妨重新审视任务适配层的设计，给它留出协同进化的空间。
+- 详情：[/202607/11/README](/202607/11/README)
 
 ### 精读区论文标签
-1. [Agentic AI and Retrieval-Augmented Models in Straight-Through Underwriting](/202607/10/2607.07858v1-agentic-ai-and-retrieval-augmented-models-in-straight-through-underwriting)  
+1. [Harness-Aware Self-Evolving: Co-Evolving Model Weights, Harness, and Task Solutions](/202607/11/2607.03935v1-harness-aware-self-evolving-co-evolving-model-weights-harness-and-task-solutions)  
    标签：评分：9.0/10、query:fla
-   evidence：为直通式核保（精算/金融）开发智能体AI框架
-2. [Feedback Manipulation Regularization: Enabling Offline Agent Alignment for Imitation Learning](/202607/10/2607.07859v1-feedback-manipulation-regularization-enabling-offline-agent-alignment-for-imitation-learning)  
-   标签：评分：9.0/10、query:fla
-   evidence：通过反馈正则化实现离线智能体对齐
+   evidence：用于金融alpha因子挖掘的强化学习框架
 
 ### 速读区论文标签
-1. [SelfMem: Self-Optimizing Memory for AI Agents](/202607/10/2607.03726v1-selfmem-self-optimizing-memory-for-ai-agents)  
-   标签：评分：7.0/10、query:fla
-   evidence：自优化记忆框架让AI智能体探索和改进记忆策略
-2. [DeepSearch-World: Self-Distillation for Deep Search Agents in a Verifiable Environment](/202607/10/2607.07820v1-deepsearch-world-self-distillation-for-deep-search-agents-in-a-verifiable-environment)  
-   标签：评分：7.0/10、query:fla
-   evidence：自蒸馏框架用于训练工具使用智能体从自身经验中改进
-3. [AgentGym2: Benchmarking Large Language Model Agents in De-Idealized Real-World Environments](/202607/10/2607.05174v1-agentgym2-benchmarking-large-language-model-agents-in-de-idealized-real-world-environments)  
-   标签：评分：6.0/10、query:fla
-   evidence：在真实环境中评估LLM智能体，可用于后训练反馈
+- 本次无速读推荐。
 
 
 <div class="dpr-home-promo-card">
