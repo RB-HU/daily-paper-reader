@@ -1,0 +1,1399 @@
+Title: XALPHA: A Memory-Driven AI Quant Researcher for Hypothesis-to-Code Alpha Discovery
+
+URL Source: https://arxiv.org/pdf/2607.08332v1
+
+Published Time: Fri, 10 Jul 2026 01:16:39 GMT
+
+Number of Pages: 61
+
+Markdown Content:
+# XA LPHA : A Memory-Driven AI Quant Researcher for Hypothesis-to-Code Alpha Discovery 
+
+Fengyuan Liu 1,2 Yuchen Fu 1 Yuqi Wang 1 Qi Liu 1,21School of Computing and Data Science, The University of Hong Kong 
+
+> 2
+
+Grace Investment Machine 
+
+oxfengyuan@gmail.com 
+
+## Abstract 
+
+Financial markets are noisy, non-stationary, and high-dimensional, making it diffi-cult to discover predictive and robust trading signals. Alpha discovery has evolved from manual factor design to machine learning, evolutionary search, and recent LLM-based frameworks, improving the efficiency of factor generation, search, and evaluation. However, existing methods still mostly automate isolated steps, rather than functioning as end-to-end quant researchers that can absorb external knowl-edge, close the hypothesis-to-code validation loop, and learn from accumulated discovery feedback. To fill this gap, we introduce XA LPHA , a memory-driven AI Quant Researcher for continuous hypothesis-to-code alpha discovery. XA LPHA 
+
+maintains a multi-source research memory system that integrates report-grounded financial knowledge with discovery feedback from prior generations and research cycles. Guided by this memory system, a Macro Brain plans research themes and selects suitable Archetypes; a Micro Brain transforms the planned hypothe-sis pool into executable factor code and verifies ex-ante tri-alignment among the hypothesis idea, code logic, and financial plausibility; and a Cross Brain consoli-dates empirical outcomes into generation-level feedback, cycle-level summaries, and archetype-level research cues for future exploration. In this way, XA LPHA 
+
+turns alpha mining from isolated factor generation into a closed-loop research process that continuously reads, hypothesizes, implements, validates, reflects, and evolves. Experiments on CSI300 show that XA LPHA achieves stronger overall alpha discovery performance than representative baselines. 
+
+## 1 Introduction 
+
+Alpha mining aims to discover predictive trading signals, or alphas, that map historical market observations into forecasts of future asset returns. It is a central problem in quantitative investing, yet remains difficult because financial markets are noisy, non-stationary, and characterized by time-varying volatility [Engle, 1982]. This difficulty has driven alpha discovery from manual factor design toward increasingly automated, explainable, and knowledge-driven approaches [Guo et al., 2024]. However, current automation still mostly addresses isolated factor-level operations, such as searching, generating, or evaluating candidate factors, rather than the full hypothesis-driven workflow of a human quant researcher. In practice, alpha discovery is a hypothesis-to-code loop: researchers absorb market knowledge, formulate financial hypotheses, translate them into factor implementations, examine their financial plausibility, evaluate them empirically, and reuse both successes and failures to guide future exploration. This gap motivates our goal of building an AI Quant Researcher that conducts alpha discovery as an iterative, memory-driven research process, rather than as isolated factor generation. 
+
+> Preprint. arXiv:2607.08332v1 [cs.CL] 9 Jul 2026
+
+Traditional alpha discovery largely relies on human expertise. Researchers manually design factors based on economic intuition, empirical asset-pricing evidence, and market observations [Fama and French, 1992, 1993, Kakushadze, 2016]. These human-crafted signals are often interpretable and easy to audit, but the discovery process is labor-intensive, difficult to scale, and heavily dependent on individual researchers’ accumulated experience. As markets become more complex and financial datasets, reports, and research materials continue to proliferate, manual factor design struggles to support continuous hypothesis exploration and systematic knowledge accumulation. To improve the scalability of alpha discovery, machine learning and automated search methods have been introduced. Deep neural models can learn nonlinear predictive representations from large market panels and have been applied to cross-sectional return prediction and stock trend forecasting [Duan et al., 2022, Xu et al., 2021a,b]. These methods improve modeling capacity, but their learned signals are often opaque and weakly connected to explicit financial hypotheses. In parallel, genetic programming and evolutionary search have long been used to discover technical trading rules and formulaic alpha factors [Allen and Karjalainen, 1999, Zhang et al., 2020, Cui et al., 2021]. Reinforcement-learning-based methods further optimize formula generation or alpha collections with performance-driven rewards [Yu et al., 2023]. These approaches preserve explicit expressions and enable large-scale search, but their search processes are usually driven by statistical fitness rather than financial reasoning. As a result, the generated formulas may lack solid economic rationale and exhibit weak robustness or unstable out-of-sample performance. Motivated by the need for more knowledge-aware and reasoning-driven alpha discovery, recent LLM-based systems have begun to automate higher-level research decisions that were previously handled by human quants. Early studies use LLMs for interactive or neural-symbolic factor construction [Wang et al., 2023, Li et al., 2024]. Later systems further structure alpha exploration, guide formula refinement with tree search, or coordinate multi-agent quantitative research workflows [Tang et al., 2025, Shi et al., 2025, Li et al., 2025]. More recent frameworks further extend LLM-based alpha mining along different axes. FactorMiner introduces skills and experience memory to reuse successful patterns and failure constraints from historical mining sessions [Wang et al., 2026]. CogAlpha represents alphas as executable code and applies LLM-driven evolutionary search with multi-agent quality checking [Liu et al., 2026]. Despite these advances, existing systems still mostly automate isolated steps of factor generation, formula refinement, experience reuse, or code evolution. They have not yet fully organized external knowledge absorption, research memory, hypothesis planning, factor-code implementation, empirical validation, and feedback consolidation into a closed-loop AI Quant Researcher for continuous alpha discovery. To bridge this gap, we introduce XA LPHA , an AI Quant Researcher for continuous hypothesis-to-code alpha discovery. The name XA LPHA uses X to denote the unknown latent structure of financial markets from which predictive alpha signals may be discovered. The key idea is to adapt the emerging paradigm of autonomous research agents [Lu et al., 2024, Gottweis et al., 2026, Lyu et al., 2026] to quantitative finance, where financial hypotheses must be grounded in market knowledge, translated into executable factor code, and validated through rigorous empirical evaluation. XA LPHA first uses a Report-to-Memory Absorption (RMA) layer to extract reusable financial insights from research reports and organize them into report-grounded knowledge memory. In parallel, it accumulates discovery feedback from prior generations and research cycles, including successful mechanisms, failed patterns, and validated factor ideas. Guided by these complementary memories, a Macro Brain plans research themes and selects suitable Archetypes; a Micro Brain transforms the archetype-guided hypothesis pool into executable OHLCV factor code and verifies ex-ante tri-alignment among the hypothesis idea, code logic, and financial plausibility; and a Cross Brain consolidates empirical outcomes into generation-level feedback, cycle-level summaries, and archetype-level research cues for future exploration. In this way, XA LPHA turns alpha mining from isolated factor generation into a closed-loop research process that continuously reads, hypothesizes, implements, validates, reflects, and evolves. The main contributions of this paper are: • We introduce XA LPHA , an AI Quant Researcher that formulates alpha discovery as a report-grounded, memory-driven, and continuous hypothesis-to-code research loop, moving beyond one-shot factor generation and isolated backtest-driven search. • We propose a closed-loop multi-brain architecture that integrates report-grounded knowledge memory and discovery feedback. Through Macro Brain research planning, Micro Brain factor-code 2evolution and validation, and Cross Brain discovery feedback consolidation, XA LPHA continuously updates its research state across generations and cycles. • We evaluate XA LPHA on CSI300, demonstrating that XA LPHA discovers more predictive and robust alpha factors than representative alpha-mining baselines. The rest of the paper is organized as follows. Section 2 reviews related work on LLM-based alpha mining and autonomous research agents. Section 3 presents the XA LPHA architecture, including the RMA layer, Macro Brain research planning, Micro Brain hypothesis-to-code evolution, and Cross Brain discovery feedback consolidation. Section 4 describes the experimental setup and demonstrates the effectiveness of XA LPHA against representative baselines. Section 5 concludes the paper and outlines future research directions. 
+
+## 2 Related Work 
+
+LLM-based alpha mining. Alpha mining has traditionally been studied through human-designed factors, neural predictors, genetic programming, and reinforcement learning [Fama and French, 1992, Kakushadze, 2016, Duan et al., 2022, Zhang et al., 2020, Cui et al., 2021, Yu et al., 2023]. These methods either rely heavily on expert design, learn opaque representations, or search over predefined symbolic spaces. Recent LLM-based systems have attempted to move beyond these limitations by using language models for financial reasoning, factor generation, and iterative refinement. AlphaGPT translates natural-language investment ideas into alpha candidates, but still relies on human interaction to provide and steer the initial ideas [Wang et al., 2023]. FAMA combines neural and symbolic factor mining through an LLM-based agent, improving interpretability but remaining focused on factor construction rather than a full research loop [Li et al., 2024]. AlphaAgent introduces regularization over originality, hypothesis alignment, and complexity to reduce factor crowding and alpha decay, but its memory and planning mechanisms remain limited [Tang et al., 2025]. AlphaJungle uses LLM-powered MCTS to refine formulaic alphas with backtesting feedback, yet its search remains centered on symbolic formulas [Shi et al., 2025]. RD-Agent(Q) automates factor–model co-optimization through a research–development–feedback pipeline, but focuses on full-stack quant strategy optimization rather than report-grounded alpha hypothesis discovery [Li et al., 2025]. More recent frameworks further extend LLM-based alpha mining along different axes. FactorMiner introduces skills and experience memory to reuse successful patterns and failure constraints from historical mining sessions, but its memory is mainly distilled from prior mining trials rather than from both external research knowledge and online discovery feedback [Wang et al., 2026]. CogAlpha represents alphas as executable code and applies LLM-driven evolutionary search with multi-agent quality checking, but does not explicitly combine report-grounded knowledge memory, macro-level research planning, and discovery feedback consolidation into a closed-loop AI Quant Researcher [Liu et al., 2026]. In contrast, XA LPHA organizes report absorption, memory-guided hypothesis planning, code-based factor evolution, empirical validation, and discovery feedback consolidation into a unified hypothesis-to-code research loop. 
+
+Autonomous research agents. Recent autonomous research agents aim to extend LLMs from isolated problem solving to long-horizon research workflows involving hypothesis generation, im-plementation, evaluation, and iterative refinement. The AI Scientist demonstrates an end-to-end scientific discovery pipeline that generates research ideas, writes code, executes experiments, pro-duces manuscripts, and performs automated review [Lu et al., 2024]. AI Co-Scientist studies a multi-agent generate–debate–evolve framework for scientific hypothesis generation under scientist-provided goals [Gottweis et al., 2026]. EvoScientist further decomposes scientific discovery into researcher, engineer, and evolution-manager agents, using persistent ideation and experimentation memories to improve future proposal generation and code execution [Lyu et al., 2026]. These systems show the potential of LLM agents to approximate parts of the scientific research loop. Recent work also emphasizes memory, self-evolution, and external knowledge acquisition. CORAL studies autonomous multi-agent evolution, where long-lived agents explore, reflect, and collaborate through shared persistent memory [Qu et al., 2026]. OpenSkill shows that agents can acquire knowledge from open-world resources and construct proxy verification signals for self-evolution without target-task supervision [Yan et al., 2026]. Meta-Harness further shows that rich execution traces and prior feedback can be more informative than scalar scores for improving LLM system 3Memory Report-derived Research Memory         
+
+> PDFs RMA Layer Research Archetypes
+> Short-term Novelty Feedback Memory
+> Good Factor sBad Factors
+> Long-term Discovery Feedback Memory
+> Cycle Summaries
+> Theme Name: ...
+> Theme Summary : ...
+> Selected Archetypes : ...
+> Coverage Information : ...
+> Positive Information : ...
+> Negative Information : ...
+> Archetype-specific Memory
+> Elites FAA Layer Verified H ypotheses
+
+Macro Brain: Outer Research Loop 
+
+> External
+> Information
+> 1. Reports
+> 2. Paper
+> ...
+> Raw Factors
+> 1. Open
+> 2. High
+> 3. Low
+> 4. Close
+> 5. Volume
+
+Micro Brain: Inner Code Discovery Loop        
+
+> AST Gate
+> TriAlign-Judge
+> Execute
+> Qualified
+> Unit Test
+> NumVal Evolution
+> AlignRev
+> Repair
+> Redundancy Control
+> lDeduplication
+> lCorrelation
+> Evaluation
+> lIC/RankIC
+> lComplexity
+> lRolling-OOS
+> Alpha
+> mutation
+> refinement crossover
+
+Cross Brain: Feedback Alignment Loop                                    
+
+> Novelty Injection
+> Factor-to-Archetype Attribution Feedback Construction
+> Memory Update
+> lB-layer
+> lC-layer
+> lLabel update
+> lRecord Building
+> lPositives
+> lFailures
+> lGeneration Level
+> lCycle Level
+> lArchetype-specific
+> lReusable principles
+> lFailure patterns
+> lFresh seed
+> 1. Read Memory 2. Routing Mode 3. Routing Profile 4. Select Archetypes 5. Hypothesis Pool
+> lEvidence
+> lArchetypes
+> lCycle Memory
+> lAnchor
+> lIntegration
+> lMemory Driven
+> lTheme Name
+> lTheme Summary
+> lFeedback Basis
+> lPrimary Layers
+> lSupporting Layers
+> lInsights
+> lRuntime Agents
+> lSubset Planning
+> lHypothesis Subsets
+
+: Forward :Memory Write : Memory Retrieval : Execution Order Figure 1: Overview of XA LPHA . XA LPHA maintains a multi-source research memory that combines report-grounded knowledge with discovery feedback from prior generations and cycles. This memory supports Macro Brain research planning and archetype selection. The Micro Brain 
+
+transforms the resulting hypothesis pool into executable OHLCV factor code and improves candidates through validation and evolution. The evaluation module filters candidate signals based on empirical quality, robustness, and redundancy. The Cross Brain attributes factor outcomes to archetypes and updates discovery feedback memory for subsequent research cycles. behavior [Lee et al., 2026]. These works motivate our use of persistent memory, external knowledge, and feedback consolidation. However, existing autonomous research agents are not designed for financial alpha discovery. In this domain, a research hypothesis must be translated into executable factor code, aligned with financial rationale, and validated through empirical signals such as cross-sectional predictiveness and out-of-sample robustness. XA LPHA adapts the autonomous research-agent paradigm to this setting through a continuous alpha discovery loop that grounds hypotheses in financial knowledge, implements them as factor code, validates both rationale and empirical behavior, and feeds discovery outcomes back into future research. 
+
+## 3 Approach 
+
+XA LPHA is designed as an AI Quant Researcher for continuous hypothesis-to-code alpha discovery. Rather than treating alpha mining as one-shot factor generation, XA LPHA organizes report absorption, memory-guided hypothesis planning, executable factor-code evolution, empirical validation, and discovery feedback consolidation into an iterative research loop. As shown in Figure 1, external research reports are absorbed into report-grounded knowledge memory, while mining feedback from prior generations and cycles is accumulated as discovery feedback memory. Guided by these complementary memories, the Macro Brain plans research themes and selects suitable research Archetypes; the Micro Brain turns the archetype-guided hypothesis pool into executable OHLCV factor code and improves candidate factors through validation and evolution; and the Cross Brain consolidates empirical outcomes into compact feedback that updates future archetype routing and hypothesis generation. In this way, XA LPHA forms a closed-loop AI Quant Researcher that contin-uously explores new alpha hypotheses while reusing validated mechanisms and avoiding repeated failure patterns across research cycles. 
+
+3.1 Report-to-Memory Absorption Layer 
+
+Inspired by structured-memory construction in StructMem [Xu et al., 2026], we propose a Report-to-Memory Absorption (RMA) layer that writes external research reports into report-grounded 4Table 1: Definition of the A/B/C taxonomy used by RMA.         
+
+> Layer Input unit Output Role in XA LPHA
+> A-layer Report fragment or evidence chunk
+> KEEP /DROP decision with an OHLCV feasibility reason Filters evidence according to the daily OHLCV factor contract. B-layer A-layer-approved research-path atom Broad mechanism-family assignment and reusable research path Groups retained evidence into coarse financial mechanisms for Macro Brain routing. C-layer B-layer research path Research Archetype record with mechanism role and report-grounded paths Constructs actionable archetype memory for hypothesis planning; it is not itself a factor formula.
+
+knowledge memory as an upstream memory-updating process for alpha mining. The purpose of RMA is not to place raw documents directly into agent prompts, but to convert report fragments into structured, retrievable knowledge that is compatible with the daily OHLCV factor workflow. RMA organizes report-derived knowledge through a three-layer A/B/C taxonomy, summarized in Table 1. The A-layer is the OHLCV eligibility layer. Its input is a report fragment or evidence chunk; its output is a KEEP /DROP decision with an OHLCV feasibility reason; and its role is to decide whether the underlying mechanism can be represented under the daily OHLCV factor contract. A fragment is retained only if its core mechanism can be directly observed, inferred, or stably proxied using daily open, high, low, close, and volume. Fragments that rely on unavailable information, such as order-book states or fundamentals, are discarded. The B-layer is the mechanism-family layer. Its input is an A-layer-approved research-path atom; its output is a broad mechanism-family assignment together with a reusable research path; and its role is to group retained evidence into coarse financial mechanisms for Macro Brain routing. For example, retained fragments may be assigned to families such as trend and momentum, reversal and mean reversion, or price-volume interaction. The C-layer is the actionable archetype-memory layer. Its input is a B-layer research path; its output is a Research Archetype record containing a mechanism role and report-grounded research paths; and its role is to specialize broad mechanism families into retrievable archetype memory for hypothesis planning. Importantly, a C-layer archetype is not itself a factor formula, but a structured research cue that later guides hypothesis generation. By separating OHLCV eligibility screening, mechanism-family classification, and actionable archetype construction, RMA makes report-grounded knowledge usable without hard-coding report claims into alpha formulas. The resulting A/B/C memory provides structured, retrievable research cues for downstream planning and hypothesis generation. Implementation details are provided in Appendix D. 
+
+3.2 Macro Brain: Research Planning and Archetype Routing 
+
+Building on the report-grounded A/B/C memory constructed by the RMA layer, the Macro Brain serves as the cycle-level research planner of XA LPHA . Its role is to retrieve B/C-layer knowledge, determine the current research direction, select suitable Research Archetypes, and construct an archetype-guided hypothesis pool for the mining cycle. In this way, the Macro Brain converts structured report knowledge and accumulated discovery feedback into concrete research hypotheses that can later be implemented by the Micro Brain. At the beginning of each cycle, the Macro Brain first determines the routing mode. We consider three modes. In the fixed-theme mode , the cycle theme is specified in advance and used directly. In the 
+
+coarse-guided mode , the user provides only a broad mechanism direction, and the Macro Brain refines it into a concrete cycle theme. In the memory-driven mode , the Macro Brain derives the cycle theme from discovery feedback accumulated in prior generations and cycles, using GOOD/BAD summaries, cycle-level outcomes, and archetype coverage records to identify unresolved information gaps and avoid saturated or repeatedly failed directions. By default, XA LPHA uses 5 coarse-guided cycles at the beginning to initialize feedback over important mechanism families, and then switches to memory-driven routing. Given the cycle theme, the Macro Brain performs B/C-layer planning. It selects 1 primary B-layer as the main mechanism line and 3-4 supporting B-layers as complementary mechanisms or boundary conditions. These B-layers narrow the candidate C-layer Research Archetypes, from which the 5Macro Brain retrieves report-grounded research paths. The selected archetypes and paths are then organized into an active research-agent bundle, where each agent is assigned a mechanism role and a hypothesis-generation target. The resulting outputs form the archetype-guided hypothesis pool passed to the Micro Brain for executable factor-code generation, validation, and evolution. Detailed routing profiles, B/C-layer expansion rules, and path-selection procedures are provided in Appendix F. 
+
+3.3 Micro Brain: Hypothesis-to-Code Factor Evolution 
+
+The Micro Brain is the inner factor-discovery loop of XA LPHA . At the beginning of a cycle, the active research agents constructed by the Macro Brain generate the initial seed factors by transforming the archetype-guided hypothesis pool into executable Python factor code. After initialization, new factors are mainly produced through code-based evolution from retained parent factors, with periodic novelty injection used to refresh the search space. Each generated factor must pass a quality pipeline before empirical evaluation. The AST gate performs static inspection and rejects code with invalid syntax, unsupported imports or fields, static future leakage such as negative shifts, and excessive code complexity. The tri-alignment judge then checks whether the hypothesis idea, code logic, and financial rationale are consistent. Executable candidates are run to materialize factor series, followed by numerical validation. We discard factors whose invalid or extreme-value ratio exceeds 30%, or whose signals contain too many low-information dates. Finally, unit tests based on truncation and future-noise perturbation checks are used to detect dynamic future leakage that cannot be fully captured by static inspection. Recoverable failures are repaired and re-submitted to the same quality pipeline. After empirical evaluation, retained factors enter code-based evolution. Evolution operates at the mechanism level rather than through random syntactic edits. Mutation creates a mechanism-level variant of a parent factor. Crossover recomposes the mechanisms of two parent factors into a new joint hypothesis and expresses it as code. Refinement preserves the parent factor’s core mechanism and signal intent while simplifying non-essential implementation components. The generated children must pass the same quality pipeline before evaluation. Factors that pass the normal selection gate enter the parent pool for subsequent generations, while stronger candidates enter the elite pool for archive update and feedback consolidation. The Micro Brain also performs novelty injection at configured mid-cycle trigger points; in the main setting, this occurs at generations 3 and 7. During novelty injection, XA LPHA recomposes the active-agent bundle according to the current cycle theme and short-term feedback memory, including recent GOOD/BAD summaries, reusable mechanisms, and failure patterns. These agents generate fresh seed factors that are intended to differ from the current pool while remaining aligned with the cycle theme. To control redundancy, novelty candidates are filtered by correlation against the current pool using a threshold of 0.95. After passing the same quality pipeline and empirical evaluation, novelty candidates are merged with evolved candidates and jointly considered for normal and elite selection. Additional implementation details are provided in Appendix G. 
+
+3.4 Factor Evaluation and Selection 
+
+After the Micro Brain produces executable and validated factor candidates, the evaluation module determines which factors can support later evolution, archive update, and library construction. We evaluate each factor using standard cross-sectional predictive metrics, including the Information Coefficient (IC), the IC information ratio (ICIR), the rank-based Information Coefficient (RankIC), and the RankIC information ratio (RankICIR). To make positive and negative signals comparable, factor directions are aligned so that higher aligned scores indicate stronger predictive quality. The main factor scores are computed from winsorized and direction-aligned metrics, while rolling out-of-sample diagnostics are used to test temporal robustness. 
+
+Normal selection maintains the parent pool for subsequent evolution. It uses train-split evidence and is intentionally broader than elite selection. Before the normal gate, child factors are deduplicated and dependent factors are removed. Each remaining factor is scored by 
+
+snormal =  0.70 · αtrain + 0 .30 · revo train ,OOS 
+
+ · dcomplexity ,
+
+where αtrain is the train-split alpha score, revo train ,OOS is the rolling-OOS evolution score on the train scope, and dcomplexity is the implementation complexity discount. The normal gate uses a relative 6score threshold together with static quality floors, including a RankIC floor of 0.005 and a RankIC positive-ratio floor of 0.50 . During warm-up generations, the system keeps the top 45% by normal score. Factors passing the normal gate become parent candidates, from which the parent pool is selected for later mutation, crossover, and refinement. 
+
+Elite selection preserves stronger mechanisms across generations. Unlike normal selection, elite selection uses train–validation evidence and stricter quality requirements. Each candidate is scored by 
+
+selite = 0 .70 · αtrain+val + 0 .30 · relite train+val ,OOS ,
+
+where αtrain+val is the train–validation alpha score and relite train+val ,OOS is the rolling-OOS elite score on the train–validation scope. We do not apply an additional complexity discount to the elite score. The elite gate uses a higher relative threshold, a RankIC floor of 0.01 , and a RankIC positive-ratio floor of 0.55 . During warm-up generations, only the top 15% by elite score are retained. The selected elite factors are merged with the previous elite archive, with a small quota reserved for current-generation elites to ensure that newly discovered mechanisms can enter the archive. 
+
+Library admission is performed at cycle finalization. Library candidates come from the current elite archive and are refreshed before admission by re-materializing factor series, rechecking leakage, and recomputing train–validation metrics. The admission score is 
+
+slibrary = 0 .70 · Norm(RankIC train+val ) + 0 .30 · Norm(IC train+val ),
+
+computed using direction-aligned winsorized metrics. A candidate enters the selected library only if its library score exceeds the admission threshold, which is set to 0.75 by default. Gate-passed candidates are ranked by this score, and only the top portion is admitted. Detailed metrics, gates, and scoring rules are provided in Appendix H. 
+
+3.5 Cross Brain: Factor Attribution and Feedback Consolidation 
+
+The Cross Brain connects empirical factor outcomes back to the research taxonomy and feed-back memory of XA LPHA . It has three main functions: Factor-to-Archetype Attribution (FAA), GOOD/BAD feedback construction, and multi-level memory update. These functions provide cleaner mechanism labels and reusable discovery signals for later novelty injection, routing, and hypothesis generation. 
+
+Factor-to-Archetype Attribution. FAA is applied to elite factors whose final mechanisms may differ from their source active agents after repair, mutation, crossover, or refinement. Given a factor name, hypothesis idea, mechanism tags, code logic, and implementation, FAA assigns the factor to a valid B-layer mechanism family and a compatible C-layer Research Archetype from the predefined OHLCV taxonomy. The resulting C-layer assignment updates the factor’s mechanism identity used by per-archetype memory, cycle feedback, and future routing. 
+
+Feedback construction. The Cross Brain converts factor outcomes into compact GOOD/BAD summaries. GOOD feedback records validated mechanisms, positive empirical evidence, reusable principles, and constraints on direct copying. BAD feedback records failure types, failed assumptions, avoidance rules, and possible repair conditions. These summaries are mechanism-level rather than score-only, so they preserve why a factor worked or failed instead of only storing IC or RankIC. 
+
+Multi-Level Memory update. The feedback is written to three levels of memory. At the archetype level, FAA-classified elite factors contribute verified hypothesis ideas to the corresponding C-layer archetype memory, where they can later be used together with report-grounded memory for hypothesis generation. At the generation level, recent GOOD/BAD summaries provide short-term feedback for novelty injection within the current cycle. At the cycle level, consolidated feedback summarizes the outcomes of the current research cycle and guides the theme selection and routing decisions of subsequent cycles. Additional implementation details are provided in Appendix I. 
+
+## 4 Experiments 
+
+4.1 Experimental Settings Dataset. We conduct the main experiments on CSI300 using the daily market data provided by Qlib [Yang et al., 2020]. The universe consists of large-cap A-share stocks in the Chinese market. We 7define the prediction target as the 10-day future adjusted open-to-open return from the next trading day’s open: 
+
+y(10)  
+
+> i,t
+
+= Oadj 
+
+> i,t +11
+
+Oadj 
+
+> i,t +1
+
+− 1,
+
+where Oadj  
+
+> i,t
+
+denotes the adjusted open price of stock i on trading day t. This convention aligns factor observations at day t with tradable returns starting from the next open. All experiments follow the same chronological calendar split: training (2011 /01 /01 –2020 /12 /31) , validation 
+
+(2021 /01 /01 –2021 /12 /31) , and testing (2022 /01 /01 –2025 /12 /31) .
+
+Model and runtime configuration. All agents use gpt-oss-120b [OpenAI, 2025] as the default LLM backend. By default, Ridge regression [Hoerl and Kennard, 1970] is used to train the alphas generated by XA LPHA . The main runtime configuration follows the CSI300 10-day setting, with 
+
+qlib_CSI300 as the dataset, a 10-trading-day prediction horizon, and LLM-based hypothesis-subset planning enabled. The chronological calendar arguments correspond to training from 2011/01/01 to 2020/12/31, validation from 2021/01/01 to 2021/12/31, and testing from 2022/01/01 to 2025/12/31. The runtime uses an initial pool size of 64, a parent-pool size of 80, 10 generations per cycle, 6 cycle-final candidates, and a novelty-injection interval of 4, which triggers at generations 3 and 7 under the 10-generation cycle. The default selection thresholds are the 60th percentile for normal selection and the 80th percentile for elite selection. We further set the maximum NaN ratio to 0.30. Additional preprocessing, backtesting, and runtime details are provided in Appendix C. 
+
+Metrics. We evaluate both predictive quality and held-out portfolio-reporting diagnostics. The Information Coefficient ( IC ) and Rank Information Coefficient ( RankIC ) measure the cross-sectional Pearson and Spearman correlations between factor scores and future returns, respectively. The Information Coefficient Information Ratio ( ICIR ) and Rank Information Coefficient Information Ratio ( RankICIR ) measure the time-series stability of IC and RankIC across evaluation dates. For portfolio evaluation, Annualized Return ( AR ) measures annualized portfolio return, Annualized Excess Return ( AER ) measures annualized return relative to the benchmark, and Information Ratio (IR ) measures risk-adjusted excess return. Additional diagnostics, including aligned RankIC positive ratio, rolling out-of-sample pass rate, selected factor count, pairwise factor correlation, and candidate-retention rates, are reported in the Appendix J. 
+
+4.2 Comparison with Representative Baselines 
+
+We compare XA LPHA with representative predictive-modeling and alpha-mining baselines under the same CSI300 10-day setting. The predictive-modeling baselines include conventional supervised models, such as Ridge regression [Hoerl and Kennard, 1970], Random Forest [Breiman, 2001], LightGBM [Ke et al., 2017], XGBoost [Chen and Guestrin, 2016], CatBoost [Prokhorenkova et al., 2018], and AdaBoost [Freund and Schapire, 1997]. Neural baselines include MLP [Rumelhart et al., 1986], GRU [Cho et al., 2014], LSTM [Hochreiter and Schmidhuber, 1997], CNN [LeCun et al., 2002], and Transformer variants [Vaswani et al., 2017]. The alpha-mining baselines include Alpha360 [Microsoft, 2025] and automated alpha systems, including AutoAgent [Kou et al., 2024], AlphaAgent [Tang et al., 2025], R&D-Agent-Quant [Li et al., 2025], and CogAlpha [Liu et al., 2026]. All methods use the same calendar split, target definition, and evaluation protocol described in Section 4.1. Table 2 reports the main comparison on CSI300. Among conventional machine-learning baselines, LightGBM achieves the strongest rank-based predictive metrics, while CatBoost gives the best IR within this group. Among deep-learning baselines, CNN performs best on predictive metrics, while MLP provides the strongest portfolio diagnostics within this group. Among alpha-mining baselines, CogAlpha obtains the highest RankIC in the full comparison, indicating strong cross-sectional rank predictiveness, while R&D-Agent(Q) provides the strongest portfolio diagnostics within the alpha-method group. Overall, XA LPHA achieves the best IC, ICIR, RankICIR, AR, AER, and IR, and obtains the strongest held-out portfolio performance by a large margin. Although CogAlpha achieves a higher RankIC, its portfolio diagnostics are weaker than those of XA LPHA . These results suggest that our method improves not only predictive factor quality but also the practical usefulness of the discovered factor library under held-out portfolio evaluation. 8Table 2: Comparison between XA LPHA and representative baselines on CSI300 under the 10-day open-to-open return prediction setting. The best, second-best, and third-best values for each metric are highlighted by progressively lighter shades; the best value is also bolded, and the second-best value is underlined. 
+
+Models Dataset Target Evaluation Metrics Type Model IC RankIC ICIR RankICIR AR AER IR 
+
+Machine Learning Ridge CSI300 10-day 0.0031 0.0080 0.0296 0.0593 0.0296 -0.0031 -0.0492 Random Forest 0.0090 0.0095 0.1139 0.1331 0.0252 -0.0053 -0.0913 LightGBM 0.0190 0.0330 0.2039 0.2674 0.0508 0.0267 0.3865 XGBoost 0.0093 0.0098 0.1146 0.1332 0.0558 0.0240 0.3974 CatBoost 0.0031 0.0066 0.0361 0.0864 0.0554 0.0232 0.4130 AdaBoost 0.0174 0.0190 0.2079 0.2056 0.0452 0.0126 0.2029 Deep Learning MLP CSI300 10-day 0.0196 0.0275 0.1780 0.2340 0.0837 0.0488 0.5965 Transformer 0.0135 0.0222 0.1093 0.1830 0.0411 0.0064 0.1049 GRU 0.0127 0.0259 0.1523 0.2223 0.0466 0.0116 0.1500 LSTM 0.0118 0.0244 0.1430 0.2159 0.0434 0.0087 0.1123 CNN 0.0253 0.0321 0.2023 0.2485 0.0781 0.0423 0.5430 Alpha Methods Alpha360 CSI300 10-day 0.0132 0.0079 0.0860 0.0489 0.0216 0.0005 0.0048 AutoAgent 0.0308 0.0444 0.1997 0.2896 0.0650 0.0314 0.3628 AlphaAgent 0.0093 0.0088 0.0826 0.0744 0.0525 0.0220 0.2855 R&D-Agent(Q) 0.0256 0.0291 0.1855 0.2061 0.0731 0.0416 0.4689 CogAlpha 0.0382 0.0590 0.2040 0.2937 0.0639 0.0381 0.3743 Ours XA LPHA CSI300 10-day 0.0413 0.0489 0.2573 0.3412 0.1792 0.1412 1.5853 
+
+Table 3: Compact RMA case used in the component analysis.              
+
+> Step Case record A-layer DROP Input: Accounting ratios based on cash flow, inventory balance, and gross margin.
+> Output: DROP because the variables are unavailable from daily OHLCV. A-layer KEEP Input: Return decomposition into past return, overnight return, and open-to-close components.
+> Output: KEEP because the mechanism is computable from daily open and close prices. B-layer classification Input: A retained fragment stating that short-horizon excess-return ranks contain continuation information.
+> Output: Assign the fragment to B1 trend-and-momentum and store a reusable research path about rank-based short-horizon continuation. C-layer classification Input: Different B1 research-path atoms describing initiation-like momentum, continuation-like momentum, and momentum decay.
+> Output: Route the atoms respectively to C101 initiation momentum, C102 continuation momentum, and C103 momentum failure.
+
+4.3 Component Analysis 
+
+We analyze two key components of XA LPHA : report-to-memory absorption and memory-driven routing. The RMA case examines how raw report fragments are converted into OHLCV-compatible A/B/C memory. The memory-routing case examines how feedback from prior cycles is converted into the next cycle’s theme, mechanism focus, and archetype routing. Compact cases are shown in Tables 3 and 4, with detailed traces provided in the appendix. 
+
+RMA analysis. Table 3 illustrates the A/B/C transformation performed by RMA. At the A-layer, the input is a report fragment. ” An accounting-ratio fragment based on cash flow, inventory balance, and gross margin " is assigned DROP , because these variables cannot be represented with daily OHLCV data. In contrast, a ” return-decomposition fragment involving past return, overnight return, and open-to-close components " is assigned KEEP , because these quantities can be computed from daily open and close prices. After this feasibility screening, the B-layer takes the ” retained continuation-related fragment " as input and assigns it to the B1 trend-and-momentum family, while storing a reusable research path about rank-based short-horizon continuation. The C-layer then routes different B1 research-path atoms to the closest C-layer Research Archetype records, separating initiation momentum, mature continuation, and momentum failure as C101, C102, and C103. This case shows that RMA does not simply retrieve report text; it converts external evidence into structured memory that can support downstream planning without directly hard-coding a factor formula. A detailed example is provided in Appendix D.1. 9Table 4: Compact memory-routing case used in the component analysis.                  
+
+> Stage Case record GOOD memory Input: Adaptive lag structures conditioned on volatility and liquidity stress.
+> Effect: Preserve regime-aware delayed-response mechanisms. BAD memory Input: Isolated volume-spike flags, rigid lag horizons, and over-stacked regime adjustments.
+> Effect: Exclude repeated failure modes from the next search space. Feedback abstraction Input: GOOD/BAD memory plus recent cycle summaries.
+> Effect: Convert factor-level outcomes into a mechanism constraint: delayed response should remain, but only with regime and pressure conditioning. Routing decision Output: Theme regime_lagged_directional_pressure_response , with lagged response as the primary B-layer.
+> Effect: Use directional pressure, liquidity stress, volatility regime, and volume structure as supporting B-layer conditions. Selected C paths Output: Retrieve C-layer Research Archetypes for delayed pressure response, regime-conditioned lag horizons, and liquidity-stress amplification.
+> Effect: Constrain the next hypothesis pool toward mechanism-complete variants and away from volume-only spike templates.
+
+Memory-routing analysis. Table 4 shows how memory-driven routing converts prior feedback into the next cycle’s research agenda. The GOOD memory input records ” adaptive lag structures conditioned on volatility and liquidity stress ", and its effect is to preserve regime-aware delayed-response mechanisms. The BAD memory input records ” isolated volume-spike flags, rigid lag horizons, and over-stacked regime adjustments ", and its effect is to exclude these repeated failure modes from the next search space. The Macro Brain then abstracts GOOD/BAD memory together with recent cycle summaries into a mechanism constraint: delayed response remains a promising direction, but it should be conditioned on regime and directional pressure rather than implemented as a brittle volume-only template. Based on this abstraction, the routing decision outputs the theme 
+
+regime_lagged_directional_pressure_response , selects lagged response as the primary B-layer, and uses directional pressure, liquidity stress, volatility regime, and volume structure as supporting conditions. The selected C-layer paths further retrieve Research Archetypes for delayed pressure response, regime-conditioned lag horizons, and liquidity-stress amplification. As a result, the next hypothesis pool is constrained toward mechanism-complete variants and away from repeated volume-only spike templates. A detailed example is provided in Appendix K.3. 
+
+4.4 Diversity of Elite Single Factors 
+
+We further examine whether XA LPHA discovers redundant variants or genuinely diverse elite single factors. Figure 2 reports pairwise correlations among elite single-factor signals in two settings. The first setting uses 50 elite factors from one cycle theme, vol_regime_breakout_interaction . The second setting uses 60 elite factors sampled evenly from six cycle themes, with 10 factors from each theme. In the single-theme case, the average absolute pairwise correlation is 0.234, the median is 0.181, and 68.0% of factor pairs have absolute correlation below 0.3. Thus, even under one fixed research theme, the discovered elite factors are not dominated by a single highly correlated block. The theme constrains the broad mechanism direction, but the Micro Brain can still instantiate that direction through different signal constructions, lag choices, nonlinear transforms, and regime conditions. The cross-theme case shows stronger diversification. Across the 60 elite factors sampled from themes covering volatility-regime breakout interaction, liquidity resilience, reversal decay, regime compression, volume-price lag, and lagged directional-pressure response, the average absolute pairwise correlation decreases to 0.142, the median decreases to 0.099, and 87.1% of factor pairs have absolute correlation below 0.3. This pattern supports the role of Macro Brain theme routing: different themes steer the search toward different regions of the factor space, allowing XA LPHA to discover strong factors along distinct mechanism directions. Together, the two heatmaps suggest a two-level diversity effect: within a theme, XA LPHA can mine many non-identical elite factors; across themes, it can further broaden the mechanism coverage of the elite factor pool. 
+
+4.5 Interpretability of Generated Factors 
+
+We present a representative elite factor discovered by XA LPHA on CSI300 to illustrate the in-terpretability of generated code-level signals. The factor is evaluated under the 10-day target on 10 (a) 50 elite factors from one theme. (b) 60 elite factors from six themes. 
+
+Figure 2: Pairwise correlation heatmaps for elite single-factor signals. Left: 50 elite factors mined under one cycle theme. Right: 60 elite factors sampled evenly from six cycle themes. the train–validation split. Its core idea is regime-dependent reversal after downside overshoot: downside overshoot pressure is measured relative to a moving-average anchor, and the pressure decays faster in high-volatility regimes. Concretely, the factor computes a 20-day moving-average anchor and a 20-day return-volatility regime; downside overshoot events are weighted by abso-lute returns, accumulated over a 20-day window, smoothed with regime-dependent exponentially weighted moving averages, and centered by an expanding historical benchmark. This corresponds to mechanism tags such as post_capitulation_repair , volatility_regime , dynamic_decay ,and overshoot_weighted . The factor achieves Train–Val IC = 0 .0382 , RankIC = 0 .0564 , ICIR 
+
+= 0 .2622 , and RankICIR = 0 .3593 ; on the test split, it achieves IC = 0 .0440 , RankIC = 0 .0634 ,ICIR = 0 .2311 , and RankICIR = 0 .3188 . Its raw AST complexity is C(f ) = 14 .788 ; the complexity scoring rule is described in Appendix J.4. Listing 1 shows the main signal-construction steps of this factor. A longer implementation excerpt is provided in Appendix K.1. 
+
+> def regime_overshoot_pressure_decay_20d_ma20_vol20(df): close = df[’close’] # 1. Estimate the medium-term price anchor and volatility regime. ma20 = close.rolling(20, min_periods=10).mean() ret = close.pct_change() vol20 = ret.rolling(20, min_periods=10).std() high_vol = (vol20 > vol20.rolling(60, min_periods=30).median()).astype(float) # 2. Tighten the downside-overshoot threshold in high-volatility regimes. threshold = (0.90 * high_vol + 0.95 * (1 -high_vol)) * ma20 overshoot = (close < threshold).astype(float) # 3. Convert overshoot events into cumulative pressure. pressure = (overshoot * ret.abs().fillna(0)).rolling(20, min_periods=1).sum() # 4. Let pressure decay faster in high-volatility regimes. slow = pressure.ewm(span=15, adjust=False, min_periods=1).mean() fast = pressure.ewm(span=5, adjust=False, min_periods=1).mean() decayed = high_vol * fast + (1 -high_vol) * slow # 5. Score abnormal pressure relative to its historical benchmark. factor = decayed -decayed.expanding().quantile(0.75) factor.name = ’regime_overshoot_pressure_decay_20d_ma20_vol20’ return factor
+
+Listing 1: Annotated core logic of the regime-dependent overshoot-pressure factor This example shows that code-based alpha discovery can still produce mechanically readable sig-nals. The factor expresses a clear financial mechanism: downside overshoot is treated as potential 11 reversal pressure, while the decay speed is conditioned on the volatility regime. Separate qualitative case studies for tri-alignment revision, cross-cycle discovery, and factor evolution are provided in Appendix K. 
+
+4.6 Computational Cost 
+
+We report the computational cost of XA LPHA under the main CSI300 10-day setting. All time measurements refer to wall-clock runtime. On average, generating one factor takes about 15 seconds. One generation takes about 16 minutes, including factor generation, validation, evaluation, parent selection, and feedback construction. One full mining cycle takes about 3 hours, including all generations in the cycle, novelty injection, archive update, and feedback consolidation. All main experiments are conducted on two H100 GPUs. The evolutionary process uses a locally deployed model ( gpt-oss-120b ), and therefore incurs no external API cost. 
+
+## 5 Conclusion 
+
+In this work, we study how to build an AI Quant Researcher that performs continuous alpha discovery in noisy, non-stationary, and high-dimensional financial markets. We formulate alpha mining as a report-grounded and memory-driven hypothesis-to-code research loop, where external financial knowledge, executable factor implementation, empirical validation, and discovery feedback are connected into a closed process. We propose XA LPHA , a multi-brain framework that combines report-to-memory absorption, memory-guided research planning, factor-code evolution, ex-ante tri-alignment validation, and empirical feedback consolidation. Experiments on CSI300 demonstrate that XA LPHA discovers more predictive and robust alpha factors than representative baselines. In future work, we plan to extend XA LPHA to broader equity universes, additional prediction horizons, richer financial data sources, and real-world trading environments to further validate its practical effectiveness. 
+
+## References 
+
+Franklin Allen and Risto Karjalainen. Using genetic algorithms to find technical trading rules. 
+
+Journal of financial Economics , 51(2):245–271, 1999. Leo Breiman. Random forests. Machine learning , 45(1):5–32, 2001. Tianqi Chen and Carlos Guestrin. Xgboost: A scalable tree boosting system. In Proceedings of the 22nd acm sigkdd international conference on knowledge discovery and data mining , pages 785–794, 2016. Kyunghyun Cho, Bart Van Merriënboer, Caglar Gulcehre, Dzmitry Bahdanau, Fethi Bougares, Holger Schwenk, and Yoshua Bengio. Learning phrase representations using rnn encoder-decoder for statistical machine translation. arXiv preprint arXiv:1406.1078 , 2014. Can Cui, Wei Wang, Meihui Zhang, Gang Chen, Zhaojing Luo, and Beng Chin Ooi. Alphaevolve: A learning framework to discover novel alphas in quantitative investment. In Proceedings of the 2021 International conference on management of data , pages 2208–2216, 2021. Yitong Duan, Lei Wang, Qizhong Zhang, and Jian Li. Factorvae: A probabilistic dynamic factor model based on variational autoencoder for predicting cross-sectional stock returns. In Proceedings of the AAAI conference on artificial intelligence , volume 36, pages 4468–4476, 2022. Robert F Engle. Autoregressive conditional heteroscedasticity with estimates of the variance of united kingdom inflation. Econometrica: Journal of the econometric society , pages 987–1007, 1982. Eugene F Fama and Kenneth R French. The cross-section of expected stock returns. the Journal of Finance , 47(2):427–465, 1992. Eugene F Fama and Kenneth R French. Common risk factors in the returns on stocks and bonds. 
+
+Journal of financial economics , 33(1):3–56, 1993. 12 Yoav Freund and Robert E Schapire. A decision-theoretic generalization of on-line learning and an application to boosting. Journal of computer and system sciences , 55(1):119–139, 1997. Juraj Gottweis, Wei-Hung Weng, Alexander Daryin, Tao Tu, Anil Palepu, Petar Sirkovic, Artiom Myaskovsky, Felix Weissenberger, Keran Rong, Ryutaro Tanno, et al. Accelerating scientific discovery with co-scientist. arXiv preprint arXiv:2502.18864 , 2026. Jian Guo, Saizhuo Wang, Lionel M Ni, and Heung-Yeung Shum. Quant 4.0: engineering quantitative investment with automated, explainable, and knowledge-driven artificial intelligence. Frontiers of Information Technology & Electronic Engineering , 25(11):1421–1445, 2024. Sepp Hochreiter and Jürgen Schmidhuber. Long short-term memory. Neural computation , 9(8): 1735–1780, 1997. Arthur E Hoerl and Robert W Kennard. Ridge regression: Biased estimation for nonorthogonal problems. Technometrics , 12(1):55–67, 1970. Zura Kakushadze. 101 formulaic alphas. Wilmott , 2016(84):72–81, 2016. Guolin Ke, Qi Meng, Thomas Finley, Taifeng Wang, Wei Chen, Weidong Ma, Qiwei Ye, and Tie-Yan Liu. Lightgbm: A highly efficient gradient boosting decision tree. Advances in neural information processing systems , 30, 2017. Zhizhuo Kou, Holam Yu, Junyu Luo, Jingshu Peng, Xujia Li, Chengzhong Liu, Juntao Dai, Lei Chen, Sirui Han, and Yike Guo. Automate strategy finding with llm in quant investment. seed , 1:3, 2024. Yann LeCun, Léon Bottou, Yoshua Bengio, and Patrick Haffner. Gradient-based learning applied to document recognition. Proceedings of the IEEE , 86(11):2278–2324, 2002. Yoonho Lee, Roshen Nair, Qizheng Zhang, Kangwook Lee, Omar Khattab, and Chelsea Finn. Meta-harness: End-to-end optimization of model harnesses. arXiv preprint arXiv:2603.28052 ,2026. Yuante Li, Xu Yang, Xiao Yang, Minrui Xu, Xisen Wang, Weiqing Liu, and Jiang Bian. R&d-agent-quant: A multi-agent framework for data-centric factors and model joint optimization. arXiv preprint arXiv:2505.15155 , 2025. Zhiwei Li, Ran Song, Caihong Sun, Wei Xu, Zhengtao Yu, and Ji-Rong Wen. Can large language models mine interpretable financial factors more effectively? a neural-symbolic factor mining agent model. In Findings of the Association for Computational Linguistics: ACL 2024 , pages 3891–3902, 2024. Fengyuan Liu, Yi Huang, Sichun Luo, Yuqi Wang, Yazheng Yang, Xinye Li, Zefa Hu, Junlan Feng, and Qi Liu. Cognitive alpha mining via llm-driven code-based evolution. In Proceedings of the 64th Annual Meeting of the Association for Computational Linguistics (Volume 1: Long Papers) ,pages 11715–11749, 2026. Chris Lu, Cong Lu, Robert Tjarko Lange, Jakob Foerster, Jeff Clune, and David Ha. The ai scientist: Towards fully automated open-ended scientific discovery. arXiv preprint arXiv:2408.06292 , 2024. Yougang Lyu, Xi Zhang, Xinhao Yi, Yuyue Zhao, Shuyu Guo, Wenxiang Hu, Jan Piotrowski, Jakub Kaliski, Jacopo Urbani, Zaiqiao Meng, et al. Evoscientist: Towards multi-agent evolving ai scientists for end-to-end scientific discovery. arXiv preprint arXiv:2603.08127 , 2026. Microsoft. Alpha 360 from microsoft qlib. https://github.com/microsoft/qlib/blob/ 85cc74846b5af2e3e6d18666a2f6e399396980b9/qlib/contrib/data/loader.py#L4 ,2025. Accessed: 2025-05-12. OpenAI. GPT-OSS-120B & GPT-OSS-20B model card. arXiv preprint arXiv:2508.10925 , 2025. URL https://arxiv.org/abs/2508.10925 .Liudmila Prokhorenkova, Gleb Gusev, Aleksandr Vorobev, Anna Veronika Dorogush, and Andrey Gulin. Catboost: unbiased boosting with categorical features. Advances in neural information processing systems , 31, 2018. 13 Ao Qu, Han Zheng, Zijian Zhou, Yihao Yan, Yihong Tang, Shao Yong Ong, Fenglu Hong, Kaichen Zhou, Chonghe Jiang, Minwei Kong, et al. Coral: Towards autonomous multi-agent evolution for open-ended discovery. arXiv preprint arXiv:2604.01658 , 2026. David E Rumelhart, Geoffrey E Hinton, and Ronald J Williams. Learning representations by back-propagating errors. nature , 323(6088):533–536, 1986. Yu Shi, Yitong Duan, and Jian Li. Navigating the alpha jungle: An llm-powered mcts framework for formulaic factor mining. arXiv preprint arXiv:2505.11122 , 2025. Ziyi Tang, Zechuan Chen, Jiarui Yang, Jiayao Mai, Yongsen Zheng, Keze Wang, Jinrui Chen, and Liang Lin. Alphaagent: Llm-driven alpha mining with regularized exploration to counteract alpha decay. arXiv preprint arXiv:2502.16789 , 2025. Ashish Vaswani, Noam Shazeer, Niki Parmar, Jakob Uszkoreit, Llion Jones, Aidan N Gomez, Łukasz Kaiser, and Illia Polosukhin. Attention is all you need. Advances in neural information processing systems , 30, 2017. Saizhuo Wang, Hang Yuan, Leon Zhou, Lionel M Ni, Heung-Yeung Shum, and Jian Guo. Alpha-gpt: Human-ai interactive alpha mining for quantitative investment. arXiv preprint arXiv:2308.00016 ,2023. Yanlong Wang, Jian Xu, Hongkang Zhang, Shao-Lun Huang, Danny Dongning Sun, and Xiao-Ping Zhang. Factorminer: A self-evolving agent with skills and experience memory for financial alpha discovery. arXiv preprint arXiv:2602.14670 , 2026. Buqiang Xu, Yijun Chen, Jizhan Fang, Ruobin Zhong, Yunzhi Yao, Yuqi Zhu, Lun Du, and Shumin Deng. Structmem: Structured memory for long-horizon behavior in llms. In Proceedings of the 64th Annual Meeting of the Association for Computational Linguistics (Volume 2: Short Papers) ,pages 122–146, 2026. Wentao Xu, Weiqing Liu, Lewen Wang, Yingce Xia, Jiang Bian, Jian Yin, and Tie-Yan Liu. Hist: A graph-based framework for stock trend forecasting via mining concept-oriented shared information. 
+
+arXiv preprint arXiv:2110.13716 , 2021a. Wentao Xu, Weiqing Liu, Chang Xu, Jiang Bian, Jian Yin, and Tie-Yan Liu. Rest: Relational event-driven stock trend forecasting. In Proceedings of the web conference 2021 , pages 1–10, 2021b. Zhiling Yan, Dingjie Song, Hanrong Zhang, Wei Liang, Yuxuan Zhang, Yutong Dai, Lifang He, Philip S Yu, Ran Xu, Xiang Li, et al. Openskill: Open-world self-evolution for llm agents. arXiv preprint arXiv:2606.06741 , 2026. Xiao Yang, Weiqing Liu, Dong Zhou, Jiang Bian, and Tie-Yan Liu. Qlib: An ai-oriented quantitative investment platform. arXiv preprint arXiv:2009.11189 , 2020. Shuo Yu, Hongyan Xue, Xiang Ao, Feiyang Pan, Jia He, Dandan Tu, and Qing He. Generating synergistic formulaic alpha collections via reinforcement learning. In Proceedings of the 29th ACM SIGKDD Conference on Knowledge Discovery and Data Mining , pages 5476–5486, 2023. Tianping Zhang, Yuanqi Li, Yifei Jin, and Jian Li. Autoalpha: an efficient hierarchical evolutionary algorithm for mining alpha factors in quantitative investment. arXiv preprint arXiv:2002.08245 ,2020. 
+
+## A Appendix Organization 
+
+The appendix is organized to follow the runtime and experimental presentation of the XA LPHA 
+
+research loop. Appendix B first summarizes the overall runtime loop in pseudocode. Appendix C then gives the experimental protocol, including data sources, target construction, preprocessing, backtesting, and runtime parameters. Appendix D covers report-to-memory absorption, Appendix E lists the C-layer Research Archetypes, Appendix F covers Macro Brain routing, Appendix G covers Micro Brain factor generation and evolution, Appendix H describes the runtime factor-evaluation 14 flow, selection gates, and pool updates, Appendix I describes Cross Brain attribution and feedback consolidation, Appendix J formalizes the metric definitions, scoring rules, redundancy controls, and portfolio diagnostics, Appendix K provides qualitative case studies, Appendix L lists primitive feature definitions, and Appendix M gives selected runtime prompt excerpts. 
+
+## B Overall Runtime Pseudocode 
+
+The following pseudocode summarizes the runtime control flow of XA LPHA .Overall runtime loop of XA LPHA 
+
+Input: report-grounded taxonomy memory discovery feedback memory from prior generations and cycles daily OHLCV feature schema and primitive factors train, and validation market panels cycle_len, num_cycles, pool_size, fresh_seed_interval Initialize: controller <- GlobalMergedAgentController.from_jsonl(taxonomy_records) runtime <- build_run_context(controller, feature_schema, configuration) raw_pool <- persist_raw_factors_if_needed(daily_OHLCV_fields) primitive_pool <- persist_primitive_features_if_needed(daily_OHLCV_panel) base_pool <- build_base_pool(raw_pool, primitive_pool) factor_store <- FactorStore for candidate, archive, and selected-factor records normal_parent_pool <- empty elite_archive <- empty For each mining cycle c = 1 ... num_cycles: # Macro Brain: cycle-level research planning. active_records <- controller.materialize_active_agents( routing_profile = select_merged_agents_with_global_feedback( taxonomy = report_grounded_taxonomy, recent_cycle_memory = load_recent_cycle_feedback_summaries(), current_cycle = c ))cycle_theme <- controller.current_cycle_theme For each materialized active record: active_record.prompt_hypothesis_pool <- rewrite_agent_prompt_fields( selected_research_paths(active_record), generated_specific_hypotheses(active_record), generated_broad_hypotheses(active_record) )# Micro Brain: seed construction and validation. If this cycle starts from initialization: prompt_subsets <- plan_prompt_hypothesis_subsets_or_llm( active_records.prompt_hypothesis_pool )seed_factors <- generate_initial_factor_code( active_records, prompt_subsets, OHLCV_schema, shared_code_constraints )seed_factors <- static_validate_repair_and_align(seed_factors) seed_factors <- classify_generated_factors_to_BC_archetypes(seed_factors) evaluated_seeds <- evaluate_factor_series(seed_factors, train, validation) normal_parent_pool <- select_normal_parent_pool(evaluated_seeds + base_pool) elite_archive <- update_elite_archive(evaluated_seeds) # Micro Brain: evolutionary generations. For generation g = 1 ... cycle_len - 1: generation_parent_pool <- dedupe(elite_archive + normal_parent_pool) If (g + 1) is divisible by fresh_seed_interval: novelty_context <- summarize_recent_GOOD_BAD_feedback() active_records <- controller.materialize_active_agents( cycle_theme = cycle_theme, recomposition_mode = "novelty_injection" )prompt_subsets <- plan_prompt_hypothesis_subsets_or_llm( augment_prompt_hypothesis_pool_with_memory( active_records.prompt_hypothesis_pool, 
+
+15 per_archetype_valid_hypotheses, elite_archive ))fresh_seeds <- generate_fresh_seed_factor_code( active_records, prompt_subsets, novelty_context, elite_archive )fresh_seeds <- static_validate_repair_and_align(fresh_seeds) fresh_seeds <- classify_generated_factors_to_BC_archetypes(fresh_seeds) fresh_seeds <- evaluate_factor_series(fresh_seeds, train, validation) fresh_seeds <- filter_by_correlation_and_internal_novelty_gate(fresh_seeds) generation_parent_pool <- dedupe(generation_parent_pool + fresh_seeds) clear_short_lived_novelty_feedback() evolution_plan <- plan_or_sample_evolution_operators( generation_parent_pool, operators = {mutation, crossover, refinement} )child_factors <- empty For each item in evolution_plan: If item.operator == mutation: child <- mutate_parent_factor(item.parent) Else if item.operator == crossover: child <- crossover_parent_factors(item.parent_a, item.parent_b) Else: child <- refine_parent_factor(item.parent) child <- static_validate_repair_and_align(child) child_factors.append(child) child_factors <- classify_generated_factors_to_BC_archetypes(child_factors) evaluated_children <- evaluate_factor_series(child_factors, train, validation) evaluated_children <- filter_generation_correlated_factors(evaluated_children) normal_pass <- apply_normal_selection_gate(evaluated_children) elite_pass <- apply_elite_selection_gate(evaluated_children) normal_parent_pool <- select_normal_parent_pool(normal_pass) current_generation_elites <- select_current_generation_elites(elite_pass) elite_archive <- merge_and_select_elite_archive( elite_archive, current_generation_elites )collect_generation_GOOD_BAD_feedback( current_generation_elites, normal_gate_failures )# Evaluation and cycle finalization. refreshed_candidates <- reload_and_rescore_current_candidates( factor_store.current_candidates, selection_window = train + validation )admitted_pairs <- admit_cycle_library_candidates( refreshed_candidates, train_validation_score_gate = enabled, admission_corr_filter = enabled )selected_factors <- factors_from(admitted_pairs) # Cross Brain: attribution and feedback consolidation. cycle_feedback <- build_cycle_global_feedback_events( selected_factors, GOOD_feedback_records, BAD_feedback_records, existing_BC_archetype_labels )controller.record_feedback_batch(cycle_feedback) persist_cycle_feedback_summary(cycle_feedback) persist_valid_hypotheses_by_agent_name(selected_factors) factor_store.clear_current_candidates() save_checkpoint(runtime, factor_store, elite_archive, normal_parent_pool) Output: selected factor library elite archive and normal parent pool cycle-level discovery feedback memory valid hypothesis memory diagnostic evaluation records 
+
+16 C Experimental Protocol Details 
+
+Data source and universe. The experiments use CSI300, whose constituents are large-cap A-share stocks in the Chinese market. We use Qlib-compatible daily panels with adjusted OHLCV fields and forward-return targets [Yang et al., 2020]. All factors, baselines, and downstream models are evaluated under the same daily factor-evaluation schema. 
+
+Target construction and preprocessing. The prediction target is the 10-day future adjusted open-to-open return. Rows are indexed by (date,ticker) . Before factor evaluation, the runtime removes rows with invalid dates, tickers, prices, volumes, or targets; converts dates to timestamps; de-duplicates (date,ticker) rows; and constructs a (date,ticker) MultiIndex. The factor panel includes a historical buffer before the training start so that rolling operations at the beginning of the train split use only past observations. We filter non-positive prices, very small volumes, and low-liquidity observations using a minimum dollar-volume rule. Tickers with insufficient post-training history are removed. Volume is rescaled to reduce numerical magnitude. The same preprocessing rules are applied to raw OHLCV inputs, baseline factors, generated factors, and selected factors. 
+
+Backtest reporting. Portfolio backtests are implemented in Qlib [Yang et al., 2020] as a held-out diagnostic rather than as a full portfolio-construction claim. The selected factor library is fitted with Ridge regression [Hoerl and Kennard, 1970] in the reported main setting. For Qlib portfolio reporting, we use a top-50 /drop-5 ranking strategy: each trading day, the strategy targets the 50 stocks with the highest predicted returns and replaces at most 5 existing holdings. Trades are executed at the opening price. The buy-side cost is 0.05%, the sell-side cost is 0.15%, and the minimum transaction cost is 5 CNY per order. Excess-return metrics are computed against the CSI300 benchmark after transaction costs. 
+
+Main runtime configuration. The main CSI300 setting follows the runtime CLI config-uration. The LLM backend is gpt-oss-120b [OpenAI, 2025]; the configured CSI300 dataset key is qlib_CSI300 ; the prediction horizon is 10 trading days; LLM hypothesis-subset planning is enabled; and the default portfolio-reporting model in the reported set-ting is Ridge regression [Hoerl and Kennard, 1970]. The paper setting uses the calendar arguments train_start=2011-01-01 , train_end=2021-01-01 , val_end=2022-01-01 , and 
+
+test_end=2026-01-01 ; these are command-line run arguments rather than hidden constants. The runtime uses an initial pool size of 64, a parent-pool size of 80, 10 generations per cycle, 6 cycle-final candidates, and a novelty-injection interval of 4, which triggers at generations 3 and 7 under the 10-generation cycle. 
+
+Calendar splits. The chronological split is training from 2011-01-01 to 2020-12-31, validation from 2021-01-01 to 2021-12-31, and testing from 2022-01-01 to 2025-12-31. In runtime arguments, this corresponds to train_start=2011-01-01 , train_end=2021-01-01 , val_end=2022-01-01 ,and test_end=2026-01-01 .
+
+## D Report-to-Memory Absorption Details 
+
+This appendix describes the implementation details of the Report-to-Memory Absorption (RMA) layer. 
+
+Document ingestion. RMA begins with an ingestion interface for external research reports/docu-ments, such as financial reports, academic papers, and other research text sources. Newly collected PDF documents are converted into markdown, and the resulting document evidence is split into chunks and indexed for later retrieval. The goal is not to preserve raw documents verbatim, but to extract reusable financial evidence that can support downstream hypothesis planning and factor-code generation. 
+
+A-layer: OHLCV eligibility screening. Each evidence chunk is first screened by the A-layer according to the daily Level-1 OHLCV data contract. Since XA LPHA generates factors only from daily open, high, low, close, and volume, RMA retains a chunk only when its core mechanism can be directly observed, inferred, or stably proxied using daily OHLCV-derived information. Evidence 17 Report / Paper Fragment 
+
+> A1: Keep
+> Observable, inferable, or
+> proxyable
+> using daily OHLCV
+> B1
+> Trend & Momentum
+> B2–B16
+> Other Mechanism Families
+> C102
+> Trend Continuation and
+> Momentum Reinforcement
+> C101
+> Trend Initiation and Early
+> Diffusion
+> C103
+> Trend Exhaustion and
+> Momentum Failure
+> C201-C1603
+> Other Archetypes
+> A Layer:
+> Screening
+> B Layer:
+> Mechanism Family
+> C-layer:
+> Research Archetypes
+> OHLCV Eligibility Gate
+> Can this fragment enter the daily
+> Level-1 OHLCV workflow?
+> A0: Drop
+> Requires unavailable data
+
+Figure 3: Three-layer taxonomy used by the RMA layer. The A-layer screens whether a report fragment is eligible for the daily OHLCV workflow. The B-layer routes eligible evidence to broad mechanism families. The C-layer specializes each B-family into fine-grained Research Archetypes for downstream planning and hypothesis-to-code factor generation. that requires unavailable inputs is excluded or marked as non-actionable. Such inputs include order-book depth, tick-level trade flow, intraday sequencing, proprietary fund flow, analyst forecasts, fundamentals, macro variables, sector labels, news, and sentiment. This step prevents the Macro Brain and Micro Brain from planning hypotheses that cannot be implemented under the available data contract. 
+
+B/C-layer taxonomy-guided consolidation. Evidence that passes the A-layer is organized through the predefined B/C taxonomy. The B-layer assigns each eligible fragment to a broad financial mechanism family, such as trend and momentum, reversal and mean reversion, volatility regime, price-volume interaction, liquidity proxies, directional pressure, or drawdown repair. The B-layer research paths mined from eligible evidence are then routed to predefined C-layer Research Archetype records within that B-layer. Within each C-layer record, similar research paths are de-duplicated and consolidated. A C-layer Research Archetype is not a factor formula or a runtime agent by itself; it is a reusable research record that links a taxonomy assignment, an archetype name, a core mechanism description, and report-grounded research paths that later seed hypothesis generation. 
+
+Mechanism-level hypothesis cues. The stored research paths describe how report-grounded mech-anisms may be translated into factor research directions. For example, a path may describe how reversal strength changes under volatility regimes, how volume contraction affects price continuation, or how directional pressure can be approximated using daily OHLCV proxies. These paths provide the Macro Brain with structured research material while preserving a clear separation between external knowledge absorption and empirical factor validation. 
+
+Role in the discovery loop. The output of RMA is report-grounded knowledge memory. This memory is retrieved by the Macro Brain during cycle routing to select relevant B-layer mechanism families and C-layer Research Archetypes. The selected archetypes are then expanded into hypothesis contexts for the Micro Brain. Since RMA stores mechanism evidence and hypothesis cues rather than validated alpha claims, empirical success and failure are handled separately by the discovery feedback consolidated during mining. 18 D.1 RMA Analysis 
+
+We inspect concrete report-ingestion traces to illustrate how RMA converts raw report fragments into taxonomy-aligned research memory. The examples below use English renderings of the logged report chunks and preserve the prompt structure and JSON outputs used by the pipeline. 
+
+A-layer prompt framework. The A-layer prompt is an eligibility screen. It decides whether a fragment can enter the daily Level-1 OHLCV workflow before any B-layer or C-layer classification is attempted. RMA A-layer screening prompt framework 
+
+You are applying Layer A of the OHLCV report taxonomy. Layer A is the screening gate only. Do not perform B-layer or C-layer classification. Layer A question: Can this report fragment enter the daily Level-1 OHLCV research workflow at all? Data scope: Only daily open, high, low, close, and volume are assumed available. No minute bars, hourly bars, intraday sequencing, order book, tick, quote, or transaction-level data may be assumed. Runtime mapping: - KEEP = A1 = Eligible for the OHLCV Workflow - DROP = A0 = Not Eligible for the OHLCV Workflow A1 definition: The core logic can be expressed directly from daily Level-1 OHLCV, or can be stably proxied using daily OHLCV alone, and can plausibly be translated into systematic rule-based factor directions. A0 definition: The core logic depends on information that cannot be recovered from daily Level-1 OHLCV alone, or materially relies on intraday structure or other essential external variables. Typical A1 / KEEP patterns: - daily price path - daily trend or momentum - daily reversal or repair - daily volatility pattern or regime - daily range compression or expansion - daily volume surge or dry-up - daily price-volume interaction - daily liquidity proxy - daily drawdown and recovery - daily gap continuation or fill Typical A0 / DROP patterns: - fundamental accounting discussion - valuation-only argument - macro narrative without trading proxy - news or text sentiment without OHLCV proxy - order book or tick-level dependency - intraday sequencing requirement - minute or hourly bar dependency - opening or closing auction detail - VWAP path dependency Output ONLY valid JSON: {"decision": "KEEP" or "DROP", "why": "one short sentence" }
+
+19 A-layer DROP trace: accounting-indicator fragment 
+
+Input chunk, English rendering: A real-estate report table defines operating-cash-flow growth, operating-cash-flow outflow growth, net operating-cash-flow growth, cash-flow inventory turnover, presales-adjusted inventory turnover, and gross-margin-adjusted accounting ratios. The variables include operating cash inflow, operating cash outflow, average inventory balance, presales, and gross profit margin. Output: {"decision": "DROP", "why": "The core logic relies on fundamental accounting data (e.g., operating cash flows, inventory balance, gross profit margin) that cannot be observed or stably proxied from daily Level-1 OHLCV alone." }
+
+This DROP example shows that the report fragment contains financially meaningful variables, but the explanatory variables are accounting fields rather than daily OHLCV observables. RMA therefore prevents the downstream Macro Brain from selecting a mechanism that the Micro Brain could not implement under the factor contract. A-layer KEEP trace: return-decomposition momentum/reversal 
+
+Input chunk, English rendering: A report studies J/K long-short portfolios based on past stock returns. It states that short formation and holding windows show strong reversal, while longer windows weaken reversal and may show mild momentum. It also decomposes past returns into overnight returns, open-to-close returns, and extreme-return components, finding different momentum or reversal behavior across these components. Output: {"decision": "KEEP", "why": "The fragment contains self-contained reversal/momentum mechanisms based on past period returns (computable from daily close prices) and cumulative overnight returns (derived from daily open and prior close prices), both of which are expressible using daily OHLCV alone and can be translated into systematic factor signals." }
+
+This KEEP example passes because the central mechanisms are past-return reversal, overnight-return momentum, and open-to-close return decomposition. These can be computed from daily open and close prices without requiring fundamentals, news, order-book states, or intraday sequencing. The prompt does not require the report’s original portfolio construction to be used verbatim; it only asks whether the mechanism can seed daily-OHLCV research paths. 
+
+B-layer prompt framework. After a fragment passes A-layer screening, the next step mines one or more OHLCV-expressible research-path atoms and assigns each accepted atom to a broad B-layer mechanism family. RMA B-layer classification prompt framework 
+
+Mine daily-OHLCV research paths from ONE report chunk, then assign each path to one Layer-B family. Input assumptions: - The chunk already passed Layer A. - Available data is daily open/high/low/close/volume only. - Do not output formulas, indicators, backtests, portfolios, risk rules, C-layer ids, or agent names. Return ONLY valid JSON: {"research_paths": [ {
+
+20 "status": "accepted" or "rejected", "research_path": str, "b_id": str, "b_layer_reason": str, "rejected_reason": str, "keywords": list[str], "supporting_logic": list[str], "evidence_quote": str, "failure_type": str }]}Layer-B catalog excerpt: B1 | Trend and Momentum Mechanism: continuation, trend persistence, momentum reinforcement, early diffusion, or trend weakening. 
+
+B-layer classification trace: B1 trend and momentum 
+
+Input chunk, English rendering: The report states that short-term industry momentum over a 3-by-3 week window is evident and relatively stable. It discusses ranking industries by recent returns and using daily close-to-close returns to evaluate continuation. Output excerpt, English rendering: {"status": "accepted", "research_path": "Persistence and strength of short-term industry momentum", "b_id": "B1", "b_layer_reason": "This belongs to trend and momentum because it studies significant and stable continuation in a short-term window.", "rejected_reason": "", "keywords": [ "short-term momentum", "industry excess return", "momentum persistence", "daily close return", "trend continuation" ], "supporting_logic": [ "The report states that the 3-by-3 week momentum effect is evident and stable.", "The effect can be evaluated by computing cumulative returns from daily close data and ranking industries." ], "evidence_quote": "Short-term momentum is evident and relatively stable.", "failure_type": "none" }
+
+The B-layer output is still deliberately coarse. It records a reusable research path and assigns it to B1, but it does not choose a C-layer archetype, generate a factor formula, or specify windows and operators for the Micro Brain. This separation keeps report absorption from prematurely becoming factor design. 
+
+C-layer prompt framework. The next step specializes each accepted B-layer research path by routing it to one C-layer Research Archetype under the selected B-layer. The example below uses the three C-layer candidates under B1. RMA C-layer routing prompt framework for B1 
+
+Route ONE research-path atom to exactly one Layer-C Research Archetype record from the allowed catalog. Allowed Layer C catalog: C101 | Trend Initiation and Early Diffusion Core mechanism: Price escapes local balance and begins early directional diffusion. Include patterns: trend initiation, fresh breakout, early diffusion, initial trend launch Exclude patterns: mature continuation, failed breakout reversal, trend exhaustion 
+
+21 C102 | Trend Continuation and Momentum Reinforcement Core mechanism: An existing trend gets stronger and more persistent. Include patterns: trend continuation, momentum reinforcement, sustained advance, persistent directional drift Exclude patterns: early breakout only, trend exhaustion, oversold reversal C103 | Trend Exhaustion and Momentum Failure Core mechanism: Continuation weakens and momentum starts to fail. Include patterns: trend exhaustion, failed confirmation, momentum decay, terminal drift weakness Exclude patterns: fresh trend launch, steady continuation, panic repair Available c_id options: C101, C102, C103 Research-path atom: Research Path: {RESEARCH_PATH} Keywords: {KEYWORDS} Supporting Logic: {SUPPORTING_LOGIC} Rules: - Choose exactly one c_id from the provided Layer-C catalog. - You must choose one of the provided c_id values. Return ONLY valid JSON: {"c_id": "<one c_id from Available c_id options>" }
+
+C-layer routing traces under B1 
+
+Input atom 1: Research Path: Evaluate whether excess-return ranking yields stronger momentum signals than raw-return ranking, using daily returns to compute alpha. Keywords: excess return, CAPM alpha, momentum signal, ranking metric Output: { "c_id": "C101" } Input atom 2: Research Path: Test short-term 5-day momentum using excess-return ranking on daily close data to capture trend continuation. Keywords: short-term momentum, 5-day holding, alpha ranking, trend continuation Output: { "c_id": "C102" } Input atom 3: Research Path: Momentum decay across holding periods; quantify how excess-return momentum strength diminishes from 5-day to 60-day horizons. Keywords: holding-period scaling, momentum decay, excess return, trend weakening Output: { "c_id": "C103" } 
+
+Layer Trace output Interpretation A-layer DROP for accounting-indicator evidence; KEEP for return-decomposition momentum/rever-sal evidence. Enforce whether a report fragment can be represented with daily OHLCV before any mechanism taxonomy is used. B-layer The short-term industry-momentum atom is assigned to 
+
+B1 .Convert retained report evidence into a broad trend-and-momentum mechanism family. C-layer B1 atoms are routed to C101 ,
+
+C102 , or C103 .Separate trend initiation, mature continuation, and momentum failure within the same B-layer family. 
+
+These traces show why RMA is separated from factor evaluation. RMA does not validate an alpha claim empirically and does not directly produce executable factor code. It filters infeasible evidence, extracts daily-OHLCV-compatible research paths, and organizes them into B/C-layer memory records. 22 The resulting memory can later guide Macro Brain routing and Micro Brain hypothesis-to-code generation without confusing external report claims with validated alpha factors. 
+
+## E C-layer Research Archetype Taxonomy 
+
+Table 5 lists the 48 C-layer Research Archetypes used in the B/C taxonomy. Each archetype is a reusable mechanism-level research cue associated with a specific B-layer mechanism family. These archetypes are not runtime agents or factor formulas; they provide structured mechanism roles and research paths that can be retrieved during hypothesis planning. 
+
+Table 5: C-layer Research Archetype definitions. 
+
+Archetype ID Name Role 
+
+B1/C101 Trend Initiation and Early Diffusion Price escapes a local equilibrium and begins early directional diffusion. 
+
+B1/C102 Trend Continuation and Momentum Reinforcement An existing trend becomes stronger and more persistent. 
+
+B1/C103 Trend Exhaustion and Momentum Failure Continuation weakens and momentum begins to fail. 
+
+B2/C201 Short-Horizon Overreaction Reversal A sharp local overreaction is followed by short-horizon repair. 
+
+B2/C202 Post-Capitulation Repair Concentrated selling pressure becomes exhausted and price starts to recover. 
+
+B2/C203 Failed Breakout and Rejection Reversal A directional attempt fails and price reverses after rejection. 
+
+B3/C301 Upper-Bound Breakout Hold Price breaks resistance and successfully holds the new level. 
+
+B3/C302 Lower-Bound Breakdown Continuation Price loses support and continues weakening. 
+
+B3/C303 Retest Confirmation and Relaunch A post-breakout retest succeeds and the move resumes. 
+
+B4/C401 Body Strength and Close Location Body size and close location capture local directional strength. 
+
+B4/C402 Shadow Pressure and Support Upper and lower shadows reveal intraday rejection or absorption. 
+
+B4/C403 Multi-Bar Turning Pattern Multiple bars jointly form a local turning or confirmation structure. 
+
+B5/C501 Gap Continuation and Overnight Diffusion The overnight move continues to diffuse in the same direction. 
+
+B5/C502 Gap Fill and Overnight Overreaction Overnight pricing overshoots and is corrected afterward. 
+
+B5/C503 Overnight-Intraday Role Switch Overnight and intraday legs switch roles between weakness and recovery. 
+
+B6/C601 Volatility Compression Setup Volatility contracts and creates a setup for later directional release. 
+
+B6/C602 Post-Expansion Volatility Repair Volatility and price expand sharply and then cool down or repair. 
+
+B6/C603 Range Energy Build-Up and Release The range structure builds and releases directional energy. 
+
+B7/C701 High-Volatility Regime Signal The signal is primarily active in high-volatility or high-shock environments. 
+
+B7/C702 Low-Volatility Regime Signal The signal is primarily active in low-noise or low-volatility environments. 
+
+B7/C703 Regime Transition Trigger The transition between regimes becomes the predictive signal. 
+
+B8/C801 Downside Volatility Bias Volatility responds more strongly to downside moves than to upside moves. 
+
+> Continued on next page
+
+23 Archetype ID Name Role 
+
+B8/C802 Tail-Risk Accumulation Small fragility signals accumulate into tail-risk pressure over time. 
+
+B8/C803 Pre-Crash Fragility and Acceleration Market fragility accelerates into instability. 
+
+B9/C901 Abnormal Volume Expansion Confirmation A sudden rise in participation confirms a price-state change. 
+
+B9/C902 Volume Dry-Up and Consolidation Participation shrinks and price enters consolidation or selling exhaustion. 
+
+B9/C903 Volume Structure Shift and Activity Repricing The center of trading activity shifts before price structure reprices. 
+
+B10/C1001 Price-Volume Confirmation Price direction is reinforced by aligned volume behavior. 
+
+B10/C1002 Price-Volume Divergence Reversal Price direction and volume support diverge, weakening continuation quality. 
+
+B10/C1003 Volatility-Volume Resonance Volatility expansion and volume expansion reinforce each other during risk release. 
+
+B11/C1101 Illiquidity Reversal Low liquidity pushes price too far and increases reversal pressure. 
+
+B11/C1102 Liquidity-Stress Trend Distortion Deteriorating liquidity amplifies or distorts an existing trend. 
+
+B11/C1103 Impact Decay and Liquidity Recovery Price impact is absorbed, liquidity recovers, and price rebalances. 
+
+B12/C1201 Persistent Buying Pressure Proxy A slow upward path with shallow pullbacks indicates persistent buying pressure. 
+
+B12/C1202 Persistent Selling Pressure Proxy Persistent weakness and weak rebounds indicate selling pressure. 
+
+B12/C1203 Pressure Absorption and Reversal Visible pressure is absorbed over time and the path reverses. 
+
+B13/C1301 Progressive Drawdown Accumulation Drawdown accumulates through persistent weakness rather than a single crash. 
+
+B13/C1302 Post-Drawdown Recovery Recovery quality after a deep drawdown contains predictive information. 
+
+B13/C1303 Failed Recovery and Second-Leg Down An apparent recovery fails and weakness returns in a second leg. 
+
+B14/C1401 Lagged Price Response to Volume Volume shifts occur first and price responds later. 
+
+B14/C1402 Post-Shock Delayed Drift Price continues drifting after the initial shock rather than repricing immediately. 
+
+B14/C1403 Underreaction and Slow Adjustment The market initially underreacts and adjusts gradually afterward. 
+
+B15/C1501 Crowding-Driven Continuation Synchronized behavior reinforces an existing direction. 
+
+B15/C1502 Crowding Unwind Reversal Crowded behavior unwinds and creates sharp reversal pressure. 
+
+B15/C1503 Herding-Amplified Fragility Herding amplifies volatility, liquidity stress, and tail fragility. 
+
+B16/C1601 Market Phase Transition Different market phases are governed by different dominant mechanisms. 
+
+B16/C1602 Compression-Expansion-Resolution Path Predictive content comes from the ordered sequence of compression, expansion, and directional resolution. 
+
+B16/C1603 Fractal Consistency and Multi-Scale Complexity Consistency or rupture across time scales is itself informative. 
+
+## F Macro Brain Routing Details 
+
+This appendix describes the routing and active-agent construction rules used by the Macro Brain. 24 Routing inputs and output. At the beginning of each cycle, the Macro Brain reads the B/C research taxonomy, the report-grounded knowledge memory constructed by RMA, the discovery feedback accumulated from prior generations and cycles, and an optional routing specification. Based on these inputs, the Macro Brain produces a routing decision that contains a routing mode, a cycle theme, a concrete information gap, and a B/C-layer routing profile. The routing mode determines how the theme is obtained. The cycle theme defines the current research direction, while the information gap specifies the mechanism-level question to be explored in the cycle. 
+
+Routing modes. The runtime supports three routing modes. In the fixed-theme mode , the cycle theme is supplied explicitly and used directly. In the coarse-guided mode , the user provides a broad mechanism direction, and the Macro Brain refines it into a concrete cycle theme and information gap. In the memory-driven mode , the Macro Brain derives the theme from accumulated discovery feedback, using recent GOOD/BAD summaries and cycle-level memory to avoid saturated directions, revisit unresolved mechanisms, and prioritize empirically promising research directions. By default, XA LPHA uses several coarse-guided cycles at the beginning to initialize feedback over important OHLCV-expressible mechanism families, and then switches to memory-driven routing. 
+
+B-layer composition. Given the cycle theme and information gap, the Macro Brain selects one primary B-layer and either three or four supporting B-layers. The primary B-layer defines the main mechanism line of the cycle. Supporting B-layers serve the same information gap by providing complementary mechanisms, boundary conditions, or alternative explanations. These supporting B-layers expand the candidate archetype pool, but the runtime active-agent bundle remains fixed at eight agents. This design keeps each cycle focused around a coherent research question while still allowing mechanism-level diversity. 
+
+C-layer planning and active-agent construction. After B-layer routing, the runtime filters the taxonomy to obtain C-layer Research Archetypes whose B-layer ids match the selected routing profile. The C-layer research-path planner receives the cycle theme, the selected B-layer plans, and the candidate C-layer records, and returns target research paths for each candidate record. This step specifies how each candidate archetype can serve the current information gap; it does not directly generate factor code. The runtime then constructs a fixed-size active research-agent bundle with eight agents. The primary B-layer contributes up to three C-layer archetypes, which define the main mechanism line of the cycle. The remaining five slots are sampled from the pooled C-layer candidates under the supporting B-layers. Thus, the active bundle size is 
+
+Nagents = 3 + 5 = 8 .
+
+The supporting slots are sampled from the pooled supporting candidates rather than allocated as one mandatory representative per supporting B-layer. For each selected archetype, the runtime chooses concrete report-grounded research paths from its stored path list using semantic matching and stochastic diversification. 
+
+Runtime-agent materialization and hypothesis subset planning. Each selected C-layer Research Archetype is used as a source record for constructing a runtime active agent; the taxonomy record itself is not an executable agent. A runtime active agent contains a mechanism role, factor-design guidance, selected report-grounded research paths, and a hypothesis-generation target. The Macro Brain then constructs an archetype-guided hypothesis pool from the selected archetypes, report-grounded paths, and available mechanism-level cues. Before factor generation, the runtime plans prompt-time hypothesis subsets from this pool; in the main run, this subset planner is LLM-based. The resulting active agents and hypothesis subsets are passed to the Micro Brain for executable factor-code generation, validation, and evolution. 
+
+Feedback interface. The Macro Brain does not route from the static taxonomy alone. It also reads feedback memory produced after factor evaluation. Archetype-level memory stores verified hypothe-sis ideas from elite factors after FAA classification, and these ideas can later be used together with report-grounded memory during hypothesis generation. Generation-level GOOD/BAD summaries provide short-term feedback for novelty injection within the current cycle. Cycle-level feedback summarizes the outcome of a completed research cycle and guides the theme selection and routing 25 decisions of subsequent cycles. Through this interface, empirical discovery changes later research planning rather than merely adding more generated factors. 
+
+## G Micro Brain Implementation Details 
+
+This appendix describes the implementation details of the Micro Brain. 
+
+Inputs and generation modes. The Micro Brain produces factors through three modes. First, during cycle initialization, it receives the active research agents constructed by the Macro Brain, prompt-time hypothesis subsets, and the factor schema, and generates initial seed factors. Each active agent provides a mechanism description, selected research paths, factor-design guidance, and hypothesis context. Second, during ordinary evolution generations, the Micro Brain receives retained parent factors, including their code, hypothesis definitions, lineage, and evaluation feedback, and generates evolved children. Third, when novelty injection is triggered, it receives recomposed active agents together with recent GOOD/BAD feedback and generates fresh seed factors. In all modes, the shared runtime context specifies the available data fields, approved primitives, factor interface, and target prediction horizon. 
+
+Factor contract. Each generated factor is implemented as a Python function. The function receives one ticker’s time-series slice with a (date, ticker) MultiIndex and returns an index-aligned 
+
+pd.Series . The returned series name must match the function name. The implementation may only use approved daily OHLCV-derived fields and allowed transformations. It must not use unavailable external information, such as order-book depth, tick trades, proprietary fund flow, sentiment, macro variables, sector labels, fundamentals, news, or external index data. 
+
+Quality pipeline. Before empirical evaluation, each generated factor must pass a multi-stage quality pipeline. The AST gate performs static inspection and rejects malformed functions, unsupported imports or fields, invalid return patterns, static future leakage such as negative shifts, reverse rolling windows, full-sample lookahead, backfilled signals, and excessive implementation complexity. The tri-alignment judge then checks whether the hypothesis idea, natural-language explanation, and stripped implementation code describe the same financial mechanism. This step prevents executable but semantically inconsistent candidates, such as a factor whose explanation describes reversal while its code implements trend continuation. Executable candidates are then run on ticker-wise data slices to materialize panel factor series. The runtime checks index alignment, converts outputs to numeric values, masks infinite or extreme values, and applies numerical validation. In the main setting, candidates are discarded if the global invalid-value ratio exceeds nan_thr =0.30. Low-information dates are also filtered using day-level checks for invalid, single-value, and near-constant cross sections. Finally, ticker-level truncation and future-noise perturbation tests are applied as dynamic safeguards against future leakage that cannot be fully detected by static AST inspection. 
+
+Repair process. If a candidate fails due to recoverable syntax, interface, or execution errors, the repair module receives the error message and code context and attempts to produce a corrected version. Repaired code must pass the same quality pipeline again before it can be evaluated. Candidates that cannot be repaired, cannot be executed, or cannot be materialized into a valid aligned series are discarded before empirical scoring. 
+
+Evolution operators. After empirical evaluation, retained parent factors can be evolved through three mechanism-level operators. Mutation creates a mechanism-level variant of a single parent factor. Crossover reasons from two parent hypotheses, recomposes their mechanisms into a new joint hypothesis, and expresses the recomposed mechanism as code. Refinement preserves the parent factor’s core mechanism and signal intent while simplifying implementation components that are not essential to the mechanism. In the main run, parent sampling is score-aware and gives elite parents higher priority, while normal parents remain available to maintain diversity. 
+
+Novelty injection and candidate construction. In addition to evolution from retained parents, the Micro Brain supports fresh-seed generation through novelty injection. When triggered, novelty 26 injection uses recomposed active agents and recent GOOD/BAD feedback to generate candidates that remain aligned with the current cycle theme but differ from the existing pool. These candidates are screened by code-level deduplication and correlation-based redundancy control against the current pool. Evolved children and novelty-injected candidates must both pass the same quality pipeline and empirical evaluation before they are considered by downstream selection gates. 
+
+Selection interface and output. The Micro Brain outputs executable, validated, and empirically evaluated factor candidates. Factors that pass the normal selection gate enter the parent pool for subsequent generations, while stronger candidates that pass the elite gate enter the elite archive. Each retained factor records its source mode, operator, parent lineage, cycle index, generation index, hypothesis definition, validated code, and evaluation diagnostics. These outputs are then used by the evaluation module for parent and elite selection and by the Cross Brain for attribution and feedback consolidation. 
+
+## H Factor Evaluation Pipeline Details 
+
+This appendix describes the detailed evaluation and selection logic used by XA LPHA .
+
+Single-factor diagnostics. For each executable factor produced by the Micro Brain, XA LPHA 
+
+computes cross-sectional predictive diagnostics on each evaluation split. The main statistics are the Information Coefficient (IC), rank-based Information Coefficient (RankIC), the information ratio of IC (ICIR), and the information ratio of RankIC (RankICIR). IC is the Pearson correlation between factor values and future target returns across stocks on each date, while RankIC is the corresponding Spearman rank correlation. ICIR and RankICIR summarize the time-series stability of IC and RankIC by dividing their mean by their standard deviation across dates. 
+
+Direction alignment. Useful alpha signals may be either positively or negatively related to future returns. To evaluate signals under a consistent convention, XA LPHA aligns factor direction before scoring. The direction is determined only on the training split. If the training RankIC is negative, the factor is multiplied by −1; otherwise, its sign is kept unchanged. The same direction is then applied to validation, train–validation, and rolling out-of-sample splits. This produces direction-aligned metrics under a positive-is-better convention and avoids treating useful short signals as failures merely because their rankIC is negative. 
+
+Split-level alpha score. The main predictive score uses direction-aligned winsorized metrics. Winsorization reduces the influence of extreme cross-sectional observations. For a split s, the split-level alpha score is computed as 
+
+αs = 0 .70 · Norm(RankIC aligned ,winsor  
+
+> s
+
+) + 0 .30 · Norm(IC aligned ,winsor  
+
+> s
+
+).
+
+Selection is driven by aligned predictive quality. ICIR and RankICIR are used as stability diagnostics and rolling-robustness signals rather than as direct components of this alpha-score blend. 
+
+Rolling out-of-sample evaluation. Rolling out-of-sample evaluation is used to assess temporal robustness. The data is divided into rolling windows with a five-year training segment, a six-month out-of-sample segment, and a three-month step. In each window, the factor first passes or fails a local training gate based on aligned predictive quality and consistency. The rolling summary then records the number of total windows, the number of train-passed windows, the train-pass rate, the number of selected OOS windows, the mean aligned out-of-sample RankIC, the out-of-sample positive-window rate, and the rolling out-of-sample RankICIR. These rolling diagnostics are used by the normal and elite gates with different scopes and thresholds. 
+
+Normal selection. Normal selection maintains the parent pool for subsequent mutation, crossover, and refinement. It uses train-split evidence and is intentionally broader than elite selection. Before the normal gate, child factors are deduplicated and factors marked as dependent are removed. Each remaining candidate is ranked by 
+
+snormal =  0.70 · αtrain + 0 .30 · revo train ,OOS 
+
+ · dcomplexity ,
+
+27 where αtrain is the train-split alpha score, revo train ,OOS is the rolling-OOS evolution score on the training scope, and dcomplexity is the implementation complexity discount. The normal gate uses a percentile threshold, set to 60 in the main setting, together with static quality floors, including an aligned RankIC floor of 0.005 and an aligned RankIC positive-ratio floor of 0.50 . During warm-up generations, the system keeps the top 45% by normal score to maintain search diversity. Factors that pass normal selection become parent candidates, and the final parent pool is selected under the configured pool-selection rule with a default parent-pool size of 80. 
+
+Elite selection. Elite selection preserves stronger mechanisms across generations. Unlike normal selection, it uses train–validation evidence and stricter quality requirements. Each candidate is ranked by 
+
+selite = 0 .70 · αtrain+val + 0 .30 · relite train+val ,OOS ,
+
+where αtrain+val is the train–validation alpha score and relite train+val ,OOS is the rolling-OOS elite score on the train–validation scope. No additional complexity discount is applied to the elite score. The elite gate uses a higher percentile threshold, set to 80 in the main setting, together with stricter static floors, including an aligned RankIC floor of 0.01 and an aligned RankIC positive-ratio floor of 0.55 .During warm-up generations, only the top 15% by elite score are retained. Gate-passed candidates are further truncated to a high-scoring prefix before elite-pool selection. The current-generation elites are then merged with the previous elite archive, with a small quota reserved for newly discovered elites so that recent mechanisms can enter the archive. 
+
+Cycle-final library admission. At cycle finalization, library candidates are drawn from the current elite archive and refreshed before admission. The refresh step re-materializes factor series, rechecks future leakage, recomputes train–validation metrics, and records redundancy diagnostics. It does not run an additional single-factor backtest. The library admission score is 
+
+slibrary = 0 .70 · Norm(RankIC aligned ,winsor train+val ) + 0 .30 · Norm(IC aligned ,winsor train+val ).
+
+A candidate must exceed the minimum train–validation alpha-score requirement, which is 0.75 in the main setting. Gate-passed candidates are ranked by slibrary , and the top half of the gate-passed set is retained before applying the cycle-final candidate budget. The admitted factors are written into the selected library. 
+
+Redundancy and reporting diagnostics. Redundancy control is applied at different stages of the pipeline. Code-level deduplication removes repeated implementations before evaluation. Correlation-based filtering is used when controlling novelty candidates. 
+
+Feedback records and novelty injection. The evaluation module produces compact feedback records for later research planning and novelty injection. Strong candidates contribute GOOD feedback that records validated hypotheses, aligned predictive evidence, and reusable mechanism principles. Failed candidates contribute BAD feedback that records failure types, failed assumptions, avoidance rules, and possible repair conditions. Mid-cycle novelty injection uses recent generation-level GOOD/BAD summaries to generate fresh seed hypotheses that avoid redundant directions and target unresolved mechanism gaps. Novelty candidates must still pass the same code validation, execution, alignment, empirical quality, and redundancy checks before they can enter normal or elite selection. 
+
+Outputs to the research loop. The evaluation module returns retained normal factors, elite factors, gate failures, rolling out-of-sample summaries, redundancy records, and reporting diagnostics. These outputs serve different roles in the research loop. Normal factors maintain evolutionary diversity, elite factors preserve stronger mechanisms across generations, and gate failures provide compact negative evidence. The Cross Brain consolidates these outcomes into archetype-level verified hypothesis memory, generation-level GOOD/BAD summaries, and cycle-level feedback for later novelty injection, routing, and hypothesis generation. 
+
+## I Cross Brain Attribution and Feedback Consolidation Details 
+
+This appendix describes the detailed role of the Cross Brain in factor attribution and discovery feedback consolidation. The main text summarizes it as the bridge from empirical outcomes back to 28 future research planning; here we describe why re-attribution is needed, how Factor-to-Archetype Attribution (FAA) is performed, and how accepted factors and informative failures are converted into reusable feedback. 
+
+Motivation. During factor discovery, the archetype that seeds a factor is not always the best label for the final factor mechanism. Repair may change the implementation, mutation may alter the trigger or transformation, crossover may combine different mechanisms, and refinement may simplify the factor into a different dominant logic. If discovery feedback were updated only according to the source archetype, useful mechanisms and failure cases could be assigned to the wrong archetype, causing feedback contamination in later cycles. The Cross Brain therefore re-attributes strong factors to their final mechanism labels before writing feedback memory. 
+
+Factor-to-Archetype Attribution. FAA is applied to elite factors after validation and empirical selection. For each factor, the Cross Brain considers the factor name, hypothesis idea, sub-mechanism tags, implementation logic, stripped code, and available empirical diagnostics under the predefined B/C taxonomy. It first assigns the factor to a valid B-layer mechanism family and then to a compatible C-layer Research Archetype. This attributed archetype is treated as the factor’s final mechanism label for feedback consolidation, even if it differs from the archetype that originally seeded the factor. If attribution fails or produces an invalid taxonomy label, the runtime falls back to a legal C-layer assignment so that every elite factor remains attached to the taxonomy. 
+
+Feedback for accepted factors. For elite-selected and cycle-final selected factors, the Cross Brain constructs GOOD feedback records. Each record describes the validated hypothesis idea, the attributed mechanism family, the OHLCV implementation form, and the empirical evidence supporting the factor. The evidence may include aligned IC/RankIC diagnostics, normal and elite scores, rolling out-of-sample summaries, and candidate diagnostics when available. The record also extracts a reusable mechanism principle and an explicit avoid-copying constraint, so future cycles can reuse the financial idea without simply duplicating the same factor code. 
+
+Feedback for failed and redundant factors. For normal-gate failures and redundancy-filtered candidates, the Cross Brain records BAD feedback when the failure is informative. These records summarize the failure type, failed assumption, empirical evidence for the failure, avoidance rule, and possible repair condition. Typical failure evidence includes weak aligned predictive quality, unstable rolling out-of-sample behavior, poor direction consistency, weak RankICIR, excessive redundancy with existing factors, or other gate-level rejection reasons. Such feedback helps later routing and novelty injection avoid repeatedly exploring saturated, brittle, or already-covered mechanism variants. 
+
+Source archetype versus attributed archetype. The Cross Brain consolidates feedback according to the attributed Research Archetype rather than the original source archetype. This distinction is important for evolved factors. For example, a factor generated from a liquidity-oriented archetype may, after refinement, primarily express reversal under low-volume conditions. In that case, its validated idea should update the reversal-related archetype, while the liquidity context may be recorded as a supporting condition. This prevents the memory system from confusing the generation source with the final discovered mechanism. 
+
+Generation-level novelty feedback. In addition to cycle-level feedback, the Cross Brain maintains a short-lived novelty buffer during mining. Elite-selected factors contribute GOOD examples, while informative normal-gate failures contribute BAD examples with failure reasons. Before a novelty-injection step, this buffer is summarized into reusable positive principles and avoid-or-repair rules for fresh-seed prompting. The resulting fresh seeds are generated, filtered, and injected into the parent pool for subsequent evolution. They still follow the same downstream validation and empirical evaluation process before they can be retained as normal or elite factors in later selection. The buffer is cleared after the novelty-injection step so that it serves as a feedback-to-generation bridge rather than a persistent selection shortcut. 
+
+Cross-cycle feedback transfer. At cycle finalization, the Cross Brain writes consolidated feedback to multiple memory levels. At the archetype level, FAA-attributed elite factors contribute verified hypothesis ideas to the corresponding C-layer Research Archetype memory. At the generation level, 29 recent GOOD/BAD summaries provide short-term feedback for novelty injection within the current cycle. At the cycle level, compact conclusions summarize what mechanisms worked, what failed, and what information gaps remain unresolved. These records are made available to later Macro Brain routing decisions, enabling future cycles to revisit promising mechanisms, avoid repeated failure patterns, and construct more focused hypothesis pools. In this way, the Cross Brain converts local evaluation outcomes into reusable discovery feedback for future routing, hypothesis planning, and factor-code evolution. 
+
+## J Metric Definitions and Selection Rules 
+
+This appendix gives the formal definitions behind the evaluation pipeline. It specifies the single-factor metrics, direction alignment, alpha score, complexity discount, rolling out-of-sample gate, normal/elite selection, redundancy filtering, and portfolio metrics used by XA LPHA .
+
+J.1 Single-Factor Predictive Metrics 
+
+For each generated factor f , let x(f ) 
+
+> i,t
+
+denote the factor value of stock i on day t, and let ri,t +h denote the future return at horizon h. On each trading day t, XA LPHA computes cross-sectional predictive diagnostics over all valid stocks in the universe. The daily Information Coefficient (IC) is the Pearson correlation between factor values and future returns: 
+
+IC (f ) 
+
+> t
+
+= Corr 
+
+
+
+x(f ) 
+
+> ·,t
+
+, r ·,t +h
+
+
+
+. (1) The daily Rank Information Coefficient (RankIC) is the Spearman rank correlation: 
+
+RankIC (f ) 
+
+> t
+
+= Corr 
+
+
+
+rank( x(f ) 
+
+> ·,t
+
+), rank( r·,t +h)
+
+
+
+. (2) For an evaluation split s, such as train, validation, or train–validation, the split-level IC and RankIC are the time-series averages: 
+
+T (f ) 
+
+> s
+
+= {t ∈ Ts : IC (f ) 
+
+> t
+
+is valid }. (3) 
+
+IC (f ) 
+
+> s
+
+= 1
+
+|T (f ) 
+
+> s
+
+|
+
+X  
+
+> t∈T (f)
+> s
+
+IC (f ) 
+
+> t
+
+. (4) 
+
+RankIC (f ) 
+
+> s
+
+= 1
+
+|T (f ) 
+
+> s
+
+|
+
+X  
+
+> t∈T (f)
+> s
+
+RankIC (f ) 
+
+> t
+
+. (5) The corresponding information ratios are defined as mean divided by standard deviation: 
+
+ICIR (f ) 
+
+> s
+
+=mean t∈Ts
+
+
+
+IC (f )
+
+> t
+
+
+
+std t∈Ts
+
+
+
+IC (f )
+
+> t
+
+ . (6) 
+
+RankICIR (f ) 
+
+> s
+
+=mean t∈Ts
+
+
+
+RankIC (f )
+
+> t
+
+
+
+std t∈Ts
+
+
+
+RankIC (f )
+
+> t
+
+ . (7) In implementation, the standard deviations above are sample standard deviations over valid evaluation dates. If an evaluation split has too few valid dates or a zero standard deviation, the corresponding information ratio is treated as unavailable in the raw metric summary and is later handled by the screening payload. Both raw and winsorized versions of these metrics are recorded. The main selection score uses direction-aligned winsorized metrics, while raw metrics are retained for diagnostics and direction determination. 30 J.2 Direction Alignment 
+
+A useful factor may be either positively or negatively associated with future returns. To compare long and short signals under a single positive-is-better convention, XA LPHA fixes a factor direction using the raw training RankIC: 
+
+df = sign (RankIC raw train (f )) , sign(0) = 1 . (8) For any metric m ∈ { IC , RankIC , ICIR , RankICIR } and split s, the direction-aligned metric is: 
+
+em(f ) 
+
+> s
+
+= df · mwinsor  
+
+> s
+
+(f ). (9) After alignment, larger values consistently indicate stronger predictive quality in the selected direction. 
+
+J.3 Alpha Score 
+
+The evaluator maps aligned predictive metrics into bounded normalized scores before aggregation. Let σ(·) denote the sigmoid function: 
+
+σ(z) = 11 + exp( −z) . (10) For a metric m, with center parameter cm and scale parameter am, the normalized metric score is: 
+
+ϕm
+
+em(f )
+
+> s
+
+
+
+= σ clip em(f ) 
+
+> s
+
+− cm
+
+am
+
+, −3, 3
+
+!! 
+
+. (11) The default alpha score emphasizes rank-based predictive quality: 
+
+S(f ) 
+
+> α,s
+
+= wRankIC ϕRankIC 
+
+
+
+^RankIC (f )
+
+> s
+
+
+
++ wIC ϕIC 
+
+fIC (f )
+
+> s
+
+
+
+. (12) The weights satisfy: 
+
+wRankIC + wIC = 1 . (13) The default implementation sets wRankIC = 0 .70 and wIC = 0 .30 . Both metrics use the same IC normalization family, with center 0.015 and scale 0.015 . ICIR and RankICIR are still recorded and used by secondary screening and rolling robustness gates, but they are not part of the current alpha-score blend. This design makes the main score focus on direction-aligned cross-sectional predictive strength, while temporal stability is enforced separately through static secondary checks and rolling-OOS gates. 
+
+J.4 Complexity Discount 
+
+LLM-generated factors may contain unnecessary transformations, fragile branching logic, excessive nesting, or over-engineered operator chains. To penalize such factors, XA LPHA computes an AST-based complexity payload from the generated function. This is a code-structure score rather than an asymptotic runtime-complexity measure. The analyzer first extracts structural signals from the factor AST, including the number of arithmetic operators, semantic expression depth, non-structural assignments, meaningful temporary variables, windowed time-series calls, nested time-series depth, transformation-chain length, numeric constants, distinct window parameters, statistical operators, and explicit control flow. These signals are grouped into component scores: 
+
+Cexpr : expression and intermediate-variable complexity ,Cflow : branching and loop complexity ,Cts : rolling, expanding, EWM, and nested time-series structure ,Cparam : numeric-threshold and window-parameter risk ,Cstat : statistical-operator risk ,Cchain : long transformation-chain complexity .
+
+(14) 31 For example, the default analyzer assigns direct penalties to binary arithmetic, expression depth, rolling-window calls, distinct window parameters, and long transformation chains, with stronger penalties for loops, nested loops, high-risk statistical operators, and excessive window tuning. The component scores are aggregated into an implementation-burden score and an overfit-risk score: 
+
+C(f )impl = C(f )expr + C(f )flow + 0 .25 C(f )ts + 0 .45 C(f )chain + C(f )impl ,stat ,C(f )risk = C(f )param + C(f )stat + 0 .75 C(f )ts + 0 .65 C(f )chain + C(f )risk ,flow . (15) Here C(f )impl ,stat contains the implementation burden of medium-risk statistical operators, while 
+
+C(f )risk ,flow contains additional overfit-risk penalties for explicit branches and loops. The raw total complexity reported in factor examples is then: 
+
+C(f ) = 0 .40 C(f )impl + 0 .60 C(f )risk . (16) The score is converted into a multiplicative piecewise discount: 
+
+D(f )raw =
+
+
+
+0.9 + 0 .1(10 .8 − C(f ))/10 .8, C(f ) ≤ 10 .8,
+
+0.9 − 0.15( C(f ) − 10 .8) /(15 .0 − 10 .8) , 10 .8 < C (f ) ≤ 15 .0,
+
+0.75 exp[ −0.25( C(f ) − 15 .0)] , C(f ) > 15 .0.
+
+(17) The final complexity discount is floored at 0.70 :
+
+D(f )cmp = max 
+
+
+
+0.70 , D (f )raw 
+
+
+
+. (18) When a split-level complexity-adjusted score is needed, it is computed as: 
+
+S(f )final ,s = S(f ) 
+
+> α,s
+
+· D(f )cmp . (19) Thus, complexity is not treated as alpha quality itself. It only discounts otherwise predictive factors when their implementation appears unnecessarily complex or overfit-prone. 
+
+J.5 Rolling Out-of-Sample Gate 
+
+Static split performance can overstate factor quality. XA LPHA therefore evaluates each factor with rolling out-of-sample windows. Each rolling window j contains a training segment T train  
+
+> j
+
+followed by an out-of-sample segment T oos  
+
+> j
+
+.For each rolling training segment, the evaluator computes local aligned RankIC, aligned RankICIR, and positive-day ratio. Let ρ+ 
+
+> j
+
+denote the fraction of days in the segment with positive aligned RankIC. The rolling training segment passes the local stability gate if: 
+
+^RankIC j, train ≥ τ train rankic . (20) 
+
+^RankICIR j, train ≥ τ train rankicir . (21) 
+
+ρ+ 
+
+> j, train
+
+≥ τ train  
+
+> ρ
+
+. (22) Let Jall denote all complete rolling windows with non-empty OOS observations, and let Jpass denote the subset whose preceding training segments pass the local stability gate. The train-pass rate is 
+
+ρpass train = |J pass ||J all | . (23) The factor-level hard gate and rolling score use OOS summaries over Jall , while train-gated OOS summaries over Jpass are retained as diagnostics: 
+
+^RankIC oos = 1
+
+|J all |
+
+X
+
+> j∈J all
+
+^RankIC j, oos . (24) 32 ρ+oos = 1
+
+|J all |
+
+X
+
+> j∈J all
+
+1
+
+
+
+^RankIC j, oos > 0
+
+
+
+. (25) 
+
+^RankICIR oos =mean j∈J all 
+
+
+
+^RankIC j, oos 
+
+
+
+std j∈J all 
+
+
+
+^RankIC j, oos 
+
+
+
++ ϵ. (26) The rolling OOS summary is used both as a hard robustness gate and as a ranking component. The rolling score is an additive normalized score: 
+
+S(f )roll = 0 .25 ρpass train + 0 .30 ϕRankIC 
+
+
+
+^RankIC oos 
+
+
+
++ 0 .20 ρ+oos 
+
++ 0 .20 ϕRankICIR 
+
+ ^RankICIR oos 
+
+
+
++ 0 .05 ϕRankIC 
+
+
+
+^RankIC oos ,worst20 
+
+
+
+,
+
+(27) where ^RankIC oos ,worst20 is the mean of the worst 20% OOS-window aligned RankIC values. Normal ranking uses this score on the train-split rolling summary. Elite ranking uses the same score on the train–validation rolling summary, but the elite rolling score is set to zero unless the elite rolling hard gate is passed. This design keeps the static alpha score interpretable while still favoring factors whose performance is stable across rolling windows. 
+
+J.6 Normal and Elite Selection 
+
+XA LPHA uses evaluation outputs to construct different factor pools for different purposes. The normal pool supports continued exploration, while the elite archive preserves high-quality candidates across generations. The normal score is computed from the train split: 
+
+S(f )normal =
+
+
+
+0.70 · S(f ) 
+
+> α, train
+
++ 0 .30 · S(f )roll ,train 
+
+
+
+· D(f )cmp . (28) A factor can enter the normal parent pool only if it passes the normal static gate and the normal rolling OOS hard gate. The normal static gate is evaluated on the train split. It requires aligned winsor RankIC to clear the maximum of the observed normal percentile threshold and the fixed floor 
+
+0.005 , requires at least one secondary metric among aligned winsor IC, ICIR, and RankICIR to pass its secondary percentile threshold, and requires aligned RankIC positive ratio at least 0.50 . With the default normal percentile 60 , the primary RankIC threshold uses the 60 th percentile of the candidate pool and the secondary checks use the 50 th percentile. In warm-up generations, the static metric gate is disabled but the rolling OOS gate remains active, and the gate-passed pool is truncated to the top 
+
+45% by normal score; after warm-up, the score truncation is disabled. The elite score is computed from the combined train–validation split: 
+
+S(f )elite = 0 .70 · S(f ) 
+
+> α, train+val
+
++ 0 .30 · S(f )roll ,train+val . (29) A factor can enter the elite archive only if it passes the stricter elite static gate, the elite rolling OOS hard gate, and the return-shape gate. The elite static gate is evaluated on the train–validation split. With the default elite percentile 80 , aligned winsor RankIC must clear the maximum of the 80 th percentile and the fixed floor 0.01 , secondary IC/ICIR/RankICIR checks use the 70 th percentile, and aligned RankIC positive ratio must be at least 0.55 . Elite candidates must also have benchmark-covered return-diagnostic days, positive top-quantile benchmark-excess return, and positive long-short return on the same train–validation split. In warm-up generations, the elite static metric gate is disabled but the rolling and return-shape gates remain active, and the gate-passed pool is truncated to the top 15% by elite score. The rolling gates require sufficient rolling-window coverage, sufficient train-pass rate, stable OOS aligned RankIC, positive OOS behavior, and acceptable OOS RankICIR. The default normal rolling 33 gate requires at least four total windows, at least three OOS windows, train-pass rate at least 0.25 ,OOS mean aligned RankIC at least −0.005 , OOS positive-window rate at least 0.45 , and OOS aligned rolling RankICIR at least −0.05 . The default elite rolling gate requires at least five OOS windows, train-pass rate at least 0.55 , OOS mean aligned RankIC at least 0.01 , OOS positive-window rate at least 0.60 , and OOS aligned rolling RankICIR at least 0.10 .
+
+J.7 Parent, Children, and Elite Pools 
+
+The selection rules above create three different runtime pools. The parent pool is the active set used to generate the next generation of factors. At initialization, it is formed from normal-gate-passed seed factors plus raw and primitive baseline factors. During evolution, it is rebuilt from normal-gate-passed children, capped by the parent-pool size, and tagged by whether each retained factor also belongs to the elite archive. The configured pool-selection rule is either deterministic top-k ranking or a hybrid rule that keeps a top-ranked head and fills the remaining slots by tournament selection. At the start of a generation, the active parent set is assembled from the previous elite archive and the current normal parent pool. The children pool is generated from this active parent set by mutation, crossover, and refinement; each child must pass parsing, code validation, execution, alignment checks, leakage checks, empirical evaluation, and de-duplication before selection. Generation-level correlation filtering is applied as a redundancy-control step for candidate flow, while elite selection itself is governed by the elite static and rolling gates plus the configured pool-selection rule. The elite pool is the persistent archive of strong mechanisms. It is selected from elite-gate-passed children, capped by the elite archive size, merged with the previous archive, de-duplicated, and selected by the configured pool-selection rule; a small share of current-generation elites is forced to survive the merge when available so that newly discovered mechanisms are not immediately displaced by previous-cycle archive members. 
+
+J.8 Novelty Injection 
+
+Novelty injection is a mid-cycle fresh-seed mechanism that expands the parent set before child evolution. It is not a shortcut into the elite archive. After each generation’s normal and elite screening, XA LPHA records a short-lived GOOD/BAD feedback buffer. GOOD records come from current-generation factors selected into the elite pool, while BAD records come from factors that failed the normal gate. Each raw record stores the factor name, identifier, attributed agent name, selection origin, operator, generation, hypothesis idea, mechanism tags, implementation logic, aligned winsorized train metrics, normal selection score, elite score, and the pass or failure reason. The buffer is diversity-limited: it keeps at most eight GOOD and eight BAD records, with at most two records per attributed agent name and at most two per mechanism family. At generation g, novelty injection is triggered when (g + 1) is divisible by the injection interval and g
+
+is not the final cycle step. Under the default interval 4 and cycle length 10 , this occurs at generations 
+
+3 and 7. When triggered, the active agent bundle is recomposed for the current cycle theme using the novelty-injection mode. The GOOD/BAD buffer is then summarized by the LLM into prompt-ready feedback rows: GOOD summaries extract positive evidence, reusable principles, and what not to copy verbatim; BAD summaries extract the failed assumption, avoidance rule, failure type, and repair condition. The summarized context is cached under the run checkpoint cache and passed only to fresh-seed generation. Fresh seeds are generated by the same validated factor-generation callback used for initialization, but with the fresh-seed phase, the novelty-factor system prompt, current-cycle hypothesis memory, the current elite pool, and the GOOD/BAD novelty context. The target fresh-seed count is one half of the initialization pool target. With the default initialization target 64 , the target fresh-seed batch size is 32 . These factors then undergo the normal execution and empirical evaluation pipeline and are marked with selection origin fresh_seed .Fresh seeds must pass two additional screens before they can affect evolution. First, they are compared against the leading previous-elite factors and the leading current parent factors using the generation-level correlation threshold. The default generation correlation threshold is 0.95 , and only a limited number of fresh seeds are forwarded after this redundancy check. Second, the remaining novelty candidates are screened against their own batch distribution: train aligned winsor ICIR and train 34 aligned winsor RankICIR must both be at or above the batch 65 th percentile. This internal gate keeps fresh seeds that are not only new but also relatively stable within the novelty batch. Only fresh seeds that pass these screens are injected into the current generation parent pool, tagged as normal-tier parents. They then participate in mutation, crossover, and refinement like ordinary parents. Their descendants must still pass child evaluation, normal selection, elite selection, and feedback consolidation before they can influence later research cycles. After injection, the short-lived novelty GOOD/BAD buffer is cleared, so the next injection uses feedback accumulated after the previous injection rather than stale records. 
+
+J.9 Redundancy Filtering and Elite Archive 
+
+After metric evaluation, XA LPHA applies identity-level de-duplication and generation-level correlation-aware filtering. This step prevents the evolution process from accumulating many small syntactic variants of the same signal. For two factors fa and fb, let ρ(fa, f b) denote their realized factor-series correlation on the evaluation panel. In the generation-level redundancy check, a candidate is retained only if its maximum absolute correlation to the comparison pool is below the configured threshold: 
+
+max   
+
+> f′∈S
+
+|ρ(f, f ′)| < τ corr . (30) In the default setting, the generation-level correlation threshold is τcorr = 0 .95 . This redundancy-control step is separate from the elite gate: elite selection is governed by the train–validation static gate, rolling OOS gate, return-shape checks, and the configured score-based pool-selection rule. 
+
+J.10 Cycle-Final Library Admission 
+
+At cycle finalization, eligible elite candidates are refreshed before library admission. The runtime reloads current candidate series, checks future leakage, and re-scores them on the train–validation selection window. The admission score uses a RankIC/IC train–validation alpha score: 
+
+S(f )library = 0 .70 ϕRankIC 
+
+
+
+^RankIC (f )train+val 
+
+
+
++ 0 .30 ϕIC 
+
+fIC (f )train+val 
+
+
+
+. (31) Unlike normal ranking, S(f )library is not multiplied by the complexity discount. A candidate must exceed the minimum train–validation alpha-score threshold, which is 0.75 in the main setting. Gate-passed candidates are ranked by S(f )library ; the runtime keeps the top half of the gate-passed set before applying the cycle-final candidate budget. These steps are separate from normal parent-pool construction and elite-archive maintenance during the generation loop. 
+
+J.11 Portfolio and Backtest Metrics 
+
+The main result table reports annualized return (AR), annualized excess return (AER), and information ratio (IR) for portfolio-level evaluation. These metrics are computed by the Qlib TopK-Dropout backtest and Qlib risk-analysis routine. Let rport  
+
+> t
+
+denote the daily portfolio return, rbench  
+
+> t
+
+the benchmark return, and ct the transaction cost on day t. Following the Qlib backtest convention, the cost-adjusted daily excess return is 
+
+rexcess  
+
+> t
+
+= rport  
+
+> t
+
+− rbench  
+
+> t
+
+− ct. (32) For daily backtests, Qlib’s day-frequency annualization scaler N is used, which is 238 under the day-frequency default used by risk_analysis . Under the product-mode risk-analysis routine used in our implementation, the compounded curves are 
+
+Πport  
+
+> T
+
+=
+
+> T
+
+Y
+
+> t=1
+
+ 1 + rport 
+
+> t
+
+ , Πexcess  
+
+> T
+
+=
+
+> T
+
+Y
+
+> t=1
+
+(1 + rexcess  
+
+> t
+
+) . (33) AR and AER are then reported as the corresponding compounded annualized returns: 
+
+AR =  Πport 
+
+> T
+
+N/T − 1, AER = (Π excess  
+
+> T
+
+)N/T − 1. (34) 35 The information ratio is the annualized excess-return ratio returned by the same Qlib risk-analysis routine. These portfolio metrics are reported only on the held-out test period. During alpha discovery, train and train–validation diagnostics drive normal and elite selection; test diagnostics are retained for reporting rather than for mining-loop selection decisions. 
+
+J.12 Summary 
+
+Overall, the evaluation module follows a staged design. Code validation ensures that a factor is executable and leakage-free. Single-factor metrics measure predictive strength. Direction alignment allows long and short signals to compete under the same convention. Complexity discount penalizes fragile implementations for normal ranking. Rolling OOS gates and rolling scores test temporal robustness. Normal and elite selection determine whether factors can be reused in evolution or pre-served as high-quality candidates. Redundancy filtering prevents repeated variants from dominating the search trajectory. 
+
+## K Qualitative Case Studies 
+
+This appendix provides qualitative examples. 
+
+K.1 Representative Factor Code 
+
+Listing 2 reports the signal-construction steps for the representative elite factor analyzed in the main text. 
+
+def regime_overshoot_pressure_decay_20d_ma20_vol20(df): """Idea: Downside overshoot pressure decays at a regime-dependent speed, capturing faster reversal after capitulation in high-volatility markets. Logic: Build a 20-day moving-average anchor and a volatility regime, flag downside overshoots with regime-specific thresholds, weight overshoots by absolute returns, smooth pressure with fast/slow EWMA decay, and center the result by an expanding historical benchmark. Sub-mechanism tags: post_capitulation_repair; volatility_regime; dynamic_decay; overshoot_weighted. """ close = df["close"] # Price anchor and volatility regime. ma20 = close.rolling(20, min_periods=10).mean() ret = close.pct_change() vol20 = ret.rolling(20, min_periods=10).std() vol_median = vol20.rolling(60, min_periods=30).median() high_vol = (vol20 > vol_median).astype(float) # Downside overshoot is stricter in high-volatility states. threshold = ma20 * (0.90 * high_vol + 0.95 * (1.0 -high_vol)) overshoot = (close < threshold).astype(float) # Accumulate overshoot pressure and decay it by regime. pressure = (overshoot * ret.abs().fillna(0.0)).rolling(20, min_periods=1).sum() slow_decay = pressure.ewm(span=15, adjust=False, min_periods=1).mean() fast_decay = pressure.ewm(span=5, adjust=False, min_periods=1).mean() decayed = high_vol * fast_decay + (1.0 -high_vol) * slow_decay return decayed -decayed.expanding().quantile(0.75) 
+
+Listing 2: Implementation excerpt for the regime-dependent overshoot-pressure factor Listing 3 shows a second factor-code example. It combines a dynamic range-burst trigger with turnover excess relative to a median baseline, then smooths the resulting event intensity. 
+
+def dynamic_range_turnover_excess_ewm10_factor(df): """Idea: Adaptive range-burst detection combined with turnover excess relative to a robust median baseline. Logic: Measure intraday range against prior close, set a volatility-adaptive burst threshold from 30-day log-return volatility, compute log dollar-volume 
+
+36 excess over a 60-day rolling median, multiply burst intensity by turnover excess, and smooth the signal with a 10-day EMA. Sub-mechanism tags: range_burst; turnover_excess; volatility_regime; ema_smoothing. """ # Range burst threshold adapts to recent close-to-close volatility. range_pct = (df["high"] -df["low"]) / df["prev_close"] log_ret = np.log(df["close"] / df["prev_close"]) vol30 = log_ret.rolling(30, min_periods=15).std() burst = (range_pct >= 0.05 + 0.5 * vol30).astype(float) # Turnover is measured relative to a robust 60-day median baseline. turnover_med = df["log_dollar_volume"].rolling(60, min_periods=20).median() turnover_excess = (df["log_dollar_volume"] -turnover_med).fillna(0.0) # Smooth range bursts confirmed by unusually high turnover. signal = burst * turnover_excess return signal.ewm(span=10, adjust=False).mean() 
+
+Listing 3: Implementation excerpt for the dynamic range-turnover factor 
+
+K.2 Tri-Alignment and Revision 
+
+We illustrate the ex-ante alignment pipeline using a generated factor: 
+
+signflip_volume_spike_lowvol_bodysign_30d_20d . The original hypothesis stated that, after a candle-body direction flip, a volume surge in a low-volatility regime predicts continuation in the new direction. The executable code implemented the same idea by multiplying the body-sign direction, a sign-flip indicator, a low-volatility indicator, and a raw volume ratio: 
+
+signal t = sign(body t) · 1{flip t} · volume t
+
+median 30 (volume) t
+
+· 1{TR t < 0.8 median 20 (TR) t}. (35) The first alignment review accepted the text-code correspondence and the explanatory financial rationale, but rejected the stripped executable code as financially unsound. The issue was not a syntax error or a mismatch between the explanation and code. Rather, the uncapped volume ratio could mechanically let extreme volume observations dominate the signal, making the implemented mechanism less robust than the intended “volume surge under low volatility” hypothesis. 
+
+Alignment check Before revision After revision Explanatory text–code alignment Accept Accept Stripped-code financial soundness Reject Accept Explanatory-text financial soundness Accept Accept 
+
+The revision preserved the same event structure, but replaced the raw volume multiplier with a capped relative-volume term and updated the hypothesis and logic text accordingly. The before/after fragments below show only the mechanism-changing lines: 
+
+> volume_ratio = df_copy["volume"] / df_copy["volume"].rolling(30, min_periods=10).median() volume_ratio = volume_ratio.replace([np.inf, -np.inf], np.nan).fillna(1.0) factor = body_sign * volume_ratio * low_vol_regime factor = factor.where(sign_flip, other=0.0)
+
+Listing 4: Before alignment revision: uncapped volume term 
+
+> volume_ratio = df_copy["volume"] / df_copy["volume"].rolling(30, min_periods=10).median() volume_ratio = volume_ratio.replace([np.inf, -np.inf], np.nan).fillna(1.0) volume_ratio = np.minimum(volume_ratio, 3.0) factor = body_sign * volume_ratio * low_vol_regime factor = factor.where(sign_flip, other=0.0)
+
+Listing 5: After alignment revision: capped volume term The metadata was revised from “a volume surge” to “a modest volume surge (capped),” and the implementation logic was revised to state that the volume ratio is capped before being combined 37 with the sign-flip and low-volatility gates. A second alignment review then accepted all three checks. This case shows that tri-alignment is not merely code parsing or execution repair: it can reject an executable and text-consistent candidate when the stripped implementation expresses an unstable financial mechanism, and then force a minimal revision that realigns the hypothesis, code logic, and financial plausibility before empirical evaluation. 
+
+K.3 Memory-Routing Analysis 
+
+This case shows how cycle-level feedback changes the next cycle’s research agenda. We use the transition from one completed cycle to the next. The examples below are compact renderings of the feedback and routing records, with the same fields interpreted by the runtime. Memory-routing input: consolidated cycle feedback 
+
+Completed cycle theme: volatility_regime_dependent_volume_price_lag Research question: How does price-adjustment timing after volume shocks vary across volatility regimes and liquidity-stress conditions? GOOD memory: - Adaptive lag structures conditioned on volatility and liquidity stress can capture timely price reactions. - Regime-aware lag design is more useful than a single fixed response horizon. - Continuous volume and pressure proxies are preferred when they preserve timing information. BAD memory: - Avoid isolated volume-spike flags. - Avoid binary spike indicators that discard response strength. - Avoid rigid lag horizons. - Avoid excessive multiplicative stacks of volatility and stress adjustments. 
+
+The input record is not a list of factor names to copy. It separates reusable positive principles from avoid-or-repair rules. This gives the next routing step both opportunities and constraints: revisit lagged response, but avoid the failure modes observed in the previous cycle. Memory-routing output: next-cycle research agenda 
+
+Selected information gap: Model a continuous mapping from directional pressure to lagged price response under liquidity stress and volatility regimes, without relying on binary regimes or fixed lags. Cycle theme: regime_lagged_directional_pressure_response Primary B-layer: B14 | Lagged Response supporting_function: primary_line Supporting B-layers: B12 | Directional Pressure supporting_function: complement B11 | Liquidity and Impact-Cost supporting_function: boundary_condition B7 | Volatility Regime supporting_function: boundary_condition B9 | Volume Level and Structure supporting_function: extension C-layer path-planning cues: - Measure the lag between directional-pressure signals and later price movement. - Replace binary spike detection with continuous volume acceleration. - Model volume contraction as gradual consolidation rather than as a hard state flag. 
+
+38 Component Trace content Routing role GOOD memory Adaptive, regime-aware lag struc-tures. Preserve empirically useful mechanism principles. BAD memory Isolated spikes, rigid lags, and over-stacked stress adjustments. Exclude repeated failure modes from the next search space. Information gap Continuous pressure-to-response mapping under regimes and liquidity stress. Convert feedback into a concrete research question. B-layer routing B14 as primary, with B12/B11/B7/B9 as supporting families. Turn the research question into a structured mechanism profile. C-layer cues Lag measurement, continuous vol-ume acceleration, gradual consolida-tion. Materialize the routing decision into down-stream hypothesis paths. 
+
+This trace shows how the Cross Brain and Macro Brain interact. The Cross Brain converts empirical outcomes into compact mechanism-level feedback, while the Macro Brain turns that feedback into a new theme, B-layer composition, and C-layer path cues. The result is not simple factor reuse; it is a controlled change in the next cycle’s search space. 
+
+K.4 Single-Factor Evolution 
+
+We use a mutation to show how a concrete factor is evolved under the cycle theme above. The parent factor, volstress_intraday_ewm5_vol20 , expressed same-day volume stress: current volume was divided by its 20-day mean, multiplied by same-day intraday return, and smoothed with a 5-day EWMA. The mutation operator preserved the volume-stress and intraday-momentum mechanism, but changed the behavioral assumption from same-day stress amplification to lagged pressure response. It also replaced the 20-day mean volume baseline with a 20-day median baseline to make the stress proxy less sensitive to extreme volume observations. 
+
+> volume_stress = df["volume"] / df["volume"].rolling(20, min_periods=20).mean() same_day_pressure = volume_stress * df["intra_1"] factor = same_day_pressure.ewm(span=5, adjust=False).mean()
+
+Listing 6: Parent factor before mutation: same-day volume stress 
+
+> volume_stress = df["volume"] / df["volume"].rolling(20, min_periods=20).median() lagged_pressure = volume_stress.shift(1) * df["intra_1"] factor = lagged_pressure.ewm(span=5, adjust=False).mean()
+
+Listing 7: Mutated child factor: lagged median-based volume stress The resulting child factor has the hypothesis: prior-day median-based volume stress modulates same-day intraday returns, capturing lagged directional pressure. Its mechanism tags are volume_stress ,
+
+intraday_momentum , lagged_response , and ewm_smoothing . A subsequent alignment review accepted the explanatory text–code alignment, stripped-code financial soundness, and explanatory-text financial soundness. This case illustrates how factor evolution is not restricted to cosmetic code variation: a mutation can move the signal from contemporaneous stress weighting to a lagged-response mechanism while preserving a direct conceptual link to the parent factor. 
+
+## L Primitive Feature Definitions 
+
+Table 6 lists the raw daily OHLCV fields and derived OHLCV primitive features exposed to the prompt-building agents. The descriptions follow the canonical runtime schema used for prompt construction. 39 Table 6: Primitive feature definitions. 
+
+Feature Description 
+
+Raw daily OHLCV columns 
+
+open Opening price of the day 
+
+high High price of the day 
+
+low Low price of the day 
+
+close Closing price of the day 
+
+volume Total trading volume of the day 
+
+Derived OHLCV primitive features 
+
+prev_close Previous session close level used as a one-day lagged price primitive. 
+
+log_close Natural log of close used as a stabilized price-level primitive. 
+
+ret_1 One-day log return of close as the basic return primitive. 
+
+gap_1 Overnight gap return from prior close to current open. 
+
+intra_1 Same-day intraday return from open to close. 
+
+bar_range Raw daily high-low trading range primitive. 
+
+true_range Daily true range primitive combining bar range and one-day lagged close extremes. 
+
+dollar_volume Dollar volume primitive from close times traded volume. 
+
+range_pct_1d_prev_close Daily high-low range scaled by previous close. 
+
+true_range_pct_1d_prev_close Daily true range scaled by previous close. 
+
+close_location_range_1d_ohlc Normalized close location inside the daily high-low range. 
+
+body_to_range_1d_ohlc Signed daily candle body normalized by the daily range. 
+
+upper_shadow_to_range_1d_ohlc Upper candle shadow normalized by the daily range. 
+
+lower_shadow_to_range_1d_ohlc Lower candle shadow normalized by the daily range. 
+
+shadow_imbalance_1d_ohlc Lower-minus-upper candle shadow imbalance normalized by the daily range. 
+
+log_volume Log-scaled non-negative daily trading volume. 
+
+log_dollar_volume Log-scaled non-negative daily dollar volume. 
+
+hl_mid_price Daily high-low midpoint price. 
+
+oc_mid_price Daily open-close midpoint price. 
+
+close_to_open_ratio Close-to-open simple return ratio. 
+
+## M Runtime Agent Prompt Excerpts 
+
+This appendix reports the runtime prompt frameworks used by XA LPHA . For each prompt-driven agent, the system prompt is assembled from shared constitutions and the agent-specific role block in 
+
+AGENT_SYSTEM_PROMPTS ; the task prompt keeps runtime fields as placeholders. C-layer Research Archetypes are taxonomy records used as prompt context, not standalone runtime prompt agents. Shared System Prompt Assembly 
+
+> build_system_prompt(brain, agent_prompt): INSTRUCTION_HIERARCHY + XALPHA_CONSTITUTION + <BRAIN_CONSTITUTION> + <AGENT_ROLE_BLOCK> INSTRUCTION_HIERARCHY: [INSTRUCTION HIERARCHY] Interpret the system prompt in three layers: 1. Global Constitution = shared principles. 2. Brain Constitution = valid scope. 3. Agent Role = specific task. The Agent Role must stay within the Brain Constitution and Global Constitution.
+
+40 XALPHA_CONSTITUTION: [GLOBAL XALPHA CONSTITUTION] You are a specialized agent within XAlpha, an autonomous dual-brain alpha research organization. XAlpha discovers alpha factors through mechanism exploration, implementation, evaluation, evolution, and accumulation. Global principles: - Prefer economic plausibility, mechanism consistency, robustness, interpretability, diversity, novelty, and generalization. - Avoid curve fitting, unsupported assumptions, redundant exploration, superficial complexity, and in-sample optimization. - Optimize for your assigned role while supporting the overall alpha discovery process. MACRO_BRAIN_CONSTITUTION: [MACRO BRAIN CONSTITUTION] You operate at the research-strategy level. Your scope is to decide what themes, mechanisms, directions, and search spaces should be explored. Do not write factor code, design exact formulas, choose implementation windows/operators, or optimize implementation details. Your output should remain strategic and mechanism-level, suitable for guiding downstream agents. MICRO_BRAIN_CONSTITUTION: [MICRO BRAIN CONSTITUTION] You operate at the research-execution level. Your scope is to implement, mutate, combine, repair, refine, or select factor candidates according to the assigned agent role. Focus on faithful mechanism realization, executable code, robustness, and evolutionary improvement. Do not redefine the global research agenda unless explicitly assigned. CROSS_BRAIN_CONSTITUTION: [CROSS BRAIN CONSTITUTION] You operate at the knowledge-transfer level. Your scope is to retrieve, classify, summarize, and distill reusable research knowledge. Focus on taxonomy consistency, memory usefulness, research continuity, and organizational learning. Do not generate new factor implementations unless explicitly assigned. UTILITY_CONSTITUTION: [UTILITY CONSTITUTION] You operate as a shared infrastructure utility. Your scope is to provide correctness, consistency, clarity, and support for other agents. Do not participate in research strategy, factor generation, or mechanism redesign unless explicitly assigned. 
+
+M.1 Macro Brain Prompts 
+
+Macro Brain – global_selector 
+
+System prompt: build_system_prompt("macro", GLOBAL_SELECTOR_AGENT) GLOBAL_SELECTOR_AGENT: [AGENT ROLE: GLOBAL RESEARCH COORDINATOR] Mission: Determine the research agenda for future evolution cycles. Objective: Maximize search-space coverage, mechanism diversity, and long-term discovery potential. Responsibilities: - Identify overexplored and underexplored mechanism areas. - Allocate future search effort across themes, agent groups, or mechanism families. - Recommend directions to increase, reduce, pause, or refresh. - Preserve diversity while prioritizing economically plausible mechanisms. Constraints: - Do not generate alpha factors. - Do not write code. - Do not specify exact formulas or implementation details. Expected output: A structured research agenda for downstream agents. GLOBAL_AGENT_ROUTING_PROMPT: Act as an evidence-based research router. 
+
+41 {ROUTING_TASK_BLOCK} {RECENT_AGENT_CYCLE_SUMMARIES_BLOCK} Core task: 1. Follow the routing task to identify one concrete mechanism-level information gap. 2. Create a concise cycle theme around that gap. 3. Select one primary B-layer for the main mechanism line. 4. Select {SUPPORTING_B_LAYER_MIN_COUNT}-{SUPPORTING_B_LAYER_MAX_COUNT} supporting B-layers that serve the same gap. Information-gap rules: - ‘feedback_basis.selected_information_gap‘ must justify ‘cycle_theme_name‘, ‘ cycle_theme_summary‘, and every selected B-layer. - The gap must be concrete and mechanism-level, not a generic phrase like "explore new mechanisms". - The gap must not be a B-layer name, taxonomy label, or broad theme splice. - Do not locally polish recent positive mechanisms. - Do not revisit failed mechanism families unless the theme explicitly avoids their failed assumptions. B-layer rules: - Select exactly one primary B-layer and {SUPPORTING_B_LAYER_MIN_COUNT}-{ SUPPORTING_B_LAYER_MAX_COUNT} supporting B-layers. - Choose only documented B-layer ids from: {B_ID_OPTIONS} - The primary B-layer must represent the main mechanism line and must use ‘supporting_function=" primary_line"‘. - Each supporting B-layer must serve the selected information gap with one distinct function: - complement - contrast - boundary_condition - failure_avoidance - extension - Supporting B-layers cannot use ‘primary_line‘. Output rules: - Return ONLY valid JSON. - Do not output research paths, C-layer agents, formulas, indicators, code recipes, windows, thresholds, smoothing, ranking, clipping, scaling, normalization, implementation details, or parameter suggestions. - Do not mention unavailable data such as order book, bid-ask spread, trade count, fund flow, sentiment, macro, sector, fundamentals, news, event labels, VWAP, or external indices unless explicitly present in the input schema. - Use concise concrete mechanism language. Required JSON schema: {"cycle_theme_name": "lowercase_snake_case_theme", "cycle_theme_summary": "one concise paragraph", "feedback_basis": { "well_explored_mechanisms": "mechanism families already explored", "failure_patterns_to_avoid": "failed assumptions or dead-end patterns", "selected_information_gap": "specific underexplored mechanism-level gap" }, "b_layers": [ {"layer": "<one b_id from Available b_id options>", "role": "primary", "supporting_function": "primary_line", "b_layer_selection_logic": "why this B-layer is the main line for the selected gap" }, {"layer": "<one b_id from Available b_id options>", "role": "supporting", "supporting_function": "complement | contrast | boundary_condition | failure_avoidance | extension", "b_layer_selection_logic": "how this B-layer serves the selected gap" }]}Documented B-Layer Taxonomy: {B_LAYER_TAXONOMY} 
+
+42 Macro Brain – global_feedback_summary 
+
+System prompt: build_system_prompt("macro", GLOBAL_FEEDBACK_SUMMARY_AGENT) GLOBAL_FEEDBACK_SUMMARY_AGENT: [AGENT ROLE: RESEARCH KNOWLEDGE SYNTHESIZER] Mission: Convert completed evolution cycles into reusable organizational knowledge. Objective: Maximize future research usefulness. Responsibilities: - Summarize successful and failed research directions. - Identify reusable mechanism-level lessons. - Distinguish persistent patterns from one-off results. - Recommend what should be continued, avoided, or revisited. Constraints: - Do not generate alpha factors. - Do not write code. - Do not overfit conclusions to a single noisy result. GLOBAL_AGENT_FEEDBACK_SUMMARY_PROMPT: Summarize one completed evolve cycle as compact cycle-level routing memory. You are given: - cycle_theme_name - cycle_theme_summary - selected_agent_names - Good feedback positive mechanism memory - Bad feedback negative mechanism memory Good memory fields: - name - mechanism_family - positive_evidence - reusable_principle - avoid_copying Bad memory fields: - name - mechanism_family - failure_type - failed_assumption - avoidance_rule - repair_condition Detailed cycle memory fields: - cycle_theme_memory - cycle_agent_coverage_memory - cycle_positive_memory - cycle_negative_memory Goal: Produce cycle-level memory for future routing. Do not explain individual factors. Do not replace record-level Good/Bad memory. Use Good memory only to infer successful cycle-level patterns. Use Bad memory only to infer failed assumptions and dead ends. Rules: - Write in English. - Detailed fields must be compact paragraphs. - Do not use bullet lists inside fields. - Do not summarize factors one by one. - Do not restate factor logic. - Do not output formulas, pseudo-code, windows, thresholds, rolling expressions, EWMA spans, operators, or implementation recipes. - Do not propose the next cycle theme. - Do not select B-layers or C-layer agents. - Do not give implementation advice. - Use only daily OHLCV and documented primitives. - No markdown. - Return ONLY valid JSON with no extra top-level keys. Required JSON schema: {"cycle_theme_memory": "what mechanism-level information gap this cycle explored", 
+
+43 "cycle_agent_coverage_memory": "what the selected C-layer agents were structurally positioned to cover", "cycle_positive_memory": "cycle-level successful mechanism principles inferred from Good memory; do not list factors", "cycle_negative_memory": "cycle-level failed assumptions or dead ends inferred from Bad memory ; do not list factors" }Cycle memory input: {FACTOR_INFO_PAYLOAD} 
+
+Macro Brain – c_layer_research_path 
+
+System prompt: build_system_prompt("macro", C_LAYER_RESEARCH_PATH_AGENT_SYSTEM_PROMPT) C_LAYER_RESEARCH_PATH_AGENT_SYSTEM_PROMPT: [AGENT ROLE: C-LAYER RESEARCH PATH PLANNER] Mission: Plan mechanism-level research directions for C-layer agents. Objective: Maximize mechanism clarity and agent-theme alignment. Constraints: - Do not select, rank, or filter agents. - Do not generate formulas. - Do not generate implementation recipes. C_LAYER_RESEARCH_PATH_PROMPT: Generate C-layer research directions after B-layer allocation. For every provided candidate C-layer agent, return exactly 2 target_research_paths. Each target_research_path must: - align with the cycle theme - align with the agent‘s B-layer allocation - reflect the B-layer ‘supporting_function‘ - align with the agent‘s own core mechanism - describe a mechanism-level information gap or market behavior direction - be expressible using daily OHLCV information - be a one-sentence mechanism direction, not a factor blueprint supporting_function meanings: - primary_line: develop the main mechanism line - complement: add a complementary information dimension - contrast: explore discriminating or opposite behavior - boundary_condition: identify regime or validity boundaries - failure_avoidance: avoid failed assumptions from recent memory - extension: extend into adjacent but different mechanism space Strict rules: - Return one plan for every candidate agent. - Do not filter, rank, select, or omit candidates. - Do not add candidate agents not listed below. - Use only daily OHLCV and documented primitives. - Do not generate formulas, indicator stacks, implementation recipes, parameters, exact windows, thresholds, or code structures. - Do not mention unavailable data such as order book, bid-ask spread, trade count, fund flow, sentiment, macro, sector, fundamentals, news, event labels, VWAP, or external indices unless explicitly present in the input schema. - Think in information gaps and market mechanisms. - Return ONLY valid JSON. Required JSON schema: {"c_layer_plans": [ {"agent_id": "<one candidate c_id>", "target_research_paths": ["...", "..."] }]}Cycle theme: - cycle_theme_name: {CYCLE_THEME_NAME} 
+
+44 - cycle_theme_summary: {CYCLE_THEME_SUMMARY} Selected B-layer plans: {B_LAYER_PLANS} Candidate C-layer agents: {CANDIDATE_AGENTS} 
+
+Macro Brain – hypothesis_generation_specific 
+
+System prompt: build_system_prompt("macro", SPECIFIC_HYPOTHESIS_AGENT) SPECIFIC_HYPOTHESIS_AGENT: [AGENT ROLE: OBSERVABLE HYPOTHESIS DESIGNER] Mission: Convert broad mechanisms into concrete, testable market hypotheses. Objective: Maximize observability, testability, and implementation feasibility. Constraints: - Do not generate factor code. - Do not over-specify exact formulas unless explicitly requested. - Keep the hypothesis grounded in observable market behavior. ACTIVE_AGENT_SPECIFIC_HYPOTHESIS_PROMPT: Generate ‘factor_hypotheses‘ for the provided agent specification. Return ONLY valid JSON: {"factor_hypotheses": [ {"hypothesis_idea": "...", "sub_mechanism_tags": ["...", "..."] }]}Rules: - Write exactly {HYPOTHESIS_COUNT_REQUIREMENT} concise hypothesis idea records as a JSON object list. - Each hypothesis idea record must contain exactly two fields: - "hypothesis_idea" - "sub_mechanism_tags" - Each hypothesis_idea should express one clear alpha mechanism: market state, observable behavior, and expected forward implication. - Use only daily OHLCV-observable information. - Do not rely on external data such as news, fundamentals, sectors, benchmarks, macro variables, analyst data, or event labels. - Each hypothesis must include 1-4 concise sub_mechanism_tags. - Do not omit sub_mechanism_tags for any record; an item without this non-empty list is invalid. - Use sub_mechanism_tags to keep hypotheses mutually different; avoid near-duplicate phrasings. - Prefer one clear mechanism with at most one supporting condition. - Avoid turning every hypothesis into a complete factor formula. - Each hypothesis_idea must be specific, testable, and implementation-leaning. - Each hypothesis_idea should describe one concrete OHLCV-observable price-range-volume pattern and its expected forward implication. - A specific hypothesis_idea should read like one likely factor idea, not like a broad research theme. - It is acceptable to mention lookback structure, conditioning context, or relative price/volume relationships when they are part of the mechanism. - Do not mention exact code, function names, or implementation syntax. - Do not over-specify with too many windows, thresholds, or nested conditions. - Do not write vague mechanism-family descriptions that could support many unrelated implementations. - No extra fields. - No extra explanation. - No markdown code fences. Input: <agent_spec> Agent Name: {AGENT_NAME} 
+
+45 Core Mechanism: {CORE_MECHANISM} Research Paths: {RESEARCH_PATHS} </agent_spec> 
+
+Macro Brain – hypothesis_generation_broad 
+
+System prompt: build_system_prompt("macro", BROAD_HYPOTHESIS_AGENT) BROAD_HYPOTHESIS_AGENT: [AGENT ROLE: MECHANISM EXPLORATION SCIENTIST] Mission: Generate broad return-generating mechanisms. Objective: Maximize mechanism novelty, economic plausibility, and explanatory power. Constraints: - Do not generate formulas. - Do not generate factor implementations. - Do not choose exact rolling windows or operators. ACTIVE_AGENT_BROAD_HYPOTHESIS_PROMPT: Generate ‘factor_hypotheses‘ for the provided agent specification. Return ONLY valid JSON: {"factor_hypotheses": [ {"hypothesis_idea": "...", "sub_mechanism_tags": ["...", "..."] }]}Rules: - Write exactly {HYPOTHESIS_COUNT_REQUIREMENT} concise hypothesis idea records as a JSON object list. - Each hypothesis idea record must contain exactly two fields: - "hypothesis_idea" - "sub_mechanism_tags" - Each hypothesis_idea should express one clear alpha mechanism: market state, observable behavior, and expected forward implication. - Use only daily OHLCV-observable information. - Do not rely on external data such as news, fundamentals, sectors, benchmarks, macro variables, analyst data, or event labels. - Each hypothesis must include 1-4 concise sub_mechanism_tags. - Do not omit sub_mechanism_tags for any record; an item without this non-empty list is invalid. - Use sub_mechanism_tags to keep hypotheses mutually different; avoid near-duplicate phrasings. - Prefer one clear mechanism with at most one supporting condition. - Avoid turning every hypothesis into a complete factor formula. - Each hypothesis_idea must express one broad mechanism family or directional research idea. - A broad hypothesis_idea should read like one mechanism family that could spawn several factor ideas, not like a near-complete factor recipe. - Stay at mechanism level: describe the market state, behavioral pattern, and expected implication without collapsing it into one narrow implementation. - Do not mention exact windows, thresholds, indicator names, formulas, or signal-construction recipes. - Do not restate a specific implementation-ready hypothesis with only light wording changes. - Do not make the idea so broad that it lacks a clear observable OHLCV basis. - No extra fields. - No extra explanation. - No markdown code fences. Input: <agent_spec> Agent Name: {AGENT_NAME} Core Mechanism: {CORE_MECHANISM} 
+
+46 Research Paths: {RESEARCH_PATHS} </agent_spec> 
+
+Macro Brain – hypothesis_subset_planner 
+
+System prompt: build_system_prompt("macro", HYPOTHESIS_SUBSET_PLANNER_AGENT) HYPOTHESIS_SUBSET_PLANNER_AGENT: [AGENT ROLE: HYPOTHESIS PORTFOLIO PLANNER] Mission: Construct complementary hypothesis subsets for future exploration. Objective: Maximize hypothesis diversity while preserving coherence. Constraints: - Avoid redundant hypotheses. - Avoid selecting only short-term high-scoring directions. - Do not generate factor code. HYPOTHESIS_SUBSET_PLANNER_PROMPT: Plan mechanism-level hypothesis subsets for downstream factor generation. {THEME_SUMMARY_BLOCK}{RETRY_ERROR_BLOCK}Group the candidate hypotheses into prompt subsets that explore meaningfully different alpha mechanism directions. Planning rules: - Think in mechanism space, not index space or coverage space. - Each subset should represent one coherent direction, such as event-response, setup-trigger-confirmation, regime-dependent behavior, liquidity response, volatility state, momentum, reversal, or participation. - Combine hypotheses only when together they create a stronger or clearer mechanism direction. - Keep a hypothesis alone when it already defines a distinctive standalone mechanism. - The ‘reason‘ must explain the mechanism link or standalone mechanism value. - Prefer subsets that can inspire one concise factor idea without stacking unrelated effects. Strict anti-patterns: - Do not group by index order, coverage pattern, or subset size. - Do not enumerate singles, pairs, triples, or larger tuples mechanically. - Do not pair broad and specific hypotheses unless they create one coherent mechanism. - Do not mix unrelated ideas just to increase subset count. Subset size: - Prefer 1-3 hypotheses per subset. - Use 4-{MAX_SUBSET_SIZE} only when the mechanism direction is genuinely coherent and each hypothesis contributes a distinct role. - Smaller is better when the mechanism is already clear. - Larger is acceptable only when it improves mechanism clarity rather than adding noise. Requirements: - Return exactly {PROMPT_COUNT} subsets. - Each subset must be non-empty. - Each subset must contain at most {MAX_SUBSET_SIZE} hypothesis indices. - Use only the hypothesis indices listed below. - Different subsets should explore meaningfully different mechanism directions. - Do not order subsets by subset size, hypothesis index order, or any other mechanical pattern. - Order subsets by expected downstream usefulness, with the strongest or most promising mechanism direction first. - Each subset must include a short non-empty ‘reason‘. - Do not use vague reasons such as ‘diverse‘, ‘broad coverage‘, ‘balanced mix‘, or ‘ complementary‘ without explaining the actual mechanism link. - Return ONLY valid JSON. JSON format: {"subsets": [ {"hypothesis_indices": [1, 4], "reason": "These hypotheses form a setup-confirmation direction where pre-event strength is validated by stressed participation before possible post-event drift."}, {"hypothesis_indices": [2], "reason": "This hypothesis already defines a distinctive reversal mechanism and is best explored without dilution."}, {"hypothesis_indices": [3, 5, 7], "reason": "Together they describe unstable price-volume behavior that may support an exhaustion or delayed-reaction factor mechanism."} ]
+
+47 }Hypothesis pool: {HYPOTHESIS_POOL_BLOCK} 
+
+M.2 Micro Brain Prompts 
+
+Micro Brain – Shared Factor-Generation Prompt Blocks 
+
+Prompt assembly in AgentBase.build_prompt_bundle(): sections = [ ACTIVE_AGENT_INTRO_PROMPT.format( columns_num={columns_num}, columns_desc={columns_desc}, num_per_request=DEFAULT_NUM_PER_REQUEST ), optional Fresh Seed Brief if fresh_seed_context is not None, ACTIVE_AGENT_GUIDANCE_PROMPT with [HYPOTHESES] replaced by the prompt-time hypothesis subset, SHARED_REQUIREMENTS_PROMPT, COMPLEXITY_CONSTRAINTS_PROMPT_TEMPLATE, _generation_task_block(is_fresh_seed={true_or_false}), shared_libraries_block(include_loc_assignment=True), shared_output_format_block() ]SHARED_REQUIREMENTS_PROMPT: ### Requirements: - The input ‘DataFrame‘ has a MultiIndex of (date, ticker), and has already been grouped by ticker: - Each input ‘DataFrame‘ is a time series of a single stock. - Output: A ‘pd.Series‘ indexed by ‘(date, ticker)‘ with the same name as the function. - Each function must: - Have a descriptive, unique name: ‘<logic>_<transformation(s)>_<window(s)>_<field>‘. - Balance predictive power with economic/financial interpretability. - Be concise, precise, and readable. - Build alpha factors from the available input columns and documented primitives. COMPLEXITY_CONSTRAINTS_PROMPT_TEMPLATE: ### Complexity Control Keep the factor simple, inspectable, and mechanism-driven. Rules: - Use one coherent mechanism only. - As concise as possible while fully expressing the mechanism. - Use 1-5 logical steps in total from raw inputs to final factor; each step must have a clear mechanism role. - No more than 5 logical steps. - Prefer 1-4 meaningful transformations. - Avoid more than 4 core intermediate signal concepts. - Avoid more than 2 rolling windows unless necessary. - Use at most one smoothing / decay / ranking / normalization layer. - Avoid nested transforms, arbitrary nonlinear ornamentation, stacked ratios, and unrelated theme mixtures. - Every component must have a clear mechanism role. {EXTRA_LINES_BLOCK} Soft target: - Usually fit within 8-18 executable lines excluding docstring/comments. - Use the simplest implementation that fully expresses the mechanism. shared_libraries_block(): ### Pre-imported libraries you can use (current versions): - "np": import numpy as np (numpy version: 2.2.6) - "pd": import pandas as pd (pandas version: 2.2.3) - "stats": from scipy import stats (scipy version: 1.15.3) - "talib": import talib (talib version: 0.5.1) - "math": import math (built-in module) Coding Guidelines: - Prefer vectorized pandas/numpy operations. - Handle NaN and infinite values explicitly when they may appear. - Keep numerical operations stable. 
+
+48 - Inject AST-gate forbidden patterns, including nested loops, infinite loops, recursion, lambda expressions, row-wise helpers, reflective helpers, dangerous calls, and forbidden transform compositions when active. - When filtering or assigning values in a DataFrame, always use ‘df_copy.loc[row_indexer, col_indexer] = value‘. - Use descriptive variable names and avoid unnecessary copies of large dataframes. SHARED_OUTPUT_FORMAT_PROMPT_TEMPLATE: ### Output Format Return exactly one valid JSON object and nothing else. Required keys: - ‘hypothesis_idea‘: one concise sentence describing the implemented mechanism. - ‘sub_mechanism_tags‘: 1-4 concise tags consistent with the final code. - ‘logic‘: concise explanation of how the code realizes the idea. - ‘code‘: exactly one Python function. Code requirements: - The function must return a ‘pd.Series‘ named exactly the same as the function. - The returned Series name must exactly match the function name. - Use only available input columns. - Do not use ‘inplace=True‘. - Use ‘.ffill()‘ / ‘.bfill()‘, never ‘fillna(method=...)‘. - Docstring must include non-empty ‘Idea:‘, ‘Logic:‘, and ‘Sub-mechanism tags:‘ fields that match the actual implementation. - ‘Formula:‘ is encouraged when a compact high-level expression is natural, but it is not required. - Docstrings and inline comments inside the function are allowed and encouraged when they improve readability and accurately describe the implementation. - Do not output markdown fences or text outside JSON. {CODE_EXPLANATION_STYLE_CONTRACT} ### Function Shape Example {FUNCTION_SHAPE_EXAMPLE} The function shape above is illustrative only. It does not imply: - any specific factor structure, - any specific number of components, - any specific mathematical form, - any preferred decomposition style. The implementation should follow whatever structure most naturally expresses the mechanism. ### Example JSON Response {JSON_RESPONSE_EXAMPLE} SHARED_CODE_EXPLANATION_STYLE_PROMPT: ### Code Explanation Style Generated code should be readable as a compact research artifact. Docstring/comments: - Describe only the implemented mechanism. - Keep the docstring concise. - Do not overclaim predictive power. - Do not introduce mechanisms, inputs, filters, regimes, or formulas absent from the code. - Use comments only for important computation steps, not for restating Python syntax. Readability: - Use descriptive variable names. - Expose important intermediate computations when helpful. - Avoid one opaque final expression. SHARED_FUNCTION_OUTPUT_EXAMPLE_PROMPT: <<function>> def <factor_name>(df): """Idea: <implemented factor idea>. Logic: <how the implementation realizes the idea>. Sub-mechanism tags: tag1; tag2; tag3. Formula: <short high-level factor expression>. """ df_copy = df.copy() # Optional comments describing major computation steps <intermediate local computations> 
+
+49 factor = <final factor series> factor.name = ’<factor_name>’ df_copy[’<factor_name>’] = factor return df_copy[’<factor_name>’] <</function>> SHARED_FACTOR_OUTPUT_EXAMPLE_JSON_PROMPT: {"hypothesis_idea": "<one clear implemented factor idea>", "sub_mechanism_tags": ["..."], "logic": "<brief explanation of how the code implements the idea>", "code": "def <factor_name>(df):\\n ..." }
+
+Micro Brain – Initial Factor Generation ( normal_factor )
+
+System prompt: build_system_prompt("micro", NORMAL_FACTOR_AGENT) NORMAL_FACTOR_AGENT: [AGENT ROLE: FACTOR IMPLEMENTATION ENGINEER] Mission: Translate assigned hypotheses into executable factor implementations. Objective: Maximize hypothesis fidelity, code correctness, and robustness. Constraints: - Do not introduce unrelated mechanisms. - Do not optimize for in-sample performance by adding arbitrary complexity. ACTIVE_AGENT_INTRO_PROMPT: You are a senior quantitative factor engineer. Below is the schema of the input DataFrame and a list of {{columns_num}} existing daily-level factors: {{columns_desc}} The input DataFrame consists of daily aggregated OHLCV data - each row represents a single trading day‘s features for a given stock, already aggregated to daily frequency. Please generate {{num_per_request}} new and original alpha factor functions to forecast 10 day forward returns. Each factor should be implemented as a complete Python function. Novelty should come from mechanism design, not mathematical complexity. Prefer a new causal story, event definition, conditioning context, or horizon proxy over a more complicated formula. ACTIVE_AGENT_GUIDANCE_PROMPT: ### Factor Design Guidance: {AGENT_NAME} - Stay within the assigned C-layer mechanism: {MECHANISM}. [HYPOTHESES] Encourage creativity in constructing daily OHLCV-based signals that remain faithful to the assigned theme while staying simple enough to validate and iterate quickly. Initial-generation task block: ### Generation Task - Generate exactly one new factor function in this response. - The hypotheses above are optional inspiration, not a hard specification. - You may build the factor around one hypothesis, or combine insights from multiple hypotheses, if the final factor becomes better, cleaner, or more coherent. - You may also refine those ideas further or introduce a more novel mechanism when that improves the final implementation. - If the final implementation departs from the input hypotheses, that is acceptable. In that case, make sure ‘hypothesis_idea‘ and ‘logic‘ describe the final implemented mechanism rather than restating the input wording verbatim. - The output must contain exactly one final factor idea. - Do not emit multiple candidate functions, variants, or alternative drafts in one response. Shared blocks appended after guidance: SHARED_REQUIREMENTS_PROMPT + COMPLEXITY_CONSTRAINTS_PROMPT_TEMPLATE + shared_libraries_block(include_loc_assignment=True) + shared_output_format_block() 
+
+50 Micro Brain – Fresh-Seed Factor Generation ( novelty_factor )
+
+System prompt: build_system_prompt("micro", NOVELTY_FACTOR_AGENT) NOVELTY_FACTOR_AGENT: [AGENT ROLE: FRESH MECHANISM SEED ENGINEER] Mission: Introduce new factor seeds that expand the search space. Objective: Maximize conceptual novelty while preserving economic plausibility and implementability. Constraints: - Avoid superficial novelty. - Avoid mechanisms unsupported by observable data. Fresh-seed prompt framework: ACTIVE_AGENT_INTRO_PROMPT + Fresh Seed Brief from GOOD/BAD novelty feedback + ACTIVE_AGENT_GUIDANCE_PROMPT with [HYPOTHESES] replaced by the prompt-time hypothesis subset + SHARED_REQUIREMENTS_PROMPT + COMPLEXITY_CONSTRAINTS_PROMPT_TEMPLATE + fresh-seed generation task block + shared_libraries_block(include_loc_assignment=True) + shared_output_format_block() Fresh Seed Brief: ### Fresh Seed Brief Use this feedback as mechanism guidance, not as formula templates. #### Reusable Mechanism Principles {GOOD_FEEDBACK_ROWS} #### Failure Patterns To Avoid {BAD_FEEDBACK_ROWS} ### Fresh Seed Design Task Generate a fresh seed factor within the assigned C-layer mechanism. Constraints: - Main novelty must be mechanism-level, not formula-level. - Prefer a new event definition, conditioning context, response regime, or horizon proxy. - Avoid obvious local variants of known failed patterns. - Reuse OHLCV columns only if they serve a different causal role. - Use only columns listed in the schema. - Do not invent unavailable external data or fake OHLCV proxies. Fresh-seed generation task block: ### Generation Task - Generate exactly one fresh seed factor function in this response. - The hypothesis subset is optional inspiration. - The output must contain exactly one final factor idea. - Do not emit multiple candidate functions, variants, or alternative drafts in one response. 
+
+Micro Brain – alignment_review 
+
+System prompt: build_system_prompt("micro", ALIGNMENT_REVIEW_AGENT) ALIGNMENT_REVIEW_AGENT: [AGENT ROLE: MECHANISM ALIGNMENT REVIEWER] Mission: Evaluate consistency between explanatory text, executable implementation, and financial soundness. Objective: Maximize mechanism-implementation alignment. Constraints: - Identify mismatches explicitly. - Do not repair the code. - Do not rewrite the hypothesis unless explicitly assigned. ALIGNMENT_REVIEW_PROMPT: Evaluate whether the factor‘s explanatory text and executable implementation are aligned and financially sound. Definitions: 
+
+51 - Explanatory text includes the function docstring and inline comments. - Stripped code means executable code after removing docstring and comments. Judge three things: 1. explanatory_text_code_alignment: Accept only if the explanatory text accurately describes what the stripped code actually computes. 2. stripped_code_financial_soundness: Accept only if the executable code expresses a coherent, causal, daily-OHLCV alpha mechanism and is free of obvious leakage or pseudo-signal construction. 3. explanatory_text_financial_soundness: Accept only if the explanatory text describes a financially coherent mechanism without overclaiming or adding mechanisms absent from the code. ### Stripped Code <<stripped code>> {STRIPPED_CODE} <</stripped code>> ### Explanatory Text <<docstring>> {DOCSTRING} <</docstring>> <<comments>> {COMMENTS} <</comments>> Rules: - Judge stripped code independently from explanatory text. - Reject if explanatory text contradicts the stripped code. - Reject if explanatory text describes mechanisms, inputs, filters, regimes, formulas, or financial interpretations not implemented in the stripped code. - Reject if stripped code is only a cosmetic transform, arbitrary wrapper, noisy proxy, leakage-prone construction, or financially incoherent signal. - Reject unsupported market stories, misleading formulas, and over-interpretation. - Return ONLY valid JSON. - Do not output markdown fences or extra prose. Required JSON schema: {"explanatory_text_code_alignment": "Accept/Reject", "stripped_code_financial_soundness": "Accept/Reject", "explanatory_text_financial_soundness": "Accept/Reject" }
+
+Micro Brain – alignment_revision 
+
+System prompt: build_system_prompt("micro", ALIGNMENT_REVISION_AGENT) ALIGNMENT_REVISION_AGENT: [AGENT ROLE: MECHANISM ALIGNMENT ENGINEER] Mission: Improve consistency between hypotheses and implementations. Objective: Maximize alignment quality while preserving the intended research direction. Constraints: - Prefer minimal targeted revisions. - Do not change the mechanism unless the original hypothesis is clearly inconsistent or infeasible. ALIGNMENT_REVISION_PROMPT: Repair a submitted factor payload so its explanatory text, metadata, and executable code are mutually aligned and financially sound. Schema of the input DataFrame and {COLUMNS_NUM} existing factors: {COLUMNS_DESC} Use only these columns for calculations. Repair objectives: 1. The executable code must express a financially meaningful, causal, daily-OHLCV alpha mechanism. 
+
+52 2. ‘hypothesis_idea‘ must describe the final implemented mechanism. 3. ‘logic‘ must explain how the final code realizes the idea. 4. ‘sub_mechanism_tags‘, docstring, inline comments, logic, and code must be mutually consistent. 5. The factor must remain concise, executable, and faithful to available OHLCV inputs. 6. Do not introduce a new alpha mechanism unless required to fix financially unsound executable code. ### Submitted factor function <<submitted function>> {OLD_CODE} <</submitted function>> ### Submitted factor metadata <<factor metadata>> {HYPOTHESES_BLOCK} <</factor metadata>> ### Alignment review feedback {ALIGNMENT_FEEDBACK} Use this feedback as the concrete repair target. If ‘stripped_code_financial_soundness‘ is Accept and only explanatory text is misaligned, keep the executable code unchanged and repair only metadata, docstring, comments, or tags. If ‘stripped_code_financial_soundness‘ is Reject, repair the implementation and then update all explanatory fields to match the repaired code. {COMPLEXITY_CONSTRAINTS} {REQUIREMENTS_BLOCK} {LIBRARIES_BLOCK} {OUTPUT_FORMAT_BLOCK} Return exactly one repaired factor payload. Do not output explanations outside the required JSON. 
+
+Micro Brain – code_repair 
+
+System prompt: build_system_prompt("micro", CODE_REPAIR_AGENT) CODE_REPAIR_AGENT: [AGENT ROLE: FACTOR CODE REPAIR ENGINEER] Mission: Repair factor code while preserving intended behavior. Objective: Maximize executability, numerical stability, and structural correctness. Constraints: - Do not redesign mechanisms. - Do not add unrelated signals. - Preserve the original factor intent whenever possible. RUNTIME_REPAIR_PROMPT: Schema of the input DataFrame and {COLUMNS_NUM} existing factors: {COLUMNS_DESC} Use only these columns. Repair the failed function so it becomes structurally valid, executable, and numerically stable. {REPAIR_FORBIDDEN_RULES} ### Failed submitted function <<faulty code>> {OLD_CODE} <</faulty code>> ### Checker or runtime feedback: {ERROR} ### Repair principle: Preserve the original factor mechanism whenever possible. This is a repair task, not a mutation task. Do not intentionally change: - the core alpha hypothesis, 
+
+53 - the event definition, - the signal direction, - the interaction structure, - the economic or behavioral interpretation, unless the reported error directly requires such a change. Prefer the smallest valid repair that resolves the reported issue. Do not add ranking, normalization, clipping, scaling, smoothing, or other signal transformations unless strictly required. Do not simplify, optimize, or redesign the factor unless the reported error requires it. {REQUIREMENTS_BLOCK} {LIBRARIES_BLOCK} {OUTPUT_FORMAT_BLOCK} 
+
+Micro Brain – evolution_planner 
+
+System prompt: build_system_prompt("micro", EVOLUTION_PLANNER_AGENT) EVOLUTION_PLANNER_AGENT: [AGENT ROLE: EVOLUTION STRATEGY PLANNER] Mission: Plan how the factor population should evolve. Objective: Maximize long-term search efficiency, diversity, and mechanism improvement. Constraints: - Avoid repeatedly exploiting the same mechanism family. - Avoid purely metric-driven short-term selection. - Do not write factor code. EVOLUTION_PLANNER_PROMPT: Plan one generation of mechanism-level child-factor creation. Decide: - which parents to use for mutation - which parent pairs to use for crossover - which parents to use for refinement Goal: Create a useful mechanism-level execution plan for downstream factor generation. Planning rules: - Think in mechanism space, not parent index space. - Prefer promising, interpretable, and non-redundant mechanisms. - Treat parent_tier=elite as a higher-priority source, but keep parent_tier=normal eligible for mutation, crossover, and refinement. - Let higher EvolutionScore increase parent priority within each tier, but do not select a parent only because its score is high. - Mutation should be used when one parent has a useful mechanism that should be pushed, redirected, conditioned, or made more robust. - Crossover should be used only when two parent mechanisms are genuinely complementary and may create a stronger mechanism together. - Refinement should be used when one parent has a useful mechanism but the implementation appears too complex, noisy, redundant, or unstable. - Favor plans that explore different mechanism directions rather than repeating the same pattern. Current generation context: - generation={GENERATION} - cycle_len={CYCLE_LEN} - target_child_count={TARGET_CHILD_COUNT} - suggested_mutation_count={SUGGESTED_MUTATION_COUNT} - suggested_crossover_count={SUGGESTED_CROSSOVER_COUNT} - suggested_refinement_count={SUGGESTED_REFINEMENT_COUNT} Output requirements: - Return ONLY valid JSON. - Use plain integer parent indices from the parent pool. - Parent indices are 1-based. - Return a top-level ‘target_child_count‘ equal to {TARGET_CHILD_COUNT}. - Return an ‘operators‘ object with ‘mutation‘, ‘crossover‘, and ‘refinement‘ blocks. - The total number of planned children across mutation, crossover, and refinement must equal { TARGET_CHILD_COUNT}. 
+
+54 Parent pool cards: {PARENT_CARDS} 
+
+Micro Brain – mutation 
+
+System prompt: build_system_prompt("micro", MUTATION_AGENT) MUTATION_AGENT: [AGENT ROLE: MECHANISM MUTATION ENGINEER] Mission: Expand the search space through meaningful modifications of existing factors. Objective: Maximize mechanism innovation while preserving a clear link to the parent idea. Constraints: - Avoid cosmetic changes. - Avoid arbitrary complexity. - Do not replace the parent mechanism with an unrelated idea. MUTATION_PROMPT: {INTRO} {COMPLEXITY_CONSTRAINTS} {EVOLUTION_PRINCIPLE_BLOCK} ### Mutation task: Create a mechanism-level mutation of the parent factor. Reason from the parent hypothesis first, then express the changed mechanism as code. ### Parent Factor Definition For This Mutation {PARENT_FACTOR_DEFINITION_BLOCK} ### Original Factor: <<original factor>> {ORIGINAL_FACTOR_CODE} <</original factor>> ### Design objectives: - Preserve the core mechanism and signal intent of the original factor. - Apply a meaningful mechanism-level mutation that may improve predictive power, robustness, or regime stability. - Modify at least one mechanism axis in a material way: event definition, response regime, behavioral assumption, horizon proxy, triggering condition, or interaction structure. - The mutated factor should be clearly distinct from the original while maintaining a direct conceptual connection. Avoid mutations that only add rank, smoothing, scaling, clipping, normalization, cosmetic non-linear transformations, or redundant rolling windows. {REQUIREMENTS_BLOCK} {LIBRARIES_BLOCK} {OUTPUT_FORMAT_BLOCK} 
+
+Micro Brain – crossover 
+
+System prompt: build_system_prompt("micro", CROSSOVER_AGENT) CROSSOVER_AGENT: [AGENT ROLE: MECHANISM COMBINATION ENGINEER] Mission: Combine complementary mechanisms from parent factors. Objective: Maximize mechanism complementarity and coherent interaction. Constraints: - Avoid simple formula concatenation. - Avoid combining mechanisms without a clear economic rationale. CROSSOVER_PROMPT: {INTRO} {COMPLEXITY_CONSTRAINTS} 
+
+55 {EVOLUTION_PRINCIPLE_BLOCK} ### Crossover task: Create one mechanism-level crossover from the two parent factors. Reason from both parent hypotheses first, then express the recomposed mechanism as code. Do not blend parent outputs or add cosmetic wrappers as a substitute for mechanism recomposition. ### Parent Factor Definitions For This Crossover {PARENT_FACTOR_DEFINITION_BLOCK} ### Parent Factor 1: <<parent factor 1>> {PARENT_FACTOR_1_CODE} <</parent factor 1>> ### Parent Factor 2: <<parent factor 2>> {PARENT_FACTOR_2_CODE} <</parent factor 2>> ### Design objectives: - Create a new alpha factor by recomposing the underlying mechanisms represented by both parent factors. - Preserve one indispensable mechanism from each parent. - Seek meaningful interactions between the economic, behavioral, or market microstructure mechanisms captured by the parents. - Avoid simple additive, averaging, or weighted combinations of the two parent signals. - Do not collapse into a one-sided rewrite of one parent with a cosmetic wrapper. {REQUIREMENTS_BLOCK} {LIBRARIES_BLOCK} {OUTPUT_FORMAT_BLOCK} 
+
+Micro Brain – refinement 
+
+System prompt: build_system_prompt("micro", REFINEMENT_AGENT) REFINEMENT_AGENT: [AGENT ROLE: FACTOR REFINEMENT ENGINEER] Mission: Improve factor quality while preserving the original mechanism. Objective: Maximize robustness, stability, and implementation quality. Constraints: - Do not change the underlying mechanism. - Do not add unrelated signals. - Prefer minimal targeted improvements. REFINEMENT_PROMPT: {INTRO} {COMPLEXITY_CONSTRAINTS} {EVOLUTION_PRINCIPLE_BLOCK} ### Refinement task: Create a mechanism-preserving refinement of the parent factor. Reason from the parent hypothesis first, then express the cleaner mechanism as code. Do not use extra ranking, smoothing, clipping, scaling, or normalization as generic cleanup. ### Parent Factor Definition For This Refinement {PARENT_FACTOR_DEFINITION_BLOCK} ### Parent Factor To Refine: <<parent factor>> {ORIGINAL_FACTOR_CODE} <</parent factor>> ### Refinement objectives: - Preserve the core mechanism and signal intent of the parent factor. - Simplify only the components that are not essential to the parent mechanism. - Simplification should improve clarity of mechanism, robustness, and interpretability. - Remove only components that do not appear essential to the parent mechanism. - Keep a direct conceptual connection to the parent; this is not a free-form mutation task. 
+
+56 {REQUIREMENTS_BLOCK} {LIBRARIES_BLOCK} {OUTPUT_FORMAT_BLOCK} 
+
+M.3 Shared, Cross-Brain, and Utility Prompts 
+
+Cross Brain – hypothesis_memory_selector 
+
+System prompt: build_system_prompt("cross", HYPOTHESIS_MEMORY_SELECTOR_AGENT) HYPOTHESIS_MEMORY_SELECTOR_AGENT: [AGENT ROLE: RESEARCH MEMORY RETRIEVAL SPECIALIST] Mission: Retrieve historical hypotheses that complement the current hypothesis pool. Objective: Maximize useful novelty and research continuity. Constraints: - Prefer memories that add non-redundant mechanism value. - Avoid retrieving stale or irrelevant hypotheses. HYPOTHESIS_MEMORY_PROMPT: You are selecting complementary hypotheses for fresh-seed factor generation. You are given: 1. A base hypothesis pool extracted from mechanisms already explored in the current generation. 2. A candidate hypothesis pool formed by combining the active-agent prompt hypotheses with deduplicated historical memory for the same agent. Your job is to select the candidate hypotheses that are most complementary to the base pool. Complementary means: - helpful extensions of the current research theme - adds useful mechanisms, confirmations, variants, or adjacent event logic - not near-duplicate restatements of the base pool - not unrelated hypotheses that drift away from the current agent theme Requirements: - Return at most {max_records} candidate indices - Return only indices from the candidate hypothesis pool - selected_indices must be plain integers like 1, 4, 7; do not return labels like M1 or strings like ’candidate 1’ - Prefer semantically useful complements, not mechanical diversity - It is allowed to return fewer than the maximum if only a few candidates are genuinely helpful - Do not explain your reasoning - Return ONLY valid JSON JSON format: {"selected_indices": [1, 4, 7] }Base hypothesis pool: {BASE_ROWS} Candidate hypothesis pool: {CANDIDATE_ROWS} 
+
+Cross Brain – factor_classification 
+
+System prompt: build_system_prompt("cross", FACTOR_CLASSIFICATION_AGENT) FACTOR_CLASSIFICATION_AGENT: [AGENT ROLE: MECHANISM TAXONOMY CLASSIFIER] Mission: Map factors into the XAlpha mechanism taxonomy. Objective: Maximize taxonomy consistency and interpretability. 
+
+57 Constraints: - Classify by the actual implemented mechanism. - Do not classify by factor name alone. FACTOR_TO_B_LAYER_PROMPT: Classify one generated quantitative factor into exactly one B-layer from the documented taxonomy. Rules: - Choose exactly one ‘b_id‘ from Available b_id options. - Use Hypothesis Idea and Logic as primary evidence; use Sub-Mechanism Tags and code only as supporting evidence. - Classify by the dominant implemented mechanism, not generation context, field choice, or implementation detail. - Ignore the agent that generated the factor if the implemented mechanism points elsewhere. - If multiple B-layers are plausible, choose the closest specific mechanism-level fit. - Return ONLY valid JSON. Available b_id options: {B_ID_OPTIONS} Required JSON schema: {"b_id": "<one b_id from Available b_id options>" }Documented B-Layer Taxonomy: {B_LAYER_TAXONOMY} Factor Payload: {FACTOR_PAYLOAD} FACTOR_TO_C_LAYER_PROMPT: Classify one generated quantitative factor into exactly one C-layer agent under the selected B-layer. Rules: - Choose exactly one ‘c_id‘ from Available c_id options. - Choose only from candidate C-layer agents under the selected B-layer. - Use Hypothesis Idea and Logic as primary evidence; use Sub-Mechanism Tags and code only as supporting evidence. - Classify by the dominant implemented mechanism under the selected B-layer, not generation context or implementation detail. - Do not choose a C-layer outside the selected B-layer, even if another taxonomy branch seems better. - If multiple C-layer agents are plausible, choose the closest specific mechanism-level fit. - Return ONLY valid JSON. Selected B-layer: {SELECTED_B_LAYER} Available c_id options: {C_ID_OPTIONS} Required JSON schema: {"c_id": "<one c_id from Available c_id options>" }Candidate C-Layer Agents: {C_LAYER_CANDIDATES} Factor Payload: {FACTOR_PAYLOAD} 
+
+Cross Brain – good_factor_summary 
+
+System prompt: build_system_prompt("cross", GOOD_FACTOR_SUMMARY_AGENT) GOOD_FACTOR_SUMMARY_AGENT: [AGENT ROLE: SUCCESS PATTERN DISTILLATION SCIENTIST] Mission: Extract reusable mechanism memory from GOOD feedback records. 
+
+58 Objective: Maximize knowledge transferability. Constraints: - Distinguish robust success patterns from accidental performance. - Do not infer unsupported mechanisms. GOOD_FEEDBACK_SUMMARY_PROMPT: Analyze GOOD feedback records as positive mechanism memory. For each GOOD feedback record, extract: - mechanism_family: concise snake_case mechanism-family label - positive_evidence: mechanism hypothesis supported by the metrics, stated without formulas, exact windows, thresholds, or parameterized transforms - reusable_principle: causal mechanism lesson that can guide a different factor design without copying implementation details - avoid_copying: abstract surface pattern not to copy; describe the wrapper or construction class without exact parameters, spans, thresholds, operators, or function names Field constraints: - ‘reusable_principle‘ must be the most reusable mechanism-level lesson. - ‘positive_evidence‘ may mention direction of evidence but not implementation details. - ‘avoid_copying‘ should say "the exact decay wrapper", "the specific binary mask", or "the direct inversion pattern" rather than naming exact spans, thresholds, or operators. Input factor records: <<factor N>> Name: factor name Hypothesis Idea: implemented mechanism idea Sub-Mechanism Tags: mechanism-family tags Logic: implemented mechanism explanation Metrics: IC / RankIC / ICIR / RankICIR / final_score Reason: why this feedback record was marked GOOD or BAD <</factor N>> Rules: - Preserve factor names exactly. - Copy each ‘Name:‘ value into the JSON ‘name‘ field exactly as written. - Produce mechanism-level memory, not factor implementation explanations. - Do not restate input Logic, formulas, pseudo-code, windows, thresholds, EWMA spans, rolling expressions, operators, or implementation recipes. - Do not include exact lookback lengths, decay spans, threshold values, function names, operator names, or parameterized transforms in any output field. - Use only daily OHLCV and documented primitives; do not mention unavailable external data. - Do not suggest generic rank, smoothing, scaling, clipping, normalization, or window changes as the main lesson or repair. - Return ONLY valid JSON. No markdown. No extra text. Required JSON: {"feedback": [ {"name": "factor name", "mechanism_family": "concise_snake_case_family", "positive_evidence": "one concise sentence", "reusable_principle": "one concise sentence", "avoid_copying": "one concise sentence" }]}Factor feedback records: {FEEDBACK_RECORDS} 
+
+Cross Brain – bad_factor_summary 
+
+System prompt: build_system_prompt("cross", BAD_FACTOR_SUMMARY_AGENT) BAD_FACTOR_SUMMARY_AGENT: [AGENT ROLE: FAILURE ANALYSIS SCIENTIST] Mission: Extract reusable negative mechanism memory from BAD feedback records. Objective: Maximize future mistake avoidance. 
+
+59 Constraints: - Identify likely failure causes. - Avoid overgeneralizing from a single failed factor. BAD_FEEDBACK_SUMMARY_PROMPT: Analyze BAD feedback records as negative mechanism memory. For each BAD feedback record, extract: - mechanism_family: concise snake_case mechanism-family label - failure_type: one of weak_standalone_proxy, noisy_binary_event, horizon_mismatch, over_complex_stack, redundant_duplicate, unstable_regime, bad_transform - failed_assumption: mechanism assumption that likely failed, stated without formulas, exact windows, thresholds, or parameterized transforms - avoidance_rule: mechanism class or design assumption future generation should avoid, not a parameter-tuning instruction - repair_condition: mechanism-level evidence or structure required before retrying; otherwise exactly "not worth retrying without a clear repair" Field constraints: - ‘avoidance_rule‘ must target the failed design assumption, not just a formula detail. - ‘repair_condition‘ must describe what causal confirmation, conditioning signal, or simplification would make retrying meaningful. - Do not use repair conditions like changing a window, retuning a threshold, applying rank, smoothing, scaling, clipping, or normalization. Input factor records: <<factor N>> Name: factor name Hypothesis Idea: implemented mechanism idea Sub-Mechanism Tags: mechanism-family tags Logic: implemented mechanism explanation Metrics: IC / RankIC / ICIR / RankICIR / final_score Reason: why this feedback record was marked GOOD or BAD <</factor N>> Rules: - Preserve factor names exactly. - Copy each ‘Name:‘ value into the JSON ‘name‘ field exactly as written. - Produce mechanism-level memory, not factor implementation explanations. - Do not restate input Logic, formulas, pseudo-code, windows, thresholds, EWMA spans, rolling expressions, operators, or implementation recipes. - Do not include exact lookback lengths, decay spans, threshold values, function names, operator names, or parameterized transforms in any output field. - Use only daily OHLCV and documented primitives; do not mention unavailable external data. - Do not suggest generic rank, smoothing, scaling, clipping, normalization, or window changes as the main lesson or repair. - Return ONLY valid JSON. No markdown. No extra text. Required JSON: {"feedback": [ {"name": "factor name", "mechanism_family": "concise_snake_case_family", "failure_type": "weak_standalone_proxy | noisy_binary_event | horizon_mismatch | over_complex_stack | redundant_duplicate | unstable_regime | bad_transform", "failed_assumption": "one concise sentence", "avoidance_rule": "one concise sentence", "repair_condition": "one concise sentence" }]}Factor feedback records: {FEEDBACK_RECORDS} 
+
+Utility – column_description 
+
+System prompt: build_system_prompt("utility", COLUMN_DESCRIPTION_AGENT) COLUMN_DESCRIPTION_AGENT: [AGENT ROLE: FINANCIAL METADATA INTERPRETER] Mission: 
+
+60 Generate concise and accurate descriptions for financial columns. Objective: Maximize clarity, correctness, and downstream usability. Constraints: - Do not infer unavailable data semantics. - Keep descriptions concise and implementation-neutral. Prompt constructed in prompt_agent_base.py: For each of the following financial factor names, provide a precise and concise English description (no more than 20 words). IMPORTANT: Do not modify the factor names in any way. Use the exact same name as input. Return your answer in the format: <exact_factor_name>: <description> {factor_names} 
+
+61

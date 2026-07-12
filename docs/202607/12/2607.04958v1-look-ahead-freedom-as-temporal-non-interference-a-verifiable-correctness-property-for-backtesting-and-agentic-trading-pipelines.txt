@@ -1,0 +1,834 @@
+Title: Look-Ahead-Freedom as Temporal Non-Interference: A Verifiable Correctness Property for Backtesting and Agentic Trading Pipelines
+
+URL Source: https://arxiv.org/pdf/2607.04958v1
+
+Published Time: Tue, 07 Jul 2026 02:57:03 GMT
+
+Number of Pages: 30
+
+Markdown Content:
+# Look-Ahead-Freedom as Temporal Non-Interference: A Verifiable Correctness Property for Backtesting and Agentic Trading Pipelines 
+
+XAVIER FONSECA, Academy for AI, Games and Media, Breda University of Applied Sciences, The Netherlands Look-ahead bias—using information from after a decision epoch to make the decision at that epoch—is the dominant way a backtest or a machine-learning evaluation flatters a system that will disappoint in deployment. The field manages it with construct-specific recipes and empirical detectors, which are sound only channel by channel and certify nothing by their silence. We show that look-ahead-freedom is a formal property in disguise: fixing an epoch, the demand that the future not influence the present is temporal non-interference 
+
+over a time-indexed information lattice. From this identification we develop a pipeline calculus separating a datum’s availability from its reference time, and settle the problem’s boundary. Where availability may depend on data values, look-ahead-freedom is undecidable ( Π01-hard): leakage is recursively enumerable but freedom is not. On the value-independent fragment—covering windowing, resampling, joins, point-in-time and vintage reads, and agentic retrieval—we give a type-and-effect system that is sound and decidable in linear time. An artifact confirms the theory: the check scales linearly, an independent oracle witnesses no leak in any accepted pipeline, and the checker catches every planted leak that differential and tiling detectors miss. 1
+
+CCS Concepts: • Software and its engineering → Software verification and validation ; • Theory of computation → Type structures ; Program semantics ; • Security and privacy → Information flow control .Additional Key Words and Phrases: look-ahead bias, data leakage, non-interference, type-and-effect systems, decidability, backtesting, agentic systems, point-in-time correctness 
+
+ACM Reference Format: 
+
+Xavier Fonseca. 2026. Look-Ahead-Freedom as Temporal Non-Interference: A Verifiable Correctness Property for Backtesting and Agentic Trading Pipelines. ACM Trans. Softw. Eng. Methodol. 0, 0, Article 0 (July 2026), 30 pages. https://doi.org/10.1145/nnnnnnn.nnnnnnn 
+
+1 Introduction 
+
+A backtest is a claim about a decision that was never made: it reports what a strategy would 
+
+have decided at each past instant, had it been running then. The claim is only meaningful if each simulated decision used exactly the information available at its own instant and nothing from later. When this fails—when a computation performed for time 𝑡 consumes a datum that only became known after 𝑡 —the backtest measures foresight the live system could never have had. In quantitative finance this failure is called look-ahead bias ; in machine learning it is one species of 
+
+data leakage . Under either name it is the dominant way an evaluation flatters a system that will disappoint in deployment, and it is notoriously easy to introduce and hard to see: a normalisation fitted on the whole sample, a feature aligned to the wrong timestamp, a restated fundamental read at its final rather than its as-first-reported value, a universe assembled from the firms that survived. 
+
+> 1
+
+Reproducibility. A public artifact accompanies this paper, containing the checker, the baseline detectors, the dynamic oracle, the adversarial corpus, and synthetic data on which every qualitative result can be re-run. The headline figures reported here are computed from proprietary market data that we are not permitted to redistribute; the artifact reproduces the method and the qualitative claims, not those exact figures. See the Data and Code Availability statement (before the references). Author’s Contact Information: Xavier Fonseca, Academy for AI, Games and Media, Breda University of Applied Sciences, Breda, The Netherlands, xavier.fonseca.phd@gmail.com. 2026. ACM 1557-7392/2026/7-ART0 https://doi.org/10.1145/nnnnnnn.nnnnnnn ACM Trans. Softw. Eng. Methodol., Vol. 0, No. 0, Article 0. Publication date: July 2026.  
+
+> arXiv:2607.04958v1 [cs.CR] 6 Jul 2026 0:2 Xavier Fonseca
+
+Recent audits of machine-learning-based science and of large-language-model trading agents find the problem to be pervasive and, in the agentic case, subtler still: an agent can leak the future through its pretraining corpus even when its code is fed only contemporaneous inputs, so that inspecting the pipeline is not even sufficient to rule leakage out [19, 28, 32, 33]. The field’s response has been, almost exclusively, detection and discipline . Practitioners maintain catalogues of the ways a pipeline can leak and matching recipes to avoid each—fit transforms on training folds only, lag running statistics, split chronologically, embargo around test windows— and a growing line of benchmarks measures, with increasing sophistication, how much a given evaluation convention inflates reported performance [ 7 , 18 , 34 , 35 ]. This body of work is valuable and has sharpened the community’s awareness. But it shares a structural limitation. A recipe is sound only for the specific channel it addresses and says nothing about the others; a detector reports the leaks it happens to trigger and certifies nothing by its silence. There is, at present, no 
+
+property —a statement a pipeline either satisfies or violates, checkable once and for all—whose satisfaction certifies that a pipeline is free of look-ahead of every kind. The field manages the problem by vigilance where it could, in principle, settle it by construction. Such a property does exist in a neighbouring discipline, though it has never been pointed at this problem. Non-interference , the central correctness notion of language-based information-flow security [ 10 , 17 , 25 , 30 ], states that a program’s low-security outputs are independent of its high-security inputs: two runs agreeing on the low inputs produce identical low outputs regardless of the high ones. It comes with a mature enforcement technology (security type systems, effect systems) and, in its timed branch, with a precisely mapped decidability frontier—non-interference is undecidable for general timed automata but decidable on identified subclasses [ 3 , 15 ]. The observation that drives this paper is that look-ahead-freedom is an instance of this notion, once the security lattice is replaced by a time-indexed one. Fixing a decision epoch 𝑡 , the requirement “information from times 𝑡 ′ > 𝑡 must not influence the decision at 𝑡 ” is exactly a non-interference statement in which the protected (“high”) partition is the future relative to 𝑡 , the observable (“low”) output is the decision at 𝑡 , and the ordering is temporal availability rather than clearance. Look-ahead bias is temporal non-interference. Taking this identification seriously turns an informally managed hazard into a formal object with the full apparatus of information-flow theory behind it, and the theory immediately tells us both the bad news and the shape of the good. The bad news is a hard limit: on a pipeline language expressive enough to let a datum’s availability be computed from other data’s values , look-ahead-freedom is undecidable—indeed Π01-hard—so no analyser can certify freedom for every pipeline one can write (Theorem 3). Leakage is recursively enumerable (a witnessing future-dependent run can be found if one exists) but freedom is not, which is precisely why detectors can exhibit leaks yet never certify their absence. The good news is that the undecidability is caused by a feature real pipelines do not use. Backtests, feature constructions, and agentic retrieval steps determine when each datum is available from its schema and schedule, not from the numeric values flowing through the pipeline. Isolating this as a syntactic condition yields a fragment—value-independent availability—on which look-ahead-freedom is decidable, and on which a static discipline can certify it soundly. 
+
+Contributions. This paper develops that programme in full. 
+
+• We give a time-indexed pipeline calculus (Section 3) that separates a datum’s availability 
+
+(when it can be read) from its reference time (which instant it describes), with a two-level grammar whose availability sublanguage is value-independent and whose membership in the decidable fragment is checkable in linear time. We define look-ahead-freedom as temporal non-interference over the resulting time-indexed information lattice (Definition 8), via an exact two-run agreement condition on an epoch-parametrised operational semantics (Section 6).  
+
+> ACM Trans. Softw. Eng. Methodol., Vol. 0, No. 0, Article 0. Publication date: July 2026. Look-Ahead-Freedom as Temporal Non-Interference: A Verifiable Correctness Property for Backtesting and Agentic Trading Pipelines 0:3
+
+• We give a type-and-effect system for the fragment and prove it sound : every pipeline it accepts is free of temporal leakage (Theorem 1), with acceptance decidable in time linear in the pipeline’s size under bounded availability-term complexity (Theorem 2). The proof is a two-run logical relation whose crux is the treatment of re-stamping, the channel by which a future value can be relabelled to an admissible time; we characterise the analysis’s precision exactly, including the opaque-value-operation cases where a sound analysis must conservatively reject a semantically clean pipeline (Proposition 2). We further harden the treatment of the series operators—windowing, scans, joins, and resampling—and isolate non-causal resample/join alignment as the genuine leakage channel there, discharged by an explicit 𝑂 (1) checker obligation (Section 5). 
+
+• We establish the boundary that makes the fragment necessary rather than merely conve-nient: on the full language look-ahead-freedom is undecidable and Π01-hard, by reduction from the halting problem through data-dependent availability (Theorem 3). Detection is r.e.; certification of freedom is not. 
+
+• We validate the checker empirically on a public, clean-room artifact (Section 8). The check scales linearly in pipeline size (measured log–log slope 1.023 , 95% bootstrap CI [1.021 , 1.026 ],across four orders of magnitude); on five archetypes drawn from proprietary market data (not redistributable) an independent dynamic oracle witnesses no leak in any accepted pipeline, corroborating soundness; and on an adversarial corpus the sound checker misses none of 
+
+33 planted leaks while a differential two-run detector of the kind used in practice misses 
+
+18 (54 .5% ) and a window-tiling detector misses all 33 , with the checker’s cost a precisely characterised and confined set of false positives on opaque value operations. The through-line is a single conversion. The empirical detectors answer “did this pipeline, on the data and epochs I tried, exhibit a leak?”; the property developed here answers “can this pipeline, on any data and at any epoch, exhibit a leak?”, and answers it soundly and—on the pipelines practitioners actually write—decidably and in linear time. It moves look-ahead-freedom from something a team hopes it has achieved into something a checker can certify. 
+
+2 Background and Related Work 
+
+Our contribution sits at the intersection of three literatures that have, to date, developed inde-pendently: (i) the applied treatment of look-ahead bias and data leakage in quantitative finance and machine learning; (ii) the theory of information-flow security and non-interference in program-ming languages and timed systems; and (iii) data provenance and stream / dataflow correctness in data-engineering systems. We review each in turn, then state precisely the gap that none of them closes and that this paper addresses: a formal, verifiable property —as opposed to a checklist, an audit, or an empirical detector—certifying that a computational pipeline does not allow information from the future to influence a decision made in the past. The stance mirrors a recurring lesson in decision-focused evaluation, where the quantity that governs a decision’s correctness is not the one conventionally measured [13]. 
+
+2.1 Look-Ahead Bias and Data Leakage as an Applied Problem 
+
+Look-ahead bias—using information not available at decision time—is recognised across quantitative finance and machine learning as a pervasive threat to the validity of reported results. In the backtesting and portfolio literature it is treated as one of a family of evaluation failures alongside survivorship bias [ 8 ], backtest overfitting [ 4 –6 ], transaction-cost neglect, and regime-shift blindness. The rapid migration of large language models into trading systems has sharpened the problem: a taxonomy-oriented evaluation study of financial multi-agent systems argues that coordination  
+
+> ACM Trans. Softw. Eng. Methodol., Vol. 0, No. 0, Article 0. Publication date: July 2026. 0:4 Xavier Fonseca
+
+and evaluation protocol, rather than model scale, drive measured performance and that claims across systems are hard to compare [ 22 ], and an audit-oriented evidence map of LLM trading agents finds acute protocol incomparability , reporting that only a small minority of surveyed empirical studies document time-consistent train/test split protocols, explicit transaction-cost models, or survivorship handling, and that none reach the highest tier of reproducibility [ 31 ]. Work on execution assumptions and reproducibility in LLM-based trading makes the mechanism concrete, emphasising that mundane choices—executing at the signal-generating close versus the next tradable price, forming a universe from future constituents, omitting costs—can move a strategy from apparently profitable to unusable, and that such retrospective leakage can be severe enough to overturn a strategy’s apparent edge [ 32 ]. For agentic pipelines the channel is subtler still. An agent can leak future information through its pretraining data or a retrieval corpus even when its code is fed only contemporaneous inputs—a form of look-ahead that has no analogue in classical backtesting and that inspection of the pipeline code cannot rule out [ 28 ]. Reported returns then need not reflect a causal pipeline at all [ 33 ], and a growing line of benchmarks quantifies exactly this decay once a model’s knowledge window ends [ 19 ], some at claim-level granularity, using Shapley attribution to isolate which parts of a rationale draw on leaked, post-cutoff information [ 35 ]. Dedicated benchmarks have begun to measure look-ahead bias directly in point-in-time language models, quantifying alpha decay across temporally distinct regimes [ 7 ], and paired one-switch benchmarks isolate how individual evaluation conventions inflate backtested performance [ 34 ]. All of this work supplies empirical measurement; none supplies the formal property this paper provides. The same problem is described, in almost identical terms, far outside finance. In network-intrusion detection, temporal leakage is addressed through a catalogue of mitigation strategies—per-split normalisation computed only on past data, lagged running statistics, causal masking of attention, and chronological rather than random splits [ 12 ]. In Android-malware detection, temporal leakage is distinguished taxonomically from train–test leakage and identified as always an experiment-design flaw, with sliding-window datasets offered as the remedy [ 20 ]. Practitioner and vendor guidance converges on the same recipes: encapsulating preprocessing so that fit/transform never sees the test partition, and using time-series cross-validation for temporally dependent data [18]. Two properties characterise this entire body of work. First, it is overwhelmingly informal : leakage is defined by example and addressed by discipline, tooling conventions, and vigilance rather than by a stated property that a pipeline either satisfies or violates. Second, its remedies are sound only by construction and only for the specific construct addressed —per-split normalisation prevents one leakage channel but says nothing about others, and no combination of such recipes yields a guarantee that a given pipeline is leakage-free. The field has, in effect, a growing list of ways to leak and a matching list of ways to avoid each, but no notion of a certificate of absence. The closest step toward a stated property casts point-in-time correctness in filtration terms—requiring that every decision’s information set lie within the natural filtration F𝑡 [ 14 ]—but does so for a fixed family of trading strategies rather than as a decidable discipline over a general pipeline language, which is the gap this paper closes. 
+
+2.2 Information-Flow Security and Non-Interference 
+
+The property the applied literature lacks has, in a different domain, a mature theory. Non-interference 
+
+formalises information-flow security: partitioning a program’s variables into high- and low-security classes, a program is non-interferent if its low-security outputs are independent of its high-security inputs—equivalently, two executions agreeing on low inputs produce identical low outputs regard-less of high inputs [ 17 , 30 ]. The security levels are organised as a lattice, following Denning [ 10 ], and secure flow can be certified statically against that lattice [ 11 ]. The subsequent three decades of  
+
+> ACM Trans. Softw. Eng. Methodol., Vol. 0, No. 0, Article 0. Publication date: July 2026. Look-Ahead-Freedom as Temporal Non-Interference: A Verifiable Correctness Property for Backtesting and Agentic Trading Pipelines 0:5
+
+language-based enforcement are surveyed by Sabelfeld and Myers [ 25 ]. The property is enforced by information-flow type systems, by taint-tracking, and, at the hardware level, by gate-level information-flow tracking, which establishes sufficient conditions under which a system provably satisfies non-interference [29]. Crucially for our purposes, the theory has an explicitly temporal branch. Timed notions of non-interference have been defined on timed automata, where it is known that adding timing constraints can turn a secure system insecure, and—decisively for the shape of our contribution—that the general problem of deciding timed strong non-deterministic non-interference is undecidable , while specific cosimulation-, bisimulation-, and state-based variants are decidable [15 ]. This “undecidable in general, decidable on a subclass” pattern recurs in the parametric-timed-opacity setting of André et al. [ 3], whose undecidability result for general parametric timed automata (via a reachability/halting reduction) and decidability result for the L/U-PTA subclass we take as methodological precedent for locating our own boundary. Related lines develop complexity-oriented “temporal non-interference” by transposing information-flow security into the timed-automata setting [ 2], where the secret is 
+
+when an action occurs and decidability sits on a knife-edge [3, 15]. This literature supplies exactly the missing apparatus: a definition schema (independence of a protected partition), enforcement mechanisms (type systems, model checking), and—most valuable— a known decidability frontier telling us in advance that the general temporal problem is intractable and that the research contribution lies in isolating a decidable fragment that covers the pipelines of interest. What it has never been applied to is look-ahead bias: the “high” partition in every prior treatment is a secret to be protected from an adversary, never data from the future to be withheld from a decision made in the past. 
+
+2.3 Provenance and Dataflow / Stream Correctness 
+
+A third literature reasons about how data moves through computational pipelines. Scientific-workflow provenance records the derivation of results, distinguishing prospective provenance (the workflow specification) from retrospective provenance (the executed run), and represents causality as a dependency graph over artefacts and processes; the community has standardised these notions in OPM and W3C PROV, and separates why- from where-provenance [ 9 ]. Provenance thus records which inputs produced an output, but it carries no notion of a time-indexed admissibility condition: it can tell us an output depended on a given input, but not that the input was drawn from a timestamp later than the output’s decision time, nor does it define a violation. Even where provenance is extended toward temporal attribution —quantifying which inputs influenced an output over time—it remains a descriptive record, not a correctness guarantee: it reports what did flow, not what may flow across the availability boundary. The stream-processing and dataflow-language communities come closest to our concern. The dataflow model formalises correct processing of unbounded, out-of-order data using watermarks and timers to reason about event-time completeness [ 1 ]. Most pointedly, the Causify DataFlow framework for high-performance ML stream computing states our exact hazard—that computations at time 𝑡 may access observations from a later time 𝑡 ′ > 𝑡 , which it calls future-peeking—and builds a substantial formal treatment around it [ 27 ]. It defines causal computation (a node’s output at simulation time depends only on data timestamped earlier) and point-in-time idempotency (once the input window is at least a minimal context length 𝐿 , the output at 𝑡 is independent of how far back the window starts), and it proves from the latter a chain of tilability and tile-correctness results guaranteeing that batch execution equals streaming execution. The decisive distinction is what receives a proof and what does not. Point-in-time idempotency and tilability are established as theorems and enforced by construction. Causality itself —the future-peeking property that is our concern—is, in the framework’s own terms, detected : violations are  
+
+> ACM Trans. Softw. Eng. Methodol., Vol. 0, No. 0, Article 0. Publication date: July 2026. 0:6 Xavier Fonseca
+
+surfaced through a testing and replay framework and validated by tiling tests that partition the data in multiple ways, a differential-testing oracle that compares batch against streaming (or across tilings) and flags a leak when outputs disagree. There is no soundness theorem certifying a computation causal, and no characterisation of when such certification is possible. This is the closest existing notion to look-ahead-freedom, and we position against it precisely. First, DataFlow’s causality check is an empirical detector : it exposes a violation when a chosen set of tile lengths triggers an inconsistency, but certifies nothing when none is observed—absence of detection is not proof of absence. We give instead a sound static property: an accepted pipeline is provably look-ahead-free (Theorem 1). Second, we explain why their causality story is a test rather than a proof: certifying look-ahead-freedom is not recursively enumerable on the full language (Theorem 3), so differential testing is, in a precise sense, the best a general-purpose method can do—and a sound certificate is available only on a decidable fragment, which we identify. Third, our treatment of causal windows is the static-effect analogue of their point-in-time idempotency: where they establish a minimal context length 𝐿 semantically per node and validate it by tiling, our type-and-effect discipline bounds availability statically and checks it without execution. The two are kin; the contribution is the shift from a tested, per-node semantic condition to a sound, decidable, whole-pipeline static guarantee, together with the boundary result that says no better is possible in general. 
+
+2.4 The Gap and Our Position 
+
+Across all three literatures the same shape recurs and remains unfilled. The applied leakage literature has the problem but treats it informally, with construct-specific recipes and no certificate of absence. The information-flow literature has the property form and enforcement machinery —including a temporal branch with a known decidability frontier—but has only ever applied it to adversary-facing secrecy, never to temporal data availability. The provenance and dataflow literature has the pipeline substrate and, in its most recent stream-computing instance, an empirical detector for future-to-past information use, but no formal property and no guarantee. We close this gap by making one identification precise and exploiting it. Look-ahead bias is temporal non-interference. Fixing a decision time 𝑡 , “information from times 𝑡 ′ > 𝑡 must not influence the decision at 𝑡 ” is exactly a non-interference statement in which the protected (“high”) partition is the future relative to 𝑡 and the observable (“low”) output is the decision at 𝑡 , taken over a time-indexed information lattice rather than a security lattice. Leakage-freeness of a backtest, feature-construction, or agentic trading pipeline is then the statement that the pipeline satisfies temporal non-interference with respect to this time-indexed partition. From this identification the paper delivers what the three literatures individually cannot: a formal definition of look-ahead-freedom as temporal non-interference (Definition 8); the decidability boundary that separates the pipelines one can certify from those one cannot (Theorems 1 and 3); a sound static checker for the former; and an empirical validation on real backtesting and agentic-trading pipelines (Section 8). The detailed contributions are set out in Section 1. The upshot is a single conversion—a problem the field currently manages by vigilance becomes one it can certify by construction. 
+
+3 A Time-Indexed Pipeline Calculus 
+
+We now make the identification of Section 2 precise. This section fixes the object of study—a small calculus of time-indexed data pipelines—and isolates the syntactic fragment on which look-ahead-freedom will turn out to be decidable. The calculus is deliberately minimal: it contains exactly the constructs that recur in backtesting, feature construction, and agentic-retrieval pipelines (windowing, causal folds, resampling, point-in-time reads, and context retrieval), and nothing 
+
+> ACM Trans. Softw. Eng. Methodol., Vol. 0, No. 0, Article 0. Publication date: July 2026.
+
+Look-Ahead-Freedom as Temporal Non-Interference: A Verifiable Correctness Property for Backtesting and Agentic Trading Pipelines 0:7 decision epoch t    
+
+> past (readable) future
+> (must not
+> influence)
+> time
+> reference time
+> (which instant it describes)
+> availability
+> (when it becomes knowable)
+> ingest lag
+> available
+> only after t
+> (a)
+> full language
+> availability may depend on values
+> freedom UNDECIDABLE ( 01-hard)
+> fragment
+> value-independent availability
+> SOUND + DECIDABLE (linear time)
+> windows · scans · joins · resample
+> normalise · as-of / vintage · retrieval
+> membership in checkable in linear time
+> (b)
+
+Fig. 1. The two ideas the calculus is built on. (a) Every datum carries two independent temporal coordinates: its reference time (which instant it describes) and its availability (when it becomes knowable); the two differ by an ingest lag, and look-ahead occurs precisely when a datum whose availability follows a decision epoch 
+
+𝑡 influences the decision at 𝑡 . (b) The language is stratified by whether availability may depend on data values. On the full language U, availability can be value-dependent and look-ahead-freedom is undecidable (Π01-hard, Theorem 3); on the value-independent fragment F —which covers the constructs real pipelines use—the property is sound and decidable in linear time (Theorems 1 and 2), and membership in F is itself checkable in linear time. 
+
+else. Section 4 then gives a static discipline over this calculus and proves it sound and decidable; Section 7 shows that the same property is undecidable once the fragment’s defining restriction is lifted, locating the exact boundary. The design has one central idea, which we state before the syntax so the grammar reads as its consequence. Every datum in a pipeline carries two independent pieces of temporal information: 
+
+what value it holds, and when that value becomes knowable—its availability . A pipeline is free of look-ahead exactly when no value that becomes knowable after a decision epoch 𝑡 can influence the decision made at 𝑡 . The calculus therefore separates the two pieces at the level of syntax: a datum’s value may depend on other data freely, but in the decidable fragment a datum’s availability 
+
+may not depend on any data value. This separation is what makes availability a statically tractable quantity, and it is justified by how real pipelines are built—availability is exogenous, fixed by the data source (a publication date, a filing date, a bar close), ingested immediately and unconditionally; a well-formed pipeline never re-times a datum’s availability on the basis of another datum’s value. We make the separation precise as a two-level grammar and then show that lifting it is the sole source of undecidability. 
+
+3.1 Sorts and Time-Indexed Values 
+
+We work over a time domain (T, ≤) , a totally ordered set of epochs. The calculus has three sorts, 
+
+𝜏 :: = Time | Val | TVal ,
+
+where Time ranges over T, Val over ordinary (untimed) data values, and TVal over time-indexed values ⟨𝑣, 𝛼 ⟩—a Val 𝑣 paired with its availability stamp 𝛼 ∈ T. The stamp 𝛼 records when 𝑣 becomes knowable, not when it is about; these can differ, and the distinction between a datum’s availability 
+
+ACM Trans. Softw. Eng. Methodol., Vol. 0, No. 0, Article 0. Publication date: July 2026. 0:8 Xavier Fonseca 
+
+and its reference time is exactly what look-ahead reasoning must track. A decision made at epoch 𝑡 
+
+may legitimately consume a time-indexed value ⟨𝑣, 𝛼 ⟩ only when 𝛼 ≤ 𝑡 .
+
+3.2 The Availability Sublanguage 
+
+Availability terms denote elements of Time and are built only from other availability information— never from values: 
+
+𝐴 :: = 𝑡 (the current decision epoch) 
+
+| 𝑐 (a constant stamp, 𝑐 ∈ T)| av (𝑥 ) (availability of a bound time-indexed variable 𝑥 )| 𝐴 + 𝛿 (constant lag/lead, 𝛿 ∈ Z)| max (𝐴 1, . . . , 𝐴 𝑛 ) (latest-of) 
+
+| min (𝐴 1, . . . , 𝐴 𝑛 ) (earliest-of, fixed arity 𝑛 ).
+
+We write A for the set of availability terms generated by this grammar. The defining discipline is that the only way a datum enters an availability term is through av (𝑥 ), which extracts the stamp 
+
+of a time-indexed variable, never its value val (𝑥 ). Consequently every term of A is a function of stamps and constants alone. The arity 𝑛 of max and min is fixed and syntactically apparent: there is no folding over a data-dependent collection, which is what prevents an availability term from smuggling in a data-dependent number of inputs. This restriction is what the following lemma records, and it is the linchpin of the entire development. 
+
+Lemma 1 (Value-independence of availability). For every availability term 𝐴 ∈ A with free time-indexed variables 𝑥 1, . . . , 𝑥 𝑘 , the denotation of 𝐴 depends on 𝑥 1, . . . , 𝑥 𝑘 only through av (𝑥 1), . . . , 
+
+av (𝑥 𝑘 ); it is invariant under any change to the values val (𝑥 𝑖 ).
+
+Proof. Structural induction on 𝐴 . No production of the grammar mentions val (·) , and the only leaf that touches a variable is av (𝑥 ), which reads its stamp. Every other leaf is 𝑡 or a constant, and the internal nodes +𝛿 , max , min are functions of their subterms’ denotations. Hence the denotation factors through the stamps alone. □
+
+Lemma 1 holds by grammar , and membership in A is therefore a syntactic, decidable predicate. This is what will let the enforcement mechanism of Section 4 treat every availability as a statically known quantity. 
+
+3.3 Pipeline Terms 
+
+Pipeline terms denote time-indexed values or series of them. For the series-valued constructs we distinguish two orderings that the scalar fragment does not need to separate: a position —an element’s index within a series, ordered by ⪯—and its availability time av ∈ T, ordered by ≤. For a single time-indexed value the two coincide operationally; the position domain (Pos , ⪯) and the availability-monotonicity invariant that links ⪯ to ≤ are introduced with the series operators in  
+
+> ACM Trans. Softw. Eng. Methodol., Vol. 0, No. 0, Article 0. Publication date: July 2026. Look-Ahead-Freedom as Temporal Non-Interference: A Verifiable Correctness Property for Backtesting and Agentic Trading Pipelines 0:9
+
+Section 5, where they are needed. The grammar is stated once: 
+
+𝑒 :: = 𝑥 (variable) 
+
+| ⟨𝑑, 𝐴 ⟩ (base datum: value 𝑑 available at stamp 𝐴 )| val (𝑒 ) (project the value) 
+
+| 𝑓 (𝑒 1, . . . , 𝑒 𝑛 ) (pure value op) 
+
+| stamp (𝑒, 𝐴 ) (attach/replace availability with 𝐴 )| window 𝑘 (𝑒 ) (last-𝑘 window at each epoch) 
+
+| scan (𝑓 , 𝑒 0, 𝑒 ) (causal fold) 
+
+| join (𝑒 1, . . . , 𝑒 𝑛 ) (align sources at an epoch) 
+
+| resample 𝜌 (𝑒 ) (down/upsample by rule 𝜌 )| asof (𝑒 store , 𝐴 ) (point-in-time / vintage read as of 𝐴 )| retrieve (𝑒 ctx , 𝐴 ) (agentic context fetch as of 𝐴 )| decide 𝑡 (𝑒 ) (emit a decision at epoch 𝑡 )| let 𝑥 = 𝑒 1 in 𝑒 2.
+
+Two features of the grammar carry the availability discipline explicitly. First, every construct that produces a fresh availability stamp— stamp , join , resample , asof , and retrieve —takes its new stamp from an availability term 𝐴 . In the fragment (Section 3.4), 𝐴 ∈ A , so the produced stamp is value-independent. Their natural stamps are the expected ones: join produces the max of its input stamps, and asof (· , 𝐴 ) and retrieve (· , 𝐴 ) produce stamp 𝐴 , typically 𝑡 or a source timestamp. Second, asof and retrieve are the point-in-time (vintage) and agentic-context constructs: their returned value may depend on the store’s contents and on 𝐴 , but their stamp is 𝐴 , which in the fragment is value-independent. This is precisely why vintages and restatements—the subtlest case in practice—remain on the decidable side of the boundary. Reading a store as of a reference time is a controlled release of data that is otherwise inaccessible at the decision epoch, i.e. a declassification with an explicit when dimension [26]. The one assumption we make about value operations isolates them from the temporal analysis entirely. 
+
+Assumption 1 (Value operations are total and pure). Every value operation 𝑓 , both in 𝑓 (𝑒 1, . . . , 𝑒 𝑛 )
+
+and as the fold function of scan , is a total, pure function of its Val arguments: it always returns a value, and it reads no data other than those arguments—in particular it performs no side-channel access to base data, the store, or availability information. Consequently 𝑓 can influence a result only through the values explicitly passed to it, and its output is determined by those values alone. Assumption 1 is what licenses treating a value operation as opaque : the analysis of Section 4 neither needs nor is permitted to look inside 𝑓 , because 𝑓 cannot introduce a dependency that its arguments do not already carry. It is also the exact hypothesis under which the relative-completeness result (Proposition 2) is stated. 
+
+3.4 The Fragment and the Full Language 
+
+Definition 1 (Value-independent fragment F ). A pipeline term 𝑒 is in the fragment F if and only if every availability term occurring in it—in a base datum, stamp , join , resample , asof , or retrieve —is drawn from the sublanguage A of Section 3.2; that is, no availability is produced by a general pipeline term. 
+
+Definition 2 (Full language U). The full language U replaces the availability argument of the stamping constructs with an arbitrary pipeline term of sort Time ,
+
+stamp (𝑒, 𝑒 𝐴 ), asof (𝑒 store , 𝑒 𝐴 ), . . . , 𝑒 𝐴 : Time , 
+
+> ACM Trans. Softw. Eng. Methodol., Vol. 0, No. 0, Article 0. Publication date: July 2026. 0:10 Xavier Fonseca
+
+so that an availability may be computed from data values—for example, 𝑒 𝐴 = if val (𝑒 1) > 𝑐 then 𝑡 −
+
+2 else 𝑡 , modelling endogenous, value-conditioned availability. This case lies outside the pipelines that motivate the work, but we include it so the theory characterises the boundary rather than assuming it away. 
+
+Proposition 1 (Fragment membership is decidable). 𝑒 ∈ F is decidable in time linear in the size of 𝑒 .
+
+Proof. Traverse the term once; at each construct carrying an availability argument, check that the argument parses in the grammar A, which forbids val and data-dependent arity. This is a single syntactic pass. □
+
+Proposition 1 makes the eventual checker honest about its own scope: it can always tell, cheaply, whether a submitted pipeline lies in the region where soundness is guaranteed ( F ) or in the general region where, by Section 7, no sound and complete checker can exist, and where it must therefore conservatively reject or warn. We defer the operational semantics—the execution that advances 𝑡 through T—and the formal definition of look-ahead-freedom as temporal non-interference to Section 6. Informally, and suffi-ciently for reading the type system: an execution is look-ahead-free if, for every decision emitted at epoch 𝑡 , perturbing any base datum whose availability exceeds 𝑡 leaves that decision unchanged. This is the two-run, non-interference form of the property, and it is the statement Theorem 1 certifies. 
+
+4 A Sound, Decidable Discipline for the Fragment 
+
+We give a type-and-effect system ⊢F for terms of the fragment F and prove two results about it. 
+
+Theorem 1 (Soundness). If ⊢F 𝑒 , then 𝑒 is look-ahead-free (Definition 8). 
+
+Theorem 2 (Decidability). ⊢F 𝑒 is decidable in time linear in |𝑒 |.
+
+Together with the undecidability of the property on the full language U (Theorem 3, Section 7), these results locate the exact boundary: look-ahead-freedom is undecidable in general, but admits a sound, linear-time static check on the value-independent fragment that covers real point-in-time pipelines. 
+
+4.1 Effects as Static Availability Bounds 
+
+The effect of a term is a conservative upper bound, expressed as an availability term, on the availability of every base datum whose value can flow into the term’s result. This is a type-and-effect discipline in the sense of Lucassen and Gifford [ 16 , 21 ] (see [ 23 ] for the general theory): the type records what a term computes, and the effect records a statically computable, conservative over-approximation of a runtime quantity—here, the temporal availability of the data the result depends on. Effects live in the availability sublanguage A, so they are themselves value-independent and statically evaluable. 
+
+Definition 3 (Effect ordering). For availability terms 𝜑,𝜓 ∈ A , write 𝜑 ⊑ 𝜓 if and only if J𝜑 K𝑡,𝐼 ≤
+
+J𝜓 K𝑡,𝐼 for all epochs 𝑡 and all stamp valuations 𝐼 . Because terms of A are monotone functions of 
+
+{𝑡, stamps , constants } built from {+ 𝛿, max , min }, the relation ⊑ is a partial order with max as join, and it is decidable (Lemma 2). 
+
+Lemma 2 (Decidability of effect ordering). 𝜑 ⊑ 𝜓 is decidable for 𝜑,𝜓 ∈ A .
+
+Proof. Normalise each of 𝜑,𝜓 to the form max 𝑖 
+
+  min 𝑗 (𝑡 + 𝑐 𝑖 𝑗 or av (𝑥 𝑘 ) + 𝑐 𝑖 𝑗 ) by distributing 
+
++𝛿 over max and min (all shifts are constant) and flattening; arities are fixed, so normalisation  
+
+> ACM Trans. Softw. Eng. Methodol., Vol. 0, No. 0, Article 0. Publication date: July 2026. Look-Ahead-Freedom as Temporal Non-Interference: A Verifiable Correctness Property for Backtesting and Agentic Trading Pipelines 0:11
+
+terminates. Comparing two such normal forms reduces to a finite set of constant-and-stamp inequalities that must hold for all 𝑡 and all stamp valuations. Each variable ( 𝑡 and each av (𝑥 ))occurs with unit coefficient, so the comparison is decided by the constant offsets together with the 
+
+max /min tree structure. □
+
+4.2 The Typing Judgement 
+
+The judgement has the form Γ ⊢ 𝑒 : 𝜏 ! 𝜑 , read: under context Γ, the term 𝑒 has sort 𝜏 and effect 
+
+𝜑 ∈ A —every base-datum value influencing 𝑒 ’s result is available no later than 𝜑 . The context Γ
+
+maps each variable to its sort and its stamp term (an element of A). We give the rules that carry temporal content; the omitted congruence rules are standard and simply join effects with max .The base and projection rules record where a value comes from: 
+
+Γ ⊢ ⟨ 𝑑, 𝐴 ⟩ : TVal ! 𝐴 (T-Base ) Γ ⊢ 𝑒 : TVal ! 𝜑 
+
+Γ ⊢ val (𝑒 ) : Val ! 𝜑 (T-Val )
+
+A base datum’s value is available exactly at its stamp 𝐴 ; that is its effect. Projecting a value inherits the effect, since reading the content exposes whatever availability produced it. Pure value operations combine effects by max :
+
+Γ ⊢ 𝑒 𝑖 : Val ! 𝜑 𝑖 (∀ 𝑖 )
+
+Γ ⊢ 𝑓 (𝑒 1, . . . , 𝑒 𝑛 ) : Val ! max 𝑖 𝜑 𝑖 
+
+(T-Op )
+
+the result can depend on the latest-available of its operands. The next rule is the crux of the system. Re-stamping a datum changes its advertised stamp but must not change its effect: 
+
+Γ ⊢ 𝑒 : Val ! 𝜑 𝐴 ∈ A 
+
+Γ ⊢ stamp (𝑒, 𝐴 ) : TVal ! 𝜑 (T-Stamp )
+
+The value produced by stamp (𝑒, 𝐴 ) still depends on data available at 𝜑 , even though it now advertises the stamp 𝐴 . This is exactly where a stamp-only check fails and the effect system succeeds: stamp (𝑒, 𝐴 ) may present an admissible stamp 𝐴 ≤ 𝑡 while its effect 𝜑 @ 𝑡 betrays a future dependency. A check that reads only the advertised stamp would accept such a term; the effect discipline does not. The series and join constructs combine their premises’ effects: 
+
+Γ ⊢ 𝑒 𝑖 : TVal ! 𝜑 𝑖 (∀ 𝑖 )
+
+Γ ⊢ join (𝑒 1, . . . , 𝑒 𝑛 ) : TVal ! max 𝑖 𝜑 𝑖 
+
+(T-Join ) Γ ⊢ 𝑒 : TVal ! 𝜑 
+
+Γ ⊢ window 𝑘 (𝑒 ) : TVal ! 𝜑 (T-Window )
+
+A causal last-𝑘 window over an availability-monotone series has effect equal to the newest element’s, namely 𝜑 : the window never reaches past the current position, as its causal semantics (Section 5) guarantee. The fold rule is 
+
+Γ ⊢ 𝑒 0 : TVal ! 𝜑 0 Γ ⊢ 𝑒 : TVal ! 𝜑 
+
+Γ ⊢ scan (𝑓 , 𝑒 0, 𝑒 ) : TVal ! max (𝜑 0, 𝜑 ) (T-Scan )
+
+A causal fold’s running result at position 𝑝 depends on the seed 𝑒 0 and on inputs up to 𝑝 . By monotonicity (Lemma 5), the current element’s effect 𝜑 dominates all earlier inputs, so the only term the current input does not necessarily dominate is the seed effect 𝜑 0; the sound bound is therefore max (𝜑 0, 𝜑 ), and the purity of 𝑓 (Assumption 1) guarantees the accumulator introduces no availability beyond these. When the seed is admissible at the series start, the bound simplifies to 𝜑 at every non-initial position; we keep the explicit max (𝜑 0, 𝜑 ) so that soundness requires no assumption on the seed.  
+
+> ACM Trans. Softw. Eng. Methodol., Vol. 0, No. 0, Article 0. Publication date: July 2026. 0:12 Xavier Fonseca
+
+The vintage rule is the second decisive one: 
+
+Γ ⊢ 𝑒 store : TVal ! 𝜑 𝑠 𝐴 ∈ A 
+
+Γ ⊢ asof (𝑒 store , 𝐴 ) : TVal ! 𝐴 (T-Asof )
+
+A point-in-time read returns the store content as known at 𝐴 ; its effect is 𝐴 , not 𝜑 𝑠 , because the as-of semantics (Section 6) guarantee that only data with availability ≤ 𝐴 is visible to the read. This is the formal reason vintages and restatements stay decidable: the value depends on the store, but only on its ≤ 𝐴 portion, and 𝐴 ∈ A is value-independent. The agentic retrieval construct retrieve 
+
+types identically. Finally, the decision rule carries the single obligation that enforces the property, and let substitutes a binding’s effect into its body: 
+
+Γ ⊢ 𝑒 : 𝜏 ! 𝜑 𝜑 ⊑ 𝑡 
+
+Γ ⊢ decide 𝑡 (𝑒 ) : 𝜏 ! 𝑡 (T-Decide ) Γ ⊢ 𝑒 1 : 𝜏 1 ! 𝜑 1 Γ, 𝑥 :𝜏 1 ⊢ 𝑒 2 : 𝜏 2 ! 𝜑 2
+
+Γ ⊢ let 𝑥 = 𝑒 1 in 𝑒 2 : 𝜏 2 ! 𝜑 2 [𝜑 1/av (𝑥 )] (T-Let )
+
+A decision at epoch 𝑡 is well-typed only if the effect of its body is bounded by 𝑡 : every value that can flow into it is available by 𝑡 . This single premise 𝜑 ⊑ 𝑡 —decidable by Lemma 2—is the static enforcement of look-ahead-freedom. The let rule substitutes the bound variable’s effect for av (𝑥 )
+
+in the body’s effect; because effects lie in A and A is closed under this substitution, the result stays in A.
+
+4.3 Acceptance 
+
+The typing rules carry the temporal content, but soundness for the full calculus depends on two further well-formedness conditions on the series operators, surfaced by the hardening of Section 5. We fold all requirements into a single acceptance predicate so that the soundness theorem stands with no external side-conditions. 
+
+Definition 4 (Acceptance). ⊢F 𝑒 holds if and only if all of the following hold: (1) (Fragment) 𝑒 ∈ F (Definition 1): every availability term in 𝑒 is drawn from the value-independent sublanguage A;(2) (Typing) ∅ ⊢ 𝑒 : 𝜏 ! 𝜑 is derivable for some 𝜏, 𝜑 , with every decide 𝑡 subterm discharging its 
+
+T-Decide premise 𝜑 ⊑ 𝑡 ;(3) (Monotone leaves) every base series in 𝑒 is declared availability-monotone (Definition 6); this is a data-source property asserted at ingestion and trusted per the stated boundary (incorrect source stamps are out of scope); (4) (Causal alignment) every resample 𝜌 in 𝑒 has a causal rule ( max 𝜌 ← (𝑝 ) ⪯ 𝜄 (𝑝 ), Section 5), and every join aligns its sources at a common position rather than across a look-ahead offset. Conditions (3)–(4) are local: each is 𝑂 (1) per operator, and, by Lemma 5, together they establish the global availability-monotonicity invariant on which Lemma 6, and hence soundness, depends. With acceptance so defined, everything the soundness proof requires is a clause of Definition 4. We can already discharge decidability. 
+
+Proof of Theorem 2. Type inference is syntax-directed: each rule computes its conclusion’s effect as a max or substitution of its premises’ effects, all in A; the only typing side-condition is 
+
+𝜑 ⊑ 𝑡 at T-Decide , decidable by Lemma 2. The fragment check (clause 1) is the linear syntactic pass of Proposition 1; the monotone-leaf and causal-alignment checks (clauses 3–4) are 𝑂 (1) per operator by inspection of the declared stamp and alignment arguments. A single bottom-up pass over 𝑒 therefore computes all effects and discharges all obligations in time linear in |𝑒 |; effect normal forms have size bounded by the term, and arities are fixed. □ 
+
+> ACM Trans. Softw. Eng. Methodol., Vol. 0, No. 0, Article 0. Publication date: July 2026. Look-Ahead-Freedom as Temporal Non-Interference: A Verifiable Correctness Property for Backtesting and Agentic Trading Pipelines 0:13
+
+4.4 Soundness via a Two-Run Logical Relation 
+
+Soundness is a relational property: it constrains two executions that agree up to the decision epoch. A single-run preservation argument cannot establish it. We define a family of relations indexed by the decision epoch 𝑡 and prove a Fundamental Lemma from which Theorem 1 follows as the instance at the decision sort. Throughout, 𝐼 ≈𝑡 𝐼 ′ denotes that two input assignments agree on every base datum whose availability is ≤ 𝑡 (Definition 7). 
+
+Definition 5 (Indistinguishability at 𝑡 ). Fix an epoch 𝑡 and inputs 𝐼 ≈𝑡 𝐼 ′. For results carrying effect 𝜑 , define: 
+
+• Values. 𝑣 ∼𝜑 𝑡,𝐼,𝐼 ′ 𝑣 ′ iff J𝜑 K𝑡,𝐼 = J𝜑 K𝑡,𝐼 ′ ≤ 𝑡 ⇒ 𝑣 = 𝑣 ′: when the effect certifies that the result is drawn from the admissible past, the two runs must agree exactly; when the effect exceeds 𝑡 ,no agreement is demanded, and by T-Decide such a value can never reach a decision. 
+
+• Time-indexed values. ⟨𝑣, 𝛼 ⟩ ∼ 𝜑 𝑡,𝐼,𝐼 ′ ⟨𝑣 ′, 𝛼 ′⟩ iff 𝛼 = 𝛼 ′ and 𝑣 ∼𝜑 𝑡,𝐼,𝐼 ′ 𝑣 ′: stamps always agree, by the determinacy lemma below; values agree when admissible. 
+
+Lemma 3 (Availability determinacy). If Γ ⊢ 𝑒 : TVal ! 𝜑 in F and 𝐼 ≈𝑡 𝐼 ′, and 𝐼 ⊢𝑡 𝑒 ⇓ ⟨ 𝑣, 𝛼 ⟩
+
+and 𝐼 ′ ⊢𝑡 𝑒 ⇓ ⟨ 𝑣 ′, 𝛼 ′⟩, then 𝛼 = 𝛼 ′.
+
+Proof. Every stamp produced in F is the denotation of an availability term 𝐴 ∈ A (by the grammar and rules T-Base , T-Stamp , T-Asof , T-Join ). By Lemma 1, 𝐴 depends on inputs only through the stamps of referenced data. Each referenced stamp is a constant, 𝑡 , or av (𝑥 ); by induction on the typing derivation, every such av (𝑥 ) is either pinned by ≈𝑡 (when ≤ 𝑡 ) or enters only through 
+
+max , min , or +𝛿 without affecting the value branch. The lemma is not circular: it does not presuppose acceptance of any decision, only that stamps are A-terms, which is a syntactic fact about F . Hence 
+
+𝛼 = 𝛼 ′. □
+
+Stamp agreement is thus a consequence of grammar— A is value-independent—and holds inde-pendently of the effect discipline; the effect discipline is needed only for value agreement. 
+
+Lemma 4 (Fundamental Lemma). Let Γ ⊢ 𝑒 : 𝜏 ! 𝜑 in F . For all 𝑡 and all 𝐼 ≈𝑡 𝐼 ′ with environments related pointwise by ∼𝑡,𝐼,𝐼 ′ at their declared effects, if 𝐼 ⊢𝑡 𝑒 ⇓ 𝑟 and 𝐼 ′ ⊢𝑡 𝑒 ⇓ 𝑟 ′, then 𝑟 ∼𝜑 𝑡,𝐼,𝐼 ′ 𝑟 ′.
+
+Proof. By induction on the typing derivation. Stamps agree throughout by Lemma 3, so we track only value agreement, and only in the case J𝜑 K𝑡,𝐼 ≤ 𝑡 .
+
+T-Base . ⟨𝑑, 𝐴 ⟩ has effect 𝐴 . If J𝐴 K𝑡 ≤ 𝑡 the datum is admissible, so by ≈𝑡 its value is pinned and 
+
+𝑑 = 𝑑 .
+
+T-Val , T-Op . The effect is the max of the premises’ effects. If max 𝑖 𝜑 𝑖 ≤ 𝑡 then every 𝜑 𝑖 ≤ 𝑡 , so by the induction hypothesis each operand value agrees; 𝑓 is pure, so 𝑓 (® 𝑣 ) = 𝑓 (® 𝑣 ′).
+
+T-Stamp . The effect is 𝜑 , unchanged by re-stamping. If 𝜑 ≤ 𝑡 the induction hypothesis gives value agreement, and the new stamp 𝐴 agrees by Lemma 3. The advertised stamp 𝐴 is irrelevant to the value relation—this is exactly why re-stamping cannot launder a future value past the discipline. In the classical taxonomy this is an intransitive flow [ 24 ]: a restamp is a permitted relabelling channel, but permitting it must not thereby permit the future value it carries to reach the decision. 
+
+T-Asof (and T-Retrieve ). The effect is 𝐴 . If 𝐴 ≤ 𝑡 , the as-of semantics read only store entries with availability ≤ 𝐴 ≤ 𝑡 , all pinned by ≈𝑡 ; hence identical content is selected and the values agree. 
+
+T-Window , T-Scan , T-Join . The effects are max es of premises, and the causal semantics reach no position later than the current one (Lemma 6). If the effect is ≤ 𝑡 , all contributing elements are admissible and the induction hypothesis applies elementwise. The series cases are proved in full in Section 5, which supplies the causality and monotonicity results this step invokes. 
+
+T-Let . By the induction hypothesis 𝑒 1’s result relates at 𝜑 1; extend the environment relation at 𝑥 
+
+and apply the induction hypothesis to 𝑒 2; the substituted effect 𝜑 2 [𝜑 1/av (𝑥 )] tracks the dependency.  
+
+> ACM Trans. Softw. Eng. Methodol., Vol. 0, No. 0, Article 0. Publication date: July 2026. 0:14 Xavier Fonseca
+
+T-Decide . The premise 𝜑 ⊑ 𝑡 forces the body’s effect ≤ 𝑡 at this epoch. By the induction hypothesis the body’s value agrees, and its stamp agrees, so the emitted decision ⟨𝑣, 𝛼 ⟩ is identical across the two runs. □
+
+Proof of Theorem 1. Suppose ⊢F 𝑒 and fix any 𝑡 , any 𝐼 , and any 𝐼 ′ ≈𝑡 𝐼 . Every decide 𝑡 subterm is well-typed with its T-Decide premise discharged. Applying Lemma 4 at that subterm yields an identical emitted ⟨𝑣, 𝛼 ⟩ under 𝐼 and 𝐼 ′. Since 𝑡 , 𝐼 , and 𝐼 ′ were arbitrary, 𝑒 satisfies Definition 8: it is look-ahead-free. □
+
+4.5 Relative Completeness 
+
+The discipline is sound but conservative: it rejects some look-ahead-free terms whose freedom is semantic rather than availability-structural—for instance, a value read from the future but provably cancelled inside a value operation. The following proposition states the strongest positive result available to any check that treats value operations as opaque. 
+
+Proposition 2 (Completeness relative to the effect abstraction). If 𝑒 ∈ F is rejected by 
+
+⊢F , then there exists an interpretation of 𝑒 ’s value operations, consistent with Assumption 1, under which 𝑒 is not look-ahead-free. Equivalently, the effect system is the most permissive sound discipline that treats value operations as opaque. 
+
+Proof. Rejection means some decide 𝑡 has body effect 𝜑 @ 𝑡 : a base datum with availability 
+
+> 𝑡 whose value reaches the decision through opaque operations. Choose those operations to be projections that expose the datum; then a future perturbation of it changes the decision, violating Definition 8. Hence no sound discipline that cannot inspect inside value operations can accept 
+
+𝑒 . □
+
+This is the honest ceiling of the approach. Exact look-ahead-freedom is value-semantic, and any decidable, function-agnostic check is complete only relative to opaque value operations. Inspecting inside a value operation—recognising, say, the algebraic cancellation of a future term—recovers more programs at the cost of decidability, which is another face of the boundary that Theorem 3 draws. 
+
+5 Hardening the Series Operators 
+
+The soundness proof of Theorem 1 treated scan , window , resample , and join by appealing to the fact that their causal semantics reach no position later than the current one. We now discharge that appeal. This section makes series and their evaluation precise, defines the availability-monotonicity invariant and proves that every operator preserves it, establishes a Causality Lemma certifying that the typed effect of a series term equals the true stamp of its output, and, on that basis, replaces the asserted series cases of the Fundamental Lemma with proved ones. It also surfaces the two local obligations—clauses (3) and (4) of Definition 4—that the checker must discharge. 
+
+5.1 Series and Positions 
+
+A term of series type denotes a function ¯𝑒 : Pos → TVal from a totally ordered position domain 
+
+(Pos , ⪯) —bar indices, event ordinals—to time-indexed values. Positions and times are distinct: Pos 
+
+orders where an element sits in a series, while availability av records when it becomes knowable. We write ¯𝑒 [𝑝 ] = ⟨𝑣 𝑝 , 𝛼 𝑝 ⟩ for the element at position 𝑝 , and av ( ¯𝑒 [𝑝 ]) = 𝛼 𝑝 .
+
+Definition 6 (Availability-monotone series). A series ¯𝑒 is availability-monotone if and only if 
+
+𝑝 ⪯ 𝑞 ⇒ av ( ¯𝑒 [𝑝 ]) ≤ av ( ¯𝑒 [𝑞 ]) . We write Mono ( ¯𝑒 ). 
+
+> ACM Trans. Softw. Eng. Methodol., Vol. 0, No. 0, Article 0. Publication date: July 2026. Look-Ahead-Freedom as Temporal Non-Interference: A Verifiable Correctness Property for Backtesting and Agentic Trading Pipelines 0:15
+
+Availability-monotonicity says that later positions are never available earlier—the defining regularity of an honestly stamped time series. It is a well-formedness invariant, not an assumption about arbitrary data: base series are monotone by construction, since a source publishes bar 𝑡 no earlier than bar 𝑡 − 1, and we prove that every operator preserves it. Where an operator could 
+
+break it—a misaligned resample or join —the preservation lemma’s premises identify exactly the well-formedness side-conditions the checker must enforce, turning a silent leakage channel into an explicit, checked obligation. 
+
+5.2 Operational Semantics of the Series Operators 
+
+Evaluation of a series term yields, at each position 𝑝 , a time-indexed value, written 𝐼 ⊢ ¯𝑒 [𝑝 ] ⇓ ⟨ 𝑣, 𝛼 ⟩.The rules below are the causal definitions; each references only positions ⪯ 𝑝 .Every series has a least position 𝑝 0 under ⪯, its start ; pred (𝑝 ) denotes the immediate predecessor of 𝑝 , defined for 𝑝 ≠ 𝑝 0. Clamped back-subtraction is 
+
+𝑝 ⊖ 𝑗 =
+
+(the position 𝑗 steps back from 𝑝, if it is ⪰ 𝑝 0,𝑝 0, otherwise (clamp at the start). Thus for 𝑝 within 𝑘 − 1 steps of the start, the window [ 𝑝 ⊖ ( 𝑘 −1), 𝑝 ] is the truncated prefix [ 𝑝 0, 𝑝 ]
+
+rather than reaching before 𝑝 0: there is no position earlier than 𝑝 0 to read. This fixes the base case of the inductions in Section 5.4, where at 𝑝 0 the window and the scan read only 𝑝 0 itself. The last-𝑘 window collects positions in [𝑝 ⊖ ( 𝑘 −1), 𝑝 ], never beyond 𝑝 , and stamps its output with the latest availability among them: 
+
+{ 𝐼 ⊢ ¯𝑒 [𝑞 ] ⇓ ⟨ 𝑣 𝑞 , 𝛼 𝑞 ⟩ } 𝑝 ⊖ ( 𝑘 −1) ⪯ 𝑞 ⪯𝑝 
+
+𝐼 ⊢ window 𝑘 ( ¯𝑒 ) [ 𝑝 ] ⇓ [ 𝑣 𝑞 ]𝑞 , max 𝑝 ⊖ ( 𝑘 −1) ⪯ 𝑞 ⪯𝑝 𝛼 𝑞 
+
+(E-Window )
+
+The causal fold is defined from its predecessor accumulator and the input at the current position only, and stamps with the running max of input stamps: 
+
+𝐼 ⊢ ¯𝑒 [𝑝 0] ⇓ ⟨ 𝑣 ′
+
+> 0
+
+, 𝛼 ′
+
+> 0
+
+⟩
+
+𝐼 ⊢ scan (𝑓 , 𝑒 0, ¯𝑒 ) [ 𝑝 0] ⇓ ⟨ 𝑓 (val (𝑒 0), 𝑣 ′
+
+> 0
+
+), max (𝛼 𝑒 0 , 𝛼 ′
+
+> 0
+
+) ⟩ (E-Scan-Init )
+
+𝐼 ⊢ scan (𝑓 , 𝑒 0, ¯𝑒 ) [ pred (𝑝 )] ⇓ ⟨ 𝑎, 𝛼 𝑎 ⟩ 𝐼 ⊢ ¯𝑒 [𝑝 ] ⇓ ⟨ 𝑣 𝑝 , 𝛼 𝑝 ⟩
+
+𝐼 ⊢ scan (𝑓 , 𝑒 0, ¯𝑒 ) [ 𝑝 ] ⇓ ⟨ 𝑓 (𝑎, 𝑣 𝑝 ), max (𝛼 𝑎 , 𝛼 𝑝 ) ⟩ (E-Scan-Step )
+
+This is the rule whose stamp bound the typing rule T-Scan must match. Join reads position 𝑝 of each source and stamps with the latest, formalising the principle that a joined row is available when its last component is: 
+
+{ 𝐼 ⊢ ¯𝑒 𝑖 [𝑝 ] ⇓ ⟨ 𝑣 𝑖 , 𝛼 𝑖 ⟩ } 𝑛 𝑖 =1
+
+𝐼 ⊢ join ( ¯𝑒 1, . . . , ¯𝑒 𝑛 ) [ 𝑝 ] ⇓ ⟨ ( 𝑣 1, . . . , 𝑣 𝑛 ), max 𝑖 𝛼 𝑖 ⟩ (E-Join )
+
+Finally, resample 𝜌 maps an output position 𝑝 to a set 𝜌 ← (𝑝 ) ⊆ Pos of source positions aggregated into it—for example, the minutes composing daily bar 𝑝 :
+
+{ 𝐼 ⊢ ¯𝑒 [𝑞 ] ⇓ ⟨ 𝑣 𝑞 , 𝛼 𝑞 ⟩ } 𝑞 ∈𝜌 ← (𝑝 )
+
+𝐼 ⊢ resample 𝜌 ( ¯𝑒 ) [ 𝑝 ] ⇓ agg ([ 𝑣 𝑞 ]) , max 𝑞 ∈𝜌 ← (𝑝 ) 𝛼 𝑞 
+
+(E-Resample )
+
+The rule 𝜌 is causal if max 𝜌 ← (𝑝 ) ⪯ 𝜄 (𝑝 ), where 𝜄 (𝑝 ) is the source position identified with output 
+
+𝑝 ’s emission point; that is, an output bar aggregates only source positions at or before its own close. Up-sampling requires the dual (each output maps to a unique source position ⪯ it). A non-causal 𝜌 
+
+is the classic resample leak, which the checker rejects (clause (4) of Definition 4).  
+
+> ACM Trans. Softw. Eng. Methodol., Vol. 0, No. 0, Article 0. Publication date: July 2026. 0:16 Xavier Fonseca
+
+5.3 Preservation of Monotonicity 
+
+Lemma 5 (Monotonicity preservation). If every base series is availability-monotone, then: 
+
+(1) window 𝑘 ( ¯𝑒 ) and scan (𝑓 , 𝑒 0, ¯𝑒 ) are monotone whenever ¯𝑒 is; 
+
+(2) join ( ¯𝑒 1, . . . , ¯𝑒 𝑛 ) is monotone whenever each ¯𝑒 𝑖 is; 
+
+(3) resample 𝜌 ( ¯𝑒 ) is monotone whenever ¯𝑒 is monotone and 𝜌 is causal. 
+
+Proof. Each output stamp is a max of input stamps over a position set that is itself monotone in 
+
+𝑝 . For E-Window , 𝑝 ⪯ 𝑝 ′ gives [𝑝 ⊖ ( 𝑘 −1), 𝑝 ] pointwise ⪯ [ 𝑝 ′ ⊖ ( 𝑘 −1), 𝑝 ′], and the max over a 
+
+≤-dominated multiset of a monotone series is non-decreasing. For E-Scan-Step , the stamp at 𝑝 is 
+
+max (stamp at pred (𝑝 ), 𝛼 𝑝 ) ≥ the stamp at pred (𝑝 ), immediately. For E-Join , the componentwise 
+
+max of monotone series is monotone. For E-Resample with causal 𝜌 , 𝑝 ⪯ 𝑝 ′ implies 𝜌 ← (𝑝 ) lies pointwise ⪯ 𝜌 ← (𝑝 ′) and each is ⪯ its emission point, so the max is non-decreasing. □
+
+Monotonicity is thus an invariant of every well-formed F -pipeline, established once at the leaves and preserved at every node—exactly the discipline that lets the effect terms of A, which use max 
+
+and min over positions, soundly bound availability. 
+
+5.4 The Causality Lemma 
+
+Lemma 6 (Causality). Let ¯𝑒 be a series term of F built from monotone base series by window ,
+
+scan , join , and causal resample . Then for every position 𝑝 :
+
+(1) (Position causality) the value and stamp of ¯𝑒 [𝑝 ] are functions only of base-series elements at positions ⪯∗ 𝑝 , where ⪯∗ is the pointwise-back reach of the operators (the identity for window, scan, and join; 𝜌 ← for resample); and 
+
+(2) (Stamp equals effect bound) the stamp 𝛼 𝑝 equals the max availability over those reachable base elements, and this equals J𝜑 K for the effect 𝜑 assigned by the typing rules T-Window , T-Scan ,
+
+T-Join , and T-Resample .
+
+Proof. By induction on the series-term structure, reading off the operational rules of Section 5.2. 
+
+Base series. ¯𝑒 [𝑝 ] is the datum at 𝑝 ; its reach is {𝑝 }; its stamp is 𝛼 𝑝 ; and its effect ( T-Base ) is that stamp. 
+
+Window. E-Window reads positions [𝑝 ⊖ ( 𝑘 −1), 𝑝 ] ⊆ { 𝑞 : 𝑞 ⪯ 𝑝 } and stamps with their max 
+
+availability. By the induction hypothesis each is a function of base elements ⪯ itself, hence ⪯ 𝑝 ;by Mono , the max over the window equals the availability of position 𝑝 , the latest, matching 
+
+T-Window ’s effect. 
+
+Scan. By induction on positions using E-Scan-Init /Step : the accumulator at 𝑝 is a function of inputs at {𝑝 0, . . . , 𝑝 }, all ⪯ 𝑝 ; the stamp is the max of those input stamps, which by Mono is the availability at 𝑝 , matching max (𝜑 0, 𝜑 ) evaluated at 𝑝 . This is the case the soundness proof previously asserted; it is now a consequence of E-Scan-Step reading only pred (𝑝 ) and 𝑝 .
+
+Join. E-Join reads position 𝑝 of each source; the reach is the union of the per-source reaches, each ⪯ 𝑝 by the induction hypothesis; the stamp is max 𝑖 𝛼 𝑖 , matching T-Join .
+
+Resample (causal 𝜌 ). E-Resample reads 𝜌 ← (𝑝 ), all ⪯ 𝜄 (𝑝 ) by causality, and stamps with their 
+
+max ; by the induction hypothesis and Mono this is bounded by the availability at 𝜄 (𝑝 ), matching 
+
+T-Resample . □
+
+The Causality Lemma is precisely the “reaches no position later than the current one” claim that the Fundamental Lemma required, now proved, and it additionally certifies that the typed effect equals the true stamp, closing any gap between the static bound and runtime reality.  
+
+> ACM Trans. Softw. Eng. Methodol., Vol. 0, No. 0, Article 0. Publication date: July 2026. Look-Ahead-Freedom as Temporal Non-Interference: A Verifiable Correctness Property for Backtesting and Agentic Trading Pipelines 0:17
+
+5.5 The Series Cases of the Fundamental Lemma 
+
+We can now discharge the series cases of Lemma 4 without appeal to unproven behaviour. Fix 𝑡 
+
+and 𝐼 ≈𝑡 𝐼 ′, and consider a series subterm evaluated toward a decision at 𝑡 whose effect 𝜑 satisfies 
+
+J𝜑 K𝑡 ≤ 𝑡 ; otherwise no value agreement is demanded, and by T-Decide the subterm cannot reach the decision. 
+
+Window, scan, join, resample. By the Causality Lemma (Lemma 6), the value at the relevant position 𝑝 is a function of base elements at positions whose availability is ≤ J𝜑 K𝑡 ≤ 𝑡 . Every such base element therefore has av ≤ 𝑡 and is pinned by ≈𝑡 : identical value and stamp under 𝐼 and 𝐼 ′.The operator’s value function—a composition of pure operations and selection—applied to identical inputs yields identical output, and the stamp is identical by Lemma 3. Hence ¯𝑒 [𝑝 ] agrees across the two runs. Every step now cites either the Causality Lemma (reach ⪯ 𝑝 with stamp equal to effect), mono-tonicity preservation (the invariant that makes the effect bound tight), or ≈𝑡 -pinning (admissible data agrees), so the series cases stand on the same footing as the scalar ones. 
+
+5.6 The Resulting Checker Obligations 
+
+The hardening surfaces exactly the two obligations recorded as clauses (3) and (4) of Definition 4, both syntactic and local. First, base series must be declared availability-monotone—a property of the data source, asserted at ingestion and, per the stated boundary, trusted, since incorrect source stamps remain out of scope. Second, each resample 𝜌 must carry a causal 𝜌 (max 𝜌 ← (𝑝 ) ⪯ 𝜄 (𝑝 )), and each join must align its sources at a common position rather than across a look-ahead offset; both are checkable by inspecting the operator’s alignment argument, and a non-causal alignment is rejected. With these local checks, Lemma 5 guarantees the global monotonicity invariant and Lemma 6 guarantees effect-stamp agreement, so Theorem 1 goes through as written. Decidability (Theorem 2) is unaffected: both obligations are 𝑂 (1) per operator, preserving the linear-time bound. 
+
+6 Operational Semantics and Look-Ahead-Freedom 
+
+This section fixes the dynamic meaning of a pipeline and, on that basis, states the property the discipline of Section 4 enforces. We define an epoch-parametrised big-step evaluation, the notion of two inputs agreeing up to an epoch , and finally look-ahead-freedom as a two-run temporal non-interference property. The definitions here are what Sections 3–5 refer forward to; in the final assembly this section may precede the calculus, so that the property is stated before the machinery that checks it. 
+
+6.1 Inputs, Stores, and Admissibility 
+
+An input assignment 𝐼 interprets the base data of a pipeline: to each base datum ⟨𝑑, 𝐴 ⟩ occurring in a term it assigns a time-indexed value 𝐼 (⟨ 𝑑, 𝐴 ⟩) = ⟨𝑣, 𝛼 ⟩, where 𝛼 = J𝐴 K is the datum’s availability stamp and 𝑣 its value. For the vintage constructs, 𝐼 additionally provides a store : a set of time-indexed entries, each carrying its own availability, over which asof and retrieve read. We write J𝐴 K𝑡,𝐼 for the denotation of an availability term 𝐴 at epoch 𝑡 under 𝐼 ; by Lemma 1 this depends on 𝐼 only through the stamps of referenced data. A time-indexed value ⟨𝑣, 𝛼 ⟩ is admissible at epoch 𝑡 if 𝛼 ≤ 𝑡 : its value is knowable by 𝑡 . A decision made at 𝑡 may legitimately depend only on admissible data. This is the semantic content that the effect discipline approximates statically.  
+
+> ACM Trans. Softw. Eng. Methodol., Vol. 0, No. 0, Article 0. Publication date: July 2026. 0:18 Xavier Fonseca
+
+6.2 Epoch-Parametrised Evaluation 
+
+Evaluation is a big-step relation 
+
+𝐼 ⊢𝑡 𝑒 ⇓ 𝑟, 
+
+read: under input assignment 𝐼 , evaluating term 𝑒 toward a decision at epoch 𝑡 produces result 
+
+𝑟 (a value, a time-indexed value, or a series thereof). The epoch 𝑡 is a parameter because the calculus’s decision construct, and the as-of reads it governs, are relative to the epoch at which a decision is being formed. The rules for the series operators were given in Section 5.2 ( E-Window ,
+
+E-Scan-Init/Step , E-Join , E-Resample ); we give here the remaining, scalar rules. A base datum evaluates to the value and stamp the assignment gives it; a projection discards the stamp; a pure operation applies once its operands are evaluated: 
+
+𝐼 (⟨ 𝑑, 𝐴 ⟩) = ⟨𝑣, 𝛼 ⟩
+
+𝐼 ⊢𝑡 ⟨𝑑, 𝐴 ⟩ ⇓ ⟨ 𝑣, 𝛼 ⟩ (E-Base ) 𝐼 ⊢𝑡 𝑒 ⇓ ⟨ 𝑣, 𝛼 ⟩
+
+𝐼 ⊢𝑡 val (𝑒 ) ⇓ 𝑣 (E-Val ){ 𝐼 ⊢𝑡 𝑒 𝑖 ⇓ 𝑣 𝑖 }𝑛 𝑖 =1
+
+𝐼 ⊢𝑡 𝑓 (𝑒 1, . . . , 𝑒 𝑛 ) ⇓ 𝑓 (𝑣 1, . . . , 𝑣 𝑛 ) (E-Op )
+
+Re-stamping evaluates its subject and replaces the stamp with the denotation of 𝐴 , leaving the value untouched—the operational counterpart of T-Stamp ’s “the value still depends on what it depended on”: 
+
+𝐼 ⊢𝑡 𝑒 ⇓ 𝑣 J𝐴 K𝑡,𝐼 = 𝛼 𝐼 ⊢𝑡 stamp (𝑒, 𝐴 ) ⇓ ⟨ 𝑣, 𝛼 ⟩ (E-Stamp )
+
+A point-in-time read returns the store content selected as of the denotation of 𝐴 : among store entries with availability ≤ J𝐴 K𝑡,𝐼 , the read returns the applicable one (e.g. the latest such entry for the queried key), stamped with J𝐴 K𝑡,𝐼 . retrieve evaluates identically over the agentic context store: 
+
+J𝐴 K𝑡,𝐼 = 𝛼 𝑤 = read  store (𝐼 ), {entries with av ≤ 𝛼 }
+
+𝐼 ⊢𝑡 asof (𝑒 store , 𝐴 ) ⇓ ⟨ 𝑤, 𝛼 ⟩ (E-Asof )
+
+A decision at epoch 𝑡 evaluates its body at that same epoch and emits the result: 
+
+𝐼 ⊢𝑡 𝑒 ⇓ ⟨ 𝑣, 𝛼 ⟩
+
+𝐼 ⊢𝑡 decide 𝑡 (𝑒 ) ⇓ ⟨ 𝑣, 𝛼 ⟩ (E-Decide )
+
+and let evaluates its bound term, extends the assignment for the bound variable, and evaluates the body: 
+
+𝐼 ⊢𝑡 𝑒 1 ⇓ 𝑟 1 𝐼 [𝑥 ↦ → 𝑟 1] ⊢ 𝑡 𝑒 2 ⇓ 𝑟 2
+
+𝐼 ⊢𝑡 let 𝑥 = 𝑒 1 in 𝑒 2 ⇓ 𝑟 2
+
+(E-Let )
+
+The reference-time versus availability distinction is now operational: the position at which a value sits in a series, and the reference period a datum is about , are recorded in its value/position; the 
+
+availability 𝛼 records only when it becomes knowable, and it is 𝛼 —not the reference time—that admissibility and the whole discipline turn on. A datum about period 𝑡 −1 that becomes knowable only at 𝑡 +5 has availability 𝑡 +5, and using it in a decision at 𝑡 is a look-ahead violation despite its earlier reference time. This is the confusion the calculus is designed to make impossible to express accidentally within the fragment. 
+
+6.3 Agreement Up to an Epoch 
+
+Look-ahead-freedom compares two executions that are identical on the admissible past and may differ arbitrarily on the future. We name that relation on inputs.  
+
+> ACM Trans. Softw. Eng. Methodol., Vol. 0, No. 0, Article 0. Publication date: July 2026. Look-Ahead-Freedom as Temporal Non-Interference: A Verifiable Correctness Property for Backtesting and Agentic Trading Pipelines 0:19
+
+Definition 7 (Agreement up to 𝑡 ). Two input assignments 𝐼 and 𝐼 ′ agree up to epoch 𝑡 , written 
+
+𝐼 ≈𝑡 𝐼 ′, if they assign identical time-indexed values to every base datum, and identical entries to every store entry, whose availability is ≤ 𝑡 :
+
+𝐼 ≈𝑡 𝐼 ′ def 
+
+⇐⇒ ∀ base data and store entries 𝑏 : av (𝑏 ) ≤ 𝑡 ⇒ 𝐼 (𝑏 ) = 𝐼 ′ (𝑏 ).
+
+No constraint is placed on data with availability > 𝑡 : the two assignments may differ freely on the future relative to 𝑡 .
+
+≈𝑡 is an equivalence relation for each fixed 𝑡 , and it is monotone in the epoch: 𝑡 ′ ≤ 𝑡 and 𝐼 ≈𝑡 𝐼 ′
+
+imply 𝐼 ≈𝑡 ′ 𝐼 ′ (agreeing on a larger admissible set implies agreeing on a smaller one). When we say a datum is pinned by ≈𝑡 , we mean its availability is ≤ 𝑡 , so Definition 7 forces the two runs to assign it the same time-indexed value—the fact used pervasively in the soundness proof. 
+
+6.4 Look-Ahead-Freedom 
+
+We can now state the property. Informally: a pipeline is look-ahead-free if no decision it emits at any epoch 𝑡 can be changed by altering data that only becomes available after 𝑡 . Formally, it is a two-run non-interference statement over the time-indexed partition induced by 𝑡 : the “high” (protected) inputs are the data with availability > 𝑡 , the “low” (observable) output is the decision at 
+
+𝑡 , and non-interference is the requirement that the low output is a function of the low inputs alone. 
+
+Definition 8 (Look-ahead-freedom). A pipeline term 𝑒 is look-ahead-free if for every epoch 𝑡 , every 
+
+decide 𝑡 subterm of 𝑒 with body 𝑒 ′, and every pair of input assignments 𝐼 ≈𝑡 𝐼 ′,
+
+𝐼 ⊢𝑡 decide 𝑡 (𝑒 ′) ⇓ ⟨ 𝑣, 𝛼 ⟩ and 𝐼 ′ ⊢𝑡 decide 𝑡 (𝑒 ′) ⇓ ⟨ 𝑣 ′, 𝛼 ′⟩ =⇒ 𝑣 = 𝑣 ′.
+
+That is, the value emitted by the decision at 𝑡 is invariant under any perturbation of the data whose availability exceeds 𝑡 .The property is stated on the decision’s emitted value , since the value is the observable a downstream consumer acts on and the only thing a future datum could corrupt; the decision’s stamp is 𝑡 by E-Decide and so agrees across the two runs unconditionally. This is the standard non-interference posture—the observable low output is a function of the low inputs alone—and it is the exact property the two-run logical relation of Section 4.4 was built to establish, where value agreement at effect 𝜑 ≤ 𝑡 is precisely 𝑣 = 𝑣 ′ here. This is the property Theorem 1 certifies for accepted terms of F , and the property Theorem 3 (Section 7) shows is undecidable on the full language U.
+
+7 The Undecidability Boundary 
+
+Theorem 1 gives a sound, decidable check on the fragment F . We now show this is the best possible in a precise sense: on the full language U, where availability may be computed from data values (Definition 2), look-ahead-freedom is undecidable. The fragment restriction is therefore not a convenience but the exact frontier of decidability. 
+
+Theorem 3 (Undecidability on the full language). Look-ahead-freedom (Definition 8) is undecidable for terms of U. More precisely, the set of look-ahead-free terms of U is Π01-complete: non-look-ahead-freedom is recursively enumerable—a leak is a finite witness—while look-ahead-freedom is not. 
+
+The proof is a many-one reduction from the halting problem. We first fix the modelling assump-tions the encoding uses; each concerns U, the object whose undecidability we characterise, not the fragment F where real pipelines live.  
+
+> ACM Trans. Softw. Eng. Methodol., Vol. 0, No. 0, Article 0. Publication date: July 2026. 0:20 Xavier Fonseca
+
+(M1) Value-conditioned availability. U admits, as the availability argument of a stamping con-struct, a pipeline term of sort Time computed from data values—in particular a total condi-tional such as if val (𝑒 )>𝑐 then 𝜏 1 else 𝜏 2. This is exactly the extension defining U (Definition 2), whose own illustrative instance is a value-conditioned Time term. (M2) Configurations as values. A value ( Val ) may hold a finite string, so a Turing-machine configuration—control state, head position, and finite tape—is a Val , and one step of the machine is a total, pure function Val → Val , consistent with Assumption 1. The step function is total; we never ask a value operation to decide halting, only to advance one step. (M3) Countable position domains. Series in U may be countably infinite, with position domain an initial segment of N of unbounded length. Because every operator is causal and pointwise (Section 5.2)— scan depends only on positions ⪯ 𝑝 , window on a bounded suffix, and we use no unbounded-lookback resample—each element ¯𝑒 [𝑝 ] is finitely determined even when the series is infinite. No evaluation ever forces a completed infinite series; the infinity resides solely in the epoch quantifier of Definition 8. 
+
+Proof. Let 𝑀 be a Turing machine (run on blank input; the general case is identical). We construct a term 𝑒 𝑀 ∈ U with 
+
+𝑀 halts ⇐⇒ 𝑒 𝑀 is not look-ahead-free ,
+
+which reduces the halting problem to non-look-ahead-freedom and hence establishes undecidability. 
+
+Simulating 𝑀 with a causal fold. Identify the position domain with the epoch grid: position 𝑝 
+
+corresponds to epoch 𝑝 , and data at position 𝑝 has availability 𝑝 . By (M2), let cfg 0 be the initial configuration and step : Val → Val the total one-step function. The causal fold 
+
+¯𝑐 = scan (step , cfg 0, ¯𝜄 )
+
+over a driver series ¯𝜄 (a base series with one element per position, availability 𝑝 at position 𝑝 )computes, by E-Scan-Init /E-Scan-Step , the configuration cfg 𝑝 = step 𝑝 (cfg 0) at each position 𝑝 .By causality (Lemma 6), ¯𝑐 [𝑝 ] depends only on positions ⪯ 𝑝 , so cfg 𝑝 is a function of data available by epoch 𝑝 ; its availability stamp is 𝑝 . Thus cfg 𝑝 is admissible at epoch 𝑝 .
+
+A halting predicate over admissible data. Let halted : Val → Bool be the total pure predicate true exactly on halting configurations (M2). The value ℎ𝑡 = halted (cfg 𝑡 ) is computed from cfg 𝑡 , which is admissible at epoch 𝑡 ; hence ℎ𝑡 is itself admissible at epoch 𝑡 —it reads no future data. Note ℎ𝑡 is monotone in 𝑡 once true (a halting machine stays halted), and ℎ𝑡 = false for all 𝑡 iff 𝑀 never halts. 
+
+Gating a genuinely future datum by the halting predicate. Introduce a base datum 𝑑 ↑ with a genuinely future availability—formally, at epoch 𝑡 its natural availability is 𝑡 +1 > 𝑡 , so it is inadmissible at 𝑡 . Using the value-conditioned availability of (M1), re-stamp 𝑑 ↑ with 
+
+𝐴 𝑡 = if ℎ𝑡 then 𝑡 else 𝑡 +1, 𝑑 ★ = stamp (𝑑 ↑, 𝐴 𝑡 ),
+
+and feed its value into the decision at 𝑡 :
+
+𝑒 𝑀 = decide 𝑡 
+
+  𝑔 (val (𝑑 ★)) ,
+
+where 𝑔 is any value operation with 𝑔 non-constant in its argument (so the datum’s value genuinely influences the output). The construction is uniform in 𝑡 : 𝑒 𝑀 emits a decision at every epoch. 
+
+Correctness of the reduction. Fix an epoch 𝑡 and consider two input assignments 𝐼 ≈𝑡 𝐼 ′ that differ only on 𝑑 ↑ (legitimate, since 𝑑 ↑ has availability > 𝑡 under any assignment where it is not re-stamped down). If 𝑀 halts, let 𝑇 be its halting step. At epoch 𝑡 = 𝑇 , ℎ𝑇 = true , so 𝐴 𝑇 = 𝑇 : the re-stamp marks 
+
+𝑑 ★ as available now , its value is admissible, and it flows through 𝑔 into decide 𝑇 . Perturbing 𝑑 ↑ (a  
+
+> ACM Trans. Softw. Eng. Methodol., Vol. 0, No. 0, Article 0. Publication date: July 2026. Look-Ahead-Freedom as Temporal Non-Interference: A Verifiable Correctness Property for Backtesting and Agentic Trading Pipelines 0:21
+
+datum with natural availability > 𝑇 ) changes val (𝑑 ★) and hence the emitted value, so there exist 
+
+𝐼 ≈𝑇 𝐼 ′ with differing decisions: 𝑒 𝑀 is not look-ahead-free. If 𝑀 never halts, then ℎ𝑡 = false for every 𝑡 , so 𝐴 𝑡 = 𝑡 +1 > 𝑡 at every epoch: 𝑑 ★ is inadmissible at every decision, its value never influences any decide 𝑡 , and every decision depends only on admissible data. Hence for all 𝑡 and all 𝐼 ≈𝑡 𝐼 ′ the emitted values coincide: 𝑒 𝑀 is look-ahead-free. Therefore 𝑀 halts iff 𝑒 𝑀 is not look-ahead-free, completing the reduction. Since the halting problem is undecidable, so is look-ahead-freedom on U.
+
+Complexity. Non-look-ahead-freedom is recursively enumerable: a leak is witnessed by a finite object—an epoch 𝑡 , and two assignments 𝐼 ≈𝑡 𝐼 ′ differing on some datum of availability > 𝑡 that yields different decisions at 𝑡 —and each candidate witness is checkable in finite time by evaluating the two runs up to 𝑡 , which by (M3) touches only finitely much of the series. Enumerating epochs and finite perturbations therefore semi-decides non-look-ahead-freedom, placing it in Σ01 and look-ahead-freedom in Π01. The reduction above maps halting (which is Σ01-complete) to non-look-ahead-freedom, so the latter is Σ01-hard and look-ahead-freedom is Π01-hard; with the upper bound, look-ahead-freedom is Π01-complete. □
+
+Two consequences frame the contribution. First, the asymmetry is practically exact: a sound analysis can always report a leak it finds (leaks are r.e.), but no analysis can certify freedom in general (freedom is properly Π01)—which is precisely why a differential tester such as DataFlow can flag violations it happens to exercise yet cannot guarantee their absence, and why the fragment restriction is the route to a soundness guarantee rather than a best-effort test. Second, the reduction pinpoints the single feature responsible: value-conditioned availability (M1). Removing it—confining availability to the value-independent sublanguage A—is exactly the passage from U to F , and it is what turns an undecidable property into the linear-time check of Theorem 2. The boundary is not incidental; it is drawn by one syntactic capability. 
+
+8 Evaluation 
+
+The formal results establish that the discipline is sound and decidable in linear time. This section asks three empirical questions that the theory alone does not answer. First, does the checker’s cost actually scale linearly in practice, as Theorem 2 predicts, and where does the availability-term complexity enter (§8.1)? Second, does soundness—an ACCEPT verdict never being falsifiable—hold on proprietary market data, as judged by an independent oracle (§8.2)? Third, does the sound checker detect leaks that the empirical detectors in current practice miss, and at what false-positive cost (§8.3)? All experiments use a clean-room implementation of the checker over the calculus of Sections 3–5, with no proprietary code, market data, or strategy content. The oracle validation (§8.2) addition-ally runs against archetypes derived from proprietary market data that we are not permitted to redistribute; the reported figures for that experiment therefore come from data readers cannot obtain. The publicly released artifact reproduces the method, not those figures: it ships the checker, the detectors, the oracle, the adversarial corpus, and synthetic stand-ins for the archetypes that exercise the same leak mechanisms, so that every qualitative claim below can be re-run end to end (see the Data and Code Availability statement). Every reported quantity is produced by an executed experiment against a committed revision; we mark computed figures accordingly and fix all seeds. We follow a pre-registered analysis plan committed before the statistical code was written, and report deviations from it explicitly. Two scope caveats apply throughout. The comparison corpus (§8.3) is adversarially constructed to stress detectors, so its rates are existence and robustness evidence over a hard corpus, not estimates of real-world leak frequency. The real-data validation  
+
+> ACM Trans. Softw. Eng. Methodol., Vol. 0, No. 0, Article 0. Publication date: July 2026. 0:22 Xavier Fonseca
+
+(§8.2) uses an independent dynamic oracle whose witnesses establish leaks but whose silence does not establish freedom (freedom is not r.e., by Theorem 3). 
+
+8.1 Scaling of the Checker (Claim A) 
+
+Theorem 2 states that acceptance is decidable in time linear in term size when availability-term complexity is bounded. We test this along two axes: the number of pipeline nodes at bounded availability complexity (Axis 1), and the availability-term complexity at fixed node count (Axis 2). Timing uses a monotonic high-resolution clock, five discarded warm-up runs followed by fifty timed repetitions per size, with pipeline construction excluded from the measured region and a 5,000 -draw bootstrap confidence interval on the median; the fitted quantity is the ordinary-least-squares slope of log (time ) on log (size ), with a bootstrap interval over resampled repetitions. 
+
+Axis 1: node count. Over pipeline sizes from 10 to 10 5 nodes at bounded availability complexity, the fitted log–log slope is 1.023 (95% bootstrap CI [1.021 , 1.026 ]) (Figure 2a). A slope of unity is linear scaling; the measured slope is within three percent of unity across four orders of magnitude, confirming the linear-time prediction of Theorem 2. We report one methodological point that materially affected this result, in the interest of repro-ducibility. An initial implementation of the availability normal-form computation performed a quadratic tuple-concatenation fold, yielding a fitted slope of 1.39 —super-linear, and at first reading an apparent tension with the theorem. Profiling localised the cost to the normalisation fold, not the type-checking pass; replacing the fold with a linear accumulation (a verdict-preserving change, with the full test suite green before and after) restored the slope to 1.023 . The theorem predicts linear behaviour of the algorithm ; the benchmark first measured an implementation that departed from it, and then, once corrected, confirmed it. We keep the episode in the record because it is exactly the kind of gap between a proof about an algorithm and the artifact that realises it that an empirical scaling check exists to catch. 
+
+Axis 2: availability-term complexity. Holding node count fixed and growing the availability term as a balanced alternating min /max tree, check time grows smoothly through small depths (from 
+
+1.35 × 10 −5 s at 2 literals to 5.6 × 10 −4 s at 32 literals) and then sharply— 4.5 × 10 −2 s at 64 literals and 1.1 × 10 −1 s at 128 literals. This inflection is not an implementation defect: it is the intrinsic cost of normalising an alternating min /max availability term, whose normal form can be large, and it is the reason Theorem 2 states linearity under bounded availability-term complexity rather than unconditionally (Figure 2b). The two axes together give the honest decomposition: the checker is linear in the structural size of the pipeline, and the only super-linear regime lies in adversarially deep availability expressions, which do not arise in the point-in-time pipelines the fragment is designed for—base data, lags, and max -of-sources joins produce shallow availability terms. The complexity of the check is thus governed by how convoluted a pipeline’s availability structure 
+
+is, not by its data-flow size, and for realistic pipelines the former is small. This observation also motivates the fragment’s restriction to fixed-arity min /max : it is what keeps availability normal forms, and therefore the effect-ordering decision, tractable. 
+
+8.2 Soundness on Real Data (Oracle Validation) 
+
+Claim A concerns cost and Claim B concerns detection against other tools; neither directly tests the property the theory actually guarantees—that an accept verdict is never wrong. We test that here against proprietary market data, using an oracle that decides leak-reality independently of the checker. The oracle is a dynamic two-run test: at a sampled epoch 𝑡 , it computes the decision on the data as stored, then recomputes it after perturbing every datum whose availability exceeds 𝑡 ;if the two decisions differ, the future has influenced the present and a leak is witnessed . This is a direct operationalisation of Definition 8 at the sampled epochs, and it shares no code with the static                         
+
+> ACM Trans. Softw. Eng. Methodol., Vol. 0, No. 0, Article 0. Publication date: July 2026. Look-Ahead-Freedom as Temporal Non-Interference: A Verifiable Correctness Property for Backtesting and Agentic Trading Pipelines 0:23 10 110 210 310 410 5
+> pipeline node count N
+> 10 4
+> 10 3
+> 10 2
+> 10 1
+> check time (s)
+> (a) Node-count scaling
+> fit slope 1.023, 95% CI [1.021, 1.026]
+> fit: slope = 1.023
+> slope = 1 (linear)
+> median check time
+> 21222324252627
+> availability-term literals
+> 10 5
+> 10 4
+> 10 3
+> 10 2
+> 10 1
+> check time (s)
+> normal-form
+> blow-up
+> (b) Availability-term complexity
+> intrinsic min/max normal-form growth
+
+Fig. 2. Checker scaling. (a) Node-count scaling at bounded availability complexity: median check time versus pipeline node count on log–log axes, with a fitted slope of 1.023 (95% bootstrap CI [1.021 , 1.026 ]) against the linear ( slope = 1) reference; error bars are 5,000 -draw bootstrap CIs on the median. (b) Availability-term complexity at fixed node count: check time versus the number of literals in a balanced alternating min /max 
+
+availability term, exhibiting the intrinsic normal-form blow-up that the fragment’s fixed-arity restriction is designed to avoid. Together the panels show the check is linear in data-flow size and super-linear only in adversarially deep availability structure, which does not arise in point-in-time pipelines. 
+
+checker. The soundness question is then precise: does any pipeline the checker accept s admit an oracle witness? If so, the checker is unsound; if not, every acceptance withstands an independent dynamic falsification attempt. We run the oracle over five archetypes drawn from proprietary market data (not redistributable), each in a clean and one or more leaky variants: AR2 (fundamentals, with a reference-time leak and a restatement-vintage leak), AR3 (weekly releases), AR4 (intraday bars aggregated at a session close), and AR5 (a survivorship-filtered universe). These span the leak families that occur in practice—reference-versus-availability misalignment, restatement vintages, post-close aggregation, and survivorship. We report only verdicts, witness existence, and decision deltas; the released artifact substitutes synthetic stand-ins with the same schemas and leak mechanisms for these archetypes. Table 1 gives the result. Every checker accept —AR2, AR3, AR4, and AR5 in their clean variants— has no oracle witness: the soundness cross-check passes with no accepted pipeline falsifiable by the oracle. Every leaky variant is rejected by the checker. For four of the five leaky variants (AR2 reference, AR2 restatement, AR4, AR5) the oracle independently witnesses the leak, confirming the rejection dynamically; the AR2 restatement case is notable, as the restatement-vintage leak is one of the subtlest in practice and the checker catches it through the T-Asof and T-Stamp discipline. The AR3 leaky variant is the instructive exception and we call it out explicitly: the checker rejects it, but the oracle finds no witness at its sampled epochs. This is not a soundness violation— soundness constrains accept , and the checker did not accept—but a case where the sound static analysis catches a real leak (real by the term’s semantics: the alignment reads a value whose availability follows the decision epoch) that the dynamic oracle fails to exercise, because the weekly release lag is short and the sampled epochs do not happen to flip the selected row. It is the same phenomenon as the coverage misses of Claim B, now arising on proprietary market data and against a dynamic oracle rather than a detector: a two-run test certifies nothing by its silence, exactly                                              
+
+> ACM Trans. Softw. Eng. Methodol., Vol. 0, No. 0, Article 0. Publication date: July 2026. 0:24 Xavier Fonseca
+> Table 1. Real-data oracle validation. For each archetype and variant: the checker verdict, whether the independent two-run oracle witnessed a leak, and whether the two agree. No checker accept has an oracle witness (soundness holds); the AR3 leaky variant is a conservative rejection the oracle does not witness (see text). Seed 20260702 ; captured at commit fcc6a41 .
+> Archetype Variant Checker Oracle witness? Agreement AR2 clean accept no yes AR2 leaky reference reject yes yes AR2 leaky restatement reject yes yes AR3 clean accept no yes AR3 leaky reject no yes (conservative) AR4 clean accept no yes AR4 leaky reject yes yes AR5 clean accept no yes AR5 leaky reject yes yes
+
+as Theorem 3 predicts, whereas the static checker’s rejection is driven by the term’s availability structure regardless of which epochs a tester samples. The static and dynamic views thus agree wherever the dynamic view can see, and where they diverge it is the static, sound analysis that is correct. 
+
+8.3 Detection versus the Empirical Detectors (Claim B) 
+
+The practical claim motivating the whole development is that a sound static check catches leaks that the empirical detectors in current use miss. We test this on an adversarial corpus of 53 pipelines with ground truth fixed by construction: 33 genuinely leaking ( leak ) and 20 genuinely clean (clean ). Each leak case carries an explicit witnessing perturbation—an input and epoch at which the decision provably changes—so ground truth is established independently of every tool under test. We compare three tools: the sound checker of this paper; a two-run differential detector that re-executes the pipeline on perturbed future data at sampled epochs and flags a change; and a tiling 
+
+detector that compares outputs across shifted data windows. The two-run detector is the design underlying differential leakage testers such as DataFlow; the tiling detector represents window-shift consistency checks. 
+
+The corpus. The corpus is organised into six mechanisms, each targeting a specific way a leak evades a detector or a clean pipeline trips a sound checker. Three produce leaks: M1 (coverage miss) places the leak at an epoch falling between the two-run detector’s sampled epochs, so a detector that samples the time axis can step over it; M2 (perturbation-insensitivity miss) reads a future value through a threshold operation that the detector’s default perturbation does not flip on the tested input, though a different input would; M3 (insidious re-stamp miss) re-stamps a future-valued series to an admissible stamp, the empirical form of the T-Stamp channel—an output-comparing detector sees an unchanging value and misses it, while the effect system preserves the future effect through the re-stamp and rejects. Three produce clean pipelines that probe the checker’s precision: 
+
+FP1 (algebraic cancellation) subtracts a future value from itself; FP2 (dominated future) applies an operation that ignores its future argument; both are clean, and the checker rejects them because it treats value operations as opaque—the documented relative-completeness ceiling of Proposition 2. The sixth, FP2b (availability-structure domination), declares an availability of min (𝑡, 𝑡 +1), which the effect normal form correctly reduces to 𝑡 : these cases are clean and the checker accepts them, testing whether the checker over-rejects on availability structure. Of the 53 cases, 52 are synthetic terms over the public DSL; one is an anchor drawn from proprietary market data (a weekly-release                                          
+
+> ACM Trans. Softw. Eng. Methodol., Vol. 0, No. 0, Article 0. Publication date: July 2026. Look-Ahead-Freedom as Temporal Non-Interference: A Verifiable Correctness Property for Backtesting and Agentic Trading Pipelines 0:25
+> Table 2. Detection over the adversarial corpus: false-negative rate over 33 leak cases and false-positive rate over 20 clean cases. The checker’s zero false-negative arm is reported with its rule-of-three upper bound. Confidence intervals are 5,000 -draw cluster bootstraps over the six mechanisms; the wide intervals reflect the small number of mechanism clusters, not instability of the underlying rates (see text).
+> Tool Metric Events/ 𝑛 Rate 95% CI Checker FN 0/33 0.0% [0,9.1% ](rule of three) Two-run FN 18 /33 54 .5% wide (see text) Tiling FN 33 /33 100 .0% [100 ,100 ]%
+> Checker FP 15 /20 75 .0% FP1, FP2 only; FP2b accepted Two-run FP 0/20 0.0% [0,0]%
+> Tiling FP 0/20 0.0% [0,0]%
+
+alignment) included to exhibit the same detector-miss phenomenon on real market data. In the released artifact this anchor is replaced by a synthetic term with the same alignment structure. 
+
+Results. Table 2 reports false-negative rates over the 33 leak cases and false-positive rates over the 20 clean cases. The sound checker has a false-negative rate of 0: it misses none of the 33 
+
+leaks. Because this is a zero-event arm, we report it with the rule-of-three upper bound, giving a false-negative rate of 0 with 95% upper bound 9.1% . The two-run detector misses 18 of 33 leaks (54 .5% ) and the tiling detector misses all 33 (100% ); both differences against the checker are large. On the clean cases, the checker false-positives on 15 of 20 (75% )—exactly the FP1 and FP2 cases, where value semantics it cannot inspect render an opaque rejection—while correctly accepting all five FP2b cases, confirming that the false positives are confined to opaque value operations and that the effect normal form does not over-reject on availability structure. The two empirical detectors false-positive on none of the clean cases, as expected of tools that only flag observed output changes. 
+
+Statistical analysis. We follow the pre-registered analysis plan. The primary endpoints are the pairwise false-negative differences between each detector and the checker; secondary endpoints are the false-positive comparison and non-parametric robustness. Because the corpus is clustered by mechanism, inference uses a cluster bootstrap and a cluster-respecting permutation test rather than treating cases as independent. For the two dominance comparisons, the checker misses strictly fewer leaks than the two-run detector (difference 54 .5 percentage points) and than the tiling detector ( 100 points); a 10 ,000 -draw permutation test rejects equality in both cases, and because the checker arm is perfect the permutation statistic sits at its resolution floor, so we report 𝑝 < 10 −4
+
+(permutation-limited) with the number of discordant pairs ( 18 and 33 respectively) rather than a spuriously precise point value. A Benjamini–Hochberg correction over the family of comparisons leaves all adjusted 𝑞 -values at 10 −4. A Wilcoxon signed-rank test on paired per-case correctness agrees ( 𝑝 < 10 −3 for each comparison). Post-hoc power for the checker-versus-two-run comparison is 76 .7% at the observed effect; this is below the conventional 80% and we report it as such, noting that the small corpus limits power and that the permutation and Wilcoxon tests independently corroborate the effect; the checker-versus-tiling comparison is at maximal effect. We stress the scope caveat from the plan: the corpus is adversarial, so these rates are existence and robustness evidence—leaks of these kinds exist that defeat the detectors and are caught by the checker—and not estimates of leak frequency in naturally occurring pipelines. Two pre-registered deviations are recorded: subgroup bootstraps resample within the leaking or clean mechanisms respectively (resampling all six for a subgroup rate yields empty pools), and the bias-corrected interval falls back to a percentile interval on the boundary arms; neither changes the endpoints.  
+
+> ACM Trans. Softw. Eng. Methodol., Vol. 0, No. 0, Article 0. Publication date: July 2026. 0:26 Xavier Fonseca
+
+The comparison and the oracle validation tell one story from two sides. Both the tiling detector on the corpus and the two-run oracle on the real-data AR3 archetype (§8.2) miss leaks that the sound checker catches; the checker’s cost is a set of opaque-value-op false positives whose extent is exactly characterised (Proposition 2) and empirically confined to the FP1/FP2 mechanisms. A sound over-approximation trades false alarms for the guarantee that an accepted pipeline is genuinely leak-free—the guarantee the empirical detectors, by Theorem 3, cannot provide. 
+
+9 Discussion 
+
+What the identification buys. The technical content of this paper follows from a single move: reading look-ahead-freedom as non-interference over a time-indexed lattice. The move is worth restating because its payoff is not cosmetic. Once the correspondence is in place, results that would each be substantial to establish from scratch arrive as instances of known theory. That freedom is undecidable in general is not a surprise to be discovered empirically but a consequence of the timed non-interference frontier, transported through data-dependent availability. That a sound static discipline exists on a value-independent fragment is the temporal reading of the classical fact that information flow is certifiable by a lattice-respecting type or effect system [ 11 , 21 , 23 , 30 ]. That re-stamping is the delicate case is the temporal reading of controlled declassification and intransitive flow [ 24 , 26 ]: a re-stamp is a permitted relabelling channel whose permission must not be allowed to launder the future value it carries, and the T-Stamp rule is exactly the discipline that grants the one without the other. The contribution is not to reinvent this machinery but to recognise that the problem the quantitative-evaluation community has been managing by hand is the problem this machinery was built to solve. 
+
+Soundness is the point, and it has a price. The empirical comparison (§8.3) is best read not as a claim that the checker is uniformly “better” than a differential detector but as a demonstration of what a soundness guarantee is and costs. The two-run and tiling detectors never raise a false alarm on our corpus, because they only ever report an output change they actually observed; and they miss 54 .5% and 100% of the planted leaks respectively, because a leak invisible at the sampled epochs or under the tested perturbation leaves the observed output unchanged. The checker inverts both properties. It misses no leak, because it reasons about every availability path rather than the epochs a tester happens to visit; and it pays for this with false positives that are not incidental but 
+
+characterised : they occur exactly when a semantically clean result depends on a value operation the analysis must treat as opaque—an algebraic cancellation of a future term against itself, or an operation that provably ignores its future argument (Proposition 2). This is the generic situation of any sound static analysis of a semantic property: undecidability forces over-approximation, and over-approximation shows up as conservative rejections on a delimited class of inputs. The design question is not whether to pay this price but whether its extent is known and acceptable, and here it is both: the false positives are confined to opaque value arithmetic over future-referenced data, a pattern that a practitioner can recognise and, where a clean pipeline is wrongly rejected, discharge by a local annotation. A detector’s silence, by contrast, is uninformative by construction, and no amount of additional sampling converts it into a guarantee (Theorem 3). 
+
+Why a static property, and not a better audit. Reporting checklists and reproducibility audits have become the community’s main instrument for disciplining evaluation, and they are a genuine advance: a recent audit of thirty large-language-model trading studies shows that the assumptions determining whether a result is economically interpretable—point-in-time controls, execution tim-ing, universe construction, artifact release—are far less consistently reported than the architectures they accompany [ 32 ]. Our contribution is complementary to that programme and addresses its ceiling. A checklist records that an author attests to point-in-time discipline; it cannot verify that  
+
+> ACM Trans. Softw. Eng. Methodol., Vol. 0, No. 0, Article 0. Publication date: July 2026. Look-Ahead-Freedom as Temporal Non-Interference: A Verifiable Correctness Property for Backtesting and Agentic Trading Pipelines 0:27
+
+the pipeline realises it, and the audit itself notes that the needed detail is frequently unrecoverable from the artifact. A formal property is exactly the missing verifier: for a pipeline in the fragment, “point-in-time correct” ceases to be an attestation and becomes a checkable fact. The agentic setting sharpens the argument. When look-ahead can enter through a model’s pretraining corpus or a retrieval index rather than through the pipeline’s code [ 19 , 28 , 33 ], even a perfect audit of the code cannot rule it out. Our calculus makes this precise rather than dissolving it: a retrieval or tool-call step is admissible in the fragment only when its result carries an availability bounded by the decision epoch, so a pipeline whose retrieval reaches into a corpus of unbounded vintage is rejected—the formal system declines to certify exactly the configuration the empirical work has found to be dangerous. It does not, and cannot, inspect the model’s weights; what it can do is refuse to accept a pipeline whose declared availability structure admits the leak, which is the appropriate boundary for a static discipline. 
+
+Threats to validity. The empirical claims carry scope limits we state plainly. The comparison corpus (§8.3) is adversarially constructed to separate the tools, so its miss rates are existence-and-robustness evidence—leaks of these kinds exist that defeat the detectors and are caught by the checker—and not estimates of how often leaks occur in naturally written pipelines; we make no such frequency claim. The corpus is small and clustered by construction mechanism, which is why inference uses a cluster bootstrap and a cluster-respecting permutation test, and why post-hoc power for the checker-versus-two-run comparison ( 76 .7% ) sits below the conventional threshold even as the permutation and Wilcoxon tests independently corroborate the effect. The real-data validation (§8.2) uses an independent dynamic oracle whose witnesses establish leaks but whose silence establishes nothing, by the same non-recursive-enumerability of freedom that limits every dynamic method; the AR3 case, where the checker soundly rejects a leak the oracle does not happen to witness, is the predicted phenomenon rather than a discrepancy to explain away. Finally, soundness is a property of the calculus and its checker, not of an arbitrary Python backtest: the guarantee applies to pipelines expressed in, or faithfully modelled by, the fragment, and extends to a real system only insofar as that system’s availability structure is captured by the model. 
+
+Limitations and future work. Three directions follow directly. First, the relative-completeness ceiling is a matter of value opacity; enriching the value layer with lightweight algebraic reasoning (recognising self-cancellation, or arguments provably ignored) would convert some of the char-acterised false positives into acceptances without touching soundness, and the precise, confined nature of those false positives makes this a well-posed target rather than an open-ended one. Second, the fragment’s guarantee currently rests on the pipeline being expressed in the calculus; closing the gap to deployed code means inferring availability structure from real backtesting and feature-engineering frameworks, so that the check can be run against an existing pipeline rather than a re-encoding of it—a program-analysis problem the value-independence of availability should make tractable. Third, the agentic treatment here bounds availability at the retrieval interface but treats the underlying model as a black box; characterising when a model’s own pretraining cutoff can be folded into the availability lattice, so that “the model knows nothing after 𝑡 ” becomes part of the certified property rather than an external assumption, is the natural next step toward certifying agentic pipelines end to end. 
+
+10 Conclusion 
+
+Look-ahead bias has been treated, across quantitative finance and machine learning alike, as a hazard to be managed by discipline and caught by detectors—an approach that is sound only channel by channel and that certifies nothing by its silence. We have argued that it is instead a formal property in disguise: fixing a decision epoch, the demand that the future not influence the present  
+
+> ACM Trans. Softw. Eng. Methodol., Vol. 0, No. 0, Article 0. Publication date: July 2026. 0:28 Xavier Fonseca
+
+is temporal non-interference over a time-indexed information lattice. That single identification imports the full apparatus of information-flow theory, and with it both a hard limit and a usable guarantee. On a pipeline language where a datum’s availability may be computed from data values, look-ahead-freedom is undecidable and Π01-hard, so leakage is recursively enumerable but freedom is not—which is exactly why detectors can exhibit leaks yet never certify their absence. On the value-independent fragment that covers the pipelines practitioners actually write—windowing, rolling statistics, normalisation, resampling, feature joins, point-in-time and vintage reads, and agentic retrieval steps—freedom is decidable, and a type-and-effect system certifies it soundly in time linear in the size of the pipeline. The empirical study confirms the picture the theory predicts: the check scales linearly, an independent oracle finds no accepted pipeline to be leaky, and against differential and window-tiling detectors the sound checker catches every planted leak they miss, at the cost of a precisely delimited set of false positives on opaque value operations. The result converts look-ahead-freedom from a property a team hopes it has achieved into one a checker can certify, and it does so with a boundary—sound and decidable where pipelines are real, provably impossible where they are not—that is drawn by the theory rather than assumed. We regard the identification itself as the durable contribution: it gives a problem the evaluation community manages by vigilance a place in a theory built precisely to settle it. 
+
+Data and Code Availability 
+
+The artifact accompanying this paper contains a clean-room implementation of the checker for the calculus of Sections 3–5, the two baseline detectors, the dynamic oracle, the full adversarial corpus, the scaling benchmark, and the statistical-analysis scripts, together with the pre-registered analysis plan. It carries no proprietary code, market data, or strategy content. The empirical figures reported in Section 8 were computed from proprietary market data licensed for the author’s use and not redistributable under the terms of those licenses. The released artifact therefore does not include that data. In its place it ships synthetic stand-ins for the five archetypes (AR2–AR5 and the weekly-release corpus anchor) that share the schemas and reproduce the leak mechanisms of the originals—reference-versus-availability misalignment, restatement vintages, post-close aggregation, and survivorship—so that the artifact runs end to end on a clean checkout with no access to the licensed data. On these synthetic data the artifact reproduces every qualitative result of Section 8 exactly: the checker’s zero false-negative rate on the planted leaks, the false-negative rates of the two baseline detectors, the confinement of the checker’s false positives to the opaque-value-operation cases, the oracle’s failure to witness any leak in an accepted pipeline, and near-linear scaling of the check. Because the synthetic data do not share the size and shape of the proprietary series, quantities that depend on that structure—most notably the exact scaling exponent—differ from the values reported here; the released run yields a slope consistent with linear growth but not the identical figure. The artifact reproduces the method and the claims, not the proprietary-data numbers. Upon acceptance the artifact will be deposited in a public repository with a permanent DOI, released under an open-source license for the code and an open-data license for the synthetic data, and submitted for evaluation under the ACM Artifact Review and Badging process. 
+
+References       
+
+> [1] Tyler Akidau, Robert Bradshaw, Craig Chambers, Slava Chernyak, Rafael J. Fernández-Moctezuma, Reuven Lax, Sam McVeety, Daniel Mills, Frances Perry, Eric Schmidt, and Sam Whittle. 2015. The Dataflow Model: A Practical Approach to Balancing Correctness, Latency, and Cost in Massive-Scale, Unbounded, Out-of-Order Data Processing. Proceedings of the VLDB Endowment 8, 12 (2015), 1792–1803. doi:10.14778/2824032.2824076 [2] Rajeev Alur and David L. Dill. 1994. A Theory of Timed Automata. Theoretical Computer Science 126, 2 (1994), 183–235. doi:10.1016/0304-3975(94)90010-8 ACM Trans. Softw. Eng. Methodol., Vol. 0, No. 0, Article 0. Publication date: July 2026.
+
+Look-Ahead-Freedom as Temporal Non-Interference: A Verifiable Correctness Property for Backtesting and Agentic Trading Pipelines 0:29 
+
+[3] Étienne André, Didier Lime, Dylan Marinho, and Jun Sun. 2022. Guaranteeing Timed Opacity using Parametric Timed Model Checking. ACM Transactions on Software Engineering and Methodology 31, 4 (2022), 1–36. doi:10.1145/3502851 [4] David H. Bailey, Jonathan M. Borwein, Marcos López de Prado, and Qiji Jim Zhu. 2014. Pseudo-Mathematics and Financial Charlatanism: The Effects of Backtest Overfitting on Out-of-Sample Performance. Notices of the American Mathematical Society 61, 5 (2014), 458–471. doi:10.1090/noti1105 [5] David H. Bailey, Jonathan M. Borwein, Marcos López de Prado, and Qiji Jim Zhu. 2017. The Probability of Backtest Overfitting. Journal of Computational Finance 20, 4 (2017), 39–69. doi:10.21314/JCF.2016.322 [6] David H. Bailey and Marcos López de Prado. 2014. The Deflated Sharpe Ratio: Correcting for Selection Bias, Backtest Overfitting, and Non-Normality. The Journal of Portfolio Management 40, 5 (2014), 94–107. [7] Mostapha Benhenda. 2026. Look-Ahead-Bench: A Standardized Benchmark of Look-Ahead Bias in Point-in-Time LLMs for Finance. arXiv:2601.13770 [cs.AI] doi:10.48550/arXiv.2601.13770 [8] Stephen J. Brown, William Goetzmann, Roger G. Ibbotson, and Stephen A. Ross. 1992. Survivorship Bias in Performance Studies. The Review of Financial Studies 5, 4 (1992), 553–580. [9] James Cheney, Laura Chiticariu, and Wang-Chiew Tan. 2009. Provenance in Databases: Why, How, and Where. 
+
+Foundations and Trends in Databases 1, 4 (2009), 379–474. doi:10.1561/1900000006 [10] Dorothy E. Denning. 1976. A Lattice Model of Secure Information Flow. Commun. ACM 19, 5 (1976), 236–243. doi:10.1145/360051.360056 [11] Dorothy E. Denning and Peter J. Denning. 1977. Certification of Programs for Secure Information Flow. Commun. ACM 20, 7 (1977), 504–513. doi:10.1145/359636.359712 [12] Abdelkader El Mahdaouy, Issam Ait Yahia, Soufiane Oualil, and Ismail Berrada. 2026. Deep Learning for Contextualized NetFlow-Based Network Intrusion Detection: Methods, Data, Evaluation and Deployment. arXiv:2602.05594 [cs.CR] doi:10.48550/arXiv.2602.05594 [13] Xavier Fonseca. 2026. The Decision Geometry of Covariance Estimation for the Global Minimum-Variance Portfolio under Heavy Tails. arXiv:2606.27462 [stat.ML] doi:10.48550/arXiv.2606.27462 [14] Xavier Fonseca. 2026. Point-in-Time Backtesting of Momentum-Trend Equity Strategies: A Formal Bias Taxonomy, ATR Trailing Stop Analysis, and Investor-Experience Metrics. Mathematics 14, 12 (2026), 2182. doi:10.3390/math14122182 [15] Guillaume Gardey, John Mullins, and Olivier H. Roux. 2007. Non-Interference Control Synthesis for Security Timed Automata. Electronic Notes in Theoretical Computer Science 180, 1 (2007), 35–53. doi:10.1016/j.entcs.2005.05.046 [16] David K. Gifford and John M. Lucassen. 1986. Integrating Functional and Imperative Programming. In Proceedings of the 1986 ACM Conference on LISP and Functional Programming (LFP ’86) . ACM, New York, NY, USA, 28–38. doi:10.1145/ 319838.319848 [17] Joseph A. Goguen and José Meseguer. 1982. Security Policies and Security Models. In 1982 IEEE Symposium on Security and Privacy . IEEE Computer Society, Los Alamitos, CA, USA, 11–20. doi:10.1109/SP.1982.10014 [18] Shachar Kaufman, Saharon Rosset, Claudia Perlich, and Ori Stitelman. 2012. Leakage in Data Mining: Formulation, Detection, and Avoidance. ACM Transactions on Knowledge Discovery from Data 6, 4, Article 15 (2012), 21 pages. doi:10.1145/2382577.2382579 [19] Xiangyu Li, Yawen Zeng, Xiaofen Xing, Jin Xu, and Xiangmin Xu. 2025. Profit Mirage: Revisiting Information Leakage in LLM-based Financial Agents. arXiv:2510.07920 [cs.AI] doi:10.48550/arXiv.2510.07920 [20] Guojun Liu, Doina Caragea, Xinming Ou, and Sankardas Roy. 2024. The Impact of Train–Test Leakage on Machine Learning-Based Android Malware Detection. arXiv:2410.19364 [cs.CR] doi:10.48550/arXiv.2410.19364 [21] John M. Lucassen and David K. Gifford. 1988. Polymorphic Effect Systems. In Proceedings of the 15th ACM SIGPLAN-SIGACT Symposium on Principles of Programming Languages (POPL ’88) . ACM, New York, NY, USA, 47–57. doi:10.1145/ 73560.73564 [22] Phat Nguyen and Thang Pham. 2026. Toward Reliable Evaluation of LLM-Based Financial Multi-Agent Systems: Taxonomy, Coordination Primacy, and Cost Awareness. arXiv:2603.27539 [cs.MA] doi:10.48550/arXiv.2603.27539 [23] Flemming Nielson, Hanne Riis Nielson, and Chris Hankin. 1999. Principles of Program Analysis . Springer, Berlin, Heidelberg. doi:10.1007/978-3-662-03811-6 [24] John Rushby. 1992. Noninterference, Transitivity, and Channel-Control Security Policies . Technical Report CSL-92-02. SRI International, Menlo Park, CA. [25] Andrei Sabelfeld and Andrew C. Myers. 2003. Language-Based Information-Flow Security. IEEE Journal on Selected Areas in Communications 21, 1 (2003), 5–19. doi:10.1109/JSAC.2002.806121 [26] Andrei Sabelfeld and David Sands. 2009. Declassification: Dimensions and Principles. Journal of Computer Security 17, 5 (2009), 517–548. doi:10.3233/JCS-2009-0352 [27] Giacinto Paolo Saggese and Paul Smith. 2025. DataFlow: A Framework for High-Performance Machine Learning Stream Computing. arXiv:2512.23977 [cs.LG] doi:10.48550/arXiv.2512.23977 [28] Suproteem K. Sarkar and Keyon Vafa. 2025. Lookahead Bias in Pretrained Language Models. In ICML 2025 Workshop on Reliable and Responsible Foundation Models (R2-FM) .ACM Trans. Softw. Eng. Methodol., Vol. 0, No. 0, Article 0. Publication date: July 2026. 0:30 Xavier Fonseca 
+
+[29] Mohit Tiwari, Hassan M. G. Wassel, Bita Mazloom, Shashidhar Mysore, Frederic T. Chong, and Timothy Sherwood. 2009. Complete Information Flow Tracking from the Gates Up. In Proceedings of the 14th International Conference on Architectural Support for Programming Languages and Operating Systems (ASPLOS ’09) . ACM, New York, NY, USA, 109–120. doi:10.1145/1508244.1508258 [30] Dennis Volpano, Cynthia Irvine, and Geoffrey Smith. 1996. A Sound Type System for Secure Flow Analysis. Journal of Computer Security 4, 2–3 (1996), 167–187. doi:10.3233/JCS-1996-42-304 [31] Yihan Xia, Panpan You, Taotao Wang, Fang Liu, Han Qi, Xiaoxiao Wu, and Shengli Zhang. 2026. Agentic Trading: When LLM Agents Meet Financial Markets. arXiv:2605.19337 [cs.AI] doi:10.48550/arXiv.2605.19337 [32] Junyi Yao and Zihao Zheng. 2026. Beyond Agent Architecture: Execution Assumptions and Reproducibility in LLM-Based Trading Systems. arXiv:2606.08285 [cs.AI] doi:10.48550/arXiv.2606.08285 [33] Yuxuan Ye, Jun Han, Ao Hu, Juncheng Bu, Yiyi Chen, Liangjian Wen, Danilo Mandic, Danny Dongning Sun, Xu Yinghui, and Zenglin Xu. 2026. The Alpha Illusion: Reported Alpha from LLM Trading Agents Should Not Be Treated as Deployment Evidence. arXiv:2605.16895 [cs.CE] doi:10.48550/arXiv.2605.16895 [34] Fan Zhang, Zhen Li, Sijia Peng, and Yu Chen. 2026. When Alpha Disappears: A One-Switch Benchmark for Decision-Time Leakage in Financial Backtests. arXiv:2605.23959 [q-fin.RM] doi:10.48550/arXiv.2605.23959 [35] Zeyu Zhang, Ryan Chen, and Bradly C. Stadie. 2026. All Leaks Count, Some Count More: Interpretable Temporal Contamination Detection in LLM Backtesting. arXiv:2602.17234 [cs.AI] doi:10.48550/arXiv.2602.17234 ACM Trans. Softw. Eng. Methodol., Vol. 0, No. 0, Article 0. Publication date: July 2026.
