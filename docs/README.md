@@ -6,46 +6,37 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-07-12
-- 运行时间：2026-07-12 21:14:53 UTC
+- 最新运行日期：2026-07-13
+- 运行时间：2026-07-13 20:41:15 UTC
 - 运行状态：成功
-- 本次总论文数：8
-- 精读区：4
-- 速读区：4
+- 本次总论文数：5
+- 精读区：3
+- 速读区：2
 
 ### 今日简报（AI）
-今日精读聚焦于量化交易中战略买入代理的设计与前瞻自由度作为时序非干涉的可验证正确性属性，速读则覆盖了LLM弃权机制、代理工具迭代优化与AI量化研究员。  
-最值得关注的方向是将前瞻自由度纳入回测管线的可验证正确性标准，以及战略购买代理如何平衡市场影响与执行质量。  
-建议开发者优先审视自己的交易管道是否存在前瞻偏差，并尝试将非干涉验证融入回测流程。
-- 详情：[/202607/12/README](/202607/12/README)
+今日精读知识图谱事实验证与模型压缩两大方向，速读点约束微调及稀疏微调方法。
+值得关注：AgentKGV 用两阶段训练让事实验证更可靠，Mach-Mind-4-Flash 技术报告展示极低参数量下的推理潜力。
+建议读者关注多智能体验证框架与激活感知稀疏微调在工程落地中的结合思路。
+- 详情：[/202607/13/README](/202607/13/README)
 
 ### 精读区论文标签
-1. [Strategic Buying Agents](/202607/12/2607.04708v1-strategic-buying-agents)  
+1. [AgentKGV: Agentic LLM-RAG Framework with Two-Stage Training for the Fact Verification of Knowledge Graphs](/202607/13/2607.09092v1-agentkgv-agentic-llm-rag-framework-with-two-stage-training-for-the-fact-verification-of-knowledge-graphs)  
    标签：评分：9.0/10、query:fla
-   evidence：设计面向在线购物的战略购买智能体，为金融相关任务提供不同信息体制下的最优策略
-2. [Look-Ahead-Freedom as Temporal Non-Interference: A Verifiable Correctness Property for Backtesting and Agentic Trading Pipelines](/202607/12/2607.04958v1-look-ahead-freedom-as-temporal-non-interference-a-verifiable-correctness-property-for-backtesting-and-agentic-trading-pipelines)  
+   evidence：提出面向智能体LLM-RAG框架的两阶段训练（SFT），是自主智能体后训练的直接技术。
+2. [Mach-Mind-4-Flash Technical Report](/202607/13/2607.09375v1-mach-mind-4-flash-technical-report)  
    标签：评分：9.0/10、query:fla
-   evidence：为金融领域的智能交易流水线提供可验证的正确性属性，直接关系到面向任务的金融智能体
-3. [STAPO: Selective Trajectory-Aware Policy Optimization for LLM Agent Training](/202607/12/2607.04963v1-stapo-selective-trajectory-aware-policy-optimization-for-llm-agent-training)  
+   evidence：通过可扩展强化学习环境对智能体模型进行后训练，性能媲美千亿参数模型。
+3. [Semantic Pareto-DQN: A Multi-Objective Reinforcement Learning Framework for Financial Anomaly Detection](/202607/13/2607.09641v1-semantic-pareto-dqn-a-multi-objective-reinforcement-learning-framework-for-financial-anomaly-detection)  
    标签：评分：9.0/10、query:fla
-   evidence：提出STAPO，一种基于强化学习的LLM智能体训练优化方法，利用归一化熵解决轨迹忽视问题
-4. [Learning to Control LLM Agent Harnesses with Offline Reinforcement Learning](/202607/12/2607.05458v1-learning-to-control-llm-agent-harnesses-with-offline-reinforcement-learning)  
-   标签：评分：9.0/10、query:fla
-   evidence：通过离线强化学习学习LLM智能体的执行支持控制器，属于后训练技术
+   evidence：提出语义帕累托-DQN，一种用于金融异常检测的多目标RL智能体，直接是任务导向的金融智能体。
 
 ### 速读区论文标签
-1. [Uncertainty-Aware Abstention in Large Language Models with Provable Alignment Guarantees](/202607/12/2607.04430v1-uncertainty-aware-abstention-in-large-language-models-with-provable-alignment-guarantees)  
+1. [Every Sample Counts: Supervised Fine-Tuning of Language Models with Pointwise Constraints](/202607/13/2607.08968v1-every-sample-counts-supervised-fine-tuning-of-language-models-with-pointwise-constraints)  
    标签：评分：7.0/10、query:fla
-   evidence：带对齐保证的选择性回答校准框架
-2. [From Atomic Actions to Standard Operating Procedures: Iterative Tool Optimization for Self-Evolving LLM Agents](/202607/12/2607.07321v1-from-atomic-actions-to-standard-operating-procedures-iterative-tool-optimization-for-self-evolving-llm-agents)  
-   标签：评分：7.0/10、query:fla
-   evidence：通过提取标准操作程序实现LLM代理自我进化的EvoSOP框架，符合后训练技术范畴。
-3. [XALPHA: A Memory-Driven AI Quant Researcher for Hypothesis-to-Code Alpha Discovery](/202607/12/2607.08332v1-xalpha-a-memory-driven-ai-quant-researcher-for-hypothesis-to-code-alpha-discovery)  
-   标签：评分：7.0/10、query:fla
-   evidence：用于金融市场alpha发现的AI量化研究员智能体
-4. [Seeing and Reflecting: Multimodal Memory-Enhanced Agent Collaboration for Recommendation](/202607/12/2607.07108v1-seeing-and-reflecting-multimodal-memory-enhanced-agent-collaboration-for-recommendation)  
+   evidence：在微调期间施加逐样本约束以实现对齐
+2. [Super-Tuning: From Activation-Aware Pruning to Sparse Fine-Tuning](/202607/13/2607.09287v1-super-tuning-from-activation-aware-pruning-to-sparse-fine-tuning)  
    标签：评分：6.0/10、query:fla
-   evidence：通过强化与反思进行记忆更新，实现智能体后训练
+   evidence：基于激活感知的稀疏参数高效微调
 
 
 <div class="dpr-home-promo-card">
