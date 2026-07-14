@@ -6,37 +6,55 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-07-13
-- 运行时间：2026-07-13 20:41:15 UTC
+- 最新运行日期：2026-07-14
+- 运行时间：2026-07-14 21:22:24 UTC
 - 运行状态：成功
-- 本次总论文数：5
-- 精读区：3
-- 速读区：2
+- 本次总论文数：11
+- 精读区：4
+- 速读区：7
 
 ### 今日简报（AI）
-今日精读知识图谱事实验证与模型压缩两大方向，速读点约束微调及稀疏微调方法。
-值得关注：AgentKGV 用两阶段训练让事实验证更可靠，Mach-Mind-4-Flash 技术报告展示极低参数量下的推理潜力。
-建议读者关注多智能体验证框架与激活感知稀疏微调在工程落地中的结合思路。
-- 详情：[/202607/13/README](/202607/13/README)
+今日重点研读了11篇AI论文，直击智能体从“模仿”跨越到“自主决策”的核心进化。  
+最大亮点是得9.0分的两篇精读——用偏好优化让智能体学会超越专家轨迹，以及用强化学习在去中心化交易所模拟器里实时应对动态费率。  
+建议开发者立刻拆解Agentic-DPO的偏好数据构造方式，它能让你手头的智能体任务不再只是复刻示范。
+- 详情：[/202607/14/README](/202607/14/README)
 
 ### 精读区论文标签
-1. [AgentKGV: Agentic LLM-RAG Framework with Two-Stage Training for the Fact Verification of Knowledge Graphs](/202607/13/2607.09092v1-agentkgv-agentic-llm-rag-framework-with-two-stage-training-for-the-fact-verification-of-knowledge-graphs)  
+1. [Agentic-DPO: From Imitation to Agentic Policy Optimization on Expert Trajectories](/202607/14/2607.10601v1-agentic-dpo-from-imitation-to-agentic-policy-optimization-on-expert-trajectories)  
    标签：评分：9.0/10、query:fla
-   evidence：提出面向智能体LLM-RAG框架的两阶段训练（SFT），是自主智能体后训练的直接技术。
-2. [Mach-Mind-4-Flash Technical Report](/202607/13/2607.09375v1-mach-mind-4-flash-technical-report)  
+   evidence：利用来自专家轨迹的状态条件偏好监督进行离线智能体策略优化
+2. [Reinforcement Learning for Execution under Dynamic Fees in a Closed-Loop DEX Simulator](/202607/14/2607.10960v1-reinforcement-learning-for-execution-under-dynamic-fees-in-a-closed-loop-dex-simulator)  
    标签：评分：9.0/10、query:fla
-   evidence：通过可扩展强化学习环境对智能体模型进行后训练，性能媲美千亿参数模型。
-3. [Semantic Pareto-DQN: A Multi-Objective Reinforcement Learning Framework for Financial Anomaly Detection](/202607/13/2607.09641v1-semantic-pareto-dqn-a-multi-objective-reinforcement-learning-framework-for-financial-anomaly-detection)  
-   标签：评分：9.0/10、query:fla
-   evidence：提出语义帕累托-DQN，一种用于金融异常检测的多目标RL智能体，直接是任务导向的金融智能体。
+   evidence：在DEX模拟器中训练DQN智能体进行动态费用下执行，是金融领域基于RL的智能体后训练
+3. [DeepSearch-World: Self-Distillation for Deep Search Agents in a Verifiable Environment](/202607/14/2607.07820v2-deepsearch-world-self-distillation-for-deep-search-agents-in-a-verifiable-environment)  
+   标签：评分：8.0/10、query:fla
+   evidence：在可验证环境中通过自蒸馏从自身经验训练网络智能体
+4. [ANCHOR: Automated Alignment Auditing for CLI Agents on Real-World Harm](/202607/14/2607.10455v1-anchor-automated-alignment-auditing-for-cli-agents-on-real-world-harm)  
+   标签：评分：8.0/10、query:fla
+   evidence：使用监督和强化学习微调对抗智能体进行对齐审计，是一种后训练方法
 
 ### 速读区论文标签
-1. [Every Sample Counts: Supervised Fine-Tuning of Language Models with Pointwise Constraints](/202607/13/2607.08968v1-every-sample-counts-supervised-fine-tuning-of-language-models-with-pointwise-constraints)  
+1. [GRASP: GRanularity-Aware Search Policy for Agentic RAG](/202607/14/2607.10463v1-grasp-granularity-aware-search-policy-for-agentic-rag)  
    标签：评分：7.0/10、query:fla
-   evidence：在微调期间施加逐样本约束以实现对齐
-2. [Super-Tuning: From Activation-Aware Pruning to Sparse Fine-Tuning](/202607/13/2607.09287v1-super-tuning-from-activation-aware-pruning-to-sparse-fine-tuning)  
+   evidence：强化学习框架用于训练自适应检索策略的智能体RAG
+2. [Tool-Adaptive LLM Reranker](/202607/14/2607.10555v1-tool-adaptive-llm-reranker)  
+   标签：评分：7.0/10、query:fla
+   evidence：将工具自适应LLM重排序器作为智能体MDP进行两阶段训练
+3. [Route, Communicate, and Reason: Gated Routing and Adaptive Depth for Efficient Multi-Agent Reasoning](/202607/14/2607.10836v1-route-communicate-and-reason-gated-routing-and-adaptive-depth-for-efficient-multi-agent-reasoning)  
+   标签：评分：7.0/10、query:fla
+   evidence：GRADE采用基于RL的CoGRPO训练分层多智能体系统的门控机制，是一种后训练技术
+4. [Proxy Exploration and Reusable Guidance: A Modular LLM Post-Training Paradigm via Proxy-Guided Update Signals](/202607/14/2607.11505v1-proxy-exploration-and-reusable-guidance-a-modular-llm-post-training-paradigm-via-proxy-guided-update-signals)  
+   标签：评分：7.0/10、query:fla
+   evidence：通过代理引导的更新信号实现模块化LLM后训练，解耦探索与对齐
+5. [Norm Enforcement for AI Agents: Robustly Shaping Behavior in Multi-Agent Systems](/202607/14/2607.09766v1-norm-enforcement-for-ai-agents-robustly-shaping-behavior-in-multi-agent-systems)  
    标签：评分：6.0/10、query:fla
-   evidence：基于激活感知的稀疏参数高效微调
+   evidence：提出鲁棒规范执行机制以对齐多智能体系统中的语言模型智能体
+6. [NextFund: A Unified Performance Tracking Platform for Agentic Portfolio Management](/202607/14/2607.11141v1-nextfund-a-unified-performance-tracking-platform-for-agentic-portfolio-management)  
+   标签：评分：6.0/10、query:fla
+   evidence：面向基于大语言模型的智能体投资组合管理的评估平台
+7. [UMoE:Unlocking Every Expert in Domain-Specific Training](/202607/14/2607.11444v1-umoeunlocking-every-expert-in-domain-specific-training)  
+   标签：评分：6.0/10、query:fla
+   evidence：UMoE流程重新对齐MoE专家以进行领域特定后训练，可改进金融等领域微调
 
 
 <div class="dpr-home-promo-card">
