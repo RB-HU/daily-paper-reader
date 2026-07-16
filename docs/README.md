@@ -6,34 +6,37 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-07-15
-- 运行时间：2026-07-15 21:26:23 UTC
+- 最新运行日期：2026-07-16
+- 运行时间：2026-07-16 20:17:11 UTC
 - 运行状态：成功
-- 本次总论文数：4
-- 精读区：1
+- 本次总论文数：5
+- 精读区：2
 - 速读区：3
 
 ### 今日简报（AI）
-1）今日精读论文展示了一个能大规模合成智能体行动轨迹的学习系统TOFFEE，速读则覆盖了递归自改进智能体、能自负盈亏的交易智能体、以及编码智能体基础模型的补全训练新法。
-2）最值得关注：用学习的方法而非人工规则来规模化生成高质量、多样化的智能体轨迹数据，直接缓解了训练数据瓶颈。
-3）关注智能体技术的读者，可优先尝试基于TOFFEE或类似合成数据框架，在自己业务场景中低成本获取训练样本。
-- 详情：[/202607/15/README](/202607/15/README)
+今日聚焦长程智能体信用分配与自我进化编程框架，精读两项前沿成果；速读覆盖能源市场基准、技能错位检测与可控记忆。  
+最值得关注 TRACE 的回合级奖励回溯机制与自改进编程智能体通过累积行为规则形成的闭环，为复杂任务可靠训练提供新路径。  
+建议读者尝试将精细反馈引入自主系统设计，从记忆管理和自我纠错入手提升智能体落地稳健性。
+- 详情：[/202607/16/README](/202607/16/README)
 
 ### 精读区论文标签
-1. [Demonstrating TOFFEE: A Learned System for Synthesizing Data Agent Trajectories at Scale](/202607/15/2607.06233v2-demonstrating-toffee-a-learned-system-for-synthesizing-data-agent-trajectories-at-scale)  
+1. [TRACE: Turn-level Reward Assignment via Credit Estimation for Long-Horizon Agents](/202607/16/2607.13988v1-trace-turn-level-reward-assignment-via-credit-estimation-for-long-horizon-agents)  
+   标签：评分：9.0/10、query:fla
+   evidence：为多轮智能体后训练提供密集信用分配方法
+2. [Self-Improving AI Coding Agents Through Accumulated Behavioral Rules: A Closed-Loop Framework](/202607/16/2607.13091v1-self-improving-ai-coding-agents-through-accumulated-behavioral-rules-a-closed-loop-framework)  
    标签：评分：8.0/10、query:fla
-   evidence：合成数据智能体轨迹用于监督微调和上下文学习
+   evidence：通过积累行为规则实现自改进的智能体
 
 ### 速读区论文标签
-1. [How to Realize Recursively Self-Improving Agents and Personal Singularity: A Goal-, Scope-, Tool-, and Benchmark-Driven Multi-Agent Architecture](/202607/15/2607.12254v1-how-to-realize-recursively-self-improving-agents-and-personal-singularity-a-goal--scope--tool--and-benchmark-driven-multi-agent-architecture)  
+1. [SolarChain-Eval: A Physics-Constrained Benchmark for Trustworthy Economic Agents in Decentralized Energy Markets](/202607/16/2607.08681v1-solarchain-eval-a-physics-constrained-benchmark-for-trustworthy-economic-agents-in-decentralized-energy-markets)  
    标签：评分：7.0/10、query:fla
-   evidence：支持后训练能力扩展的递归自改进智能体架构
-2. [Can Agentic Trading Systems Pay for Their Own Intelligence?](/202607/15/2607.10286v1-can-agentic-trading-systems-pay-for-their-own-intelligence)  
+   evidence：提出物理约束基准用于评估去中心化能源市场中可信经济智能体，与金融智能体对齐相关
+2. [Cross-Layer Misalignment Detection in Agent Skills: A Progressive Loading-Aware Contrastive Learning Approach](/202607/16/2607.10534v1-cross-layer-misalignment-detection-in-agent-skills-a-progressive-loading-aware-contrastive-learning-approach)  
    标签：评分：6.0/10、query:fla
-   evidence：评估交易中的LLM智能体能否自负成本，涉及金融智能体可行性
-3. [Function-Aware Fill-in-the-Middle as Mid-Training for Coding Agent Foundation Models](/202607/15/2607.12463v1-function-aware-fill-in-the-middle-as-mid-training-for-coding-agent-foundation-models)  
+   evidence：通过对比学习检测LLM智能体技能描述与行为间的不对齐
+3. [Memory as a Controlled Process: Learned Adaptive Memory Management for LLM Agents](/202607/16/2607.13591v1-memory-as-a-controlled-process-learned-adaptive-memory-management-for-llm-agents)  
    标签：评分：6.0/10、query:fla
-   evidence：提出面向编程智能体的自监督中间训练方法以改善工具集成，一种智能体后训练技术
+   evidence：提出学习自适应记忆管理以改进LLM智能体跨任务学习
 
 
 <div class="dpr-home-promo-card">
