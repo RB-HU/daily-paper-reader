@@ -6,37 +6,43 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-07-16
-- 运行时间：2026-07-16 20:17:11 UTC
+- 最新运行日期：2026-07-17
+- 运行时间：2026-07-17 21:37:58 UTC
 - 运行状态：成功
-- 本次总论文数：5
-- 精读区：2
-- 速读区：3
+- 本次总论文数：7
+- 精读区：6
+- 速读区：1
 
 ### 今日简报（AI）
-今日聚焦长程智能体信用分配与自我进化编程框架，精读两项前沿成果；速读覆盖能源市场基准、技能错位检测与可控记忆。  
-最值得关注 TRACE 的回合级奖励回溯机制与自改进编程智能体通过累积行为规则形成的闭环，为复杂任务可靠训练提供新路径。  
-建议读者尝试将精细反馈引入自主系统设计，从记忆管理和自我纠错入手提升智能体落地稳健性。
-- 详情：[/202607/16/README](/202607/16/README)
+今日精读金融报告质量评估新基准FinResearchBench II，并速览联邦学习持续微调方案。  
+最值得关注：基于共识的黄金评分标准区分金融报告质量，以及弹性正则化与合成回放解决联邦多模态模型遗忘问题。  
+建议关注AI自动评估在金融文档审核中的应用，并思考联邦微调如何平衡隐私与模型更新。
+- 详情：[/202607/17/README](/202607/17/README)
 
 ### 精读区论文标签
-1. [TRACE: Turn-level Reward Assignment via Credit Estimation for Long-Horizon Agents](/202607/16/2607.13988v1-trace-turn-level-reward-assignment-via-credit-estimation-for-long-horizon-agents)  
+1. [FinResearchBench II: A Deep Research Benchmark with Consensus-Derived Gold Rubrics for Distinguishing Financial Report Quality](/202607/17/2607.12252v1-finresearchbench-ii-a-deep-research-benchmark-with-consensus-derived-gold-rubrics-for-distinguishing-financial-report-quality)  
+   标签：评分：10.0/10、query:fla
+   evidence：评估金融深度研究代理报告质量的基准
+2. [FinResearchBench II: A Deep Research Benchmark with Consensus-Derived Gold Rubrics for Distinguishing Financial Report Quality](/202607/17/2607.12252v2-finresearchbench-ii-a-deep-research-benchmark-with-consensus-derived-gold-rubrics-for-distinguishing-financial-report-quality)  
    标签：评分：9.0/10、query:fla
-   evidence：为多轮智能体后训练提供密集信用分配方法
-2. [Self-Improving AI Coding Agents Through Accumulated Behavioral Rules: A Closed-Loop Framework](/202607/16/2607.13091v1-self-improving-ai-coding-agents-through-accumulated-behavioral-rules-a-closed-loop-framework)  
+   evidence：用于评估生成金融报告的深度研究智能体的基准
+3. [Step-Level Preference Learning for Generative Agents in Social Simulations](/202607/17/2607.14485v1-step-level-preference-learning-for-generative-agents-in-social-simulations)  
+   标签：评分：9.0/10、query:fla
+   evidence：提出步级偏好学习，通过SFT和DPO对齐智能体中间决策步骤的人类偏好，属于典型的智能体后训练技术。
+4. [LongStraw: Long-Context RL Beyond 2M Tokens under a Fixed GPU Budget](/202607/17/2607.14952v1-longstraw-long-context-rl-beyond-2m-tokens-under-a-fixed-gpu-budget)  
+   标签：评分：9.0/10、query:fla
+   evidence：LongStraw在固定GPU下实现百万token的智能体RL后训练，直接解决智能体轨迹长上下文训练缺口。
+5. [ToolAnchor: Anchoring Counterfactual Context to Boost Agentic Tool-use Capability](/202607/17/2607.14145v1-toolanchor-anchoring-counterfactual-context-to-boost-agentic-tool-use-capability)  
    标签：评分：8.0/10、query:fla
-   evidence：通过积累行为规则实现自改进的智能体
+   evidence：通过反事实上下文提升LLM智能体工具使用的后训练框架
+6. [Gold-Guided Programmatic Distillation for Financial Reasoning over Hybrid Tables and Text](/202607/17/2607.14709v1-gold-guided-programmatic-distillation-for-financial-reasoning-over-hybrid-tables-and-text)  
+   标签：评分：8.0/10、query:fla
+   evidence：金融推理的程序化蒸馏，一种后训练知识迁移方法
 
 ### 速读区论文标签
-1. [SolarChain-Eval: A Physics-Constrained Benchmark for Trustworthy Economic Agents in Decentralized Energy Markets](/202607/16/2607.08681v1-solarchain-eval-a-physics-constrained-benchmark-for-trustworthy-economic-agents-in-decentralized-energy-markets)  
-   标签：评分：7.0/10、query:fla
-   evidence：提出物理约束基准用于评估去中心化能源市场中可信经济智能体，与金融智能体对齐相关
-2. [Cross-Layer Misalignment Detection in Agent Skills: A Progressive Loading-Aware Contrastive Learning Approach](/202607/16/2607.10534v1-cross-layer-misalignment-detection-in-agent-skills-a-progressive-loading-aware-contrastive-learning-approach)  
+1. [Continual Learning with Elastic Regularization and Synthetic Replay for Federated MLLM Fine-Tuning](/202607/17/2607.12112v1-continual-learning-with-elastic-regularization-and-synthetic-replay-for-federated-mllm-fine-tuning)  
    标签：评分：6.0/10、query:fla
-   evidence：通过对比学习检测LLM智能体技能描述与行为间的不对齐
-3. [Memory as a Controlled Process: Learned Adaptive Memory Management for LLM Agents](/202607/16/2607.13591v1-memory-as-a-controlled-process-learned-adaptive-memory-management-for-llm-agents)  
-   标签：评分：6.0/10、query:fla
-   evidence：提出学习自适应记忆管理以改进LLM智能体跨任务学习
+   evidence：联邦微调多模态大语言模型以防止灾难性遗忘，支持自主智能体的持续后训练
 
 
 <div class="dpr-home-promo-card">

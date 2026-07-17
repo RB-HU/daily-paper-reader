@@ -1,0 +1,157 @@
+Title: Gold-Guided Programmatic Distillation for Financial Reasoning over Hybrid Tables and Text
+
+URL Source: https://arxiv.org/pdf/2607.14709v1
+
+Published Time: Fri, 17 Jul 2026 00:49:11 GMT
+
+Number of Pages: 12
+
+Markdown Content:
+# Gold-Guided Programmatic Distillation for Financial Reasoning over Hybrid Tables and Text 
+
+Yun Dong 
+
+College of Computing Georgia Institute of Technology 
+
+ydong380@gatech.edu 
+
+Erica Zhao 
+
+Department of Management Science & Engineering Stanford University 
+
+erica117@stanford.edu 
+
+Elana Chen 
+
+Department of Computer Science Stanford University 
+
+elanac25@stanford.edu 
+
+# Abstract 
+
+Financial question answering over hybrid tabular and textual data may require multi-source reasoning and precise numerical computation. While large language models (LLMs) can generate intermediate reasoning steps, natural-language rationales remain prone to arithmetic errors, making them an unreliable supervision source for distillation. Building on programmatic distillation, we develop an approach that trans-fers reliable numerical reasoning from a large teacher model to a compact student using execution-verified Python programs instead of free-form tex-tual rationales. It leverages gold derivations to guide teacher-side program synthesis and retains only programs that execute correctly and produce the gold answer, ensuring high-quality supervision. We further introduce an iterative recovery stage that revisits teacher-failed examples, enabling the student to recover and incorporate newly verified programs into training. Experiments on TAT-QA show that our framework is highly effective for hybrid financial reasoning. Our best 7B student achieves 87.00 EM / 87.18 F1 on the test set, substantially outperforming the 72B teacher (78.46 EM) as well as traditional and strong LLM-based baselines, including TAGOP and TAT-LLM. These results demonstrate that execution-verified programmatic distillation provides an effective and extensible framework for training smaller models to perform reliable numerical reasoning. 
+
+# 1 Introduction 
+
+Financial question answering over hybrid tabular and textual data may require integrating information from multiple sources and, in many cases, performing precise numerical rea-soning. While Chain-of-Thought (CoT) prompting Wei et al. (2022) enables large language models (LLMs) to generate intermediate reasoning steps, their final answers remain prone to arithmetic errors, making natural-language rationales an unreliable supervision source for distillation. Program-of-Thought (PoT) Chen et al. (2022) addresses this limitation by expressing reason-ing as executable programs and delegating computation to an external interpreter. However, effectively transferring such reliable reasoning into smaller models remains challenging, as distillation quality depends critically on the correctness of intermediate traces. In this work, we study a gold-guided programmatic distillation framework for transferring reliable numerical reasoning from a large teacher model to a compact student. The teacher synthesizes executable Python programs guided by gold derivations, and we retain only 1arXiv:2607.14709v1 [cs.CL] 16 Jul 2026 programs that produce the gold answer, resulting in a high-quality supervision signal for distillation. Building on this framework, we introduce an iterative recovery stage that revisits examples the teacher fails to solve. By sampling candidate programs from the student and retaining only execution-verified correct solutions, we recover additional high-quality reasoning traces, thereby expanding supervision beyond the teacher’s original coverage. 
+
+# 2 Related Work 
+
+Question answering over hybrid tabular and textual contexts, such as the TAT-QA finan-cial benchmark Zhu et al. (2021), requires complex numerical reasoning and multi-source evidence aggregation. Early approaches like TAGOP relied on rigid extraction pipelines and predefined symbolic operations, which struggle to bridge the gap to human perfor-mance Zhu et al. (2021). Consequently, the field has shifted toward large language models (LLMs). Approaches such as TAT-LLM Zhu et al. (2024a) demonstrate that LLMs can suc-cessfully tackle discrete tabular-text reasoning by decomposing inference into step-wise stages, highlighting the potential of LLM-based financial reasoning. While explicit intermediate reasoning, such as Chain-of-Thought (CoT) prompting Wei et al. (2022), helps models decompose complex tasks, natural language rationales remain highly prone to arithmetic hallucinations. Program-of-Thought (PoT) addresses this by representing reasoning as executable programs and delegating computation to an external interpreter, ensuring the precise calculation required for financial QA Chen et al. (2022); Gao et al. (2023). Crucially, these reasoning capabilities can be transferred from large teacher models to smaller students. While distilling CoT rationales improves student performance Magister et al. (2023); Hsieh et al. (2023), the reliability of these distilled traces dictates downstream success Tian et al. (2025). Frameworks such as Program-aided Distillation (PaD) improve trace quality by replacing text rationales with automatically verifiable code Zhu et al. (2024b). Furthermore, iterative methods such as STaR Zelikman et al. (2022) and Rejection Sampling Fine-Tuning (RFT) Yuan et al. (2023) show that models can autonomously self-improve by generating, verifying, and training on multiple candidate reasoning paths. Taken together, prior work suggests two open challenges for distilling reliable reasoning. First, distillation quality depends heavily on the quality of intermediate traces, and imperfect or natural-language traces may propagate errors. Second, while iterative generation-and-verification strategies have shown promise, an important open question is how they can be used to expand supervision beyond the teacher’s solved examples. These challenges motivate the need for a more reliable and extensible framework for distilling executable reasoning. 
+
+# 3 Method 
+
+3.1 Overview 
+
+We propose a programmatic distillation framework that trains a compact language model to generate executable reasoning programs for hybrid financial question answering, using the teacher model’s successful program examples as supervision. The key idea is to represent reasoning as Python programs, so that the final answer is obtained through code execution rather than the model’s internal arithmetic. Our framework consists of two main stages: (1) teacher-driven distillation, where a large model generates high-quality executable programs, and (2) iterative self-improvement, where the student model generates new programs for teacher-failed examples and keeps only those that execute to the correct answer. Fig. 1 illustrates the overall pipeline of our two-phase distillation and refinement framework. 2Figure 1: Overview of our two-phase programmatic distillation and iterative fine-tuning framework. 
+
+3.2 Phase 1: Teacher-Driven Distillation 
+
+In the first phase, we extract reasoning paths from the teacher model. Given a financial context C (comprising a table T and paragraphs P) and a query q, the teacher generates a Python program π. To ensure accurate execution traces and guide the teacher through complex multi-step calculations, we inject the TAT-QA ground-truth derivation d into the teacher’s prompt. We further apply DSPy Khattab et al. (2023) for prompt optimization to format the output strictly as executable code. The generation is defined as: 
+
+π = Teacher (C, q, d)
+
+To construct a high-quality distillation dataset, DT , we execute generated programs π in a sandboxed Python interpreter. Only programs that execute without compilation errors and yield the exact gold numerical answer ( EM = 1) and scale are retained. The student model is then trained on DT via supervised fine-tuning utilizing Low-Rank Adaptation (LoRA) Hu et al. (2022). The student optimizes the log-likelihood of generating π conditioned solely on C and q,without access to the ground-truth derivation d:
+
+LPhase1 = − ∑
+
+> (C,q,π)∈DT
+
+log PStudent (π | C, q)
+
+3.3 Phase 2: Iterative Rejection Sampling and Self-Improvement 
+
+In the first round, we retain only teacher-generated programs that execute correctly and match the gold answer, leaving teacher-failed examples in a failure set Dwrong . This con-strains the student to the teacher’s successful coverage. To recover these harder cases, we introduce a second round of training inspired by Rejection Sampling Fine-Tuning (RFT) and STaR. Starting from the Phase-1 student model, we revisit each (C, q) ∈ Dwrong and sample five candidate programs ˆ π1, . . . , ˆ π5 at a higher decoding temperature ( T = 0.7): ˆπk ∼ PStudent v1 (· | C, q)
+
+Each candidate is evaluated using the same sandboxed execution filter as in Phase 1. If a candidate executes successfully and produces the gold answer, it is added to a recovery 3Figure 2: Answer type × answer source heatmaps across (a) train (b) dev (c) test. The distributions of answer types and sources remain consistent across splits, dominated by arithmetic questions answered exclusively from tables (57%) and those requiring both tables and text (25%). set Drec . We then perform a second round of LoRA fine-tuning on the augmented dataset 
+
+DTotal = DT ∪ Drec using the same objective as in Phase 1. This stage allows the student to learn from execution-verified self-generated programs beyond the teacher’s original coverage. 
+
+3.4 Inference 
+
+At inference time, the trained student model generates an executable program ˆπ given (C, q).The program is executed by a Python interpreter to produce the final numerical answer. This design eliminates arithmetic errors by delegating all numerical computation to deter-ministic execution, while the model focuses solely on reasoning. 
+
+# 4 Experimental Setup 
+
+4.1 Dataset 
+
+We utilize the TAT-QA dataset Zhu et al. (2021) for question answering over hybrid financial tables and text. The student model input comprises a table, associated paragraphs, and a natural-language question. A teacher setting additionally incorporates the dataset’s gold derivation as an explicit reasoning hint. The models generate executable Python code to predict a structured answer and scale. Because our approach requires executable code, we exclude examples lacking derivations. All reported results are evaluated on this filtered subset for fair comparison. This yields an approximate 8:1:1 split of 6,603 training, 834 development, and 831 test examples. From the dataset’s raw structure, we extract the 2D table array, paragraph text, and question text as inputs, reserving the gold answer and scale for evaluation. As illustrated in Fig. 2, the distributions of answer types and sources remain consistent across splits, dominated by arithmetic questions answered exclusively from tables ( 57%) and those requiring both tables and text ( 25%). 
+
+4.2 Baselines 
+
+We compare our method against task-specific baselines, prior LLM-based systems, and reference teacher/student models. (1) Task-specific baseline: We include TaGOP Zhu et al. (2021), a strong traditional model designed specifically for TAT-QA that performs multi-step reasoning using structured operators over table and paragraph representations. (2) Reference models: To isolate the contribution of our programmatic distillation framework, we evaluate the untuned student model (Qwen2.5-7B-Instruct) under standard prompting 4without programmatic distillation. We also report the performance of the teacher model (Qwen2.5-72B-Instruct) as a reference Bai et al. (2023). (3) Prior LLM-based baseline: We further compare against TAT-LLM Zhu et al. (2024a), a specialized LLM for discrete reasoning over hybrid tabular and textual financial data. For completeness, we report both its LoRA and full fine-tuning (FFT) variants. All TAT-LLM results are evaluated on the same filtered subset used in our experiments to ensure a fair comparison. 
+
+4.3 Models and Training Setup 
+
+We use Qwen2.5-72B-Instruct as the teacher model for data synthesis and Qwen2.5-7B-Instruct as the student model for fine-tuning. To improve the executability of teacher-generated programs, we use DSPy (MIPROv2) together with manual prompt refinement to enforce a structured output format. Specifically, the teacher is required to generate executable Python code that prints a final JSON object of the form {"ans": ..., "scale": ... }.For Phase 1 student training, we apply Low-Rank Adaptation (LoRA) for one epoch with a learning rate of 2 × 10 −4, rank r = 8, α = 16, dropout = 0.05, per-device batch size = 1, and gradient accumulation steps = 4. We evaluate two LoRA configurations: an attention-only variant applied to the attention projection layers ( q proj , k proj , v proj , and o proj ), and an attention+MLP variant that additionally includes the feed-forward projection layers (gate proj , up proj , and down proj ). In Phase 2, for each example failed by the teacher, we sample five candidate programs from the Phase-1 student model. Programs that execute successfully and produce the correct answer are added to the training set for a second round of fine-tuning. Final model selection is based on dev set performance. For completeness, we also report development and test performance for intermediate models in our analysis. We implement our training and inference pipeline using Hugging Face Transformers and related PyTorch-based libraries (e.g., PEFT Hugging Face (2023)), and run experiments on Modal. 
+
+4.4 Evaluation Metrics 
+
+We evaluate using the official TAT-QA evaluation metrics, which take both the predicted answer and scale into account. For span and multi-span questions, we normalize answers (lowercasing and punctuation removal) and compute Exact Match (EM) and token-overlap F1 Rajpurkar et al. (2016). For multi-span answers, F1 is computed with order-invariant Hungarian matching Kuhn (1955). For numeric answers, the evaluator converts numbers to a string after applying the predicted scale, where the supported scale labels are ”” , thousand ,
+
+million , billion , percent . If code execution or output parsing fails, we mark the prediction as 
+
+null , which receives zero EM and F1. 
+
+# 5 Results 
+
+Main Results: Table 1 presents the main results on the test set. We compare our method against task-specific and prior LLM-based baselines, as well as untuned teacher and stu-dent reference models. Our approach substantially outperforms all baselines and reference models. In particular, the best student model, based on Qwen2.5-7B-Instruct with Atten-tion+MLP adaptation, achieves 87.00 EM and 87.18 F1, surpassing the 72B teacher model with hints (78.46 EM / 78.73 F1) and the strongest prior baseline, TAT-LLM (FFT), by a clear margin (82.67 EM / 83.07 F1). These results show that execution-verified programmatic distillation is highly effective for hybrid financial reasoning over tables and text. 
+
+Phase 1 Results : The final teacher prompts, with and without derivation hints, were obtained through manual refinement and are shown in Fig.6 in the appendix. After fil-tering, 5,190 of 6,603 training examples are retained. As shown in Table 2, the resulting 5Model Setting EM F1 Task-specific and prior LLM baselines                         
+
+> TAGOP –47.05 47.60 TAT-LLM (LoRA) –80.26 80.89 TAT-LLM (FFT) –82.67 83.07
+> Reference models
+> Qwen2.5-7B-Instruct (Student) Without tuning 46.33 46.75 Qwen2.5-72B-Instruct (Teacher, no hints) Without tuning 69.55 70.02 Qwen2.5-72B-Instruct (Teacher, with hints) Without tuning 78.46 78.73
+> Our method
+> Qwen2.5-7B-Instruct (Attention-only) Round 2 85.08 85.29 Qwen2.5-7B-Instruct (Attention+MLP) Round 2 87.00 87.18
+
+Table 1: Main results on the test set of the filtered TAT-QA subset. We compare against task-specific baselines, prior LLM-based methods, and reference teacher/student models.                           
+
+> Model Round Dev Test
+> EM F1 EM F1 Attention-only Round 1 82.73 82.78 84.12 84.27 Attention+MLP Round 1 84.14 84.22 84.72 84.80 Attention-only Round 2 85.13 85.18 85.08 85.29 Attention+MLP Round 2 86.33 86.38 87.00 87.18
+
+Table 2: Performance across training rounds and adaptation settings on dev and test sets. Round-1 student models achieve strong performance on both the development and test sets, with attention+MLP consistently outperforming attention-only. On the test set, the attention+MLP model achieves 84.72 EM and 84.80 F1, compared with 84.12 EM and 84.27 F1 for the attention-only model. Notably, both Round-1 student models already outperform all baselines and reference models reported in Table 1. 
+
+Phase 2 Results : On the teacher-failed subset, the attention-only model recovers 781 addi-tional examples, while the attention+MLP model recovers 979. As shown in Table 2, the second round of training improves performance over Round 1 for both variants on both the dev and test sets. For attention-only, performance improves from 82.73 EM / 82.78 F1 to 85.13 EM / 85.18 F1 on the dev set, and from 84.12 EM / 84.27 F1 to 85.08 EM / 85.29 F1 on the test set. For attention+MLP, performance improves from 84.14 EM / 84.22 F1 to 86.33 EM / 86.38 F1 on the dev set, and from 84.72 EM / 84.80 F1 to 87.00 EM / 87.18 F1 on the test set. 
+
+# 6 Analysis 
+
+6.1 Performance Improvements from Different Techniques 
+
+We analyze the drivers of the student model’s performance improvements by examining three factors: teacher-side data generation, LoRA module selection, and recursive training. First, we found that teacher-side data quality is critical for effective distillation. As shown in Fig. 3, providing ground-truth derivations as reasoning hints improves the 72B teacher’s test EM from 69.55 to 78.46. In addition, through manual and DSPy-based prompt refinement, we found that enforcing a structured output format substantially improved the executability and consistency of teacher-generated programs. Combined with strict execution-based filtering, these steps retain 78.6% of the training examples and produce a reliable supervision set that directly enables strong Round-1 student performance. Second, we evaluated the effect of expanding the Low-Rank Adaptation (LoRA) modules. Adapting both the attention and MLP projections consistently outperforms adapting the 6Figure 3: Ablation analysis evaluating the impact of core framework components on test EM scores. 
+
+Figure 4: Test-set Exact Match (EM) scores by answer type and answer source across model stages: (a) Qwen-7B pre-training, (b) Qwen-72B with derivation hints, (c) Qwen-7B Round 2 (attention-only), and (d) Qwen-7B Round 2 (attention+MLP). Cells marked as N/A indicate that no examples are available for that subgroup. attention weights alone. In the initial fine-tuning phase, the attention+MLP student achieves a test EM of 84.72 and F1 of 84.80, surpassing the attention-only variant (84.12 EM / 84.27 F1). This structural advantage is maintained throughout the subsequent training phase. Finally, we observe additional gains from our recursive training strategy (Phase 2). By recovering teacher-failed examples via student sampling and executing a second round of fine-tuning, performance improves for both architectural variants. The attention+MLP model reaches a peak test EM of 87.00 and F1 of 87.18. Phase 2 consistently improves over Round 1, although the size of the improvement varies across training configurations. 
+
+6.2 Subgroup Performance 
+
+Fig. 4 shows test-set EM scores by answer type and answer source across different stages of our framework. The largest gains occur in categories requiring structured numerical reasoning over tables and mixed evidence. The student achieves strong EM across all question types in table-text settings, reaching perfect EM on count, multi-span, and span queries. The breakdown also shows large improvements on arithmetic questions, one of the hardest subsets of financial QA. Compared with the pretrained 7B model, programmatic distillation pushes the student above 85% EM on both table and table-text cases, highlighting the value of delegating computation to an external interpreter. In addition, Round-2 self-improvement enables the student to surpass the teacher in several mixed-evidence settings. Finally, extending LoRA adaptation from attention-only to attention+MLP yields further gains, notably improving pure text arithmetic from 0.73 to 1.00. 7Figure 5: Breakdown of incorrect predictions with three categories: (1) answer wrong only, (2) scale wrong only, and (3) both wrong/missing. 
+
+6.3 Error Composition 
+
+The error decomposition (Fig. 5) shows that most of the remaining mistakes of the fine-tuned student arise from answer prediction errors rather than scale-only errors. Compared with the untuned Qwen-7B baseline, Round-2 training reduces the total number of errors from 445 to 124 for the attention-only model and 108 for the attention+MLP model. All three error categories decrease substantially after training: answer-wrong-only errors drop from 224 to 59 and 54, scale-wrong-only errors drop from 122 to 24 and 22, and both-wrong/missing cases drop from 99 to 41 and 32. This suggests that programmatic distillation improves both reasoning correctness and output-format consistency. Overall, compared with the untuned Qwen-7B baseline, both fine-tuned Qwen-7B models substantially reduce all three error types, and even outperform the Qwen-72B teacher model. 
+
+# 7 Limitations 
+
+Although our approach yields strong improvements overall, several limitations remain. First, our evaluation uses a filtered subset of TAT-QA designed for executable program generation. As a result, the evaluation set is relatively small, and some answer type-source combinations are absent, especially simpler extraction-based cases that do not require derivation. Second, despite strong gains, all three error types are not yet fully resolved, indicating that answer prediction, scale prediction, and joint failures still remain. 
+
+# 8 Conclusion and Future Work 
+
+We propose Gold-Guided Programmatic Distillation, a framework that improves the numeri-cal reasoning capabilities of compact language models through execution-verified programs and iterative self-improvement. On TAT-QA, our 7B student achieves 87.00 EM and 87.18 F1, substantially outperforming both the TAGOP baseline and the 72B teacher with derivation hints. Our results show that this framework significantly improves arithmetic reliability and reduces numerical and scale-related errors, with the largest gains on tasks requiring reasoning over mixed tabular and textual evidence. Despite these improvements, the problem is not fully resolved. All three types of errors (answer prediction errors, scale errors, and joint failures) remain present after training, indicating that both reasoning accuracy and output alignment can be further improved. 8For future work, a promising direction is to incorporate a task-aware, agent-like routing mechanism that determines whether a query requires programmatic reasoning or simpler extraction, and selects the appropriate solving strategy accordingly. This could involve different prompts, solvers, or model components, rather than relying on a single unified setup. In addition, evaluating this framework on broader financial QA benchmarks, such as FinQA and ConvFinQA, will be important for assessing its generalizability. 
+
+# References 
+
+Jinze Bai, Shuai Bai, Yunfei Chu, Zeyu Cui, Kai Dang, Xiaodong Deng, Yang Fan, Wenbin Ge, Yu Han, Fei Huang, et al. Qwen technical report. arXiv preprint arXiv:2309.16609 ,2023. Wenhu Chen, Xueguang Ma, Xinyi Wang, and William W Cohen. Program of thoughts prompting: Disentangling computation from reasoning for numerical reasoning tasks. 
+
+arXiv preprint arXiv:2211.12588 , 2022. Luyu Gao, Aman Madaan, Shuyan Zhou, Uri Alon, Pengfei Liu, Yiming Yang, Jamie Callan, and Graham Neubig. Pal: Program-aided language models. In International conference on machine learning , pp. 10764–10799. PMLR, 2023. Cheng-Yu Hsieh, Chun-Liang Li, Chih-Kuan Yeh, Hootan Nakhost, Yasuhisa Fujii, Alex Ratner, Ranjay Krishna, Chen-Yu Lee, and Tomas Pfister. Distilling step-by-step! out-performing larger language models with less training data and smaller model sizes. In 
+
+Findings of the Association for Computational Linguistics: ACL 2023 , pp. 8003–8017, 2023. Edward J Hu, Yelong Shen, Phillip Wallis, Zeyuan Allen-Zhu, Yuanzhi Li, Shean Wang, Liang Wang, Weizhu Chen, et al. Lora: Low-rank adaptation of large language models. 
+
+Iclr , 1(2):3, 2022. Hugging Face. Peft: Parameter-efficient fine-tuning. https://github.com/huggingface/ peft , 2023. GitHub repository. Omar Khattab, Arnav Singhvi, Paridhi Maheshwari, Zhiyuan Zhang, Keshav Santhanam, Sri Vardhamanan, Saiful Haq, Ashutosh Sharma, Thomas T. Joshi, Hanna Moazam, Heather Miller, Matei Zaharia, and Christopher Potts. Dspy: Compiling declarative language model calls into self-improving pipelines, 2023. URL https://arxiv.org/abs/ 2310.03714 .Harold W Kuhn. The hungarian method for the assignment problem. Naval research logistics quarterly , 2(1-2):83–97, 1955. Lucie Charlotte Magister, Jonathan Mallinson, Jakub Adamek, Eric Malmi, and Aliaksei Severyn. Teaching small language models to reason. In Proceedings of the 61st Annual Meeting of the Association for Computational Linguistics (Volume 2: Short Papers) , pp. 1773– 1781, 2023. Pranav Rajpurkar, Jian Zhang, Konstantin Lopyrev, and Percy Liang. Squad: 100,000+ questions for machine comprehension of text. In Proceedings of the 2016 conference on empirical methods in natural language processing , pp. 2383–2392, 2016. Xiaoyu Tian, Yunjie Ji, Haotian Wang, Shuaiting Chen, Sitong Zhao, Yiping Peng, Han Zhao, and Xiangang Li. Not all correct answers are equal: Why your distillation source matters. 
+
+arXiv preprint arXiv:2505.14464 , 2025. Jason Wei, Xuezhi Wang, Dale Schuurmans, Maarten Bosma, Fei Xia, Ed Chi, Quoc V Le, Denny Zhou, et al. Chain-of-thought prompting elicits reasoning in large language models. Advances in neural information processing systems , 35:24824–24837, 2022. Zheng Yuan, Hongyi Yuan, Chengpeng Li, Guanting Dong, Keming Lu, Chuanqi Tan, Chang Zhou, and Jingren Zhou. Scaling relationship on learning mathematical reasoning with large language models. arXiv preprint arXiv:2308.01825 , 2023. 9Eric Zelikman, Yuhuai Wu, Jesse Mu, and Noah Goodman. Star: Bootstrapping reasoning with reasoning. Advances in Neural Information Processing Systems , 35:15476–15488, 2022. Fengbin Zhu, Wenqiang Lei, Youcheng Huang, Chao Wang, Shuo Zhang, Jiancheng Lv, Fuli Feng, and Tat-Seng Chua. Tat-qa: A question answering benchmark on a hybrid of tabular and textual content in finance. In Proceedings of the 59th annual meeting of the Association for Computational Linguistics and the 11th international joint conference on natural language processing (volume 1: long papers) , pp. 3277–3287, 2021. Fengbin Zhu, Ziyang Liu, Fuli Feng, Chao Wang, Moxin Li, and Tat Seng Chua. Tat-llm: A specialized language model for discrete reasoning over financial tabular and textual data. In Proceedings of the 5th ACM International Conference on AI in Finance , pp. 310–318, 2024a. Xuekai Zhu, Biqing Qi, Kaiyan Zhang, Xinwei Long, Zhouhan Lin, and Bowen Zhou. Pad: Program-aided distillation can teach small models reasoning better than chain-of-thought fine-tuning. In Proceedings of the 2024 Conference of the North American Chapter of the Association for Computational Linguistics: Human Language Technologies (Volume 1: Long Papers) , pp. 2571–2597, 2024b. 10 9 Appendix 
+
+9.1 Prompt 
+
+Figure 6: Prompts used in our pipeline. (a) Teacher prompt with derivation hints. (b) Shared prompt without derivation hints for teacher and student. 11 9.2 Examples 
+
+Figure 7: Examples of TAT-QA dataset. 12
