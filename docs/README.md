@@ -6,43 +6,46 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-07-17
-- 运行时间：2026-07-17 21:37:58 UTC
+- 最新运行日期：2026-07-18
+- 运行时间：2026-07-18 21:12:23 UTC
 - 运行状态：成功
-- 本次总论文数：7
-- 精读区：6
-- 速读区：1
+- 本次总论文数：8
+- 精读区：4
+- 速读区：4
 
 ### 今日简报（AI）
-今日精读金融报告质量评估新基准FinResearchBench II，并速览联邦学习持续微调方案。  
-最值得关注：基于共识的黄金评分标准区分金融报告质量，以及弹性正则化与合成回放解决联邦多模态模型遗忘问题。  
-建议关注AI自动评估在金融文档审核中的应用，并思考联邦微调如何平衡隐私与模型更新。
-- 详情：[/202607/17/README](/202607/17/README)
+智能体纠错与进化技术双突破：记忆图实现单次修正，成对验证器驱动无奖励演化  
+最值得关注的方向：利用经验记忆图让智能体从一次错误中即时学习，以及无需奖励函数、仅靠配对验证器进化的新范式  
+想尝试的话，可以从构建智能体操作记忆库或设计“比较-选择”式反馈机制入手，避开繁琐的奖励工程
+- 详情：[/202607/18/README](/202607/18/README)
 
 ### 精读区论文标签
-1. [FinResearchBench II: A Deep Research Benchmark with Consensus-Derived Gold Rubrics for Distinguishing Financial Report Quality](/202607/17/2607.12252v1-finresearchbench-ii-a-deep-research-benchmark-with-consensus-derived-gold-rubrics-for-distinguishing-financial-report-quality)  
-   标签：评分：10.0/10、query:fla
-   evidence：评估金融深度研究代理报告质量的基准
-2. [FinResearchBench II: A Deep Research Benchmark with Consensus-Derived Gold Rubrics for Distinguishing Financial Report Quality](/202607/17/2607.12252v2-finresearchbench-ii-a-deep-research-benchmark-with-consensus-derived-gold-rubrics-for-distinguishing-financial-report-quality)  
+1. [Experience Memory Graph: One-Shot Error Correction for Agents](/202607/18/2607.13884v1-experience-memory-graph-one-shot-error-correction-for-agents)  
    标签：评分：9.0/10、query:fla
-   evidence：用于评估生成金融报告的深度研究智能体的基准
-3. [Step-Level Preference Learning for Generative Agents in Social Simulations](/202607/17/2607.14485v1-step-level-preference-learning-for-generative-agents-in-social-simulations)  
+   evidence：通过图匹配利用历史经验的智能体错误纠正框架，直接提升自主智能体后训练表现。
+2. [Reward-Free Evolving Agents via Pairwise Validator](/202607/18/2607.14408v1-reward-free-evolving-agents-via-pairwise-validator)  
    标签：评分：9.0/10、query:fla
-   evidence：提出步级偏好学习，通过SFT和DPO对齐智能体中间决策步骤的人类偏好，属于典型的智能体后训练技术。
-4. [LongStraw: Long-Context RL Beyond 2M Tokens under a Fixed GPU Budget](/202607/17/2607.14952v1-longstraw-long-context-rl-beyond-2m-tokens-under-a-fixed-gpu-budget)  
-   标签：评分：9.0/10、query:fla
-   evidence：LongStraw在固定GPU下实现百万token的智能体RL后训练，直接解决智能体轨迹长上下文训练缺口。
-5. [ToolAnchor: Anchoring Counterfactual Context to Boost Agentic Tool-use Capability](/202607/17/2607.14145v1-toolanchor-anchoring-counterfactual-context-to-boost-agentic-tool-use-capability)  
+   evidence：无需标量奖励的自进化智能体，使用成对验证，是自主智能体后训练的直接技术。
+3. [PFAdapter: Hierarchical LoRA Decomposition for Personalized Federated MLLMs](/202607/18/2607.12111v1-pfadapter-hierarchical-lora-decomposition-for-personalized-federated-mllms)  
    标签：评分：8.0/10、query:fla
-   evidence：通过反事实上下文提升LLM智能体工具使用的后训练框架
-6. [Gold-Guided Programmatic Distillation for Financial Reasoning over Hybrid Tables and Text](/202607/17/2607.14709v1-gold-guided-programmatic-distillation-for-financial-reasoning-over-hybrid-tables-and-text)  
+   evidence：提出针对智能体AI系统中多模态大模型的分层LoRA分解方法进行联邦微调
+4. [Multi-Head Latent Control: A Unified Interface for LLM Agent Decision Making](/202607/18/2607.14277v1-multi-head-latent-control-a-unified-interface-for-llm-agent-decision-making)  
    标签：评分：8.0/10、query:fla
-   evidence：金融推理的程序化蒸馏，一种后训练知识迁移方法
+   evidence：提出在LLM上训练轻量控制头用于智能体决策，直接关联自主智能体后训练。
 
 ### 速读区论文标签
-1. [Continual Learning with Elastic Regularization and Synthetic Replay for Federated MLLM Fine-Tuning](/202607/17/2607.12112v1-continual-learning-with-elastic-regularization-and-synthetic-replay-for-federated-mllm-fine-tuning)  
+1. [Non-vacuous Generalization Bounds for Reinforcement Learning with Verifiable Rewards](/202607/18/2607.14506v1-non-vacuous-generalization-bounds-for-reinforcement-learning-with-verifiable-rewards)  
+   标签：评分：7.0/10、query:fla
+   evidence：针对LLM的RLVR微调，提出Progressive RLVR框架改善后训练泛化。
+2. [Leveraging Instruction Tuning and Merging for Reasoning Model Adaptation](/202607/18/2607.14895v1-leveraging-instruction-tuning-and-merging-for-reasoning-model-adaptation)  
+   标签：评分：7.0/10、query:fla
+   evidence：指令微调与模型合并是适用于金融任务适配的大模型后训练技术
+3. [From Critic to Confidence: PPO for Language-Based Quantitative Prediction with Confidence Estimation](/202607/18/2607.12687v1-from-critic-to-confidence-ppo-for-language-based-quantitative-prediction-with-confidence-estimation)  
    标签：评分：6.0/10、query:fla
-   evidence：联邦微调多模态大语言模型以防止灾难性遗忘，支持自主智能体的持续后训练
+   evidence：使用基于PPO的强化学习微调进行带置信度的定量预测，是一种可应用于金融智能体的强化学习后训练方法。
+4. [Supervised Fine-Tuning vs. In-Context Learning: An Equilibrium Analysis of LLM Personalization under Congestion](/202607/18/2607.14371v1-supervised-fine-tuning-vs-in-context-learning-an-equilibrium-analysis-of-llm-personalization-under-congestion)  
+   标签：评分：6.0/10、query:fla
+   evidence：分析LLM个性化中监督微调与上下文学习的权衡，与金融大模型智能体微调方法相关
 
 
 <div class="dpr-home-promo-card">
