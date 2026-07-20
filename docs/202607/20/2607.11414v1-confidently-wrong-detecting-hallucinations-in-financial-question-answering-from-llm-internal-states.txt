@@ -1,0 +1,253 @@
+Title: Confidently Wrong: Detecting Hallucinations in Financial Question Answering from LLM Internal States
+
+URL Source: https://arxiv.org/pdf/2607.11414v1
+
+Published Time: Tue, 14 Jul 2026 02:39:19 GMT
+
+Number of Pages: 8
+
+Markdown Content:
+# Confidently Wrong: Detecting Hallucinations in Financial Question Answering from LLM Internal States 
+
+# Richard Zhe Wang 
+
+St. John Fisher University Rochester, NY, USA zwang@sjfc.edu rzwang.research@gmail.com 
+
+## Abstract 
+
+Large language models (LLMs) in financial applications fail most consequentially when they are confidently wrong . Hedged, uncer-tain answers invite scrutiny, whereas confident errors silently de-grade downstream decisions without warning. We ask how reliably such confidently wrong answers, or confident hallucinations, can be detected from a model’s internal activations, and whether those activations carry information beyond its observable outputs. We train linear probes on the residual stream and evaluate them on two established question-answering (QA) benchmarks built from real filings, FinQA and TAT-QA. Behavioral confidence is measured as the agreement among eight resampled answers to the same question, and probe effectiveness is compared against baselines, such as token log-probabilities and the model’s own True /False 
+
+self-assessment of its answer. Our findings show that among con-fident answers, those for which all eight resamples agree, 15–23% are wrong on FinQA. There the probes have a significant advan-tage over baseline methods in detecting hallucinations, holding 0.68–0.77 AUROC while the best baselines fall to 0.55–0.63, across Qwen3-8B, Llama-3.1-8B, and Gemma-2-9B. Our results suggest that probing can be a cost-effective triage mechanism for routing LLM answers to human review and quality control procedures in high-stakes financial applications. 
+
+## 1 Introduction 
+
+Assistants built on large language models (LLMs) are entering fi-nancial analysis and advisory workflows, answering questions and supporting high-stakes decisions in financial analysis and planning, investment, risk management, and market intelligence [ 22 , 27 , 34 ]. In these settings, a costly failure mode is LLM hallucination , where an LLM gives not the wrong answer per se but the confidently 
+
+wrong answer with a high degree of certainty and conviction. If the answer is hedged or has detectable signatures of uncertainty such as low log-probability from the outputs, the user can discount a hedged, uncertain answer or the system can route it to external review before relying on it for decision-making. But confidently wrong answers have characteristics that easily pass both automated filters and the human reader’s own judgment, giving both the sys-tem and the reader the impression that the LLM is highly certain about the accuracy of the answer. This kind of confidently wrong hallucination is especially dangerous in financial applications as the mistakes are often costly and irreversible. An equity investment made based on a fabricated growth rate or a misread balance-sheet line could easily cost an institutional investor millions of dollars. Thus, detecting hallucinations, especially the confidently wrong type, is critical for the success of LLM applications in the financial industry and is one of the most important safeguards for deployed systems. Two recent lines of work tackle this problem to various de-grees. Simhi et al . [30] show that models hallucinate with high certainty even when they demonstrably possess the correct knowl-edge, and that uncertainty-based detectors fail on precisely these cases. Separately, a maturing literature shows that answer correct-ness is linearly decodable from a model’s hidden states on fact-recall benchmarks [ 1 , 3 , 5 , 28 ], and probe-based screening operates at pro-duction scale in safety cascades [ 9, 17 ]. To our best knowledge, no prior work has measured, among high-confidence answers where common deployable output-level signals fail, whether hallucination signals based on the LLMs’ internal representations are effective in detecting errors that the simple output-level signals cannot, on financial question answering tasks that are often consequential. Our investigation focuses on two questions. First , does an inter-nal probe beat deployment-cheap output signals at detecting hal-lucinations, especially confidently wrong answers? Second , which probe design is most effective, and does a single best design general-ize across model families? We then translate the detection method into operational terms, exploring its triage value in on-the-fly sort-ing of LLM queries and answers for human review. We answer these questions via experiments on numeric financial question answering (QA) tasks using two benchmarks — FinQA and TAT-QA. Our design first crosses confidence , measured behav-iorally as the agreement of 𝑘 =8 resampled answers of each query, with correctness , established by mechanical grading against gold answers, resulting in a 2 × 2 (i.e. confidence vs. correctness) grid of query/answer pairs. We then evaluate, within the grid, if a probe on the LLM’s internal states can beat the output-level signals of uncertainty that are available at negligible or low marginal cost in production (henceforth deployment-cheap ): token log-probabilities, which are a free byproduct of decoding, and P( True ), the model’s self-reported True /False assessment of its own answer following Kadavath et al. [ 15 ], which costs one extra forward pass. The behav-ioral, self-consistency test of generating 𝑘 =8 resampled answers per query costs eight generations per query and is therefore reported as a reference but excluded from the deployable set due to impractical-ity and cost. Different probe configurations are reported to identify the best common design across three model architectures. This paper contributes to the literature in the following ways: (1) Activation probing for numeric financial QA. We present, to our knowledge, the first systematic evaluation of answer-correctness probing on financial numeric QA with modern instruction-fine-tuned LLMs, using FinQA and TAT-QA, arXiv:2607.11414v1 [cs.CL] 13 Jul 2026 Richard Zhe Wang 
+
+two benchmarks built from real filings. We find that fi-nancial reasoning errors are substantially harder to decode (≈0.73–0.79 AUROC, area under the receiver operating char-acteristic curve) than factual falsehoods ( ≈0.9–1.0 in [ 1 ]), highlighting both the gap in the literature and the fact that the accuracy of financial QA is a considerably harder task to probe and detect than factual recall. (2) Probe’s advantage in detecting errors in confident an-swers. Among those highly confident answers generated by the LLM (proxied by unanimous answers from 8 runs on the same query), a linear probe on the 2/3 depth layer residual stream has a classification AUROC of 0.68–0.77 compared to that of the best output signal at 0.55–0.63. The probe leads by Δ = +0.151, +0.151, +0.131 AUROC on FinQA for Qwen3-8B, Llama-3.1-8B, and Gemma-2-9B, respectively. As expected, the advantage of probing disappears when classifying unsure answers where the LLM’s output level signals are already sufficient to detect uncertainty in the generated answers. This highlights that the value of prob-ing internal representations for hallucination is the highest 
+
+precisely when the hallucination is the most problematic to the user — when the LLM is itself highly certain about the correct answer. (3) Probe design and robustness. We find that a simple probe design rule generalizes robustly across the three fam-ilies of LLMs (Qwen3-8B, Llama-3.1-8B, and Gemma-2-9B) tested: a mean-pooled probe placed at 2/3 of the network depth works very well. At this fixed layer-depth, the probe matches the per-family optimal network layer for two of the three models and costs at most 0.013 AUROC for the third (§5.2). Further, the confident-answer advantage is not an artifact of the probe flagging cases where the model declines to answer, because removing such “abstention” query/answer pairs does not significantly move the AU-ROC. The advantage of probing does not, however, survive task transfers (FinQA ↔TAT-QA costs 0.07 to 0.16 AUROC), so the probing monitor is task-specific. (4) Validity controls. We apply rigorous controls uncommon in this literature for validity and statistical inference: (1) random-initialization placebos, which place the reference AUROC at ≈0.63 rather than 0.5; (2) document-grouped cross-validation, and (3) audited grading with a quantified label-noise sensitivity (§4.2). (5) Operational value: triage under bounded review. In human-in-the-loop deployments, at a fixed review budget of 20% of answers (Qwen3-8B on FinQA), probe-ranked rout-ing catches 45% of all errors, against 37% for the Kadavath-style P( True ) and 20% for random routing. The gain is largest for the over-committing models (e.g. Qwen3-8B), whose output signals are the least informative. 
+
+## 2 Related work 
+
+Three lines of prior work are relevant to this research: (1) truth-fulness probing of hidden states, (2) uncertainty signals and their costs, and (3) financial hallucination detection. 
+
+Truthfulness probing. Prior literature shows that LLM hidden states encode answer correctness. Linear probes and unsupervised directions detect lies and errors [ 3 , 5, 25 ] on fact-oriented bench-marks such as TruthfulQA [ 23 ] and HaluEval [ 20 ], and internal states support both detection and steering of hallucination [ 6, 21 ]. Moreover, correctness information concentrates in specific tokens and mid-network layers [ 1, 28 ], and probes already screen produc-tion traffic in deployed safety cascades [ 9 , 17 ]. For a broader survey of LLM hallucination, see Huang et al . [12] . Given these findings, we treat the decodability of correctness as a premise for the rest of the paper, rather than a new claim. Our contribution is to quantify the effectiveness of probing signals under confidence stratification, against deployment-fair baselines, and across model families, in the financial domain where errors frequently arise from multi-step numeric reasoning. 
+
+Uncertainty signals and their costs. Prior work has shown that semantic entropy [ 10 , 18 ] and sampling-based agreement measures [ 24 , 33 ] are strong correctness predictors, but they require mul-tiple generations per query and thus are not practical for most deployments. Semantic-entropy probes [16] amortize that cost, al-though they do not match the sampled measures. P( True ) self-assessment [ 15 ], by comparison, adds only one forward pass. Simhi et al . [30] argue that high-certainty hallucinations mostly defeat uncertainty-based methods, and propose probing-based mitigation on perturbation-induced factual errors. A follow-up work by Simhi et al . [29] maps hallucinations jointly along certainty and knowl-edge axes. We take this phenomenon as our starting point and ask the question the prior works do not: can probing signals effectively detect hallucinations among confident answers when output-level uncertainty signals struggle? How large is the advantage against other deployment-cheap competitors? 
+
+Financial hallucination detection. Existing systems for financial hallucination detection focus on retrieval and verify outputs against retrieved evidence or estimate entropy over samples [ 11 , 31 , 32 ], and benchmarks abound [ 8 , 19 , 35 ]. The exception is a mechanistic case study by Mirajkar [26] that traces arithmetic-error circuits in GPT-2 XL on ConvFinQA and reports a layer-specific linear probe evalu-ated on synthetic templated queries. It reports near-perfect cross-topic transfer between two families of synthetic prompts, whereas we find that transfer between two real filing-based benchmarks costs 0.07 to 0.16 AUROC (§5.2), so transfer measured on templated queries does not predict transfer across naturally occurring ques-tion distributions. Beyond that case study, however, no prior work evaluates internal-state detection on modern instruction-fine-tuned LLMs against deployment-relevant baselines at scale. Furthermore, reported progress in hallucination detection is highly sensitive to evaluation and benchmark-construction artifacts [ 13 , 14 ], and we observe the same in the financial domain, where label noise and split leakage can each meaningfully move the central comparisons (§3, §4.2), and we control for both. 
+
+## 3 Task, data, and labels 
+
+Task & models. Financial QA involves giving each model a fi-nancial filing excerpt (text plus a serialized table) and a question Confidently Wrong: Detecting Hallucinations in Financial Question Answering from LLM Internal States 
+
+requiring it to locate one to three values amid distractors and com-pute a derived quantity (a change, ratio, or share of total). The model reasons step by step via prompted chain-of-thought (CoT) and emits ANSWER: <number> . Decoding is greedy, so each question has one canonical served answer. Numeric QA is also methodologi-cally convenient for this study, as gold answers are mechanically gradable and labeled examples of model error can be produced at inference cost, without human annotation. We evaluate three instruction-fine-tuned LLMs from different developers with distinct pretraining recipes: Qwen3-8B, Llama-3.1-8B-Instruct, and Gemma-2-9B-it. All three run through an identical pipeline with chat-template differences normalized and Qwen3’s native reasoning mode disabled for cross-family comparability. 
+
+Data. We use two established benchmarks. FinQA [ 7 ] comprises questions written by financial analysts over S&P 500 firms’ filing excerpts (1999–2019) and requires multi-step numeric reasoning over long contexts. TAT-QA [ 36 ], in contrast, poses questions over annual-report tables with short accompanying text, and its ques-tions are shorter and more extractive. The two datasets thus span the harder and the easier end of financial QA. Question selection re-quires the gold answer to be a bare number, and contexts over 2,800 tokens are dropped. After filtering, 6,105 FinQA and 1,138 TAT-QA questions remain, which are 98% and 68% of the full datasets, respectively. 
+
+Grading as a measurement instrument. To grade each answer, the final ANSWER: line is first parsed to a float, with handling for cur-rency symbols, thousands separators, percent signs, and accounting-style parenthesized negatives. An answer is graded as correct when it matches the gold answer to within a 2% relative tolerance under at least one of five scale conventions. Formally, prediction 𝑝 matches gold answer 𝑔 iff 
+
+match (𝑝, 𝑔 ) = ⊮
+
+
+
+min  
+
+> 𝑠 ∈𝑆
+
+| 𝑝𝑠 − 𝑔 |
+
+max (| 𝑔 |, 𝜀 ) ≤ 𝜏 
+
+
+
+, (1) with tolerance 𝜏 = 0.02 , a small constant 𝜀 guarding division by zero, and a scale set 𝑆 containing 1, 100 , 0.01 , 1000 , and 0.001 , covering the percent-vs-decimal and thousands-vs-millions conventions of financial text. The small constant 𝜀 in the denominator prevents division by zero when the gold answer is itself zero, in which case the relative-error test reduces to an absolute one: the prediction must lie within 𝜏𝜀 of zero. Because every 𝑠 ∈ 𝑆 is positive, no rescaling can repair a sign flip, so sign errors are never forgiven. The grader itself is validated. An LLM judge (GPT-5.4-mini) in-structed with the same conventions re-graded 120 sample query/answer pairs (60 graded-correct and 60 graded-incorrect items). The LLM judge agrees with the grader on 90.0% and 93.3% of them, respec-tively. The residual disagreement is dominated by convention am-biguities on which the judge itself is inconsistent across runs. We estimate residual label noise of 4–6%, balanced between the two directions. Symmetric label noise attenuates AUROC differences, and the actual edge of probing is likely slightly larger than reported. 
+
+The 2 ×2. Each question 𝑥 contributes two labels: the correctness against the gold answer using the grader mentioned above, and a 
+
+Table 1: Confidence × correctness on FinQA. Reweighted population shares (§4.2). Confident = 8/8 self-consistent. Bold = confident-wrong cell; parenthetical = raw CW count. Acc = overall accuracy (CC+UC).                                        
+
+> Qwen3-8B ( 𝑛 =6,105 , Acc 69.9%) Correct Wrong Total Confident 64% 19% (1,137) 82% Unsure 6% 11% 18% Total 70% 30% 100% Llama-3.1-8B ( 𝑛 =6,114 , Acc 60.1%) Correct Wrong Total Confident 30% 5% (329) 36% Unsure 30% 35% 64% Total 60% 40% 100% Gemma-2-9B ( 𝑛 =6,110 , Acc 68.1%) Correct Wrong Total Confident 58% 14% (861) 72% Unsure 10% 18% 28% Total 68% 32% 100%
+
+behavioral confidence (i.e. self-consistency) score [33] 
+
+𝑐 (𝑥 ) = 1
+
+𝑘 
+
+> 𝑘
+
+∑︁ 
+
+> 𝑖 =1
+
+match  𝑎 𝑖 (𝑥 ), 𝑎 0 (𝑥 ), 𝑘 = 8, (2) where 𝑎 1 (𝑥 ), . . . , 𝑎 𝑘 (𝑥 ) are independent temperature-0.7 resamples of the same query and the same grader (Eq. 1) defines agreement. Agreement among resampled answers is a well-established behav-ioral confidence measure. Self-consistency across sampled answers predicts correctness [ 33 ], sampling-based agreement drives halluci-nation detectors such as SelfCheckGPT [ 24 ], and the closely related semantic entropy is among the most reliable uncertainty measures reported, at the cost of multiple generations per query [ 10 , 18 ]. “Confident” means unanimous answers across all 8 runs ( 𝑐 (𝑥 ) = 1,i.e. 8/8), and the case of 6/8 sameness ( 𝑐 (𝑥 ) ≥ 6/8) is reported as a sensitivity check. We call the unanimously self-consistent an-swers confident answers and the rest unsure answers . In stratified analysis, we compare all remaining signals within subgroups clas-sified by this confidence measure. Note that self-consistency was run on every wrong answer but only a random subset of correct answers (FinQA: 1,500 correct; TAT-QA: 400 correct; all three mod-els) to save compute. So when computing prevalence, precision, recall, and related shares, each correct example is weighted by (1/ sampling rate ) so the numbers match the full answer pool (i.e. population-reweighted). Table 1 gives the resulting populations of the 2 ×2 classification. Overall, Qwen3 is more accurate (69.9%) and more confident (over-all confidence 82%), while Llama-3.1 is less accurate (60.1%) and less confident (overall confidence 36%). Gemma-2 is in the mid-dle. The main cell of interest, confident hallucination, is where the answer is confident but wrong (CW). Qwen3-8B has the most confident-wrongs (19%), with Gemma-2-9B a close second (14%). While Llama-3.1-8B performs the worst overall, it also has the least confident-wrongs (5%). Thus, Qwen3-8B and Gemma-2-9B tend to over-commit, whereas Llama-3.1-8B tends to under-commit. On the easier TAT-QA (untabulated), all three models are more accurate, and the confident-wrong share is 4–7% across the models. Richard Zhe Wang 
+
+## 4 Methods 4.1 Signals under comparison 
+
+The baseline deployment-cheap set constructed from last-layer out-puts contains two kinds of signal. The first kind comprises three token-log-probability scores that are free byproducts of decoding: (1) The mean log-probability over all generated tokens, (2) The mean log-probability over the final-answer span (to-kens from the last ANSWER: marker onward; if the marker is absent, the full generation is used). (3) The minimum log-probability over the final-answer span (same implementation as above). The second type of signal in the deployment-cheap set is P( True )[ 15 ], which prompts the model by showing its own question and answer, asks whether the answer is correct ( True /False ). It then scores by the relative logit of True at the first output position, at the cost of one extra forward pass, as follows: 
+
+𝑃 (True )( 𝑥 ) = 𝜎   log Í𝑡 ∈ T 𝑒 𝑧 𝑡 − log Í𝑡 ∈ F 𝑒 𝑧 𝑡 , (3) where 𝑧 is the logit vector at the first output position, T and F are the tokenizer ids for the case variants of True and False , and 𝜎 is the logistic sigmoid. P( True ) comes at the cost of one extra forward pass by the LLM. Our main detection method, the probe , follows the linear probing-classifier methodology [ 2, 4] and its application to truthfulness detection in LLMs [ 3 , 28 ]. The probe is logistic regression on a linear readout of the residual stream, the model’s per-token internal representation, taken at a layer fixed a priori at 2/3 depth and mean-pooled over the generated answer’s tokens. Activations are captured in a single forward pass over the concatenated prompt and generated answer, so no regeneration is required. Specifically, 
+
+¯ℎ(𝑥 ) = 1
+
+|𝑇 𝑥 |∑︁ 𝑡 ∈𝑇 𝑥 
+
+ℎ(ℓ ) 
+
+> 𝑡
+
+(𝑥 ), 𝑚 (𝑥 ) = 𝜎  𝑤 ⊤ ¯ℎ(𝑥 ) + 𝑏 , (4) where 𝑇 𝑥 is the set of generated tokens, ℎ(ℓ ) 
+
+> 𝑡
+
+(𝑥 ) the residual-stream vector at token 𝑡 and layer ℓ = ⌊2𝐿 /3⌋ of an 𝐿 -layer model, and 
+
+(𝑤, 𝑏 ) are fit by ℓ2-regularized, class-balanced logistic regression against the binary correctness label ( 𝐶 =0.1; features standardized within training folds). The linear probing score, 𝑚 (𝑥 ), scores each answer for correctness. The layer and pooling choices are fixed a priori rather than tuned; §5.2 reports the layer-by-pooling sweep that motivates the 
+
+2/3-depth, mean-pooled choice and shows it generalizes well across model families. Because the probe reads activations already com-puted during generation, it adds near-zero marginal FLOPs, but it requires white-box access and is therefore limited to self-hosted models such as ours. Furthermore, we also train and evaluate com-bined predictors based on both the probe and the baseline predictors using stacking .Self-consistency score 𝑐 (𝑥 ) itself is excluded from the cheap de-ployable set because it costs eight generations per query and it already serves as the stratifier (§3) for sorting answers into confi-dent and unsure cells in the 2 × 2 grid. The requirement of eight generations per query means self-consistency is an impractical method for error detection. 
+
+## 4.2 Evaluation protocol and validity controls 
+
+The evaluation of the detection methods (probe vs. baselines) is based on 5-fold cross-validation with document-grouped, class-stratified folds on both FinQA and TAT-QA benchmarks. Since TAT-QA asks 1,138 questions over 278 source documents, the same source document may be shared by multiple questions. Conse-quently, a naive random split on questions would result in the same source document split across both the training and testing samples, resulting in data leakage and inflating AUROC by up to 0.04 by our measurements. Thus, we impose a document-grouped train-test split so that the same source document can only appear in either training or testing samples but not both. Every example is scored out-of-fold, and no model is ever used to predict anything in its own training data. These out-of-fold er-ror/hallucination prediction scores are consumed by downstream statistical analyses. When the deployable signals are stacked into a combined predictor (probe+cheap, Table 2), an inner cross-validation loop within each training fold produces the first-stage scores, so the second-stage combiner never trains on its own out-of-fold inputs. We report two performance metrics: (1) AUROC, the area under the receiver operating characteristic curve, which measures how well a binary classifier separates positive from negative cases across all possible decision thresholds. (2) PR-AUC, the area under the precision–recall curve (wrong answer = positive), which gives the retrieval view by balancing precision and recall, is our secondary metric. Confidence is measured on all wrong answers but only a random subset of correct ones. All PR metrics and population shares are importance-reweighted to population prevalence. Every reported effect is read against the following controls: (i) a 
+
+permuted-label control (≈0.5 observed as expected); (ii) a random-initialization placebo : the same linear probe is trained on activations from a randomly initialized copy of the LLM architecture (no pre-trained weights); it still reaches 0.625 AUROC by exploiting surface features of the text, so gains from the trained model should be read against ≈0.63 rather than against chance (0.5); (iii) a layer-0 base-line capturing non-contextual token information ( ≈0.62–0.67); (iv) 
+
+cross-task transfer evaluation (§5.2); and (v) cross-run reproducibility :activations re-extracted for the same inputs must match across runs. 
+
+## 5 Results 5.1 Detection performance 
+
+Full sample. We first report the detection accuracy of the probe against the baselines in the full sample. Table 2 shows that, across model families and datasets, the probe attains 0.73–0.79 AUROC, against 0.66–0.73 for P( True ) and 0.59–0.71 for the best token log-probability variant for each model-benchmark combination, making the probe the strongest deployable signal in all six conditions. Stack-ing the cheap signals onto the probe increases AUROC in five out of six conditions, with the largest gain for Llama, whose outputs are the most informative. Once the non-deployable self-consistency is included, the ranking depends on the specific model-benchmark combination. 
+
+Confident answers. Table 3 compares the probe against the best baseline predictors for hallucination inside the quadrant of only Confidently Wrong: Detecting Hallucinations in Financial Question Answering from LLM Internal States 
+
+Table 2: Full-population detection. AUROC of every signal over all answers, before confidence stratification. Bold marks the best deployable signal, that is, the cheap output signals and the probe. probe+baseline stacks all deployable signals by logistic regression. † Self-consistency requires 𝑘 =8 regenerations per query, is not deployable at production cost, and is reported for reference only.                                   
+
+> best logprob P( True )self-cons. †probe probe+baseline FinQA Qwen3-8B .605 .692 .651 .786 .794 Llama-3.1-8B .705 .703 .820 .764 .792 Gemma-2-9B .651 .657 .724 .776 .796 TAT-QA Qwen3-8B .649 .725 .689 .732 .752 Llama-3.1-8B .654 .726 .839 .751 .781 Gemma-2-9B .588 .696 .770 .733 .714
+
+Table 3: Detection among confident answers (head-line). Restricted to unanimously confident answers (8/8 self-consistent). AUROC | PR-AUC (wrong-as-positive, population-reweighted). Best baseline = max over the deployment-cheap set; Δ is the probe’s AUROC gain over that baseline.                             
+
+> 𝑛 (wrong) best baseline probe Δ
+> FinQA Qwen3-8B 2,503 (1,137) .615 |.348 .766 |.563 +.151
+> Llama-3.1-8B 1,085 (329) .550 |.183 .701 |.368 +.151
+> Gemma-2-9B 2,141 (861) .624 |.292 .755 |.499 +.131
+> TAT-QA Qwen3-8B 459 (74) .629 |.183 .687 |.204 +.058
+> Llama-3.1-8B 307 (44) .587 |.131 .708 |.222 +.121
+> Gemma-2-9B 434 (72) .593 |.104 .684 |.218 +.091
+
+answers classified as confident . Among the unanimously (8/8) con-fident answers the best baseline output-level signals decay toward the chance level. This is expected, since membership in the confi-dent stratum means the LLM itself gives the answer a high degree of certainty. The probe, in contrast, is still highly effective and barely degrades from its full-population level. The probe leads by 
+
+Δ = +0.151 , +0.151 , +0.131 AUROC on FinQA across the three fami-lies (confidence intervals ≈ ± 0.02 to ±0.04 at these counts of wrong answers), and by +0.06 to +0.12 on TAT-QA. At the looser ≥6/8 confidence threshold (untabulated), the probe’s gains on FinQA are similar, ranging from +0.11 to +0.13 . The FinQA/TAT-QA gradient is consistent with difficulty scaling, as the simpler lookup tasks in TAT-QA leave less concealed error signal and the harder FinQA benefits more from the probe. Additional analyses support the same conclusion. First, probe score correlates with correctness at 𝑟 = 0.23 –0.38 on FinQA after 
+
+linearly removing every confidence measure. Second, a “specialist” probe trained only on confident examples changes within-group AUROC by less than 0.02 in five of six conditions. Third, the probe– self-consistency rank correlation is only 0.28–0.48, suggesting most of the probe’s signal is incremental to that of the self-consistency measure based on multiple runs. The probe’s advantage is not due to the probe flagging refusals either. A confident-wrong answer can be an abstention, such as “the filing does not provide this figure,” and abstentions may be easy to separate from committed answers by probes. To test this, 
+
+Table 4: Detection among unsure answers. Probe vs. best baseline signal within unsure answers ( 𝑐 (𝑥 ) < 1), AUROC with Δ over that baseline.                     
+
+> best baseline probe Δ
+> FinQA Qwen3-8B .669 .722 +.053
+> Llama-3.1-8B .680 .730 +.050
+> Gemma-2-9B .651 .715 +.064
+> TAT-QA Qwen3-8B .691 .697 +.006
+> Llama-3.1-8B .679 .658 −.021
+> Gemma-2-9B .613 .543 −.070
+
+we first remove abstentions from the confident sample and then recompute the AUROC of all models. Abstentions account for 4– 11% of the confident-wrong cell on FinQA, and removing them does not materially change the gap between the probe and the best baseline. The incremental AUROC from the best baseline to the probe changes by about 0.01 in every family (Qwen from +0.151 
+
+to +0.161 , Llama from +0.151 to +0.156 , Gemma from +0.131 to 
+
++0.120 ), ruling out the possibility that the probe is mainly picking up on the LLM’s refusals. Figure 1 translates the ranking of answers generated by P( True )and the probe into a review policy among confident answers (Qwen3-8B on FinQA). Answers are ordered from most to least suspicious; the review budget is the fraction of that pool inspected. Precision is the share of reviewed answers that are wrong, and recall is the share of all confident-wrong answers caught. The probe stays above P( True ) at every budget in both precision (left) and recall (right). Flagging the 5% most-suspicious answers yields 79% precision (3.4 ×
+
+prevalence) at 17% recall for the probe. A 10% budget yields 69% precision at 31% recall, and a 30% budget yields 45% precision at 60% recall, for the probe. Table 4 reports the model comparison within unsure answers, for which the served answer is not unanimously reproduced across 8 runs. Here the baseline output-level signals retain strong dis-criminative power, particularly in the harder FinQA benchmark. The probe’s advantage is negative for two families on the easier TAT-QA. Thus, the probe does not dominate baseline uncertainty signals in all situations. Its value is the strongest when the LLM pro-duces a confident answer precisely when hallucinations are hidden and hard to detect based on surface observables. This asymmetry Richard Zhe Wang 0 10 20 30 40 50      
+
+> review budget (% of con fi dent answers)
+> 0.0
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> 1.0
+> precision
+> probe
+> P(True) prevalence
+> 010 20 30 40 50
+> review budget (% of con fi dent answers)
+> 0.0
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> 1.0
+> recall
+> random
+
+Figure 1: Precision (left) and recall (right) for retrieving confident-wrong answers vs. review budget, among unanimously confident answers (Qwen3-8B, FinQA; population-reweighted). Dotted: prevalence / random routing. 
+
+motivates a two-stage design in which the cheap output signals first route the unsure answers for review, and the probe screens the confident remainder. 
+
+## 5.2 Probe design across layers and pooling 
+
+This subsection analyzes the most effective probe configuration for detecting hallucinations. Figure 2 reports the layer-by-pooling sweep behind the fixed design, and two regularities hold across all three families. First, mean pooling over all generated answer tokens (left panel) has higher AUROC than pooling over the last prompt token (right panel), suggesting mean-pooling is the better aggregation method for the probe. Second, the layer profile is not monotonic. In the left panel (mean-pooling), AUROC rises from the embedding layer (0.67–0.70) to approximately 2/3 the depth, plateauing there until the final layer (0.76–0.79). Hence, the a priori choice of a mean-pooled probe at two-thirds depth is close to optimal and transfers across LLM families. For Qwen3-8B and Gemma-2 the two-thirds-depth layer coincides with the sweep-optimal layer (0.785 and 0.776 AUROC). For Llama-3.1 the optimum sits earlier, near one-half depth (0.778 at layer 16), and fixing the layer at two-thirds depth costs only 0.013 AUROC (0.765 at layer 21), so the reported Llama performance numbers are slightly conservative. In summary, a single relative-depth rule appears adequate for all three models, which supports deploying one probe design without per-family tuning. We also examined the possibility of cross-dataset transfers. Cross-dataset transfer asks whether a probe trained on one benchmark still works on the other. It does not. Training on FinQA and testing on TAT-QA, or the reverse, costs roughly 0.07–0.16 AUROC across all three families, and the transferred probe typically falls below the tar-get’s own baseline signals (e.g. P( True ) or token log-probabilities). The hallucination probe therefore appears task-specific, and it must be trained for new tasks. 
+
+## 5.3 Triage under bounded human review 
+
+In financial LLM applications, a hallucination can have significant monetary and legal consequences. Example applications include an LLM-based financial analyst or research copilot, audit and financial-reporting systems, an automated lending system, or model-assisted 
+
+Table 5: Errors caught at fixed reviewer capacity. Share of all wrong answers caught within the reviewed fraction (recall), routed by P( True ), the probe, and their rank fusion (cascade). The first three blocks are FinQA; the last is Qwen3-8B on TAT-QA. Bold = most errors caught per row.                                        
+
+> capacity P( True )probe cascade Qwen3-8B (FinQA) 10% 22% 27% 25% 20% 37% 45% 45% 30% 50% 58% 59%
+> Llama-3.1-8B (FinQA) 10% 21% 22% 22%
+> 20% 36% 38% 39%
+> 30% 48% 51% 53%
+> Gemma-2-9B (FinQA) 10% 18% 26% 23% 20% 32% 44% 45%
+> 30% 44% 58% 58%
+> Qwen3-8B (TAT-QA) 10% 30% 36% 37%
+> 20% 51% 51% 56%
+> 30% 64% 60% 63%
+
+insurance underwriting. A mistake by the LLM could easily cost the user millions of dollars. But capacity for human review is often limited in such firms and the reviewers cannot feasibly attend to all LLM-generated answers. Thus, a triage system is necessary to filter the traffic and direct only those queries/answers that are more likely to have errors to human reviews and other quality procedures. A triage system based on output-level signals such as log probability of the generated tokens cannot detect confident-wrongs by construction. That calls for better techniques that can detect confident wrongs in a fast, cheap, and effective manner. Probing is a prime candidate for such a triage system. Table 5 reports the hallucination probe’s triage value at review budgets of 10–30% of total queries. When the review capacity is scarce, the probe prioritizes confident errors better than the best de-ployable baseline for the over-committing models. On FinQA, probe routing, alone or fused with P( True ) in the cascade, catches more errors than P( True ) at every budget for Qwen3-8B and Gemma-2, for instance 45% against 37% at a 20% budget for Qwen3-8B, with Confidently Wrong: Detecting Hallucinations in Financial Question Answering from LLM Internal States 0 1/3 2/3 1   
+
+> relative layer depth
+> 0.50
+> 0.55
+> 0.60
+> 0.65
+> 0.70
+> 0.75
+> 0.80
+> AUROC
+> random-init placebo
+> answer-conditioned (mean over answer tokens)
+> Qwen3-8B
+> Llama-3.1-8B
+> Gemma-2-9B
+> 01/3 2/3 1
+> relative layer depth
+> pre-generation (last prompt token)
+
+Figure 2: Probe AUROC by relative network depth (FinQA). Left: answer-conditioned probes (mean over generated tokens). Right: pre-generation probes (last prompt token), which can only read question difficulty. Dashed: random-initialization placebo (0.625). Dotted vertical: the 2/3-depth layer used throughout. 
+
+random routing at 20%. The advantage is smaller for Llama-3.1-8B, whose outputs are already informative, and on the easier extractive TAT-QA task, where the probe and P( True ) are close and P( True )edges ahead at the largest budget. P( True ) incurs a higher cost than the probe, because P( True )involves one more generation cycle at the LLM, significantly in-creasing the cost and latency. The probe, on the other hand, relies on direct readouts from the forward pass and the prediction based on the pre-trained logistic regression is extremely lightweight. Since probing has higher recall than P( True ) at almost all review bud-gets for all three models, it is a triage system that will have higher marginal benefits and lower marginal cost for most deployed finan-cial QA systems. If both P( True ) and the probe are deployed via a two-stage system, the recall is likely higher, as shown in Table 5. 
+
+## 6 Discussion and limitations 
+
+In a human-in-the-loop deployment, the results in this paper sup-port a two-stage monitor in which inexpensive output signals route visibly uncertain answers and the probe screens the confident re-mainder, where visible output-level signals carry little information. In fact, the probe’s accuracy value is largest exactly where output signals are least informative. For an institution, such a monitor is an effective automated control in the oversight of its generative LLM systems, one that does not certify all answers with absolute certainty but helps prioritize them for review. Several limitations bound these claims. First, the probe requires direct access to activations deep inside the LLM. Thus, it is only deployable for self-hosted LLMs rather than third-party APIs. In the latter case, baseline methods, P( True )and token log-probabilities, remain the only viable options. Second, our evaluation protocol is limited on purpose to re-main tractable, which affects the study’s generalizability. It covers prompted CoT rather than native reasoning modes, which are avail-able in the case of Qwen3. It also only evaluates the effectiveness of hallucination probing in single-turn QA settings rather than multi-turn dialogues. We also limit the LLMs tested to three representative ones in the 8B-9B parameter range. Larger models and models from other LLM families are not tested. Furthermore, the experiments are restricted to only numeric answers rather than free-text gen-erations in order to get more accurate grading against the gold answers. Future work could expand on the present experimental setting to address these deliberate design limits. Third, we make no claim about robustness to temporal drift in accounting or reporting practice. FinQA benchmark’s questions exercise arithmetic conventions such as changes, ratios, and shares of total that have been stable for decades, so a filing-year split would vary the documents but not the reporting regime the questions exercise. A genuine temporal evaluation would require questions whose answers depend on evolving financial reporting rules, which these benchmarks do not provide. 
+
+## 7 Conclusion 
+
+This paper asked how much hallucination signal remains recov-erable from deep within an LLM’s internal states, even when its outputs convey a false sense of confidence. We built a linear hal-lucination probe on the residual stream, compared it against the output signals a deployed system could afford, and evaluated it on two widely adopted financial QA benchmarks across three model families (Qwen3, Llama-3.1, and Gemma-2). Three findings emerged. First , confident hallucination is common in financial QA. Depending on the LLM family, 5–19% of all FinQA answers are unanimously self-consistent and wrong. Second , among those confident answers the output-level signals approach chance level for error detection, while the probe retains 0.68–0.77 AUROC. The advantage of +0.13 to +0.15 AUROC on FinQA is replicated in all three families. But it does not survive task transfer, so a probe-based monitor must be retrained per task. Training and deploying a new task-specific probe is, however, both fast and inexpensive. 
+
+Third , the proposed probing method has measurable operational value for production financial LLM systems as a triage component for quality control and human-review routing. At realistic review capacities, probe-based routing catches materially more confident errors than the best output signal for the baseline. Extending the Richard Zhe Wang 
+
+analysis to reasoning-mode traces, multi-turn conversations, free-text answers, and larger-scaled LLMs remains for future work. 
+
+## References 
+
+[1] Aizierjiang Aiersilan. 2026. Hallucination Is Linearly Decodable from Mid-Layer Hidden States in Quantized LLMs. arXiv preprint arXiv:2606.02628 (2026). [2] Guillaume Alain and Yoshua Bengio. 2016. Understanding Intermediate Layers Using Linear Classifier Probes. arXiv preprint arXiv:1610.01644 (2016). [3] Amos Azaria and Tom Mitchell. 2023. The Internal State of an LLM Knows When It’s Lying. In Findings of the Association for Computational Linguistics: EMNLP 2023 . arXiv:2304.13734. [4] Yonatan Belinkov. 2022. Probing Classifiers: Promises, Shortcomings, and Ad-vances. Computational Linguistics 48, 1 (2022), 207–219. doi:10.1162/coli_a_00422 [5] Collin Burns, Haotian Ye, Dan Klein, and Jacob Steinhardt. 2023. Discovering Latent Knowledge in Language Models Without Supervision. In International Conference on Learning Representations (ICLR) . arXiv:2212.03827. [6] Chao Chen, Kai Liu, Ze Chen, Yi Gu, Yue Wu, Mingyuan Tao, Zhihang Fu, and Jieping Ye. 2024. INSIDE: LLMs’ Internal States Retain the Power of Hallucina-tion Detection. In International Conference on Learning Representations (ICLR) .arXiv:2402.03744. [7] Zhiyu Chen, Wenhu Chen, Charese Smiley, Sameena Shah, Iana Borova, Dylan Langdon, Reema Moussa, Matt Beane, Ting-Hao Huang, Bryan Routledge, and William Yang Wang. 2021. FinQA: A Dataset of Numerical Reasoning over Financial Data. In Proceedings of the 2021 Conference on Empirical Methods in Natural Language Processing (EMNLP) .[8] Eunbyeol Cho, Yunseung Lee, Mirae Kim, Jeewon Yang, Youngjun Kwak, and Edward Choi. 2026. K-FinHallu: A Hallucination Detection Benchmark for Multi-Turn RAG in Korean Finance. arXiv preprint arXiv:2605.29523 (2026). [9] Hoagy Cunningham, Jerry Wei, Zihan Wang, et al . 2026. Constitutional Classi-fiers++: Efficient Production-Grade Defenses against Universal Jailbreaks. arXiv preprint arXiv:2601.04603 (2026). [10] Sebastian Farquhar, Jannik Kossen, Lorenz Kuhn, and Yarin Gal. 2024. Detecting Hallucinations in Large Language Models Using Semantic Entropy. Nature 630, 8017 (2024), 625–630. doi:10.1038/s41586-024-07421-0 [11] Dongxin Guo, Jikun Wu, and Siu Ming Yiu. 2026. FinGround: Detecting and Grounding Financial Hallucinations via Atomic Claim Verification. arXiv preprint arXiv:2604.23588 (2026). To appear, ACL 2026 Industry Track. [12] Lei Huang, Weijiang Yu, Weitao Ma, Weihong Zhong, Zhangyin Feng, Haotian Wang, Qianglong Chen, Weihua Peng, Xiaocheng Feng, Bing Qin, and Ting Liu. 2025. A Survey on Hallucination in Large Language Models: Principles, Taxonomy, Challenges, and Open Questions. ACM Transactions on Information Systems 43, 2 (2025), 1–55. arXiv:2311.05232. doi:10.1145/3703155 [13] Khizar Hussain and Murat Kantarcioglu. 2026. PARALLAX: Separating Genuine Hallucination Detection from Benchmark Construction Artifacts. arXiv preprint arXiv:2605.17028 (2026). [14] Denis Janiak, Jakub Binkowski, Albert Sawczyn, Bogdan Gabrys, Ravid Shwartz-Ziv, and Tomasz Kajdanowicz. 2025. The Illusion of Progress: Re-evaluating Hallucination Detection in LLMs. arXiv preprint arXiv:2508.08285 (2025). [15] Saurav Kadavath, Tom Conerly, Amanda Askell, et al . 2022. Language Models (Mostly) Know What They Know. arXiv preprint arXiv:2207.05221 (2022). [16] Jannik Kossen, Jiatong Han, Muhammed Razzak, Lisa Schut, Shreshth Malik, and Yarin Gal. 2024. Semantic Entropy Probes: Robust and Cheap Hallucination Detection in LLMs. arXiv preprint arXiv:2406.15927 (2024). [17] János Kramár, Joshua Engels, Zheng Wang, Bilal Chughtai, Rohin Shah, Neel Nanda, and Arthur Conmy. 2026. Building Production-Ready Probes for Gemini. 
+
+arXiv preprint arXiv:2601.11516 (2026). [18] Lorenz Kuhn, Yarin Gal, and Sebastian Farquhar. 2023. Semantic Uncertainty: Lin-guistic Invariances for Uncertainty Estimation in Natural Language Generation. In International Conference on Learning Representations (ICLR) . arXiv:2302.09664. [19] Mahesh Kumar, Bhaskarjit Sarmah, and Stefano Pasquali. 2026. FinReflectKG– HalluBench: GraphRAG Hallucination Benchmark for Financial Question An-swering Systems. arXiv preprint arXiv:2603.20252 (2026). [20] Junyi Li, Xiaoxue Cheng, Wayne Xin Zhao, Jian-Yun Nie, and Ji-Rong Wen. 2023. HaluEval: A Large-Scale Hallucination Evaluation Benchmark for Large Language Models. In Proceedings of the 2023 Conference on Empirical Methods in Natural Language Processing (EMNLP) . arXiv:2305.11747. [21] Kenneth Li, Oam Patel, Fernanda Viégas, Hanspeter Pfister, and Martin Wat-tenberg. 2023. Inference-Time Intervention: Eliciting Truthful Answers from a Language Model. In Advances in Neural Information Processing Systems (NeurIPS) .arXiv:2306.03341. [22] Yinheng Li, Shaofei Wang, Han Ding, and Hang Chen. 2023. Large Language Models in Finance: A Survey. In Proceedings of the 4th ACM International Confer-ence on AI in Finance (ICAIF) .[23] Stephanie Lin, Jacob Hilton, and Owain Evans. 2022. TruthfulQA: Measuring How Models Mimic Human Falsehoods. In Proceedings of the 60th Annual Meeting of the Association for Computational Linguistics (ACL) . arXiv:2109.07958. [24] Potsawee Manakul, Adian Liusie, and Mark J. F. Gales. 2023. SelfCheckGPT: Zero-Resource Black-Box Hallucination Detection for Generative Large Language Models. In Proceedings of the 2023 Conference on Empirical Methods in Natural Language Processing (EMNLP) . arXiv:2303.08896. [25] Samuel Marks and Max Tegmark. 2023. The Geometry of Truth: Emergent Linear Structure in Large Language Model Representations of True/False Datasets. arXiv preprint arXiv:2310.06824 (2023). [26] Soham Mirajkar. 2025. Dissecting the Ledger: Locating and Suppressing “Liar Circuits” in Financial Large Language Models. arXiv preprint arXiv:2511.21756 
+
+(2025). [27] Yuqi Nie, Yaxuan Kong, Xiaowen Dong, John M. Mulvey, H. Vincent Poor, Qing-song Wen, and Stefan Zohren. 2024. A Survey of Large Language Models for Financial Applications: Progress, Prospects and Challenges. arXiv preprint arXiv:2406.11903 (2024). [28] Hadas Orgad, Michael Toker, Zorik Gekhman, Roi Reichart, Idan Szpektor, Hadas Kotek, and Yonatan Belinkov. 2025. LLMs Know More Than They Show: On the Intrinsic Representation of LLM Hallucinations. In International Conference on Learning Representations (ICLR) . arXiv:2410.02707. [29] Adi Simhi, Jonathan Herzig, Itay Itzhak, Dana Arad, Zorik Gekhman, Roi Re-ichart, Fazl Barez, Gabriel Stanovsky, Idan Szpektor, and Yonatan Belinkov. 2025. HACK: Hallucinations Along Certainty and Knowledge Axes. arXiv preprint arXiv:2510.24222 (2025). [30] Adi Simhi, Itay Itzhak, Fazl Barez, Gabriel Stanovsky, and Yonatan Belinkov. 2025. Trust Me, I’m Wrong: LLMs Hallucinate with Certainty Despite Knowing the Answer. In Findings of the Association for Computational Linguistics: EMNLP 2025 .arXiv:2502.12964. [31] Mainak Singha. 2025. Detecting AI Hallucinations in Finance: An Information-Theoretic Method Cuts Hallucination Rate by 92%. arXiv preprint arXiv:2512.03107 
+
+(2025). [32] Likun Tan, Kuan-Wei Huang, and Kevin Wu. 2025. FRED: Financial Retrieval-Enhanced Detection and Editing of Hallucinations in Language Models. arXiv preprint arXiv:2507.20930 (2025). [33] Xuezhi Wang, Jason Wei, Dale Schuurmans, Quoc Le, Ed Chi, Sharan Narang, Aakanksha Chowdhery, and Denny Zhou. 2023. Self-Consistency Improves Chain of Thought Reasoning in Language Models. In International Conference on Learning Representations (ICLR) . arXiv:2203.11171. [34] Shijie Wu, Ozan Irsoy, Steven Lu, Vadim Dabravolski, Mark Dredze, Sebas-tian Gehrmann, Prabhanjan Kambadur, David Rosenberg, and Gideon Mann. 2023. BloombergGPT: A Large Language Model for Finance. arXiv preprint arXiv:2303.17564 (2023). [35] Mengao Zhang, Jiayu Fu, Tanya Warrier, Yuwen Wang, Tianhui Tan, and Ke-wei Huang. 2025. FAITH: A Framework for Assessing Intrinsic Tabular Hallucinations in Finance. In Proceedings of the 6th ACM International Conference on AI in Finance (ICAIF) . arXiv:2508.05201. [36] Fengbin Zhu, Wenqiang Lei, Youcheng Huang, Chao Wang, Shuo Zhang, Jiancheng Lv, Fuli Feng, and Tat-Seng Chua. 2021. TAT-QA: A Question An-swering Benchmark on a Hybrid of Tabular and Textual Content in Finance. In Proceedings of the 59th Annual Meeting of the Association for Computational Linguistics (ACL) .
