@@ -1,0 +1,925 @@
+Title: AIGB-R1: Self-Evolving Generative Auto-Bidding via Hierarchical Planner-Executor Optimization
+
+URL Source: https://arxiv.org/pdf/2607.17281v1
+
+Published Time: Tue, 21 Jul 2026 01:23:15 GMT
+
+Number of Pages: 13
+
+Markdown Content:
+# AIGB-R1: Self-Evolving Generative Auto-Bidding via Hierarchical Planner-Executor Optimization 
+
+# Yuejia Dou ∗
+
+douyuejia@ruc.edu.cn Gaoling School of Artificial Intelligence, Renmin University of China Beijing, China 
+
+# Hesong Wang ∗
+
+whs040114@gmail.com Gaoling School of Artificial Intelligence, Renmin University of China Beijing, China 
+
+# Xinyu Zhang 
+
+zxy479640@alibaba-inc.com Alibaba Group Beijing, China 
+
+# Tianyu Wang 
+
+yves.wty@alibaba-inc.com Alibaba Group Beijing, China 
+
+# Zhilin Zhang 
+
+zhangzhilin.pt@alibaba-inc.com Alibaba Group Beijing, China 
+
+# Chuan Yu 
+
+yuchuan.yc@alibaba-inc.com Alibaba Group Beijing, China 
+
+# Jian Xu 
+
+xiyu.xj@alibaba-inc.com Alibaba Group Beijing, China 
+
+# Bo Zheng 
+
+bozheng@alibaba-inc.com Alibaba Group Beijing, China 
+
+# Qi Qi †
+
+qi.qi@ruc.edu.cn Gaoling School of Artificial Intelligence, Renmin University of China Beijing, China 
+
+## Abstract 
+
+Auto-bidding plays an essential role in online advertising, auto-matically adjusting bids for advertisers to optimize their commer-cial goals. The emerging AI-Generated Bidding (AIGB) paradigm widely adopts generative modeling to optimize bidding strategies, yet suffers from the limited mode coverage of offline datasets and inadequate task-state understanding, hindering effective exploration of optimal strategies. Large Language Models (LLMs), with prior world knowledge and reasoning capabilities, offer a promising ap-proach to overcome these limitations. However, directly applying LLMs to auto-bidding tasks faces inherent challenges in limited numerical precision, hallucinations, and inference latency. To ad-dress these limitations, we propose AIGB-R1 , a hierarchical self-evolving auto-bidding framework aiming to enhance AI -Generated 
+
+Bidding via LLMs’ Reasoning capabilities, comprising a high-level Planner module for macro-level strategy planning and a low-level Executor module for fine-grained decision-making. Building upon this, we design an experience-driven self-evolving loop, enabling autonomous strategy exploration and optimization from accumu-lated experience. We adopt a two-stage pipeline of offline pre-training and post-training alignment, and build an interactive bidding sim-ulation environment for strategy rollout. Furthermore, we propose Decoupled Group Relative Policy Optimization (D-GRPO) to achieve end-to-end optimization via advantage decoupling. Experimental results on a large-scale public dataset demonstrate the effective-ness of AIGB-R1. 
+
+## CCS Concepts 
+
+• Information systems → Computational advertising .
+
+> ∗Equal contribution
+> †Corresponding author
+
+## Keywords 
+
+Generative Model, Large Language Model, Auto-bidding, Prefer-ence Alignment 
+
+## 1 Introduction 
+
+With the rapid digitalization of commerce, online advertising plat-forms have continually expanded their traffic coverage, becoming critical channels for businesses to attract target audiences and boost sales [12, 20, 49]. Given billions of impressions and intense compe-tition, the traditional paradigm of manual bid adjustment has be-come impractical. To alleviate this burden, major advertising plat-forms provide auto-bidding services that automatically determine bids for each impression to optimize advertisers’ commercial goals [5, 9, 36]. In the emerging AI-Generated Bidding (AIGB) paradigm, auto-bidding can be formulated as a sequential decision-making task, where the objective is to generate optimal bidding parameters that maximize cumulative conversions subject to constraints such as cost-per-action (CPA) and budget, based on historical bidding se-quences and current market states [19, 22]. Within this paradigm, generative auto-bidding methods represented by Decision Trans-former (DT) [7, 65] have attracted widespread attention [10, 16, 32]. These methods employ generative models to learn optimal strate-gies from historical bidding trajectories collected from online ad-vertising platforms, autoregressively generating bidding parame-ters conditioned on return-to-go, state, and action sequences. However, existing generative auto-bidding methods face critical challenges. First, their performance is restricted by the quality and coverage of the offline dataset, leading to degraded decision qual-ity when encountering out-of-distribution states [31, 32]. Second, existing generative auto-bidding methods simply condition poli-cies on return-to-go without fully understanding the true value arXiv:2607.17281v1 [cs.LG] 19 Jul 2026 Yuejia Dou, Hesong Wang, Xinyu Zhang, Tianyu Wang, Zhilin Zhang, Chuan Yu, Jian Xu, Bo Zheng, and Qi Qi 
+
+of actions and specific task states, making it difficult to plan opti-mal strategies [2, 16]. Third, existing generative methods are typ-ically trained under fixed preference distributions and struggle to adapt to diverse advertiser preferences in real-world bidding ser-vices, while retraining for different preferences incurs substantial training costs [10, 24, 44]. These challenges limit the further devel-opment and widespread adoption of generative auto-bidding ser-vices [50], but the rapid advancement of Large Language Models (LLMs) in recent years offers new insights into how to overcome these bottlenecks [4, 18, 59]. With prior world knowledge and rea-soning capabilities, LLMs are expected to transcend the limitations of offline dataset coverage and adapt to diverse bidding strategy preferences through semantic understanding and multi-task gener-alization. However, directly applying LLMs to auto-bidding tasks faces inherent limitations. First, auto-bidding requires precise con-trol over continuous numerical action spaces when generating bid-ding parameters, yet LLMs suffer from inherent limitations in nu-merical decision-making, including insufficient precision and hal-lucinations [14, 23, 33]. Moreover, online advertising platforms re-quire auto-bidding agents to process numerous bid requests under tight latency constraints, while LLMs face a fundamental trade-off between decision-making quality and inference latency: larger LLMs possess strong decision-making and planning capabilities but struggle to meet the low-latency requirements, whereas signif-icantly reducing model size alleviates latency issues but inevitably leads to substantial degradation in decision-making and planning capabilities [6, 23, 55]. Several works have explored integrating LLM techniques into auto-bidding systems from different perspectives. One straightfor-ward approach uses an LLM as the decision-maker, leveraging rea-soning capabilities with memory and reflection mechanisms to out-put bidding decisions, but is directly constrained by the aforemen-tioned numerical precision, hallucination, and latency issues [6]. Other methods optimize generative policy models through seman-tic representation embedding, or through post-training policy search techniques, but fundamentally fail to fully exploit the decision-making and planning potential of LLMs [10, 32, 67]. Recently, LBM [31] designed a hierarchical framework with separate modules ded-icated to high-level reasoning and low-level decision-making re-spectively, effectively retaining LLM reasoning and planning capa-bilities while circumventing inherent bottlenecks, representing a promising architectural direction for LLM-empowered auto-bidding [1, 44, 46, 48]. However, the above methods still face the following challenges when learning optimal auto-bidding strategies. First, existing meth-ods typically rely on offline pre-trained value functions to evaluate strategy quality, but these value functions often suffer from ex-trapolation errors on out-of-distribution strategies, struggling to guide exploration toward potentially optimal regions [15, 26, 27]. Second, existing methods’ post-training search and alignment typ-ically rely on repeated random sampling, which has limited explo-ration efficiency in auto-bidding tasks with high-dimensional con-tinuous strategy spaces, generating massive redundant trajectories while failing to effectively reuse historical rollout experience for self-improvement [16, 19, 29]. Finally, existing methods either per-form training-free test-time search or only optimize the high-level reasoning module while freezing the low-level execution module, thereby limiting convergence to globally optimal strategies com-pared with end-to-end optimization. To overcome these challenges, we propose AIGB-R1 , a hierar-chical self-evolving auto-bidding framework designed to enhance 
+
+AI -Generated Bidding via LLMs’ Reasoning capabilities, achiev-ing autonomous exploration and evolution of bidding strategies through an experience-driven self-evolving loop. AIGB-R1 tempo-rally decouples the auto-bidding task into two stages: macro-level strategy planning and fine-grained bidding decision-making, based on which we construct a high-level Planner module and a low-level Executor module, respectively. Specifically, the Planner mod-ule employs a large LLM to reason about macro-level strategies for each bidding period and generate structured semantic strategy prompts. The Executor module employs Prompt Decision Trans-former (PDT) to generate bidding parameters at each timestep within the bidding period, conditioned on both observed numerical se-quences and the Planner’s strategy prompts. Building upon this, we introduce an experience-driven self-evolving loop that enables AIGB-R1 to autonomously explore and optimize strategies from ac-cumulated rollout experience, rather than blindly exploring through random sampling. We adopt a two-stage training pipeline: In the pre-training stage, we train the Executor to equip it with the ca-pability to fuse observed sequences and strategy prompts for bid-ding decisions. In the post-training stage, we build an interactive bidding simulation environment for strategy rollout, mitigating extrapolation errors associated with offline value estimation. We design Decoupled Group Relative Policy Optimization (D-GRPO) to achieve inter-layer credit assignment, enabling end-to-end opti-mization of the Planner and Executor. In summary, our contribu-tions are as follows: 
+
+• We propose AIGB-R1, a hierarchical self-evolving auto-bidding framework comprising a Planner for macro-level strategy plan-ning and an Executor for fine-grained bidding decision-making, fully leveraging LLMs’ reasoning and planning capabilities while effectively circumventing their inherent limitations in limited numerical precision, hallucinations and inference latency. 
+
+• We design an experience-driven self-evolving loop that enables AIGB-R1 to autonomously explore and optimize strategies from accumulated rollout experience, continuously approaching op-timal bidding strategies through sustained interaction with the simulation environment during post-training. 
+
+• We build an interactive bidding simulation environment for strat-egy rollout and propose D-GRPO to achieve inter-layer credit assignment through advantage decoupling, enabling end-to-end optimization of the LLM Planner and PDT Executor. 
+
+• Experimental results on a large-scale public dataset demonstrate that AIGB-R1 significantly outperforms various state-of-the-art baselines, validating the effectiveness of the proposed framework. 
+
+## 2 Related Work 2.1 Auto-bidding Methods 
+
+Auto-bidding helps advertisers achieve their commercial goals by adaptively optimizing bids for each impression [22, 57]. Early meth-ods primarily relied on predefined rules or online learning to ad-just strategies [8, 61]. As online bidding environments grew in-creasingly complex, reinforcement learning methods such as USCB AIGB-R1: Self-Evolving Generative Auto-Bidding via Hierarchical Planner-Executor Optimization 
+
+[22], SORL [35], and MAAB [52] became essential for auto-bidding. Due to the risks of online interaction, offline RL methods includ-ing BCQ [15], CQL [27], and IQL [25] have gained widespread at-tention for their ability to learn effective strategies from offline datasets. However, these methods are subject to the Markov as-sumption, which limits their sequential modeling capability. Recently, generative models represented by Decision Transformer (DT) [7, 65] have opened a new paradigm for auto-bidding. DiffBid [19] uses diffusion models to generate bidding trajectories, whereas CBD [30] introduces a diffusion completer –aligner for trajectory completion. GAS [32] performs post-training search via MCTS, GAVE [16] employs value-guided exploration. PRO-Bid [53] introduces Pareto-prioritized regret optimization, while GRAD [28] develops a large-scale pre-trained DT-based bidding model. For the broader auto-marketing setting, GAM [10] employs DTs for joint bidding and coupon distribution with GRPO-based preference alignment. Several works have begun exploring LLM-empowered auto-bidding. RTBAgent [6] uses prompt engineering to directly output bidding decisions via LLMs, SemBid [67] integrates LLM semantic repre-sentations to assist generative sequence modeling, LBM [31] de-signs a hierarchical Think-Act architecture and employs GQPO for fine-tuning. 
+
+## 2.2 LLM for Decision-Making 
+
+Recently, the autonomous decision-making potential of LLMs has been extensively explored. Early works such as ReAct [60] and Reflexion [42] established the foundational paradigm of reason-ing, acting, and reflection. However, recent studies reveal inher-ent limitations of LLMs as direct decision-makers [40], motivat-ing researchers to leverage LLMs for macro-level planning rather than direct action execution. SayCan [1], LgTS [43], and DART-LLM [51] translate LLM-generated language plans into executable actions through feasibility assessment and effectiveness scoring, while PAR [21] and ACE [46] propose hierarchical collaboration frameworks between LLMs and RL agents. Meanwhile, reinforcement learning has been widely adopted to optimize the decision-making capabilities of LLMs. RLHF [37] op-timizes models using human feedback to construct reward signals. DPO [39] and its extensions [3, 11, 34, 56] directly fine-tune models with human preference datasets. GRPO [41] improves the stability and efficiency of fine-tuning through group relative advantage esti-mation. GiGPO [13] introduces fine-grained credit assignment for multi-step decision-making tasks. 
+
+## 2.3 Self-Evolving Agents 
+
+Self-evolving agents continuously improve their capabilities through accumulated experience. Early works achieve self-improvement via in-context learning with feedback from experience. Reflexion [42], ExpeL [63], and Voyager [47] retain interaction experience in the form of linguistic reflections or generalized rules to itera-tively improve subsequent decision quality. These methods enable strategy evolution without parameter updates, but are often con-strained by the inherent limits of the model ’s capabilities. To further enhance LLMs’ performance through parameter updates, STaR [62] and ReST [17] bootstrap LLM reasoning capabilities via iterative self-training. WebRL [38] and SCA [66] drive online RL training through automatic curriculum generation. EvolveR [54] designs a collect-refine-guide self-evolving loop. 
+
+## 3 Preliminary 3.1 Problem Formulation 
+
+We consider the auto-bidding problem with cost-related constraints. Within a bidding period, we assume that 𝐼 impression opportuni-ties arrive sequentially, indexed by 𝑖 . Advertisers submit bids on the platform to compete for each impression. For each arriving im-pression 𝑖 ∈ [𝐼 ] , an advertiser wins when its bid 𝑏 𝑖 exceeds those of other advertisers, and pays the winning cost 𝑐 𝑖 , which is typically the highest bid of the other advertisers in the second-price auction (SPA) setting. The advertiser’s objective is to maximize the cumu-lative value of won impressions ∑𝑖 𝑜 𝑖 𝑣 𝑖 over the entire bidding pe-riod, where 𝑣 𝑖 denotes the value of the impression and 𝑜 𝑖 indicates whether the advertiser wins it. Moreover, to control advertising de-livery performance, advertisers typically need to satisfy the budget and multiple Key Performance Indicator (KPI) constraints [22]. The budget constraint is expressed as ∑𝑖 𝑜 𝑖 𝑐 𝑖 ≤ 𝐵 , where 𝑐 𝑖 is the cost of impression 𝑖 and 𝐵 is the budget. Other KPI constraints are more complex and can be uniformly expressed as: 
+
+∑𝑖 𝑐 𝑖𝑗 𝑜 𝑖 
+
+∑𝑖 𝑝 𝑖𝑗 𝑜 𝑖 
+
+≤ 𝐶 𝑗 , (1) where 𝐶 𝑗 is the upper bound of the 𝑗 -th constraint, 𝑝 𝑖𝑗 can be any performance indicator such as return or constant, and 𝑐 𝑖𝑗 is the cost of the 𝑗 -th constraint. Therefore, given 𝐽 constraints, the auto-bidding problem can be formulated as: max ∑
+
+> 𝑖
+
+𝑜 𝑖 𝑣 𝑖 
+
+s.t. ∑
+
+> 𝑖
+
+𝑜 𝑖 𝑐 𝑖 ≤ 𝐵, ∑𝑖 𝑐 𝑖𝑗 𝑜 𝑖 
+
+∑𝑖 𝑝 𝑖𝑗 𝑜 𝑖 
+
+≤ 𝐶 𝑗 , ∀ 𝑗, (2) 
+
+𝑜 𝑖 ∈ {0, 1}, ∀ 𝑖. 
+
+A previous study [22] has shown that the optimal solution is: 
+
+𝑏 ∗𝑖 = 𝜆 0𝑣 𝑖 +
+
+> 𝐽
+
+∑
+
+> 𝑗=1
+
+𝜆 𝑗 𝑝 𝑖𝑗 𝐶 𝑗 , (3) where 𝑏 ∗𝑖 is the optimal bid for impression 𝑖 , and 𝜆 𝑗 , 𝑗 ∈ {0, … , 𝐽 } 
+
+are the optimal bidding parameters. However, the uncertainty and dynamics of online advertising systems make it impractical for ad-vertisers to directly calculate these optimal bidding parameters. In-stead, these parameters should be regularly adjusted in response to the dynamic environment, rendering auto-bidding a sequential decision-making task of iteratively identifying the optimal bidding parameters. 
+
+## 3.2 Sequential Modeling of Auto-Bidding 
+
+Under the sequential modeling formulation of auto-bidding, we first divide the bidding period into 𝑇 discrete timesteps. At each timestep 𝑡 , the auto-bidding agent receives a real-time advertising state 𝑠 𝑡 ∈ 𝒮 and then outputs an action 𝑎 𝑡 ∈ 𝒜 according to its Yuejia Dou, Hesong Wang, Xinyu Zhang, Tianyu Wang, Zhilin Zhang, Chuan Yu, Jian Xu, Bo Zheng, and Qi Qi 
+
+policy 𝜋 to adjust the bidding parameters. The state transition dy-namics of the advertising environment are unknown, and the next state 𝑠 𝑡+1 ∈ 𝒮 depends not only on the current state 𝑠 𝑡 and action 
+
+𝑎 𝑡 , but also potentially on the historical bidding trajectory 𝜏 . After transitioning to the next state, the environment returns a reward 
+
+𝑟 𝑡 , representing the cumulative impression value obtained during timestep 𝑡 . The auto-bidding agent’s objective is to maximize the cumulative impression value ∑𝑡 𝑟 𝑡 over the entire bidding period. The detailed description of our modeling is as follows: 
+
+• State 𝑠 𝑡 : The state 𝑠 𝑡 describes the advertising status at timestep 
+
+𝑡 , which can include the remaining time of the bidding period, re-maining budget, budget consumption speed, and other historical statistics. 
+
+• Action 𝑎 𝑡 : The action 𝑎 𝑡 represents the adjustment of bidding pa-rameters 𝜆 𝑗 (𝑗 = 0, … , 𝐽 ) at timestep 𝑡 , modeled as (𝑎 𝜆 0 
+
+> 𝑡
+
+, … , 𝑎 𝜆 𝐽  
+
+> 𝑡
+
+).
+
+• Reward 𝑟 𝑡 : The reward 𝑟 𝑡 represents the value contributed to the objective during the period from timestep 𝑡 to 𝑡 + 1 .
+
+• Return-To-Go (RTG) 𝑅 𝑡 : The RTG value 𝑅 𝑡 represents the sum of rewards to be obtained in the future timesteps: 
+
+𝑅 𝑡 =
+
+> 𝑇
+
+∑
+
+> 𝑡 ′=𝑡
+
+𝑟 𝑡 ′ , (4) where 𝑇 is the final timestep. 
+
+## 4 Method 4.1 Framework Overview 
+
+In the emerging AIGB paradigm, generative models exemplified by Decision Transformer (DT) have been widely adopted for their abil-ity to learn from offline datasets. However, these methods are lim-ited by the mode coverage of offline datasets and struggle to fully understand task states and strategy preferences, motivating us to explore a new approach that leverages the semantic understanding, reasoning, and planning capabilities of LLMs to empower auto-bidding. However, LLMs’ inherent limitations, including limited numerical precision, hallucinations, and inference latency, make it impractical to directly use a single LLM for end-to-end bidding. To address these limitations, a practical architectural design is to decouple strategy reasoning and real-time decision-making into two separate modules using a hierarchical framework, where a large LLM asynchronously performs macro-level strategy reason-ing, while a lightweight decision model makes real-time decisions at each timestep based on the derived strategy and current states. Accordingly, we temporally decompose the auto-bidding task into macro-level strategy planning followed by fine-grained bid-ding decision-making, handled by a high-level Planner and a low-level Executor respectively. Specifically, the Planner module em-ploys a large LLM to reason about macro-level strategies for each bidding period and generates structured strategy prompts. The Ex-ecutor module employs Prompt Decision Transformer (PDT) as a lightweight decision-maker, generating bidding parameters at each timestep within the bidding period, conditioned on both the observed numerical sequences and the strategy prompts. Next, we formally describe the sequential decision-making pro-cess of AIGB-R1. Consider a bidding period for advertiser 𝑔 . Before the bidding period begins, we obtain the advertiser’s contextual in-formation 𝒞 𝑔 (including budget, CPA constraints, and advertising category) and its historical bidding performance from previous pe-riods ℋ𝑔 . The high-level LLM Planner 𝜋 𝜃 𝒫 then plans the macro-level strategy (e.g., risk preference) for the current bidding period based on 𝒞 𝑔 and ℋ𝑔 , generating a structured strategy prompt 𝑝 
+
+that contains enumerated bidding strategy labels and macro-level strategy reasoning: 
+
+𝑝 ∼ 𝜋 𝜃 𝒫 (⋅ ∣ 𝒞 𝑔 , ℋ𝑔 ), (5) Notably, this planning step is completed before the bidding pe-riod begins, and the generated strategy prompt remains effective throughout the entire period. Subsequently, at each timestep 𝑡 within the bidding period, the low-level PDT Executor 𝜋 𝜃 ℰ generates an action 𝑎 𝑡 conditioned on the observed numerical sequences of RTG values, states, and actions (𝑅 𝑡−𝐿∶𝑡 , 𝑠 𝑡−𝐿∶𝑡 , 𝑎 𝑡−𝐿∶𝑡−1 ) along with the strategy prompt 𝑝 , where 𝐿 denotes the context length of PDT: 
+
+𝑎 𝑡 ∼ 𝜋 𝜃 ℰ (⋅ ∣ 𝑝, 𝑅 𝑡−𝐿∶𝑡 , 𝑠 𝑡−𝐿∶𝑡 , 𝑎 𝑡−𝐿∶𝑡−1 ) (6) PDT embeds the strategy prompt as a conditional prefix to the stan-dard Decision Transformer’s input sequence, enabling the Plan-ner’s macro-level strategy to naturally influence the conditional autoregressive generation of actions at each timestep. The overall framework of AIGB-R1 is illustrated in Figure 1. We adopt a two-stage training pipeline of pre-training and post-training alignment: In the pre-training stage, we pre-train the Executor of-fline to equip it with the capability to fuse observed sequences and strategy prompts for bidding decisions. In the post-training stage, we fine-tune the entire framework end-to-end via reinforcement learning to further discover optimal strategies. 
+
+## 4.2 PDT Executor Pre-training with Strategy Prompts 
+
+Despite LLMs’ strong semantic understanding and reasoning capa-bilities, directly using them as the low-level Executor faces funda-mental limitations. First, industrial bidding systems typically re-quire millisecond-level response times, yet LLMs struggle to si-multaneously achieve high performance and low latency. Second, LLMs are inherently unsuitable for tasks with continuous numer-ical action spaces such as auto-bidding, where the decision model must output precise bidding parameters at each timestep, while LLMs’ encoding of numerical inputs as discrete tokens inevitably introduces precision loss and hallucination risks. Furthermore, cur-rent public LLMs have not been specifically pre-trained for auto-bidding tasks, meaning their general prior knowledge can hardly provide effective inductive biases for predicting bidding parame-ters, making it more practical to directly train a dedicated light-weight decision model on offline bidding trajectories. These limitations motivate us to adopt PDT rather than an LLM as the core architecture of the low-level Executor. PDT extends the standard DT by introducing a textual strategy prompt as a conditional sequence prefix. Specifically, PDT embeds the strategy prompt 𝑝 into vector representations and prepends them to the standard DT input sequence (𝑅 𝑡−𝐿∶𝑡 , 𝑠 𝑡−𝐿∶𝑡 , 𝑎 𝑡−𝐿∶𝑡−1 ), forming the extended input sequence (𝑝, 𝑅 𝑡−𝐿∶𝑡 , 𝑠 𝑡−𝐿∶𝑡 , 𝑎 𝑡−𝐿∶𝑡−1 ). At timestep 
+
+𝑡 , PDT autoregressively generates action 𝑎 𝑡 conditioned on this se-quence. In this way, the strategy prompt influences the conditional AIGB-R1: Self-Evolving Generative Auto-Bidding via Hierarchical Planner-Executor Optimization -
+
+(a) PDT Executor Pre -training 
+
+(b) End -to -End Post -training 
+
+AuctionNetEnv 
+
+Causal Transformer ... ... ... ... 
+
+Offline Dataset         
+
+> 𝑅 !"#𝑃 $𝑃 %𝑃 &𝑃 '𝑠 !"#𝑎 !"#𝑅 !𝑠 !𝑎 !
+
+...                    
+
+> Prompt Emb. Decision Emb.
+> Linear Decoder
+> %𝜇 !%𝜎 !%𝜇 !"#%𝜎 !"#
+> 𝑳𝑵 #𝝁 𝒕 ,#𝝈 𝒕
+> NLL Loss
+> Advertiser Profile
+> Budget
+> CPA Constraint
+> Category
+> Experience Buffer
+> Best Strategy Anchor
+> Historical Performance
+> Strategy Prompt
+> Rollout Trajectory
+> Performance Statistics
+
+... 
+
+...         
+
+> LLM Planner 𝑃 $
+> )𝑃 %
+> )𝑃 &
+> )
+> ...
+> Prompt M
+> Prompt 2
+> Prompt 1
+> PDT Executor
+
+Causal Transformer    
+
+> 𝑃 $
+> )𝑃 %
+> )𝑃 &
+> )
+
+...                             
+
+> Prompt Emb. Decision Emb.
+> Linear Decoder
+> 𝑳𝑵 𝝁 𝒕
+> 𝑴 ,𝒌 ,𝝈 𝒕
+> 𝑴 ,𝒌
+> 𝑎 !
+> ),-
+> Sample
+> 𝑏𝑖𝑑 -
+> .,/
+> Others 0Bids
+> Auto -bidding Agents
+> Impressions
+> Performance
+> e.g., Impressions, Clicks,
+> Conversions, Cost
+> Environment
+> Update
+> 𝑅 !.%
+> ),-𝑠 !.%
+> ),-
+> Append
+> Feedback
+> Rollout
+> 𝑅 !
+> ),-𝑅 $
+> ),-𝑠 $
+> ),-𝑎 $
+> ),-𝑠 !
+> ),-
+> 𝜇 !
+> ),-𝜎 !
+> ),-
+> 𝑎 !
+> ),-𝑅 !.%
+> ),-𝑠 !.%
+> ),-
+> 𝑟 1,1
+> 𝑟 2,1
+> 𝑟 .,1
+> …
+> Update PDT Executor
+> Update LLM Planner
+> Update Experience Buffer
+> 𝐴 1
+> 𝒫 𝐴 2
+> 𝒫 𝐴 .
+> 𝒫
+
+…          
+
+> Trajectory 1-K
+> Trajectory 1-2
+> Trajectory 1-1
+> Second -Price
+> Auction
+> Simulation
+> Trajectory M-K
+> 𝑃 $
+> )𝑃 %
+> )𝑃 &
+> )𝑅 $
+> ),/𝑠 $
+> ),/𝑎 $
+> ),/
+
+... 𝑅 0    
+
+> ),/𝑠 0
+> ),/𝑎 0
+> ),/
+> ... Trajectory M-2
+> Trajectory M-1
+> ...  ...
+> M*K
+> 𝑟 1,2
+> 𝑟 2,2
+> 𝑟 .,2
+> …
+> 𝑟 1,4
+> 𝑟 2,4
+> 𝑟 .,4
+> …
+
+…
+
+…
+
+…
+
+> Reward
+> Model
+> 𝐴 1,1
+> ℰ
+> 𝐴 2,1
+> ℰ
+> 𝐴 .,1
+> ℰ…
+> 𝐴 1,2
+> ℰ
+> 𝐴 2,2
+> ℰ
+> 𝐴 .,2
+> ℰ…
+> 𝐴 1,4
+> ℰ
+> 𝐴 2,4
+> ℰ
+> 𝐴 .,4
+> ℰ…
+
+…
+
+…
+
+…           
+
+> Advantage
+> Decomposition
+> Prompt  M
+> Prompt  1
+> ...
+> per trajectory
+> per prompt
+> PDT Executor
+> 𝑃 '
+> )𝑃 '
+> )
+> 𝑃 '
+> )
+> strategy prompt 𝑝
+> strategy prompt 𝑝 )strategy prompt 𝑝 )
+> strategy prompt 𝑝 )
+
+Figure 1: Overall framework of AIGB-R1. 
+
+autoregressive sampling of actions at each subsequent timestep through the self-attention mechanism, achieving strategy-conditioned decision-making. The strategy prompt 𝑝 of the PDT Executor contains two forms of information: enumerated strategy labels and macro-level strat-egy reasoning. The strategy labels cover predefined discrete strat-egy dimensions such as risk preference and budget pacing, while the macro-level strategy reasoning provides a summary of histor-ical bidding performance along with semantic reasoning and de-tailed explanations for the current period’s bidding strategy. This dual design balances structural and semantic expressiveness: enu-merated strategy labels effectively reduce the variance of strategy learning, enabling the Executor to efficiently learn coarse-grained strategy behavior patterns, while the macro-level strategy reason-ing provides fine-grained semantic strategy expressions, compen-sating for the strategy details and decision rationale that discrete labels cannot capture. We use pre-trained text embedding layers to process strategy labels and macro-level strategy reasoning into vector representations of equal size, and concatenate them to form the complete strategy prompt representation 𝑝 .During the pre-training stage of the PDT Executor, we first use an advanced LLM to annotate the offline bidding trajectory dataset with corresponding strategy prompts, and then perform offline su-pervised training on PDT. Whereas previous DT methods learn de-terministic policies 𝜋 𝜃 (𝑎 𝑡 |𝑅 𝑡−𝐿∶𝑡 , 𝑠 𝑡−𝐿∶𝑡 , 𝑎 𝑡−𝐿∶𝑡−1 ), we opt to learn a stochastic policy that maximizes the dataset likelihood, as stochas-tic policies enable efficient strategy exploration through repeated sampling during post-training and can be directly fine-tuned with policy-based reinforcement learning algorithms. Specifically, since the action 𝑎 𝑡 is a non-negative continuous value, we adopt the log-normal distribution to model the stochastic policy: 
+
+𝜋 𝜃 ℰ (𝑎 𝑡 ∣ 𝑝, 𝑅 𝑡−𝐿∶𝑡 , 𝑠 𝑡−𝐿∶𝑡 , 𝑎 𝑡−𝐿∶𝑡−1 ) = 
+
+ℒ𝒩 (𝜇 𝜃 ℰ (𝑎 𝑡 ∣ 𝑝, 𝑅 𝑡−𝐿∶𝑡 , 𝑠 𝑡−𝐿∶𝑡 , 𝑎 𝑡−𝐿∶𝑡−1 ), 𝜎 𝜃 ℰ (𝑎 𝑡 ∣ 𝑝, 𝑅 𝑡−𝐿∶𝑡 , 𝑠 𝑡−𝐿∶𝑡 , 𝑎 𝑡−𝐿∶𝑡−1 )) 
+
+(7) 
+
+During pre-training, we train the PDT Executor to fit the offline data distribution by maximizing the log-likelihood of the stochas-tic policy over the trajectories in the training dataset, equivalently Yuejia Dou, Hesong Wang, Xinyu Zhang, Tianyu Wang, Zhilin Zhang, Chuan Yu, Jian Xu, Bo Zheng, and Qi Qi 
+
+minimizing the Negative Log-Likelihood (NLL) loss:         
+
+> ℒNLL =1𝐿 + 1 𝔼 (𝑝,𝑅,𝑠,𝑎)∼ 𝒟 [−
+> 𝑡
+> ∑
+> 𝑡 ′=𝑡−𝐿
+> log 𝜋 𝜃 ℰ(𝑎 𝑡 ′∣ 𝑝, 𝑅 𝑡 ′−𝐿∶𝑡 ′, 𝑠 𝑡 ′−𝐿∶𝑡 ′, 𝑎 𝑡 ′−𝐿∶𝑡 ′−1 )]
+> (8)
+
+## 4.3 Self-Evolving Post-training via D-GRPO 
+
+Limited by the quality and coverage of offline training datasets, pre-trained generative models often converge to local optima. We therefore employ reinforcement learning in the post-training stage to fine-tune the Planner and Executor end-to-end for further per-formance improvement. However, conventional RL methods typi-cally rely on repeated random trial-and-error, resulting in massive redundant trajectories and slow convergence. To this end, we build a self-evolving post-training framework consisting of the interac-tive bidding simulation environment AuctionNetEnv, an experience-guided hierarchical rollout mechanism, and the D-GRPO algorithm for inter-layer credit assignment, thereby enabling AIGB-R1 to in-ternalize and leverage accumulated experience and transforming strategy optimization from undirected trial-and-error into a more effective self-improvement process. 
+
+4.3.1 Interactive Bidding Simulation Environment. To enable the auto-bidding agent to obtain reward signals through rollouts for guiding strategy optimization, we build a flexible interactive bid-ding simulation environment, AuctionNetEnv, based on a public large-scale auto-bidding decision-making benchmark [45]. Auction-NetEnv enables the auto-bidding agent to compete with diverse op-ponent agents under a second-price auction, with these opponents trained using different decision-making algorithms. The detailed construction of AuctionNetEnv and its distributional consistency validation are provided in Appendix A.1. At each training step, the auto-bidding agent samples a bidding task 𝑔 from AuctionNetEnv’s task pool 𝒢 , described by the ad-vertiser’s contextual information 𝒞 𝑔 including budget, CPA con-straints, and advertising category, and then executes a complete bidding period for this task. At each timestep 𝑡 , the agent generates an action 𝑎 𝑡 and computes the bid 𝑏 𝑡 . The environment then con-ducts the second-price auction with the agent’s bid 𝑏 𝑡 and the op-ponents’ bids, returns outcomes such as impressions, conversions 
+
+𝑑 𝑡 , and cost 𝑐 𝑡 for this timestep, and updates the next state 𝑠 𝑡+1 . At the end of the bidding period, the reward model of AuctionNetEnv returns a trajectory reward 𝑟 based on the agent’s cumulative per-formance under the CPA constraint 𝐶 , incorporating the constraint satisfaction objective into the reward signal to encourage a balance between maximizing impression value and satisfying constraints: 
+
+⎧⎪⎨⎪⎩𝐶𝑃𝐴 = ∑𝑡 𝑐 𝑡  
+
+> ∑𝑡 𝑑 𝑡
+
+ℙ(𝐶𝑃𝐴; 𝐶) = min {( 𝐶 𝐶𝑃𝐴 )
+
+> 𝜂
+
+, 1} 𝑟 = ℙ(𝐶𝑃𝐴; 𝐶) ⋅ ∑ 𝑡 𝑑 𝑡 
+
+(9) where 𝜂 is a hyperparameter that controls the penalty intensity for constraint violation. By conducting online agent-environment interaction through AuctionNetEnv, AIGB-R1 mitigates the out-of-distribution extrap-olation errors associated with offline value estimation methods, thereby providing more reliable learning signals for strategy op-timization. 
+
+4.3.2 Experience-Guided Hierarchical Rollout. To leverage histor-ical experience for transforming strategy optimization from ran-dom trial-and-error into a more effective self-improvement pro-cess, we design an experience-guided hierarchical rollout mech-anism that enables the LLM Planner to explore optimal strategies based on accumulated experience during post-training. We observe that optimal strategies for different bidding tasks often differ sig-nificantly due to variations in budget scale and CPA constraint tightness, necessitating task-specific experience accumulation. There-fore, we maintain an experience buffer ℋ𝑔 for each bidding task 𝑔 
+
+in AuctionNetEnv, consisting of two components: the best-strategy anchor and the sliding memory window. The best-strategy anchor records the strategy prompt and bidding trajectory summary asso-ciated with the highest average reward across all rollouts for task 
+
+𝑔 , serving as a reference direction for subsequent exploration and enabling the Planner to refine its search within the neighborhood of the known best strategy. The sliding memory window retains detailed bidding performance from recent periods in a FIFO man-ner, including the strategy prompt, bidding trajectory, trajectory reward, and corresponding performance statistics of each bidding period, allowing the Planner to observe performance differences across strategies on task 𝑔 for targeted adjustments. Credit assignment is a core challenge in end-to-end RL training of hierarchical frameworks like AIGB-R1, as it requires distinguish-ing the respective contributions of the Planner’s strategy selection and the Executor’s bidding execution to overall performance. We address this challenge through hierarchical rollout. Specifically, for each bidding period of task 𝑔 , we first use the LLM Planner to reason about potentially optimal strategies by referencing the ad-vertiser’s contextual information 𝒞 𝑔 and historical bidding experi-ence ℋ𝑔 , and output the 𝑀 most promising and diverse strategy prompts {𝑝 1, 𝑝 2, … , 𝑝 𝑀 }:
+
+𝑝 𝑚 ∼ 𝜋 𝜃 𝒫 (⋅ ∣ 𝒞 𝑔 , ℋ𝑔 ), 𝑚 = 1, 2, … , 𝑀, (10) Then, for each strategy prompt 𝑝 𝑚 , we invoke the PDT Executor to perform 𝐾 rollouts in AuctionNetEnv, producing 𝐾 bidding tra-jectories 
+
+𝜏 𝑚,𝑘 ∼ 𝜋 𝜃 ℰ (⋅ ∣ 𝑝 𝑚 ), 𝑘 = 1, 2, … , 𝐾 , (11) After all rollouts are completed, the strategy prompts and bidding trajectories from this period are appended to the experience buffer 
+
+ℋ𝑔 .At this point, for each bidding period of task 𝑔 , we have col-lected an 𝑀 × 𝐾 nested reward matrix, where the element (𝑚, 𝑘) 
+
+corresponds to the 𝑘 -th rollout trajectory under strategy prompt 
+
+𝑝 𝑚 , with reward 𝑟 𝑚,𝑘 . The nested structure of this reward matrix encapsulates the dual contributions of the Planner’s strategy se-lection and the Executor’s bidding execution, providing a natural basis for inter-layer credit assignment via D-GRPO. 
+
+4.3.3 Decoupled Group Relative Policy Optimization. In recent years, Group Relative Policy Optimization (GRPO) [41] has been widely adopted for reinforcement fine-tuning of LLMs. However, directly applying GRPO to the hierarchical architecture of AIGB-R1 faces the aforementioned credit assignment problem, as the reward sig-nal couples the dual contributions of the Planner and the Executor, AIGB-R1: Self-Evolving Generative Auto-Bidding via Hierarchical Planner-Executor Optimization 
+
+and directly using GRPO for advantage estimation would lead to misattribution between the two layers, undermining training sta-bility. To this end, we propose Decoupled Group Relative Policy Optimization (D-GRPO), which constructs decoupled advantage signals for the Planner and the Executor respectively, through an orthogonal decomposition of the reward signal, achieving inter-layer credit assignment. GRPO measures the relative superiority of trajectory 𝑘 within a sampled group based on its reward deviation from the group mean, i.e., 𝑟 𝑘 − 1𝐾 ∑𝐾 ℓ=1 𝑟 ℓ. For the reward matrix produced by hierarchical rollout, we introduce the mean reward ̄ 𝑟 𝑚 of strategy prompt 𝑝 𝑚 
+
+to further decompose the reward deviation of the nested reward matrix along the sampling hierarchy into two orthogonal compo-nents, namely the inter-group reward component and the intra-group reward component: 
+
+⎧⎨⎩̄ 𝑟 𝑚 = 1𝐾 ∑𝑘 𝑟 𝑚,𝑘 ̄𝑟 = 1𝑀𝐾 ∑𝑚 ∑𝑘 𝑟 𝑚,𝑘 ,𝑟 𝑚,𝑘 −̄ 𝑟 = (̄𝑟 𝑚 −̄ 𝑟) + (𝑟 𝑚,𝑘 −̄ 𝑟 𝑚 )
+
+(12) The inter-group component ̄ 𝑟 𝑚 −̄𝑟 averages over 𝐾 rollouts for each strategy prompt 𝑝 𝑚 , reducing the randomness of individual Execu-tor executions, so that this signal reflects the quality of the Plan-ner’s strategy selection. The intra-group component 𝑟 𝑚,𝑘 −̄ 𝑟 𝑚 sub-tracts the mean reward of the corresponding strategy prompt from each trajectory’s reward, mitigating the influence of the strategy prompt itself, so that this signal reflects the Executor’s decision-making performance under a given strategy prompt. The orthogo-nality of this decomposition is formally proved in Appendix A.2. We normalize the inter-group and intra-group reward compo-nents along the strategy prompt dimension and the trajectory di-mension respectively, yielding the advantage ̂ 𝐴 𝒫  
+
+> 𝑚
+
+for each strategy prompt 𝑝 𝑚 output by the Planner and the advantage ̂ 𝐴 ℰ 
+
+> 𝑚,𝑘
+
+for each bidding trajectory 𝜏 𝑚,𝑘 output by the Executor: ̂𝐴 𝒫  
+
+> 𝑚
+
+=̄ 𝑟 𝑚 −̄ 𝑟 𝜎 𝒫 ,̂ 𝐴 ℰ 
+
+> 𝑚,𝑘
+
+= 𝑟 𝑚,𝑘 −̄ 𝑟 𝑚 
+
+𝜎 ℰ (13) where 𝜎 𝒫 and 𝜎 ℰ denote the standard deviations of the inter-group and intra-group reward components, respectively. At each training step, we jointly optimize the Planner and the Executor by maximizing the following objectives, achieving end-to-end training:  
+
+> 𝒥 𝐺𝑅𝑃𝑂
+
+(𝜃 𝒫 ) = 𝔼 (𝒞 ,ℋ)∼ 𝒟 , {𝑝 𝑚 }𝑀 𝑚=1 ∼𝜋 𝒫  
+
+> old (𝑝 | 𝒞 ,ℋ)
+
+1𝑀 
+
+> 𝑀
+
+∑
+
+> 𝑚=1
+
+1|𝑝 𝑚 | 
+
+> |𝑝 𝑚 |
+
+∑
+
+> 𝑡=1
+
+{ min (𝜌 𝒫 
+
+> 𝑚,𝑡
+
+̂ 𝐴 𝒫  
+
+> 𝑚
+
+, clip (𝜌 𝒫  
+
+> 𝑚,𝑡
+
+, 1±𝜖)̂ 𝐴 𝒫  
+
+> 𝑚
+
+) − 𝛽 𝒫 𝔻 KL [𝜋 𝜃 𝒫 ‖ 𝜋 𝒫 
+
+> ref
+
+]}  
+
+> (14)
+> 𝒥 𝐺𝑅𝑃𝑂
+
+(𝜃 ℰ) = 𝔼 𝑝 𝑚 ∼𝑃, {𝜏 𝑚,𝑘 }𝐾 𝑘=1 ∼𝜋 ℰ 
+
+> old (𝜏 | 𝑝 𝑚 )
+
+1𝐾 
+
+> 𝐾
+
+∑
+
+> 𝑘=1
+
+1|𝜏 𝑚,𝑘 | 
+
+> |𝜏 𝑚,𝑘 |
+
+∑
+
+> 𝑡=1
+
+{ min (𝜌 ℰ
+
+> 𝑚,𝑘,𝑡
+
+̂ 𝐴 ℰ 
+
+> 𝑚,𝑘
+
+, clip (𝜌 ℰ 
+
+> 𝑚,𝑘,𝑡
+
+, 1±𝜖)̂ 𝐴 ℰ 
+
+> 𝑚,𝑘
+
+) − 𝛽 ℰ 𝔻 KL [𝜋 𝜃 ℰ ‖ 𝜋 ℰ
+
+> ref
+
+]} 
+
+> (15)
+
+where 𝜌 denotes the importance sampling weight, and 𝜖 and 𝛽 are training hyperparameters. The detailed post-training procedure is shown in Appendix A.3. 
+
+## 5 Experiment 5.1 Experimental Setup 
+
+5.1.1 Dataset. To comprehensively evaluate the performance of AIGB-R1 on large-scale advertising auctions, we utilize Auction-Net, a large-scale public real-world bidding dataset released by Al-ibaba, together with its more challenging sparse variant, AuctionNet-Sparse. Both datasets contain approximately 480K bidding trajec-tories, each consisting of 48 timesteps and millions of impression opportunities. Details are provided in Appendix A.4.1. 
+
+5.1.2 Evaluation Metrics. We adopt the following metrics to eval-uate the performance: 
+
+• Conversions : The total conversions obtained during the bid-ding period, calculated as ∑𝑖 𝑜 𝑖 𝑣 𝑖 .
+
+• Score : A metric for jointly evaluating conversions and CPA con-straint satisfaction, defined as score = (∑ 𝑖 𝑜 𝑖 𝑣 𝑖 ) × penalty, where the penalty term penalty = min {( 𝐶 𝐶 𝑟𝑒𝑎𝑙 
+
+)
+
+> 2
+
+, 1} , and 𝐶 𝑟𝑒𝑎𝑙 and 𝐶 
+
+denote the strategy’s realized CPA and CPA constraint, respec-tively. 
+
+5.1.3 Baselines. We compare AIGB-R1 against various state-of-the-art baselines. For RL-based methods, we compare with the online RL method USCB [22] and offline RL methods BCQ [15], CQL [27], and IQL [25]. For generative methods, we compare with both diffusion-based and DT-based methods. Diffusion-based baselines include DiffBid [19], which generates bidding trajectories via conditional diffusion modeling, and CBD [30], which adopts a diffusion completer-aligner framework for large-scale competitive auctions. DT-based baselines include DT [7] and DT-score [57], which leverages a re-ward function to jointly represent the winning value and KPI con-straints. We further include GAS [32], which performs post-training search via MCTS, GAVE [16], which employs value-guided explo-ration, PRO-Bid [53], which introduces Pareto-prioritized regret optimization for constraint-aware bidding, and GRAD [28], which develops a large-scale pre-trained DT-based bidding model. For LLM-based methods, we compare with LBM [31], which designs a hierarchical Think-Act architecture with GQPO-based fine-tuning. 
+
+5.1.4 Implementation Details. We deploy the baseline models fol-lowing their standard implementations with default hyperparame-ters from the original papers. The Planner module of AIGB-R1 uses the Qwen2.5-32B-Instruct model with parameter-efficient fine-tuning based on the ms-swift framework [64], with a batch size of 128 and a learning rate of 5e-6. The Executor module follows the official code of DT [7] and Prompt-DT [58] with necessary adaptations. The Executor adopts a causal transformer architecture with 6 at-tention layers and 8 attention heads, with a hidden size of 512, con-stituting a lightweight decision model. The Executor is optimized using AdamW with a learning rate of 1e-5 and a batch size of 512. Our training is conducted on NVIDIA A100 GPUs using the Py-Torch framework. We implement the D-GRPO algorithm compati-ble with the PDT architecture following GAM [10], with training hyperparameters set to default values. More implementation de-tails are provided in Appendix A.4. Yuejia Dou, Hesong Wang, Xinyu Zhang, Tianyu Wang, Zhilin Zhang, Chuan Yu, Jian Xu, Bo Zheng, and Qi Qi 
+
+Table 1: Performance comparison. The boldface denotes the best performance.                                           
+
+> Dataset USCB CQL IQL BCQ DT DT-score DiffBid CBD GAS GAVE PRO-Bid GRAD LBM AIGB-R1 AuctionNet 157 171 281 321 329 334 152 298 359 376 372 372 348 385 ±3.61 AuctionNet-sparse 17.5 22.2 30.0 31.1 29.6 33.2 19.5 37.0 36.1 37.2 38.1 37.4 33.4 39.0 ±0.37
+
+## 5.2 Performance Comparison 
+
+We present a comprehensive comparison between AIGB-R1 and various baseline approaches, using Score as the evaluation metric, with results on AuctionNet and AuctionNet-sparse summarized in Table 1. To further assess the generalization ability and robustness of our method, we evaluate AIGB-R1 against state-of-the-art gen-erative baselines under different budget settings. Specifically, we conduct experiments on both datasets across five budget ratios: {50%, 75%, 100%, 125%, 150%}, with results reported in Table 2. Our experimental results show that: 
+
+• DT-based generative bidding methods significantly outperform RL methods such as IQL, CQL, and USCB, demonstrating the effectiveness of generative models in solving complex sequen-tial decision-making tasks like advertising auctions. Notably, ad-vanced generative baselines such as GAS, GAVE, PRO-Bid, and GRAD further outperform DT and its simple variants through Monte Carlo tree search, value-guided exploration, constraint-aware regret optimization, and large-scale pre-training, respec-tively, indicating the effectiveness of incorporating specialized strategy exploration and optimization mechanisms into genera-tive auto-bidding. 
+
+• Although the LLM-based method outperforms the standard DT, it still falls significantly behind advanced generative baselines, likely due to the inherent limitations of LLMs as decision models in handling complex numerical decision-making tasks. In con-trast, AIGB-R1 leverages LLMs for high-level strategy planning while training a dedicated PDT as the decision model, fully ex-ploiting LLMs’ reasoning and planning capabilities while circum-venting this limitation. 
+
+• AIGB-R1 demonstrates the best performance across all exper-imental settings, consistently outperforming existing state-of-the-art baselines. These results validate the effectiveness of our hierarchical Planner-Executor architecture and end-to-end self-evolving training paradigm, while demonstrating strong gener-alization and robustness. 
+
+Table 2: Generalization to various budget settings.                                                                       
+
+> AuctionNet Method 50% 75% 100% 125% 150% DiffBid 54 100 152 193 234 GAS 193 287 359 409 461 GAVE 201 296 376 421 467 PRO-Bid 204 291 372 426 471 GRAD 204 293 372 432 476 AIGB-R1 231 313 385 437 489
+> AuctionNet-sparse Method 50% 75% 100% 125% 150% DiffBid 9.87 15.4 19.5 25.3 30.8 GAS 18.4 27.5 36.1 40.0 46.5 GAVE 19.6 28.3 37.2 42.7 47.4 PRO-Bid 21.0 28.8 38.1 43.7 49.9 GRAD 20.0 28.5 37.4 43.2 47.5 AIGB-R1 21.1 29.6 39.0 45.1 50.9
+
+## 5.3 Ablation Study 
+
+To evaluate the effectiveness of each component in AIGB-R1, we conduct an ablation study by evaluating the following modified variants of AIGB-R1: 
+
+• AIGB-R1(E) w/o RL : Removes the Planner module and the post-training stage, using only the pre-trained Executor to predict bid-ding parameters. 
+
+• AIGB-R1(E) : Removes the Planner module and applies standard GRPO to post-train the pre-trained Executor. 
+
+• AIGB-R1(SP) w/o RL : Removes the post-training stage and uses a frozen LLM as a static Planner to provide strategy prompts for the pre-trained Executor at test time. 
+
+• AIGB-R1(SP) : Uses a frozen static Planner during post-training, i.e., only the Executor’s parameters are updated. Table 3 presents the performance comparison of modified variants, showing that every core component of AIGB-R1 is indispensable. Specifically, AIGB-R1(E) w/o RL performs the worst, reflecting the inherent limitation that purely offline pre-trained generative mod-els are constrained by the quality and coverage of training datasets. AIGB-R1(E) achieves a significant improvement over AIGB-R1(E) w/o RL by applying post-training. This trend is also observed in the comparison between AIGB-R1(SP) and AIGB-R1(SP) w/o RL, con-firming the importance of post-training for improving generative models’ performance. Meanwhile, the AIGB-R1(SP) series consis-tently outperforms the AIGB-R1(E) series, indicating that LLMs’ reasoning and planning capabilities provide effective macro-level strategy priors for generative decision models, validating the ratio-nale for our hierarchical architecture that decouples planning and execution. Furthermore, the significant improvement of AIGB-R1 over AIGB-R1(SP) demonstrates that the static Planner with frozen parameters in AIGB-R1(SP) has limited ability to improve strate-gies through in-context learning. AIGB-R1 achieves the best per-formance by using D-GRPO to jointly optimize the Planner and Executor, validating that end-to-end training is indispensable for unleashing the full potential of the hierarchical architecture. 
+
+Table 3: Ablation Study 
+
+Model Score Conversions AIGB-R1(E) w/o RL 343 362 AIGB-R1(E) 367 395 AIGB-R1(SP) w/o RL 351 388 AIGB-R1(SP) 371 396 AIGB-R1 385 404 
+
+## 6 Conclusion 
+
+In this work, we propose a hierarchical self-evolving auto-bidding framework, termed AIGB-R1, which achieves autonomous explo-ration and continuous evolution of bidding strategies through an experience-driven self-evolving loop powered by LLMs’ reason-ing, planning, and reflection capabilities. We design a hierarchical AIGB-R1: Self-Evolving Generative Auto-Bidding via Hierarchical Planner-Executor Optimization 
+
+Planner-Executor architecture that employs LLMs for high-level bidding strategy planning and PDT for low-level execution, fully leveraging LLMs’ reasoning and planning capabilities while cir-cumventing their inherent limitations in complex numerical decision-making tasks. We adopt a two-stage training pipeline comprising offline pre-training and post-training alignment, and propose an end-to-end self-evolving post-training paradigm for efficient strat-egy exploration and continuous self-improvement. We also design a hierarchical rollout mechanism and the corresponding Decou-pled Group Relative Policy Optimization (D-GRPO) algorithm, achiev-ing credit assignment through advantage decoupling and ensuring stable end-to-end optimization. Experimental results on a large-scale public dataset demonstrate the effectiveness of AIGB-R1, pro-viding a promising solution for LLM-empowered auto-bidding. 
+
+## References 
+
+[1] Michael Ahn, Anthony Brohan, Noah Brown, Yevgen Chebotar, Omar Cortes, Byron David, Chelsea Finn, Chuyuan Fu, Keerthana Gopalakrishnan, Karol Hausman, et al. 2022. Do as i can, not as i say: Grounding language in robotic affordances. arXiv preprint arXiv:2204.01691 (2022). [2] Anurag Ajay, Yilun Du, Abhi Gupta, Joshua Tenenbaum, Tommi Jaakkola, and Pulkit Agrawal. 2022. Is conditional generative modeling all you need for decision-making? arXiv preprint arXiv:2211.15657 (2022). [3] Mohammad Gheshlaghi Azar, Zhaohan Daniel Guo, Bilal Piot, Remi Munos, Mark Rowland, Michal Valko, and Daniele Calandriello. 2024. A general theoret-ical paradigm to understand learning from human preferences. In International Conference on Artificial Intelligence and Statistics . PMLR, 4447–4455. [4] Jinze Bai, Shuai Bai, Yunfei Chu, Zeyu Cui, Kai Dang, Xiaodong Deng, Yang Fan, Wenbin Ge, Yu Han, Fei Huang, et al. 2023. Qwen technical report. arXiv preprint arXiv:2309.16609 (2023). [5] Santiago Balseiro, Yuan Deng, Jieming Mao, Vahab Mirrokni, and Song Zuo. 2021. Robust auction design in the auto-bidding world. Advances in Neural Information Processing Systems 34 (2021), 17777–17788. [6] Leng Cai, Junxuan He, Yikai Li, Junjie Liang, Yuanping Lin, Ziming Quan, Yawen Zeng, and Jin Xu. 2025. Rtbagent: A llm-based agent system for real-time bid-ding. In Companion Proceedings of the ACM on Web Conference 2025 . 104–113. [7] Lili Chen, Kevin Lu, Aravind Rajeswaran, Kimin Lee, Aditya Grover, Misha Laskin, Pieter Abbeel, Aravind Srinivas, and Igor Mordatch. 2021. Decision transformer: Reinforcement learning via sequence modeling. Advances in neural information processing systems 34 (2021), 15084–15097. [8] Ye Chen, Pavel Berkhin, Bo Anderson, and Nikhil R Devanur. 2011. Real-time bidding algorithms for performance-based display ad allocation. In Proceedings of the 17th ACM SIGKDD international conference on Knowledge discovery and data mining . 1307–1315. [9] Yuan Deng, Jieming Mao, Vahab Mirrokni, and Song Zuo. 2021. Towards effi-cient auctions in an auto-bidding world. In Proceedings of the Web Conference 2021 . 3965–3973. [10] Yuejia Dou, Shuai Dou, Yuchao Ma, Bingzhe Wang, Tianyu Wang, Zhilin Zhang, Chuan Yu, Jian Xu, and Qi Qi. 2026. GAM: A Generative Auto-Marketing Frame-work in Online E-commerce Platforms. In Proceedings of the ACM Web Confer-ence 2026 . 7979–7988. [11] Kawin Ethayarajh, Winnie Xu, Niklas Muennighoff, Dan Jurafsky, and Douwe Kiela. 2024. Kto: Model alignment as prospect theoretic optimization. arXiv preprint arXiv:2402.01306 (2024). [12] David S Evans. 2009. The online advertising industry: Economics, evolution, and privacy. Journal of economic perspectives 23, 3 (2009), 37–60. [13] Lang Feng, Zhenghai Xue, Tingcong Liu, and Bo An. 2026. Group-in-group policy optimization for llm agent training. Advances in Neural Information Pro-cessing Systems 38 (2026), 46375–46408. [14] Ali Forootani. 2025. A survey on mathematical reasoning and optimization with large language models. arXiv preprint arXiv:2503.17726 (2025). [15] Scott Fujimoto, David Meger, and Doina Precup. 2019. Off-policy deep rein-forcement learning without exploration. In International conference on machine learning . PMLR, 2052–2062. [16] Jingtong Gao, Yewen Li, Shuai Mao, Peng Jiang, Nan Jiang, Yejing Wang, Qing-peng Cai, Fei Pan, Peng Jiang, Kun Gai, et al. 2025. Generative auto-bidding with value-guided explorations. In Proceedings of the 48th International ACM SI-GIR Conference on Research and Development in Information Retrieval . 244–254. [17] Caglar Gulcehre, Tom Le Paine, Srivatsan Srinivasan, Ksenia Konyushkova, Lotte Weerts, Abhishek Sharma, Aditya Siddhant, Alex Ahern, Miaosen Wang, Chenjie Gu, et al. 2023. Reinforced self-training (rest) for language modeling. 
+
+arXiv preprint arXiv:2308.08998 (2023). [18] Daya Guo, Dejian Yang, Haowei Zhang, Junxiao Song, Peiyi Wang, Qihao Zhu, Runxin Xu, Ruoyu Zhang, Shirong Ma, Xiao Bi, et al. 2025. Deepseek-r1: Incen-tivizing reasoning capability in llms via reinforcement learning. arXiv preprint arXiv:2501.12948 (2025). [19] Jiayan Guo, Yusen Huo, Zhilin Zhang, Tianyu Wang, Chuan Yu, Jian Xu, Bo Zheng, and Yan Zhang. 2024. Generative auto-bidding via conditional diffusion modeling. In Proceedings of the 30th ACM SIGKDD Conference on Knowledge Dis-covery and Data Mining . 5038–5049. [20] Louisa Ha. 2008. Online advertising research in advertising journals: A review. 
+
+Journal of Current Issues & Research in Advertising 30, 1 (2008), 31–48. [21] Jianliang He, Siyu Chen, Fengzhuo Zhang, and Zhuoran Yang. 2024. From words to actions: Unveiling the theoretical underpinnings of llm-driven autonomous systems. arXiv preprint arXiv:2405.19883 (2024). [22] Yue He, Xiujun Chen, Di Wu, Junwei Pan, Qing Tan, Chuan Yu, Jian Xu, and Xiaoqiang Zhu. 2021. A unified solution to constrained bidding in online display advertising. In Proceedings of the 27th ACM SIGKDD Conference on Knowledge Discovery & Data Mining . 2993–3001. [23] Lei Huang, Weijiang Yu, Weitao Ma, Weihong Zhong, Zhangyin Feng, Haotian Wang, Qianglong Chen, Weihua Peng, Xiaocheng Feng, Bing Qin, et al. 2025. A Yuejia Dou, Hesong Wang, Xinyu Zhang, Tianyu Wang, Zhilin Zhang, Chuan Yu, Jian Xu, Bo Zheng, and Qi Qi 
+
+survey on hallucination in large language models: Principles, taxonomy, chal-lenges, and open questions. ACM Transactions on Information Systems 43, 2 (2025), 1–55. [24] Yinqiu Huang, Hao Ma, Wenshuai Chen, Zongwei Wang, Shuli Wang, Yongqiang Zhang, Xue Wei, Yinhua Zhu, Haitao Wang, and Xingxing Wang. 2025. Generative Bid Shading in Real-Time Bidding Advertising. arXiv preprint arXiv:2508.06550 (2025). [25] Ilya Kostrikov, Ashvin Nair, and Sergey Levine. 2021. Offline reinforcement learning with implicit q-learning. arXiv preprint arXiv:2110.06169 (2021). [26] Aviral Kumar, Justin Fu, Matthew Soh, George Tucker, and Sergey Levine. 2019. Stabilizing off-policy q-learning via bootstrapping error reduction. Advances in neural information processing systems 32 (2019). [27] Aviral Kumar, Aurick Zhou, George Tucker, and Sergey Levine. 2020. Conser-vative q-learning for offline reinforcement learning. Advances in neural infor-mation processing systems 33 (2020), 1179–1191. [28] Yu Lei, Jiayang Zhao, Yilei Zhao, Zhaoqi Zhang, Linyou Cai, Qianlong Xie, and Xingxing Wang. 2026. Generative Large-Scale Pre-trained Models for Auto-mated Ad Bidding Optimization. In Proceedings of the 32nd ACM SIGKDD Con-ference on Knowledge Discovery and Data Mining V. 1 . 2266–2277. [29] Haoming Li, Yusen Huo, Shuai Dou, Zhenzhe Zheng, Zhilin Zhang, Chuan Yu, Jian Xu, and Fan Wu. 2024. Trajectory-wise iterative reinforcement learning framework for auto-bidding. In Proceedings of the ACM Web Conference 2024 .4193–4203. [30] Yewen Li, Jingtong Gao, Nan Jiang, Shuai Mao, Ruyi An, Fei Pan, Xiangyu Zhao, Bo An, Qingpeng Cai, and Peng Jiang. 2025. Generative Auto-Bidding in Large-Scale Competitive Auctions via Diffusion Completer-Aligner. arXiv preprint arXiv:2509.03348 (2025). [31] Yewen Li, Zhiyi Lyu, Peng Jiang, Qingpeng Cai, Fei Pan, Bo An, and Peng Jiang. 2026. LBM: Hierarchical Large Auto-Bidding Model via Reasoning and Acting. In Proceedings of the ACM Web Conference 2026 . 75–86. [32] Yewen Li, Shuai Mao, Jingtong Gao, Nan Jiang, Yunjian Xu, Qingpeng Cai, Fei Pan, Peng Jiang, and Bo An. 2025. Gas: Generative auto-bidding with post-training search. In Companion Proceedings of the ACM on Web Conference 2025 .315–324. [33] Xiaowei Lv, Zhilin Zhang, Yijun Li, Yusen Huo, Siyuan Ju, Xuyan Li, Chunxi-ang Hong, Tianyu Wang, Yongcai Wang, Peng Sun, et al. 2026. DecisionLLM: Large Language Models for Long Sequence Decision Exploration. arXiv preprint arXiv:2601.10148 (2026). [34] Yu Meng, Mengzhou Xia, and Danqi Chen. 2024. Simpo: Simple preference optimization with a reference-free reward. Advances in Neural Information Pro-cessing Systems 37 (2024), 124198–124235. [35] Zhiyu Mou, Yusen Huo, Rongquan Bai, Mingzhou Xie, Chuan Yu, Jian Xu, and Bo Zheng. 2022. Sustainable online reinforcement learning for auto-bidding. 
+
+Advances in Neural Information Processing Systems 35 (2022), 2651–2663. [36] Weitong Ou, Bo Chen, Yingxuan Yang, Xinyi Dai, Weiwen Liu, Weinan Zhang, Ruiming Tang, and Yong Yu. 2023. Deep landscape forecasting in multi-slot real-time bidding. In Proceedings of the 29th ACM SIGKDD Conference on Knowledge Discovery and Data Mining . 4685–4695. [37] Long Ouyang, Jeffrey Wu, Xu Jiang, Diogo Almeida, Carroll Wainwright, Pamela Mishkin, Chong Zhang, Sandhini Agarwal, Katarina Slama, Alex Ray, et al. 2022. Training language models to follow instructions with human feed-back. Advances in neural information processing systems 35 (2022), 27730–27744. [38] Zehan Qi, Xiao Liu, Iat Long Iong, Hanyu Lai, Xueqiao Sun, Jiadai Sun, Xinyue Yang, Yu Yang, Shuntian Yao, Wei Xu, et al. 2025. Webrl: Training llm web agents via self-evolving online curriculum reinforcement learning. In Interna-tional Conference on Learning Representations , Vol. 2025. 79791–79821. [39] Rafael Rafailov, Archit Sharma, Eric Mitchell, Christopher D Manning, Stefano Ermon, and Chelsea Finn. 2023. Direct preference optimization: Your language model is secretly a reward model. Advances in neural information processing systems 36 (2023), 53728–53741. [40] Thomas Schmied, Jörg Bornschein, Jordi Grau-Moya, Markus Wulfmeier, and Razvan Pascanu. 2025. Llms are greedy agents: Effects of rl fine-tuning on decision-making abilities. arXiv preprint arXiv:2504.16078 (2025). [41] Zhihong Shao, Peiyi Wang, Qihao Zhu, Runxin Xu, Junxiao Song, Xiao Bi, Haowei Zhang, Mingchuan Zhang, YK Li, Yang Wu, et al. 2024. Deepseekmath: Pushing the limits of mathematical reasoning in open language models. arXiv preprint arXiv:2402.03300 (2024). [42] Noah Shinn, Federico Cassano, Ashwin Gopinath, Karthik Narasimhan, and Shunyu Yao. 2023. Reflexion: Language agents with verbal reinforcement learn-ing. Advances in neural information processing systems 36 (2023), 8634–8652. [43] Yash Shukla, Wenchang Gao, Vasanth Sarathy, Alvaro Velasquez, Robert Wright, and Jivko Sinapov. 2023. LgTS: Dynamic task sampling using LLM-generated sub-goals for reinforcement learning agents. arXiv preprint arXiv:2310.09454 
+
+(2023). [44] Mingxuan Song, Yusen Huo, Bohan Zhou, Shenglin Yin, Zhen Xiao, Jieyi Long, Zhilin Zhang, and Chuan Yu. 2026. DARA: Few-shot Budget Allocation in On-line Advertising via In-Context Decision Making with RL-Finetuned LLMs. In 
+
+Proceedings of the ACM Web Conference 2026 . 40–50. [45] Kefan Su, Yusen Huo, Zhilin Zhang, Shuai Dou, Chuan Yu, Jian Xu, Zongqing Lu, and Bo Zheng. 2024. Auctionnet: A novel benchmark for decision-making in large-scale games. Advances in Neural Information Processing Systems 37 (2024), 94428–94452. [46] Xu Wan, Wenyue Xu, Chao Yang, and Mingyang Sun. 2025. Think twice, act once: A co-evolution framework of llm and rl for large-scale decision making. 
+
+arXiv preprint arXiv:2506.02522 (2025). [47] Guanzhi Wang, Yuqi Xie, Yunfan Jiang, Ajay Mandlekar, Chaowei Xiao, Yuke Zhu, Linxi Fan, and Anima Anandkumar. 2023. Voyager: An open-ended embod-ied agent with large language models. arXiv preprint arXiv:2305.16291 (2023). [48] Hao Wang, Bo Tang, Chi Harold Liu, Shangqin Mao, Jiahong Zhou, Zipeng Dai, Yaqi Sun, Qianlong Xie, Xingxing Wang, and Dong Wang. 2023. Hibid: A cross-channel constrained bidding system with budget allocation by hierarchical of-fline deep reinforcement learning. IEEE Trans. Comput. 73, 3 (2023), 815–828. [49] Jun Wang and Shuai Yuan. 2015. Real-time bidding: A new frontier of com-putational advertising research. In Proceedings of the Eighth ACM International Conference on Web Search and Data Mining . 415–416. [50] Jun Wang, Weinan Zhang, and Shuai Yuan. 2017. Display advertising with real-time bidding (RTB) and behavioural targeting. Foundations and Trends® in In-formation Retrieval 11, 4–5 (2017), 297–435. [51] Yongdong Wang, Runze Xiao, Jun Younes Louhi Kasahara, Ryosuke Yajima, Keiji Nagatani, Atsushi Yamashita, and Hajime Asama. 2024. Dart-llm: Dependency-aware multi-robot task decomposition and execution using large language mod-els. arXiv preprint arXiv:2411.09022 (2024). [52] Chao Wen, Miao Xu, Zhilin Zhang, Zhenzhe Zheng, Yuhui Wang, Xiangyu Liu, Yu Rong, Dong Xie, Xiaoyang Tan, Chuan Yu, et al. 2022. A cooperative-competitive multi-agent framework for auto-bidding in online advertising. In 
+
+Proceedings of the Fifteenth ACM International Conference on Web Search and Data Mining . 1129–1139. [53] Binglin Wu, Yingyi Zhang, Xianneng Li, Ruyue Deng, Chuan Yue, Weiru Zhang, and Xiaoyi Zeng. 2026. Constraint-Aware Generative Auto-bidding via Pareto-Prioritized Regret Optimization. arXiv preprint arXiv:2602.08261 (2026). [54] Rong Wu, Xiaoman Wang, Jianbiao Mei, Pinlong Cai, Daocheng Fu, Cheng Yang, Licheng Wen, Xuemeng Yang, Yufan Shen, Yuxin Wang, et al. 2025. Evolver: Self-evolving llm agents through an experience-driven lifecycle. arXiv preprint arXiv:2510.16079 (2025). [55] Chaojun Xiao, Jie Cai, Weilin Zhao, Biyuan Lin, Guoyang Zeng, Jie Zhou, Zhi Zheng, Xu Han, Zhiyuan Liu, and Maosong Sun. 2025. Densing law of llms. 
+
+Nature Machine Intelligence (2025), 1–11. [56] Haoran Xu, Amr Sharaf, Yunmo Chen, Weiting Tan, Lingfeng Shen, Benjamin Van Durme, Kenton Murray, and Young Jin Kim. 2024. Contrastive preference optimization: Pushing the boundaries of llm performance in machine transla-tion. arXiv preprint arXiv:2401.08417 (2024). [57] Jian Xu, Zhilin Zhang, Zongqing Lu, Xiaotie Deng, Michael P Wellman, Chuan Yu, Shuai Dou, Yusen Huo, Zhiwei Xu, Zhijian Duan, et al. 2024. Auto-bidding in large-scale auctions: Learning decision-making in uncertain and competitive games. In NeurIPS 2024 Competition Track .[58] Mengdi Xu, Yikang Shen, Shun Zhang, Yuchen Lu, Ding Zhao, Joshua Tenen-baum, and Chuang Gan. 2022. Prompting decision transformer for few-shot policy generalization. In international conference on machine learning . PMLR, 24631–24645. [59] An Yang, Anfeng Li, Baosong Yang, Beichen Zhang, Binyuan Hui, Bo Zheng, Bowen Yu, Chang Gao, Chengen Huang, Chenxu Lv, et al. 2025. Qwen3 technical report. arXiv preprint arXiv:2505.09388 (2025). [60] Shunyu Yao, Jeffrey Zhao, Dian Yu, Nan Du, Izhak Shafran, Karthik Narasimhan, and Yuan Cao. 2022. React: Synergizing reasoning and acting in language mod-els. arXiv preprint arXiv:2210.03629 (2022). [61] Hao Yu, Michael Neely, and Xiaohan Wei. 2017. Online convex optimization with stochastic constraints. Advances in Neural Information Processing Systems 
+
+30 (2017). [62] Eric Zelikman, Yuhuai Wu, Jesse Mu, and Noah D Goodman. 2024. Star: Self-taught reasoner bootstrapping reasoning with reasoning. In Proc. the 36th Inter-national Conference on Neural Information Processing Systems , Vol. 1126. 0–55. [63] Andrew Zhao, Daniel Huang, Quentin Xu, Matthieu Lin, Yong-Jin Liu, and Gao Huang. 2024. Expel: Llm agents are experiential learners. In Proceedings of the AAAI Conference on Artificial Intelligence , Vol. 38. 19632–19642. [64] Yuze Zhao, Jintao Huang, Jinghan Hu, Xingjun Wang, Yunlin Mao, Daoze Zhang, Zeyinzi Jiang, Zhikai Wu, Baole Ai, Ang Wang, Wenmeng Zhou, and Yingda Chen. 2024. SWIFT:A Scalable lightWeight Infrastructure for Fine-Tuning. arXiv:2408.05517 [cs.CL] https://arxiv.org/abs/2408.05517 [65] Qinqing Zheng, Amy Zhang, and Aditya Grover. 2022. Online decision trans-former. In international conference on machine learning . PMLR, 27042–27059. [66] Yifei Zhou, Sergey Levine, Jason Weston, Xian Li, and Sainbayar Sukhbaatar. 2026. Self-challenging language model agents. Advances in Neural Information Processing Systems 38 (2026), 113959–113991. [67] Guanyu Zhu, Jining Luan, Hanwen Du, Xinyu Fang, Sibo Xu, Ersheng Ni, Hongji Li, Jincheng Fang, Ronghao Chen, Huacan Wang, et al. 2026. On the Role of Language Representations in Auto-Bidding: Findings and Implications. arXiv AIGB-R1: Self-Evolving Generative Auto-Bidding via Hierarchical Planner-Executor Optimization  
+
+> preprint arXiv:2605.05833 (2026).
+
+## A Appendix A.1 AuctionNetEnv Details 
+
+A.1.1 Construction Details. Based on the public, large-scale auto-bidding decision benchmark AuctionNet [45], we construct an in-teractive bidding simulation environment, AuctionNetEnv, to pro-vide flexible agent-environment interaction during the post-training phase. AuctionNetEnv reuses the ad opportunity generation mod-ule, the ad auction module, and various auto-bidding opponent agents provided by AuctionNet, aligns them with the distribution characteristics of the training dataset, and encapsulates them into an OpenAI Gym-style interface to be invoked during the rollout process. In AuctionNetEnv, each rollout trajectory corresponds to a com-plete bidding period of 𝑇 = 48 timesteps. Within each bidding pe-riod, the ad opportunity generator produces approximately 500K impression opportunities in total, distributed across the 48 timesteps following the temporal traffic patterns of a real-world advertising platform. The task pool 𝒢 contains 48 bidding tasks, each associ-ated with a distinct advertiser configuration including budget, CPA constraint, and advertising category. During post-training, an ad-vertiser configuration is sampled from 𝒢 to serve as the player agent, which is controlled by AIGB-R1 and engages in online bid-ding against opponent agents that are pre-trained on the training dataset using various algorithms (PID Controller, Online LP, IQL, etc.), thereby simulating the heterogeneous competitive dynam-ics of real-world advertising platforms. The auction module em-ploys the second-price auction mechanism, with each impression opportunity corresponding to a single ad slot. At each timestep, the player agent submits a bid for each impression opportunity; if the bid exceeds the highest bid among all opponent agents, the player wins the impression and pays the winning cost. For each won impression, the conversion outcome is generated by Bernoulli sampling with the impression value as the success probability. 
+
+A.1.2 Distributional Consistency of AuctionNetEnv. To assess whether AuctionNetEnv preserves the key distributional properties of the historical dataset, we compare the simulated statistics with the cor-responding data statistics. We report the mean, standard deviation, and median of representative traffic-side and cost-side metrics, to-gether with the Sim/Data ratio. A ratio closer to 1.0 indicates better alignment with the historical dataset. 
+
+## A.2 Proof of Reward Decomposition Orthogonality 
+
+PRoposition 1. The centered reward deviation of the hierarchical rollout reward matrix can be decomposed into two orthogonal com-ponents. 
+
+PRoof. Consider the reward matrix obtained from hierarchical rollout: 
+
+𝑅 = {𝑟 𝑚,𝑘 }𝑀, 𝐾 𝑚=1, 𝑘=1 , (16) where 𝑚 indexes the 𝑚 -th strategy prompt and 𝑘 indexes the 𝑘 -th rollout trajectory under this prompt. Define the mean reward under the 𝑚 -th strategy prompt as ̄𝑟 𝑚 = 1𝐾 
+
+> 𝐾
+
+∑
+
+> 𝑘=1
+
+𝑟 𝑚,𝑘 , (17) and the global mean reward as ̄𝑟 = 1𝑀𝐾 
+
+> 𝑀
+
+∑
+
+> 𝑚=1 𝐾
+
+∑
+
+> 𝑘=1
+
+𝑟 𝑚,𝑘 . (18) Then the centered reward deviation of each element can be decom-posed as 
+
+𝑟 𝑚,𝑘 −̄ 𝑟 = (̄𝑟 𝑚 −̄ 𝑟) ⏟⏟⏟⏟⏟⏟⏟⏟⏟ 
+
+> 𝐵 𝑚,𝑘
+
++ (𝑟 𝑚,𝑘 −̄ 𝑟 𝑚 )⏟⏟⏟⏟⏟⏟⏟⏟⏟⏟⏟ 
+
+> 𝑊 𝑚,𝑘
+
+, (19) where 𝐵 denotes the inter-group component across strategy prompts, and 𝑊 denotes the intra-group component within the same strat-egy prompt. In matrix form, 
+
+𝑅 −̄ 𝑟 11 ⊤ = 𝐵 + 𝑊 . (20) We now prove that 𝐵 and 𝑊 are orthogonal under the Frobenius inner product. Substituting the definitions of 𝐵 𝑚,𝑘 and 𝑊 𝑚,𝑘 ,
+
+⟨𝐵, 𝑊 ⟩ 𝐹 =
+
+> 𝑀
+
+∑
+
+> 𝑚=1 𝐾
+
+∑
+
+> 𝑘=1
+
+(̄𝑟 𝑚 −̄ 𝑟) (𝑟 𝑚,𝑘 −̄ 𝑟 𝑚 ). (21) For a fixed 𝑚 , the factor (̄𝑟 𝑚 −̄ 𝑟) is independent of 𝑘 , so 
+
+⟨𝐵, 𝑊 ⟩ 𝐹 =
+
+> 𝑀
+
+∑
+
+> 𝑚=1
+
+(̄𝑟 𝑚 −̄ 𝑟) 
+
+> 𝐾
+
+∑
+
+> 𝑘=1
+
+(𝑟 𝑚,𝑘 −̄ 𝑟 𝑚 ). (22) By the definition of ̄ 𝑟 𝑚 ,
+
+> 𝐾
+
+∑
+
+> 𝑘=1
+
+(𝑟 𝑚,𝑘 −̄ 𝑟 𝑚 ) = 
+
+> 𝐾
+
+∑
+
+> 𝑘=1
+
+𝑟 𝑚,𝑘 − 𝐾̄ 𝑟 𝑚 = 𝐾̄ 𝑟 𝑚 − 𝐾̄ 𝑟 𝑚 = 0. (23) Therefore, ⟨𝐵, 𝑊 ⟩ 𝐹 = 0 , proving that the inter-group and intra-group components are orthogonal. □
+
+## A.3 Post-training Procedure 
+
+Algorithm 1 describes the complete post-training procedure of AIGB-R1. At each training step, we first sample a bidding task and ob-tain its contextual information and historical bidding experience. We then perform the experience-guided hierarchical rollout. The LLM Planner then generates 𝑀 diverse strategy prompts based on the context and historical experience, and the PDT Executor performs 𝐾 rollouts in AuctionNetEnv for each strategy prompt. During advantage estimation, we decouple the reward signal into inter-group and intra-group components to construct separate ad-vantage signals for the Planner and the Executor respectively. Fi-nally, we update the parameters of the Planner and the Executor using their corresponding advantages, and append the rollout re-sults to the experience buffer. Yuejia Dou, Hesong Wang, Xinyu Zhang, Tianyu Wang, Zhilin Zhang, Chuan Yu, Jian Xu, Bo Zheng, and Qi Qi 
+
+Table 4: Distributional consistency of AuctionNetEnv against the historical dataset. Ratio denotes Sim/Data, and values closer to 1.0 indicate better alignment with the data distribution. 
+
+Dataset Metric Mean Std Median Data Sim Ratio Data Sim Ratio Data Sim Ratio AuctionNet pValue 0.00479 0.00480 1.003 0.00377 0.00364 0.966 0.00385 0.00388 1.008 LWC 0.0892 0.0847 0.950 0.0293 0.0243 0.830 0.0810 0.0785 0.968 PV count/tick 10416 10416 1.000 6353 6743 1.061 10573 10483 0.991 AuctionNet -sparse pValue 0.000479 0.000480 1.002 0.000377 0.000364 0.966 0.000385 0.000388 1.008 Marketing 0.0924 0.0883 0.956 0.0273 0.0213 0.780 0.0851 0.0835 0.980 PV count/tick 10416 10416 1.000 6353 6743 1.061 10573 10483 0.991 
+
+Algorithm 1: Post-training Procedure  
+
+> 1
+
+Input: Planner 𝜋 𝜃 𝒫 , pre-trained Executor 𝜋 𝜃 ℰ , task pool 𝒢 
+
+of AuctionNetEnv, number of strategy prompts 𝑀 , number of rollouts per prompt 𝐾 ; 
+
+> 2
+
+Initialize experience buffer ℋ𝑔 ← ∅ for each task 𝑔 ∈ 𝒢 ; 
+
+> 3
+
+Initialize reference models 𝜋 𝒫  
+
+> ref
+
+← 𝜋 𝜃 𝒫 , 𝜋 ℰ 
+
+> ref
+
+← 𝜋 𝜃 ℰ ; 
+
+> 4
+
+for each training step do  
+
+> 5
+
+Sample bidding task 𝑔 from 𝒢 , obtain contextual information 𝒞 𝑔 and historical experience ℋ𝑔 ;
+
+/* Experience-Guided Hierarchical Rollout */  
+
+> 6
+
+Planner generates 𝑀 diverse strategy prompts 
+
+{𝑝 1, … , 𝑝 𝑀 } ∼ 𝜋 𝜃 𝒫 (⋅ ∣ 𝒞 𝑔 , ℋ𝑔 ); 
+
+> 7
+
+for 𝑚 = 1, … , 𝑀 do  
+
+> 8
+
+for 𝑘 = 1, … , 𝐾 do  
+
+> 9
+
+Execute rollout 𝜏 𝑚,𝑘 ∼ 𝜋 𝜃 ℰ (⋅ ∣ 𝑝 𝑚 ) in AuctionNetEnv;  
+
+> 10
+
+Compute trajectory reward 𝑟 𝑚,𝑘 ; 
+
+> 11
+
+end  
+
+> 12
+
+end 
+
+/* Decoupled Advantage Estimation */ 
+
+> 13
+
+̄ 𝑟 𝑚 ← 1𝐾 ∑𝐾 𝑘=1 𝑟 𝑚,𝑘 ,̄ 𝑟 ← 1𝑀𝐾 ∑𝑚,𝑘 𝑟 𝑚,𝑘 ;
+
+> 14
+
+̂ 𝐴 𝒫  
+
+> 𝑚
+
+←̄ 𝑟 𝑚 −̄𝑟 𝜎 𝒫 ; // Inter-group 
+
+> 15
+
+̂ 𝐴 ℰ 
+
+> 𝑚,𝑘
+
+← 𝑟 𝑚,𝑘 −̄𝑟 𝑚  
+
+> 𝜎 ℰ
+
+; // Intra-group /* Parameter Update */  
+
+> 16
+
+Update 𝜃 𝒫 by maximizing 𝒥 𝐺𝑅𝑃𝑂 (𝜃 𝒫 ); 
+
+> 17
+
+Update 𝜃 ℰ by maximizing 𝒥 𝐺𝑅𝑃𝑂 (𝜃 ℰ);
+
+/* Update Experience Buffer */  
+
+> 18
+
+Update ℋ𝑔 with rollout results;  
+
+> 19
+
+Update best-strategy anchor if max 𝑚 ̄ 𝑟 𝑚 exceeds current best;  
+
+> 20
+
+end  
+
+> 21
+
+Output: Optimized Planner 𝜋 𝜃 𝒫 and Executor 𝜋 𝜃 ℰ ;
+
+## A.4 Implementation Details 
+
+A.4.1 Dataset Details. The AuctionNet benchmark comprises two datasets, AuctionNet and AuctionNet-sparse, where AuctionNet-sparse is a sparse variant of AuctionNet with fewer conversions. Each dataset contains 21 advertising delivery periods, each with approximately 500,000 impression opportunities, divided into 48 time intervals. Detailed parameters are summarized in Table 5. 
+
+Table 5: Detailed parameters of AuctionNet and AuctionNet-sparse. 
+
+Parameters AuctionNet AuctionNet-sparse Trajectories 479,376 479,376 Delivery Periods 9,987 9,987 Timesteps in a trajectory 48 48 State dimension 16 16 Action dimension 1 1Action range [0, 493] [0, 589] Impression’s value range [0, 1] [0, 1] CPA range [6, 12] [60, 130] Total conversion range [0, 1512] [0, 57] 
+
+A.4.2 Hyperparameter Settings. We summarize the hyperparame-ter settings used in AIGB-R1 in Table 6. 
+
+Table 6: Detailed hyperparameter settings of AIGB-R1. 
+
+Module Hyperparameter Value LLM Planner Batch size 128 Number of steps 500 Max completion length 512 Learning rate 5e-6 Epsilon for PPO clipping 0.1 Number of strategy prompts ( 𝑀 ) 3Experience buffer depth 4Number of rollouts per prompt ( 𝐾 ) 8PDT Executor Batch size 512 Number of steps 250000 Sequence length 20 Learning rate 1e-5 Number of attention layers 6Number of heads 8Scale 1000 Hidden size 512 Target return 2Activation function ReLU Epsilon for PPO clipping 0.1 
+
+A.4.3 Prompt Templates. To provide a detailed illustration of the prompt design in AIGB-R1, we present the core prompt template used to guide the Planner in generating strategy prompts. AIGB-R1: Self-Evolving Generative Auto-Bidding via Hierarchical Planner-Executor Optimization 
+
+System Prompt 
+
+You are a professional ad bidding expert, responsible for helping ad-vertisers plan optimal bidding strategies. 
+
+BACKGROUND: The advertiser participates in a one-day auction pe-riod consisting of 48 timesteps. At each step, the advertiser determines the optimal bid multiplier 𝛼 ≥ 0 based on market conditions. The ad-vertiser competes in a second-price auction; the highest bidder wins the impression and pays the second-highest price. The objective is to maximize total conversions while keeping actual CPA within the CPA constraint. 
+
+OBJECTIVE: Your goal is to maximize the advertiser’s score within the auction period, defined as: score = total_conversion × penalty, where penalty = min (( cpa_target /cpa_actual )2, 1.0) . To maximize this objective function, you should fully utilize the budget to acquire impressions while satisfying the CPA constraint. If the CPA constraint is severely violated, consider lowering the bid multiplier. 
+
+TASK: Based on the target advertiser’s profile and historical bidding performance (if available), prescribe promising macro-level bidding strategies for the next auction period. Your task consists of the fol-lowing steps: 1. First, thoroughly summarize and reflect on historical bidding perfor-mance to infer the potentially optimal strategy adjustment direction. 2. Then, based on your chosen adjustment direction, select the most appropriate enumerated strategy label for each of the following dimen-sions ⟨strategy labels ⟩: ⟨option ⟩
+
+– e.g., Risk Awareness: AGGRESSIVE / MODERATE / CONSERVATIVE 
+
+3. Finally, briefly summarize historical strategy performance and ex-plain the rationale for your chosen adjustment direction, producing 
+
+⟨strategy reasoning ⟩: ⟨description ⟩.Provide ⟨M⟩ distinct strategies ranked by potential value in descending order; they must differ in at least one strategy dimension. 
+
+NOTES: 
+
+– Each advertiser has unique budget, CPA, and advertising category, which implicitly reflect strategy preferences. Personalize strategies ac-cordingly. – The BEST-STRATEGY ANCHOR records the best-performing strat-egy across all historical periods for this advertiser, but may not be the global optimum. – The SLIDING MEMORY WINDOW records the most recent N peri-ods of bidding experience, including strategy labels, strategy reason-ing, performance statistics, and rollout trajectories, enabling intuitive comparison of performance across different strategies. – Strategy reasoning should be forward-looking and not exceed 300 characters. 
+
+User Prompt 
+
+ADVERTISER PROFILE: 
+
+Budget: ⟨budget ⟩, CPA: ⟨CPA ⟩, Category: ⟨category ⟩
+
+BEST-STRATEGY ANCHOR: 
+
+Strategy Labels: ⟨strategy labels ⟩
+
+Strategy Reasoning: ⟨strategy reasoning ⟩
+
+Trajectory Summary: ⟨trajectory summary ⟩
+
+SLIDING MEMORY WINDOW (recent N periods): Period ⟨period index ⟩:Strategy Labels: ⟨strategy labels ⟩
+
+Strategy Reasoning: ⟨strategy reasoning ⟩
+
+Performance Statistics: ⟨performance statistics ⟩
+
+Rollout Trajectory: ⟨rollout trajectory ⟩
+
+– Timestep t: State: ⟨state ⟩, Action: ⟨action ⟩, Reward: ⟨reward ⟩, Cost: 
+
+⟨cost ⟩
+
+RESPONSE FORMAT (JSON): Return only a valid JSON array containing exactly ⟨𝑀⟩ strategy ob-jects, ranked by potential value in descending order: {”strategy_labels”: ⟨strategy labels ⟩,”reasoning”: ⟨strategy reasoning ⟩
+
+}

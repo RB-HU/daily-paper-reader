@@ -6,40 +6,46 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-07-20
-- 运行时间：2026-07-20 21:45:10 UTC
+- 最新运行日期：2026-07-21
+- 运行时间：2026-07-21 21:51:37 UTC
 - 运行状态：成功
-- 本次总论文数：6
-- 精读区：3
-- 速读区：3
+- 本次总论文数：8
+- 精读区：6
+- 速读区：2
 
 ### 今日简报（AI）
-1) 今日聚焦AI交易、自改进与大模型幻觉：用情感增强的深度强化学习做主动交易，以及递归式自改进框架，均获高分精读。
-2) 最值得关注用“Alpha回报”重塑交易RL的奖励设计，以及让模型通过自我纠错实现无监督提升的递归算法。
-3) 想跟上智能体前沿，可以先从速读里挑选虚实结合的环境探索与金融场景中的幻觉检测，快速补全知识拼图。
-- 详情：[/202607/20/README](/202607/20/README)
+今日聚焦AI交易策略革命：强化学习打造市场中性组合，大语言模型挑战技术分析圣经。  
+最值得看：满分论文《AlphaZeroBeta》用深度RL实现市场中性投资组合，以及《MADA-RL》用多智能体辩论提升小模型推理效率。  
+如果你想量化投资更稳，不妨试试把辩论机制塞进你自己的交易模型里，或许能对冲“模型内讧”风险。
+- 详情：[/202607/21/README](/202607/21/README)
 
 ### 精读区论文标签
-1. [CLaC@FinMMEval 2026 Task 3: Sentiment-Augmented Deep Reinforcement Learning for Active Trading -- An Alpha-Reward Approach](/202607/20/2607.16028v1-clacfinmmeval-2026-task-3-sentiment-augmented-deep-reinforcement-learning-for-active-trading----an-alpha-reward-approach)  
+1. [AlphaZeroBeta: Deep Reinforcement Learning for Market-Neutral Portfolios](/202607/21/2607.18001v1-alphazerobeta-deep-reinforcement-learning-for-market-neutral-portfolios)  
+   标签：评分：10.0/10、query:fla
+   evidence：深度强化学习用于市场中性投资组合，PPO训练策略
+2. [AI Trading: Evaluating Large Language Models for Technical Market Analysis](/202607/21/2607.15414v1-ai-trading-evaluating-large-language-models-for-technical-market-analysis)  
    标签：评分：9.0/10、query:fla
-   evidence：深度强化学习智能体，采用alpha奖励进行金融交易
-2. [Recursive Harness Self-Improvement](/202607/20/2607.15524v1-recursive-harness-self-improvement)  
+   evidence：评估LLM作为金融领域任务导向智能体
+3. [When Does Muon Help Agentic Reinforcement Learning?](/202607/21/2607.16169v2-when-does-muon-help-agentic-reinforcement-learning)  
+   标签：评分：9.0/10、query:fla
+   evidence：用于智能体RL后训练的优化器
+4. [Environment-free Synthetic Data Generation for API-Calling Agents](/202607/21/2607.16900v1-environment-free-synthetic-data-generation-for-api-calling-agents)  
+   标签：评分：9.0/10、query:fla
+   evidence：无需环境即可生成API调用智能体的训练轨迹合成数据
+5. [FinSAgent: Corpus-Aligned Multi-Agent RAG Framework for Evidence-Grounded SEC Filing Question Answering](/202607/21/2607.18102v1-finsagent-corpus-aligned-multi-agent-rag-framework-for-evidence-grounded-sec-filing-question-answering)  
+   标签：评分：9.0/10、query:fla
+   evidence：提出面向金融SEC申报文件问答的多代理RAG框架，解决语料不对齐问题以增强证据根基
+6. [A Method for Learning Value Systems in Generative AI](/202607/21/2607.16903v1-a-method-for-learning-value-systems-in-generative-ai)  
    标签：评分：8.0/10、query:fla
-   evidence：通过轻量级递归更新优化脚手架以提升智能体性能与训练轨迹质量
-3. [When Does Muon Help Agentic Reinforcement Learning?](/202607/20/2607.16169v1-when-does-muon-help-agentic-reinforcement-learning)  
-   标签：评分：8.0/10、query:fla
-   evidence：研究Muon优化器用于LLM智能体强化学习后训练
+   evidence：从偏好数据学习价值系统以对齐生成式AI
 
 ### 速读区论文标签
-1. [CatalogAgent: A Supervisor-mediated Self-Learning System Enabling Context Engineering for GenAI Models](/202607/20/2607.14396v1-catalogagent-a-supervisor-mediated-self-learning-system-enabling-context-engineering-for-genai-models)  
+1. [MADA-RL: Multi-Agent Debate-Aware Reinforcement Learning for Parameter-Efficient Reasoning in Compact Models](/202607/21/2607.18006v1-mada-rl-multi-agent-debate-aware-reinforcement-learning-for-parameter-efficient-reasoning-in-compact-models)  
+   标签：评分：8.0/10、query:fla
+   evidence：面向紧凑模型智能体的辩论感知RL后训练框架
+2. [AIGB-R1: Self-Evolving Generative Auto-Bidding via Hierarchical Planner-Executor Optimization](/202607/21/2607.17281v1-aigb-r1-self-evolving-generative-auto-bidding-via-hierarchical-planner-executor-optimization)  
    标签：评分：7.0/10、query:fla
-   evidence：面向电商智能体的GenAI模型后训练自学习系统
-2. [ToolVerse: Unlocking Massive Environments and Long-Horizon Tasks for Agentic Reinforcement Learning](/202607/20/2607.15660v1-toolverse-unlocking-massive-environments-and-long-horizon-tasks-for-agentic-reinforcement-learning)  
-   标签：评分：7.0/10、query:fla
-   evidence：大规模智能体强化学习训练框架，集成工具推理
-3. [Confidently Wrong: Detecting Hallucinations in Financial Question Answering from LLM Internal States](/202607/20/2607.11414v1-confidently-wrong-detecting-hallucinations-in-financial-question-answering-from-llm-internal-states)  
-   标签：评分：6.0/10、query:fla
-   evidence：检测自信幻觉用于金融AI智能体对齐
+   evidence：使用LLM的自我演进生成式自动出价
 
 
 <div class="dpr-home-promo-card">
