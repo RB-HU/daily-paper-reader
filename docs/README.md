@@ -6,46 +6,35 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-07-21
-- 运行时间：2026-07-21 21:51:37 UTC
+- 最新运行日期：2026-07-22
+- 运行时间：2026-07-22 21:35:56 UTC
 - 运行状态：成功
-- 本次总论文数：8
-- 精读区：6
-- 速读区：2
+- 本次总论文数：4
+- 精读区：4
+- 速读区：0
 
 ### 今日简报（AI）
-今日聚焦AI交易策略革命：强化学习打造市场中性组合，大语言模型挑战技术分析圣经。  
-最值得看：满分论文《AlphaZeroBeta》用深度RL实现市场中性投资组合，以及《MADA-RL》用多智能体辩论提升小模型推理效率。  
-如果你想量化投资更稳，不妨试试把辩论机制塞进你自己的交易模型里，或许能对冲“模型内讧”风险。
-- 详情：[/202607/21/README](/202607/21/README)
+今日精读两篇顶会论文，聚焦离线强化学习的不确定性估计与企业级智能体的可靠性来源。  
+最值得关注：离线RL中保守查询与自适应正则化新解法，以及生产环境中验证循环、专家模型和脚手架如何决定Agent可信度。  
+下一步不妨深入阅读《Conservative Query》实验设计，或从企业Agent案例中梳理可落地的可靠性评估框架。
+- 详情：[/202607/22/README](/202607/22/README)
 
 ### 精读区论文标签
-1. [AlphaZeroBeta: Deep Reinforcement Learning for Market-Neutral Portfolios](/202607/21/2607.18001v1-alphazerobeta-deep-reinforcement-learning-for-market-neutral-portfolios)  
+1. [Conservative Query and Adaptive Regularization for Offline RL Under Uncertainty Estimation](/202607/22/2607.19199v1-conservative-query-and-adaptive-regularization-for-offline-rl-under-uncertainty-estimation)  
    标签：评分：10.0/10、query:fla
-   evidence：深度强化学习用于市场中性投资组合，PPO训练策略
-2. [AI Trading: Evaluating Large Language Models for Technical Market Analysis](/202607/21/2607.15414v1-ai-trading-evaluating-large-language-models-for-technical-market-analysis)  
+   evidence：离线强化学习结合偏好查询，无需环境交互即可改进策略，是一种后训练技术
+2. [Where Does Agent Reliability Come From? A Cross-Benchmark Decomposition of Verification Loops, Specialist Models, and Scaffolding in a Production Enterprise Agent](/202607/22/2607.17044v1-where-does-agent-reliability-come-from-a-cross-benchmark-decomposition-of-verification-loops-specialist-models-and-scaffolding-in-a-production-enterprise-agent)  
    标签：评分：9.0/10、query:fla
-   evidence：评估LLM作为金融领域任务导向智能体
-3. [When Does Muon Help Agentic Reinforcement Learning?](/202607/21/2607.16169v2-when-does-muon-help-agentic-reinforcement-learning)  
+   evidence：后训练的专业化模型通过验证循环提升智能体可靠性
+3. [FinSAgent: Corpus-Aligned Multi-Agent RAG Framework for Evidence-Grounded SEC Filing Question Answering](/202607/22/2607.18102v2-finsagent-corpus-aligned-multi-agent-rag-framework-for-evidence-grounded-sec-filing-question-answering)  
    标签：评分：9.0/10、query:fla
-   evidence：用于智能体RL后训练的优化器
-4. [Environment-free Synthetic Data Generation for API-Calling Agents](/202607/21/2607.16900v1-environment-free-synthetic-data-generation-for-api-calling-agents)  
-   标签：评分：9.0/10、query:fla
-   evidence：无需环境即可生成API调用智能体的训练轨迹合成数据
-5. [FinSAgent: Corpus-Aligned Multi-Agent RAG Framework for Evidence-Grounded SEC Filing Question Answering](/202607/21/2607.18102v1-finsagent-corpus-aligned-multi-agent-rag-framework-for-evidence-grounded-sec-filing-question-answering)  
-   标签：评分：9.0/10、query:fla
-   evidence：提出面向金融SEC申报文件问答的多代理RAG框架，解决语料不对齐问题以增强证据根基
-6. [A Method for Learning Value Systems in Generative AI](/202607/21/2607.16903v1-a-method-for-learning-value-systems-in-generative-ai)  
+   evidence：面向金融领域的任务导向型智能体，用于SEC申报问答
+4. [ResearchArena: Evaluating Sabotage and Monitoring in Automated AI R&D](/202607/22/2607.19321v1-researcharena-evaluating-sabotage-and-monitoring-in-automated-ai-rd)  
    标签：评分：8.0/10、query:fla
-   evidence：从偏好数据学习价值系统以对齐生成式AI
+   evidence：评估自动化AI研发中的后训练安全与监控
 
 ### 速读区论文标签
-1. [MADA-RL: Multi-Agent Debate-Aware Reinforcement Learning for Parameter-Efficient Reasoning in Compact Models](/202607/21/2607.18006v1-mada-rl-multi-agent-debate-aware-reinforcement-learning-for-parameter-efficient-reasoning-in-compact-models)  
-   标签：评分：8.0/10、query:fla
-   evidence：面向紧凑模型智能体的辩论感知RL后训练框架
-2. [AIGB-R1: Self-Evolving Generative Auto-Bidding via Hierarchical Planner-Executor Optimization](/202607/21/2607.17281v1-aigb-r1-self-evolving-generative-auto-bidding-via-hierarchical-planner-executor-optimization)  
-   标签：评分：7.0/10、query:fla
-   evidence：使用LLM的自我演进生成式自动出价
+- 本次无速读推荐。
 
 
 <div class="dpr-home-promo-card">
