@@ -1,0 +1,69 @@
+{
+  "label": "2026-07-23",
+  "date": "2026-07-23",
+  "generated_at": "2026-07-23T21:18:48",
+  "count": 4,
+  "papers": [
+    {
+      "paper_id": "202607/23/2607.16900v2-environment-free-synthetic-data-generation-for-api-calling-agents",
+      "section": "deep",
+      "title_en": "Environment-free Synthetic Data Generation for API-Calling Agents",
+      "authors": "Seanie Lee, Sanjoy Chowdhury, Chao Jiang, Cheng-Yu Hsieh, Ting-Yao Hu, Alexander T Toshev, Oncel Tuzel, Raviteja Vemulapalli",
+      "date": "2026-07-18",
+      "pdf": "https://arxiv.org/pdf/2607.16900v2",
+      "score": "9.0",
+      "evidence": "无需环境为API调用代理生成合成训练数据",
+      "tldr": "训练调用API的大语言模型智能体需要大量高质量交互轨迹，但可执行环境的搭建和数据库预填充严重限制了数据规模。本文提出环境无关的合成数据生成框架，仅需API规范，利用LLM作为即时数字世界模型，通过任务生成、教师求解与仿真、评判过滤三步生成轨迹。在信息检索和状态修改基准AppWorld与OfficeBench上，用合成数据微调模型带来显著性能提升，证明无需可执行环境即可提供有效监督。该方法为多API生态下的智能体训练提供了实用低成本的可扩展方案。",
+      "tags": "query:fla",
+      "abstract_en": "Training API-calling large language model (LLM) agents demands massive amounts of high-quality trajectories. However, collecting such data at scale typically requires fully implemented environments with executable APIs and realistic, pre-populated backend databases, creating a major bottleneck for scalability. To overcome this, we propose an environment-free synthetic data generation approach that leverages LLMs as on-the-fly digital world models. Given only API specifications, our method generates trajectories mimicking interactions between an agent and a stateful environment. Specifically, an LLM first generates diverse tasks solvable with the provided APIs. A teacher agent then iteratively solves each task while an LLM simulator generates coherent synthetic API responses conditioned on the task context and simulation history. Finally, an LLM judge filters the trajectories to ensure the quality of the resulting dataset. We evaluate our approach on the challenging AppWorld and OfficeBench benchmarks, which include both information-retrieval and state-changing tasks. Fine-tuning models on our synthetic data yields significant performance gains, demonstrating that effective supervision for API-calling agents can be generated without any executable environment. Our results establish LLM-based API simulation as a practical, scalable solution for training agents across diverse API ecosystems.",
+      "source": "arxiv",
+      "selection_source": "fresh_fetch"
+    },
+    {
+      "paper_id": "202607/23/2607.19794v1-triagent-divergence-aware-multi-agent-committees-for-cost-efficient-financial-sentiment-analysis",
+      "section": "deep",
+      "title_en": "TriAgent: Divergence-Aware Multi-Agent Committees for Cost-Efficient Financial Sentiment Analysis",
+      "authors": "Isabel Xu, Cynthia Xu, Rachel Ren, Cong Guo, Jiacheng Ding",
+      "date": "2026-07-22",
+      "pdf": "https://arxiv.org/pdf/2607.19794v1",
+      "score": "9.0",
+      "evidence": "TriAgent是一个用于金融情感分析的多智能体委员会，属于面向金融领域的任务导向智能体",
+      "tldr": "金融情感分析生产环境中，大多数查询简单可判，但云端推理大模型处理所有请求导致成本随用户线性增长。TriAgent提出按词级、句级和跨句三层粒度构建多智能体委员会，并设计三项语义分歧指数衡量跨粒度代理的分歧，据此路由查询。核心发现是批评平台：将大模型重用作小代理输出的批评者时，F1值稳定在0.87附近，而同样大小模型投票仅得0.66，突显粒度分层多样性。SDI信号还衍生三大推论：共享共识字典使95%中文查询从英文缓存以零边际成本回复，F1达0.99；SDI可作幻觉检测器，AUC为0.90；基于SDI的单阶段交易策略在20支股票回测中获最高3.50夏普比率。千万用户规模下，TriAgent较基线年省930万美元，相关代码与词典已发布。",
+      "tags": "query:fla",
+      "abstract_en": "Production LLM-based financial sentiment analysis faces a structural cost trap: most queries are trivially classifiable, yet expensive cloud reasoners process them all, and the bill scales linearly with user count. We present TriAgent, a multi-agent committee stratified by contextual granularity -- a word-level lexicon (VADER), a sentence-level domain transformer (FinBERT), and a cross-sentence reasoner (Qwen2.5, 0.5B-14B-4bit, with Mistral-7B and Phi-3.5-mini cross-family checks). A three-way Semantic Divergence Index (SDI) measures pairwise disagreement across granularities and routes each query accordingly. Our central finding is the critic plateau: when the LLM is re-tasked as a critic over the smaller agents' outputs, F1 plateaus at ~0.87 across 1.5B-7B Qwen (bootstrap 95% CIs overlap), while a same-size 3-persona vote drops to F1=0.66, which is driven by granularity-stratified diversity. Three corollaries follow from the same SDI signal: (i) a Shared Consensus Dictionary on multilingual sentence-BERT answers 95% of Chinese queries from an English cache at F1=0.99 -- cross-border canonicalization at zero marginal cost; (ii) SDI doubles as a post-hoc LLM-hallucination detector at AUC=0.90; (iii) the SDI single-stage strategy attains the best risk-adjusted return (Sharpe=3.50) on a 20-ticker back-test, dominating both always-FinBERT (1.36) and always-LLM (0.11). At 10M-user scale, TriAgent saves $9.3M/year vs. a GPT-4o-mini baseline. Code, lexicons, and the SCD are released.",
+      "source": "arxiv",
+      "selection_source": "fresh_fetch"
+    },
+    {
+      "paper_id": "202607/23/2607.20083v1-co-evolving-llm-evaluators-and-policies-via-dynamicrubric",
+      "section": "deep",
+      "title_en": "Co-Evolving LLM Evaluators and Policies via DynamicRubric",
+      "authors": "Beining Wang, Weihang Su, Hongtao Tian, Hao Kong, Tao Yang, Ting Yao, Qingyi Pan, Yueyue Wu, Qingyao Ai, Min Zhang, Yiqun Liu",
+      "date": "2026-07-22",
+      "pdf": "https://arxiv.org/pdf/2607.20083v1",
+      "score": "8.0",
+      "evidence": "提出DynamicRubric框架，通过评估器与策略协同进化提升LLM智能体后训练效果，解决评估分数崩塌和策略优化信号问题。",
+      "tldr": "大语言模型后训练中，策略响应趋同导致评估分数差距崩溃，削弱优化信号。DynamicRubric通过条件化动态生成加权评分项，保持区分度，实现评估器与策略协同进化。在8B模型上，其评估性能超70B奖励模型和235B静态生成器，策略优化获益于推理与编码任务，并已部署微信搜索AI问答系统，日处理数千万请求。这确立了评估器随策略演化的原则。",
+      "tags": "query:fla",
+      "abstract_en": "Post-training with evaluator feedback on policy-induced samples serves as a major mechanism for improving large language models. As policies improve, these sampled responses become close in quality. These close candidates create a bottleneck for policy optimization: collapsed relative evaluator score gaps yield weak or misleading policy supervision. We theoretically characterize why these gaps matter through a probability allocation view, showing that the directional gain of shifting probability mass from one response to another is exactly the evaluator score gap between them. This identifies relative score gaps as the policy optimization signals that guide updates. Motivated by this view, we propose DynamicRubric, a response-set-conditioned evaluator--policy co-evolution framework that generates weighted binary rubric items for each candidate set and aggregates the resulting judgments into response-level scores. In our experiments with 8B backbones, DynamicRubric improves evaluator performance and provides stronger policy supervision than baselines using a 70B reward model or a 235B static rubric generator. DynamicRubric-optimized policies also show gains on verifiable reasoning and coding tasks. A DynamicRubric-optimized model is fully deployed in WeChat Search's AI answering scenario, where it serves all online traffic across tens of millions of requests per day and improves key online metrics. These results suggest a principle for evaluator-guided post-training: evaluators should evolve with the policies they supervise.",
+      "source": "arxiv",
+      "selection_source": "fresh_fetch"
+    },
+    {
+      "paper_id": "202607/23/2607.19592v1-knowledge-centric-self-improvement",
+      "section": "quick",
+      "title_en": "Knowledge-Centric Self-Improvement",
+      "authors": "Xuefei Julie Wang, Lauren Hyoseo Yoon, Chengrui Qu, Amanda Zichang Wang, Atharva Sehgal, Eric Mazumdar, Yisong Yue",
+      "date": "2026-07-21",
+      "pdf": "https://arxiv.org/pdf/2607.19592v1",
+      "score": "6.0",
+      "evidence": "提出以知识为中心的自改进方法，作为一种agent后训练技术",
+      "tldr": "传统自我改进AI以代理为中心，通过优化提示、工作流甚至代码来提升性能，但改进绑定于特定代理设计，维护昂贵且难以迁移。本文探索知识中心自我改进范式，代理保持通用且可丢弃，改进输出为持久知识库。代理通过任务级和跨任务论坛贡献基于证据的见解，再经知识蒸馏形成知识。在抽象推理、编码、终端基准上，该方法解决率提升同时成本低于代理中心基线。所得知识可迁移至新任务和不同LLM家族，证明改进非特定于模型。这为自我改进系统提供了知识驱动的新方向。",
+      "tags": "query:fla",
+      "abstract_en": "Self-improving AI systems typically treat the agent as the object that improves, by optimizing prompts, workflows, harnesses, or even the agent's own code. This agent-centric view can make improvements expensive to maintain and difficult to transfer, because gains become tied to a particular agent design, task distribution, or adaptation run. We study a complementary paradigm: knowledge-centric self-improvement, in which agents remain generic and disposable while the persistent object is a curated knowledge base that agents can leverage for future tasks. We conduct controlled case studies to operationalize this idea via a simple protocol. Agents attempt one task, then contribute evidence-grounded insights to a shared knowledge base via task-level and cross-task forums, followed by knowledge distillation. Because self-improvement is contained in the knowledge rather than the agent, improvement can be more inspectable, transferable, and portable. Across abstract reasoning, coding, and terminal benchmarks, this protocol improves solve rates while reducing dollar cost relative to agent-centric baselines. The resulting distilled knowledge also transfers to held-out tasks and across LLM families, indicating that the improvement is not merely an LLM- or run-specific behavior. These results support a new view of self-improving agentic systems: progress can be driven primarily by the curated persistent knowledge. Code is available at https://github.com/recursive-knowledge/KSI.",
+      "source": "arxiv",
+      "selection_source": "fresh_fetch"
+    }
+  ],
+  "errors": []
+}
