@@ -1,0 +1,69 @@
+{
+  "label": "2026-07-24",
+  "date": "2026-07-24",
+  "generated_at": "2026-07-24T21:40:10",
+  "count": 4,
+  "papers": [
+    {
+      "paper_id": "202607/24/2607.20083v2-co-evolving-llm-evaluators-and-policies-via-dynamicrubric",
+      "section": "deep",
+      "title_en": "Co-Evolving LLM Evaluators and Policies via DynamicRubric",
+      "authors": "Beining Wang, Weihang Su, Hongtao Tian, Hao Kong, Tao Yang, Ting Yao, Qingyi Pan, Yueyue Wu, Qingyao Ai, Min Zhang, Yiqun Liu",
+      "date": "2026-07-22",
+      "pdf": "https://arxiv.org/pdf/2607.20083v2",
+      "score": "8.0",
+      "evidence": "利用评估器反馈进行后训练以提升LLM策略",
+      "tldr": "大型语言模型后训练依赖评估器反馈，但策略改进使响应质量趋近，评估器分数差距缩小，导致优化信号弱或误导。我们从概率分配视角理论证明，相对分数差距即策略优化信号。据此提出DynamicRubric框架，为每个响应集动态生成加权二元评价项并聚合评分，协同进化评估器与策略。在8B模型上，其评估与监督性能超70B奖励模型及235B静态生成器；优化策略在推理和编码任务提升，并部署于微信搜索AI回答，日处理数千万请求，提升关键线上指标。这揭示评估器须随策略协同进化。",
+      "tags": "query:fla",
+      "abstract_en": "Post-training with evaluator feedback on policy-induced samples serves as a major mechanism for improving large language models. As policies improve, these sampled responses become close in quality. These close candidates create a bottleneck for policy optimization: collapsed relative evaluator score gaps yield weak or misleading policy supervision. We theoretically characterize why these gaps matter through a probability allocation view, showing that the directional gain of shifting probability mass from one response to another is exactly the evaluator score gap between them. This identifies relative score gaps as the policy optimization signals that guide updates. Motivated by this view, we propose DynamicRubric, a response-set-conditioned evaluator--policy co-evolution framework that generates weighted binary rubric items for each candidate set and aggregates the resulting judgments into response-level scores. In our experiments with 8B backbones, DynamicRubric improves evaluator performance and provides stronger policy supervision than baselines using a 70B reward model or a 235B static rubric generator. DynamicRubric-optimized policies also show gains on verifiable reasoning and coding tasks. A DynamicRubric-optimized model is fully deployed in WeChat Search's AI answering scenario, where it serves all online traffic across tens of millions of requests per day and improves key online metrics. These results suggest a principle for evaluator-guided post-training: evaluators should evolve with the policies they supervise.",
+      "source": "arxiv",
+      "selection_source": "fresh_fetch"
+    },
+    {
+      "paper_id": "202607/24/2607.20645v1-frontier-financial-judgement-can-agents-tell-what-might-move-a-stock",
+      "section": "deep",
+      "title_en": "Frontier Financial Judgement: Can agents tell what might move a stock?",
+      "authors": "Joshua Harris",
+      "date": "2026-07-22",
+      "pdf": "https://arxiv.org/pdf/2607.20645v1",
+      "score": "8.0",
+      "evidence": "面向金融智能体的股票走势信息判断基准",
+      "tldr": "现实金融新闻分析中，迅速识别新信息并评估其对股票估值的影响是耗时且困难的任务，随着人工智能生成信息增多，挑战加剧。为此，研究者与专业分析师合作构建了Frontier Financial Judgement基准，涵盖人工合成、实时新闻及历史文档共656个评估项，要求智能体在贴近真实的环境下区分真正具有估值影响的新信息。测试显示，顶尖智能体在所有专家标注上完全一致的准确率仅为52.4%，而不同模型的假阳性率差距显著，从GPT-5.6 Sol的约1%到Claude Sonnet 4.6的约32%。该基准揭示了智能体在精度、成本、假阳性与可靠性间的权衡，凸显新闻过滤的现实施挑战，为金融智能化提供了评判平台。",
+      "tags": "query:fla",
+      "abstract_en": "We introduce Frontier Financial Judgement, a challenging new benchmark developed in collaboration with professional equity analysts to assess agents' ability to replicate expert human judgements. Rapidly identifying new information, evaluating its implications and determining its valuation impact is one of the most time-consuming and challenging aspects of real-world equity coverage. This is becoming ever more difficult and important as AI rapidly increases the quantity of new information to process. The strongest agent we evaluate on Frontier Financial Judgement matches all expert labels in only 52.4% of cases. We also find significant divergence in estimated false-positive rates among frontier agents, ranging from ~1% for GPT-5.6 Sol to ~32% for Claude Sonnet 4.6. To construct the benchmark and make it representative of real-world settings, we combine human-designed and labelled synthetic articles with live news articles and historical documents, creating 656 items for assessment. The resulting task requires agents to distinguish genuinely new, valuation-relevant financial information from stale, immaterial or misleading news under realistic conditions. We find substantial trade-offs among agent accuracy, cost, false positives and reliability that continue to hinder the reliable deployment of news-flow filtering in practice.",
+      "source": "arxiv",
+      "selection_source": "fresh_fetch"
+    },
+    {
+      "paper_id": "202607/24/2607.21361v1-fedagentke-federated-semantic-knowledge-evolution-for-heterogeneous-agents",
+      "section": "deep",
+      "title_en": "FedAgentKE: Federated Semantic Knowledge Evolution for Heterogeneous Agents",
+      "authors": "Weihao Li, Jun Bai, Ziyang Song",
+      "date": "2026-07-23",
+      "pdf": "https://arxiv.org/pdf/2607.21361v1",
+      "score": "8.0",
+      "evidence": "联邦语义知识进化用于智能体后训练",
+      "tldr": "现有基于大语言模型的智能体在推理、工具使用与迭代执行上取得显著进展，但孤立运行的框架造成局部经验碎片化，严重限制了跨框架知识迁移与协同进化，即便记忆增强机制也未能打破这一壁垒。FedAgentKE为此提出联邦语义知识进化方案，通过迭代的语义知识蒸馏、聚合与自适应，在不共享原始推理轨迹的前提下，实现了分布式异构智能体对可迁移推理抽象的协同提炼。在跨框架与跨任务的广泛实验中，FedAgentKE取得了一致的性能提升，充分验证了联邦语义知识进化作为构建未来协作式智能体生态的关键技术路线的可行性。",
+      "tags": "query:fla",
+      "abstract_en": "Large language model (LLM)-based agents increasingly rely on reasoning, tool use, and iterative execution, yet existing agent frameworks still operate largely in isolation. While recent memory-based agent systems improve individual agents through local retrieval and workflow reuse, local experiences remain fragmented across isolated agent frameworks, limiting cross-framework knowledge transfer and collaborative reasoning evolution. We propose FedAgentKE, a lightweight framework for Federated Semantic Knowledge Evolution across heterogeneous agents. FedAgentKE enables distributed agent frameworks to collaboratively evolve transferable reasoning abstractions through iterative semantic knowledge distillation, aggregation, and adaptation without sharing raw reasoning trajectories. Experiments demonstrate consistent improvements under both cross-framework and cross-task settings, highlighting the potential of federated semantic knowledge evolution for future collaborative agent ecosystems.",
+      "source": "arxiv",
+      "selection_source": "fresh_fetch"
+    },
+    {
+      "paper_id": "202607/24/2607.19238v1-financecomplexqa-benchmarking-agentic-reasoning-on-industrial-grade-financial-documents",
+      "section": "quick",
+      "title_en": "FinanceComplexQA: Benchmarking Agentic Reasoning on Industrial-grade Financial Documents",
+      "authors": "Xianfu Cheng, Shiwei Zhang, Jiyu Zhao, Jian Yang, Xinyuan Wang, Ming Zhou, Weixiao Zhou, Xiangyuan Guan, Xiang Li, Zhenhe Wu, Ziyi Ni, Zhoujun Li, Bingjing Xu",
+      "date": "2026-07-21",
+      "pdf": "https://arxiv.org/pdf/2607.19238v1",
+      "score": "7.0",
+      "evidence": "对工业级金融文档上的智能体推理进行基准测试",
+      "tldr": "智能体推理在金融分析中性能差异大，缺乏真实场景基准。提出Finance-LaTeX SKILL合成复杂布局金融文档，构建FinanceComplexQA基准，涵盖2026个深度研究任务，支持双语与多场景。评估主流RAG与智能体工具，暴露数值计算、多跳推理等短板，为金融文档智能体推理提供高仿真评估平台。",
+      "tags": "query:fla",
+      "abstract_en": "Agentic Reasoning has become a transformative force in financial analysis due to its ability to integrate large-scale information and generate reliable and accurate content. However, when handling complex real-world problems, different agents still show significant performance variation. In this work, we design Finance-LaTeX SKILL, a skill for synthesizing financial documents with complex layouts based on expert knowledge. Using an agent workflow built on this skill, we generate 2,000 professional financial documents along with 6,000 high-quality question-answer pairs. To evaluate the overall capability of agents, we introduce FinanceComplexQA, a comprehensive open-ended generation benchmark for financial documents that closely resembles real-world scenarios. It contains 2,026 deep research tasks targeting 1009 financial documents. FinanceComplexQA has 8 key features: bilingual support; coverage of six mainstream scenarios and seven tasks; expert-level document reasoning questions; deep research of complex layouts; relatively stable and permanent reference answers; and precise evaluation through an Agent-as-a-Judge with multiple evaluation metrics. Using FinanceComplexQA, we conduct a comprehensive evaluation of leading RAG systems and agentic reasoning tools for financial document QA. Through identifying and analyzing failure cases, we provide an in-depth study of their capabilities in numerical computation, multi-hop reasoning, content summarization, and industry analysis.",
+      "source": "arxiv",
+      "selection_source": "fresh_fetch"
+    }
+  ],
+  "errors": []
+}

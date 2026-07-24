@@ -6,34 +6,34 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-07-23
-- 运行时间：2026-07-23 21:18:34 UTC
+- 最新运行日期：2026-07-24
+- 运行时间：2026-07-24 21:39:59 UTC
 - 运行状态：成功
 - 本次总论文数：4
 - 精读区：3
 - 速读区：1
 
 ### 今日简报（AI）
-今日拆解了3篇AI核心论文，聚焦智能体合成数据与低成本多智能体协作。  
-最值得关注：不用沙盒环境就能为API调用智能体生成训练数据，以及利用多智能体分歧感知可让金融情感分析成本骤降。  
-建议开发者先复现《Environment-free Synthetic Data Generation》的纯文本模拟管线，低成本构建自己的智能体数据集。
-- 详情：[/202607/23/README](/202607/23/README)
+今日精研AI评估与金融智能体：4篇中2篇8分论文，涵盖动态评分标准共进化、股价驱动预判及工业级金融文档推理。  
+其中，动态共同进化的评估器可让AI自适应成长，而前沿金融判断展示了智能体挖掘股价变动信号的潜力。  
+普通读者不妨从《DynamicRubric》看AI自我优化机理，或用《Frontier Financial Judgement》理解机器如何预判市场。
+- 详情：[/202607/24/README](/202607/24/README)
 
 ### 精读区论文标签
-1. [Environment-free Synthetic Data Generation for API-Calling Agents](/202607/23/2607.16900v2-environment-free-synthetic-data-generation-for-api-calling-agents)  
-   标签：评分：9.0/10、query:fla
-   evidence：无需环境为API调用代理生成合成训练数据
-2. [TriAgent: Divergence-Aware Multi-Agent Committees for Cost-Efficient Financial Sentiment Analysis](/202607/23/2607.19794v1-triagent-divergence-aware-multi-agent-committees-for-cost-efficient-financial-sentiment-analysis)  
-   标签：评分：9.0/10、query:fla
-   evidence：TriAgent是一个用于金融情感分析的多智能体委员会，属于面向金融领域的任务导向智能体
-3. [Co-Evolving LLM Evaluators and Policies via DynamicRubric](/202607/23/2607.20083v1-co-evolving-llm-evaluators-and-policies-via-dynamicrubric)  
+1. [Co-Evolving LLM Evaluators and Policies via DynamicRubric](/202607/24/2607.20083v2-co-evolving-llm-evaluators-and-policies-via-dynamicrubric)  
    标签：评分：8.0/10、query:fla
-   evidence：提出DynamicRubric框架，通过评估器与策略协同进化提升LLM智能体后训练效果，解决评估分数崩塌和策略优化信号问题。
+   evidence：利用评估器反馈进行后训练以提升LLM策略
+2. [Frontier Financial Judgement: Can agents tell what might move a stock?](/202607/24/2607.20645v1-frontier-financial-judgement-can-agents-tell-what-might-move-a-stock)  
+   标签：评分：8.0/10、query:fla
+   evidence：面向金融智能体的股票走势信息判断基准
+3. [FedAgentKE: Federated Semantic Knowledge Evolution for Heterogeneous Agents](/202607/24/2607.21361v1-fedagentke-federated-semantic-knowledge-evolution-for-heterogeneous-agents)  
+   标签：评分：8.0/10、query:fla
+   evidence：联邦语义知识进化用于智能体后训练
 
 ### 速读区论文标签
-1. [Knowledge-Centric Self-Improvement](/202607/23/2607.19592v1-knowledge-centric-self-improvement)  
-   标签：评分：6.0/10、query:fla
-   evidence：提出以知识为中心的自改进方法，作为一种agent后训练技术
+1. [FinanceComplexQA: Benchmarking Agentic Reasoning on Industrial-grade Financial Documents](/202607/24/2607.19238v1-financecomplexqa-benchmarking-agentic-reasoning-on-industrial-grade-financial-documents)  
+   标签：评分：7.0/10、query:fla
+   evidence：对工业级金融文档上的智能体推理进行基准测试
 
 
 <div class="dpr-home-promo-card">
