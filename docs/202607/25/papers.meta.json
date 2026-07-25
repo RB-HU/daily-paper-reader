@@ -1,0 +1,54 @@
+{
+  "label": "2026-07-25",
+  "date": "2026-07-25",
+  "generated_at": "2026-07-25T21:15:46",
+  "count": 3,
+  "papers": [
+    {
+      "paper_id": "202607/25/2607.17558v1-why-does-feedback-augmented-self-distillation-fail-to-improve-retrieval-interleaved-search-agents",
+      "section": "deep",
+      "title_en": "Why Does Feedback-Augmented Self-Distillation Fail to Improve Retrieval-Interleaved Search Agents?",
+      "authors": "Fan Yang, Rui Meng, Yuxin Wen",
+      "date": "2026-07-20",
+      "pdf": "https://arxiv.org/pdf/2607.17558v1",
+      "score": "9.0",
+      "evidence": "智能体搜索的后训练自蒸馏算法",
+      "tldr": "反馈增强自蒸馏在检索交错搜索代理中失效，模型陷入解码崩溃，生成模板化且与输入问题无关的轨迹，导致KL蒸馏信号无意义。分析发现自教师监督信号的模型不一致与提示不一致是根本原因，导致学习不稳定。为此，我们引入指数移动平均（EMA）教师以提供稳定监督，虽然需预热阶段，但最终提升了模型性能。该工作揭示了自蒸馏失败的关键机制，并提供了稳定代理学习的有效方案。",
+      "tags": "query:fla",
+      "abstract_en": "On-policy self-distillation (OPSD) offers a promising approach for training large language models without relying on a separate teacher model. However, its effectiveness on complex agentic tasks remains largely unexplored. In this work, we instantiate Feedback-Augmented Self-Distillation (FA-SD), a self-distillation algorithm for agentic search that leverages successful demonstrations as privileged information. We identify that models can rely on recurring reasoning-and-search output templates, producing trajectories that appear diverse but are largely agnostic to the input question, making the KL-based self-distillation signal uninformative. We term this phenomenon decoding collapse, a failure mode that can be missed by existing evaluation metrics. To understand its underlying cause, we show that although the self-teacher achieves stronger performance, learning remains inherently unstable due to inconsistent supervision signals. We further decompose this inconsistency into model inconsistency and prompt inconsistency, and show that the latter can significantly degrade the quality of the supervision signal, limiting the effectiveness of self-teacher learning. To mitigate this inconsistency, we introduce an exponential moving average (EMA) teacher to stabilize the self-teacher and provide more consistent supervision signals. Although the EMA teacher requires a warm-up phase during which performance may temporarily regress, it ultimately improves model performance by providing more stable supervision.",
+      "source": "arxiv",
+      "selection_source": "fresh_fetch"
+    },
+    {
+      "paper_id": "202607/25/2607.21106v1-attrimem-attribution-guided-process-feedback-for-agent-memory-learning",
+      "section": "deep",
+      "title_en": "AttriMem: Attribution-Guided Process Feedback for Agent Memory Learning",
+      "authors": "Qinfeng Li, Yuntai Bao, Xinyan Yu, Hongze Chen, Wenqi Zhang, Xuhong Zhang",
+      "date": "2026-07-23",
+      "pdf": "https://arxiv.org/pdf/2607.21106v1",
+      "score": "8.0",
+      "evidence": "提出通过强化学习与过程反馈进行智能体记忆学习，用于智能体后训练",
+      "tldr": "LLM代理在长期交互中需要高效记忆策略，但现有启发式方法依赖主观规则，RL方法仅提供粗粒度结果奖励，无法精准识别中间记忆贡献，存在细粒度信用分配瓶颈。本文提出AttriMem，一种归因引导的过程反馈框架，利用token级贡献度生成局部奖励，与全局结果奖励结合，通过强化学习优化记忆构建策略。在长时间对话问答基准上，AttriMem显著优于基于检索、启发式和RL的方法，并展示了跨基准和答案模型的泛化能力，同时稳定了RL优化过程。该框架为代理记忆学习引入了细粒度反馈机制，提升了策略的适应性和优化效率。",
+      "tags": "query:fla",
+      "abstract_en": "Effective memory is crucial for LLM agents, yet constructing it effectively remains challenging. A memory-construction policy decides what information to extract, store, update, compress, or discard as interactions accumulate. Heuristic memory methods rely on subjective, task-specific rules, which can misalign with downstream objectives and limit cross-task adaptability. RL-based methods, by contrast, learn from task feedback but mainly use outcome- or module-level rewards. These coarse signals indicate task success but cannot identify which intermediate memory contents support the final answer, creating a fine-grained credit-assignment bottleneck. However, constructing such process feedback is prohibitively difficult because intermediate memory decisions lack unique ground-truth targets, while the appropriate credit varies with the agent's uncertain reasoning trajectory and therefore cannot be specified in advance. We propose AttriMem, an attribution-guided process-feedback framework for learning memory-construction policies with RL. AttriMem augments the global outcome reward with local rewards derived from token-level contributions to the final answer. Experiments on long-horizon dialogue question answering show that AttriMem outperforms retrieval-based, heuristic, and RL-based baselines, generalizes across benchmarks and answer models, stabilizes RL optimization.",
+      "source": "arxiv",
+      "selection_source": "fresh_fetch"
+    },
+    {
+      "paper_id": "202607/25/2607.17946v1-a-geometric-perspective-on-stabilizing-value-conflict-resolution",
+      "section": "quick",
+      "title_en": "A Geometric Perspective on Stabilizing Value Conflict Resolution",
+      "authors": "Saket Reddy, Andy Liu",
+      "date": "2026-07-20",
+      "pdf": "https://arxiv.org/pdf/2607.17946v1",
+      "score": "7.0",
+      "evidence": "利用思维链推理提升RLHF稳定性，一种后训练对齐技术",
+      "tldr": "当前，大语言模型在处理涉及价值冲突的请求时，常因RLHF的压缩标量奖励而遭遇优化不稳定，导致响应质量不佳。本文从损失景观的几何视角出发，揭示链式思维（CoT）可平滑最陡方向，从而有效缓解优化难题。实验证实价值冲突CoT能泛化至多种道德推理；作者的新CoT设计进一步平滑损失景观并提升性能。该工作首次将推理动态与损失景观平滑关联，为通过改进推理机制解决价值冲突提供了新思路，有力推动了LLMs的多元对齐。",
+      "tags": "query:fla",
+      "abstract_en": "Large Language Models (LLMs) often struggle to navigate value conflicts when trained with the compressed scalar rewards of Reinforcement Learning from Human Feedback (RLHF). To address this challenge, we investigate how chain-of-thought (CoT) reasoning can help improve performance in this domain. Geometrically, we show that CoT correlates with further smoothing the model's loss landscape in its sharpest direction, helping resolve the optimization instability of traditional scalar rewards. We also demonstrate via relevant downstream benchmarks that value conflict-focused CoT may generalize to different kinds of moral reasoning, demonstrating that this CoT has the potential to be an effective mechanism for better moral reasoning. To capitalize on this potential, we create a new value conflict-focused CoT design that further smooths the sharpest direction of the loss landscape and increases moral reasoning performance. This finding shows that explicitly modifying and improving the design of reasoning dynamics offers a promising avenue for improving model performance on user requests with complex value conflicts, advancing pluralistic alignment in LLMs.",
+      "source": "arxiv",
+      "selection_source": "fresh_fetch"
+    }
+  ],
+  "errors": []
+}
