@@ -1,0 +1,523 @@
+Title: SalesLoop: Reinforcement Learning from Performance Feedback for Sales Lead Ranking
+
+URL Source: https://arxiv.org/pdf/2607.20655v1
+
+Published Time: Fri, 24 Jul 2026 00:09:32 GMT
+
+Number of Pages: 15
+
+Markdown Content:
+# SalesLoop: Reinforcement Learning from Performance Feedback for Sales Lead Ranking 
+
+## Chenyu Zhang Li Auto Inc. 
+
+## cyzhang57@outlook.com 
+
+# Abstract 
+
+Lead ranking in Customer Relationship Management (CRM) systems faces a persistent challenge: models achieving high offline accuracy often underperform in production. We iden-tify three fundamental gaps responsible for this disconnect: offline-online metric mismatch, pointwise-listwise objective misalignment, and temporal distribution drift. To address these gaps, we propose SalesLoop, a reinforcement learning frame-work that establishes a closed feedback loop between model predictions and real-world business outcomes. Our approach introduces (1) a performance-aware reward that encodes con-version outcomes weighted by ranking position and conver-sion velocity, and (2) Discriminative GRPO, a listwise op-timization objective that adapts Group Relative Policy Opti-mization to discriminative ranking models. SalesLoop improves NDCG@K by +7.9% and P@K by +15.8% over the strongest static baseline. A 160-day produc-tion A/B test at a New Energy Vehicle manufacturer, span-ning 16.5M leads and 280 sales specialists across two provin-cial markets, validates statistically significant cumulative lift of +4.7% ( p = 0 .047 ) and +8.7% ( p = 0 .002 ). In produc-tion, the ranking backbone achieves Top-10% recall of 44.1% and surfaces high-intent leads at 2.3× the conversion rate of specialist baselines. 
+
+# 1 Introduction 
+
+Lead ranking—prioritizing sales leads by conversion likelihood—is a cornerstone of modern Customer Relation-ship Management (CRM) [33, 21]. In high-value industries such as automotive sales, real estate, and enterprise B2B, the quality of lead prioritization directly determines sales efficiency and revenue. Industrial CRM platforms routinely process millions of leads daily, but limited sales capacity means that follow-up effort must be prioritized: only the top-ranked leads (e.g., the daily Top-10,000) are surfaced to specialists for timely follow-up. Because the highest-priority effort is concentrated on these top-ranked leads, how well the model ranks them directly shapes how many conversions the sales team realizes—and thus revenue. Despite significant advances in deep learning [8, 32] and the recent emergence of Large Language Models (LLMs) for CRM tasks [10], a persistent gap remains between model de-velopment and real-world deployment. In our experience de-ploying lead ranking systems at a major New Energy Vehicle manufacturer, we observe that models achieving high offline metrics frequently underperform in production. We identify three fundamental gaps that existing approaches fail to ad-dress: 
+
+Gap 1: Offline-Online Metric Mismatch. Offline model evaluation optimizes for prediction accuracy (e.g., AUC on binary conversion labels), but the online business outcome de-pends on a fundamentally different set of factors: the effective-ness of sales follow-up . In practice, conversion is not a passive event that a model merely predicts—it is an outcome jointly determined by lead quality and the intensity of human effort (follow-up frequency, call duration, engagement depth). This creates a critical evaluation mismatch: an offline metric can improve while the corresponding online outcome stagnates or even deteriorates. An analogous phenomenon has been doc-umented in multi-objective recommendation systems, where offline AUC improvements for both watch time and user inter-action coexist, yet online deployment yields increased watch time alongside decreased interaction [35]. The subtlety is that historical conversion labels are themselves confounded by hu-man effort: a lead converts partly because it was promising and partly because a specialist invested time in it. A model trained on these labels therefore learns a mixture of intent and effort ,and can raise offline AUC by favoring leads that are “easier to follow up” (e.g., responsive but low-intent) over leads that need more effort but carry higher latent intent. The result: of-fline AUC increases, but online lock-in rate does not, because the model’s ranking no longer aligns with the effective deploy-ment of limited sales capacity. 
+
+Gap 2: Pointwise Prediction ̸ = Listwise Ranking Qual-ity. Standard training objectives optimize pointwise accu-racy: minimizing prediction error for individual leads. How-ever, business value depends entirely on listwise ranking qual-ity: whether the right leads appear within the operational Top-1arXiv:2607.20655v1 [cs.LG] 22 Jul 2026 K window. These two objectives are not equivalent. A model may achieve excellent pointwise accuracy across the full lead population, yet still rank true conversions at positions 11K– 20K—just outside the Top-10K operational window where sales capacity is allocated. In this scenario, the model’s point-wise performance is strong, but its business impact is zero, be-cause the leads that actually convert are not surfaced to sales teams. Conversely, a model with modest pointwise accuracy but strong Top-K concentration of conversions delivers sub-stantially higher business value. Pointwise-optimal models are not necessarily listwise-optimal, and optimizing for the former does not guarantee improvement in the latter. 
+
+Gap 3: Temporal Distribution Drift. Customer behaviors, market conditions, and sales strategies continuously evolve over time [7]. Promotional campaigns, seasonal variations, and competitive dynamics cause the lead population distribu-tion to shift, yet static models trained on historical data remain fixed. In automotive sales, the Chinese New Year promotional period alone can shift lead volume by 40–60%, with quali-tatively different conversion patterns (e.g., higher volume of casual browsers, lower immediate intent). A model that per-formed well in one quarter may become progressively mis-aligned a few months later because the underlying distribution of incoming leads has changed. Traditional training pipelines lack mechanisms for continuous adaptation to these temporal shifts, creating a growing gap between what the model was trained on and what it encounters in production. A common thread runs through these three gaps: models are trained once on historical data but must operate in a contin-uously evolving deployment environment. Addressing them calls for a system that adapts to feedback from production rather than relying solely on historical signals. Inspired by recent advances in Reinforcement Learning from Performance Feedback (RLPF) for ad optimization [13] and Group Relative Policy Optimization (GRPO) for language models [28], we propose SALES LOOP , a reinforcement learning framework that closes the feedback loop between model deployment and business outcomes. The reward signal comes directly from what deployment reveals: which leads actually converted, how quickly, and at what rank the model had placed them. S ALES LOOP turns this deployment feedback into a continuous learning signal: 
+
+Deploy → Observe → Reward → Update → Deploy 
+
+Our approach introduces two key innovations: (1) A performance-aware reward that encodes conversion outcomes weighted by ranking position (following the log-arithmic attention decay model [6]) and conversion velocity (faster conversions indicate stronger intent). Unlike binary conversion labels, this reward differentiates among converted leads and directly encodes ranking quality from deployment. (2) A listwise optimization objective that adapts GRPO to discriminative ranking models—a setting we term Discrimi-native GRPO . By treating each training batch as a group and computing relative advantages across leads, we optimize the ranking distribution rather than individual predictions, directly addressing Gap 2. We evaluate S ALES LOOP through a multi-stage protocol at a New Energy Vehicle manufacturer, anchored by a live 160-day production deployment spanning 16.5M leads and 280 sales specialists: • Offline benchmarking : SALES LOOP achieves sig-nificant improvements over traditional ML (XGBoost, DeepFM) and LLM-based baselines (SFT, DPO), with the largest gains on ranking-sensitive metrics (NDCG@K: +7.9%, P@K: +15.8% over the strongest static baseline). • Production A/B test : A 160-day deployment across two provincial markets (280 specialists) validates +4.7% and +8.7% cumulative lift in lock-in conversions ( p < 0.05 ), with the advantage growing as the feedback loop accu-mulates deployment data. • Deployment validation : In production over 103 days, the ranking backbone attains Top-10% recall of 44.1% (4.4 × random) and surfaces incremental high-intent leads at 2.3 × the conversion rate of specialist baselines, quan-tifying absolute ranking quality and business value inde-pendent of the A/B comparison. Our contributions are threefold: 1. We characterize three gaps that cause offline-strong lead ranking models to underperform in production— offline-online metric mismatch, pointwise-listwise objec-tive misalignment, and temporal distribution drift—and propose closing them with a performance-feedback loop rather than a static training pipeline. 2. We instantiate this loop with two components: aperformance-aware reward that combines conversion out-comes with ranking position and conversion velocity, and 
+
+Discriminative GRPO , a listwise objective that adapts group-relative advantages to discriminative ranking mod-els. 3. We validate S ALES LOOP in a 160-day production A/B test over 16.5M leads and 280 specialists across two markets—a long-horizon, real-world evaluation that is rare in online ranking—demonstrating statistically signif-icant lift (+4.7% to +8.7%, p < 0.05 ). 
+
+# 2 Related Work 
+
+Lead Scoring and CRM Analytics. Traditional lead scor-ing relies on rule-based scorecards [33] or shallow machine 2learning models such as logistic regression and gradient boost-ing [4]. Recent work explores deep learning for CRM and click-through prediction, including Wide & Deep [5], DeepFM [8], xDeepFM [14], AutoInt [29], and DCN and its successor [32, 31] for modeling feature interactions. CR-MArena [10] benchmarks LLMs on CRM tasks including lead qualification. SalesRLAgent [17] applies RL to real-time con-version prediction in sales conversations. Sun et al. [30] pro-pose asLLR, integrating CTR and QA losses within a decoder-only LLM for automotive lead ranking, with gains validated in A/B testing. HPRO [37] scores leads with an LLM under a hi-erarchical preference-ranking objective, but is trained once on historical data and deployed as a static model. SALES LOOP 
+
+instead closes the loop between deployment and training, con-tinuously adapting the ranking model from observed conver-sion outcomes. 
+
+Learning to Rank. Learning-to-rank methods are catego-rized into pointwise [15], pairwise [1], and listwise [2, 34] approaches. Pointwise methods treat ranking as regression or classification on individual items. Pairwise methods opti-mize relative orderings between item pairs. Listwise methods directly optimize ranking quality over the entire list. While listwise approaches better align with ranking objectives, most operate in offline settings with static relevance labels. Online learning-to-rank [18, 12] adapts rankings from user feedback, but assumes immediate click signals rather than the delayed, sparse conversion outcomes with long feedback cycles (30+ days) that characterize lead ranking. 
+
+Reinforcement Learning for Ranking and Recommenda-tion. RL has been applied to ranking and recommendation tasks [11, 3]. RLHF [19] aligns LLMs using human feed-back as a reward signal, with PPO [26] as the standard policy-optimization algorithm. Xue et al. [36] apply RL to adaptive user retention in recommender systems, showing that online RL can outperform static scoring in production; their reward, however, is driven by near-immediate user-retention signals, whereas lead ranking must learn from conversions that mate-rialize weeks later. Most relevant to our work, Jiang et al. [13] introduce Reinforcement Learning from Performance Feed-back (RLPF) for ad text generation at Meta, using a CTR prediction model as the reward signal and reporting consis-tent CTR gains in a large-scale production A/B test. This line of work establishes that real-world performance metrics can serve as effective reward signals, bypassing the need for human annotation. Their setting, however, is generative —optimizing token-level generation probabilities against an im-mediate CTR proxy. GRPO [28] likewise operates on gen-erative models, introducing group-relative advantages that re-move the need for a learned value network. SALES LOOP 
+
+adapts these insights to a discriminative ranking model under 
+
+delayed, sparse rewards, proposing a listwise variant that com-putes group-relative advantages over lead scores rather than token-level generation probabilities. 
+
+Online and Continual Learning. Online learning [27] up-dates models incrementally as data arrives. Continual learn-ing [20] addresses catastrophic forgetting when learning from non-stationary distributions. Concept drift detection [7] iden-tifies distribution shifts requiring model updates. Recent work on unbiased learning to rank [25, 38] highlights the impor-tance of disentangling relevance from position and selection bias in deployed ranking systems. While these methods pro-vide theoretical foundations, they rarely address the specific challenges of lead ranking: extremely delayed feedback (30+ days), sparse positive labels ( <2% conversion rate), and the need to optimize listwise business metrics rather than point-wise accuracy. Taken together, prior work leaves a distinct gap: static of-fline LTR does not adapt after deployment; online LTR as-sumes immediate feedback; and performance-feedback RL has so far targeted generative models with near-term prox-ies. None addresses discriminative, listwise ranking that must learn from delayed and sparse business outcomes—the regime SALES LOOP is designed for. 
+
+# 3 Methodology 
+
+## 3.1 Problem Formulation 
+
+Let X denote the feature space and Y = {0, 1} the binary conversion outcomes. At iteration t, we observe a deployment dataset Dt = {(xi, y i, r i, τ i)}Nt
+
+> i=1
+
+, where: • xi ∈ X : lead features (tabular attributes + dialogue tran-scripts), • yi ∈ Y : binary conversion indicator (1 if locked-in within 
+
+T days), • ri ∈ { 1, . . . , N t}: rank assigned by the deployed model 
+
+fθt−1 ,• τi ∈ [0 , T ]: conversion latency in days from ranking to lock-in, defined only for yi = 1 .
+
+Objective. Learn a scoring function fθ : X → R that maxi-mizes business-relevant ranking metrics within the operational capacity K:
+
+max  
+
+> θ
+
+E(x,y )∼pt [Precision@ K + λ · Recall@ K] , (1) where K is the operational capacity (e.g., K = 10 ,000 
+
+leads for daily follow-up) and λ expresses the precision-recall trade-off inherent in the business goal. Eq. 1 states this goal conceptually; since Precision@ K and Recall@ K are non-differentiable, we do not optimize it directly (and thus do not 3Figure 1: Overview of the S ALES LOOP framework. In each monthly iteration, the deployed ranking model scores all leads and selects Top-K candidates for sales follow-up. After the 30-day conversion window, observed outcomes are converted into performance-aware rewards, which are used to update the model through a Discriminative GRPO objective. The updated model is then deployed in the next iteration, forming a closed online feedback loop. tune λ explicitly). Instead, our position-weighted listwise ob-jective (§3.4) serves as a differentiable surrogate that concen-trates converted leads near the top of the ranking, which is precisely what Top-K metrics reward. The key challenge is that pt—the deployment distribution at time t—differs from historical training distributions and evolves over time due to market dynamics and seasonal patterns. 
+
+## 3.2 SalesLoop Framework 
+
+SALES LOOP operates as a closed-loop system with three stages per iteration (Figure 1): 
+
+Stage 1: Deploy. Model fθt scores all incoming leads and produces a ranking. The Top-K leads are selected for sales follow-up based on operational capacity constraints. 
+
+Stage 2: Collect. After the conversion window T (30 days), we observe real-world outcomes: which leads converted ( yi)and how quickly ( τi). These outcomes are transformed into performance-aware rewards Ri (§3.3). 
+
+Stage 3: Update. The model is optimized via a listwise loss function that aligns predicted scores with observed rewards (§3.4). Training continues from fθt (warm start) with a re-duced learning rate to preserve previously learned representa-tions while adapting to new patterns. This closed-loop cycle repeats monthly, enabling the model to continuously adapt to the evolving deployment distribution. A critical design choice is the warm-start strategy: rather than training from scratch, each iteration initializes from the previ-ous model’s parameters, providing a strong prior that acceler-ates convergence while the reduced learning rate and regular-ization keep the model close to previously learned patterns. This design enables S ALES LOOP to accumulate knowledge across iterations, creating a compounding effect where each iteration benefits from all prior deployment experience. 
+
+## 3.3 Performance-Aware Reward Design 
+
+The reward design is central to S ALES LOOP ’s ability to opti-mize ranking quality rather than pointwise accuracy. We con-struct rewards that encode three business-relevant signals: the conversion outcome ( yi), the ranking position at which the lead was surfaced ( ri), and the speed of conversion ( τi). 
+
+Definition 1 (Performance-Aware Reward) . For lead i with conversion outcome yi ∈ { 0, 1}, assigned rank ri, and con-version latency τi:
+
+Ri = yi · g(ri) · v(τi), (2) 
+
+where the position gain g(ri) and velocity bonus v(τi) are de-
+
+4fined as: 
+
+g(ri) = 1log 2(ri + 1) , v(τi) = 1 − τi
+
+T . (3) 
+
+The leading factor yi ensures Ri = 0 for non-converted leads, so v(τi) only needs to be defined for converted leads, where 
+
+τi ∈ [0 , T ].
+
+Position gain. We adopt logarithmic decay following the position-based click model [6], which assumes user (sales) at-tention decays logarithmically with rank. This choice is moti-vated by our operational setting: a conversion at rank 1 is sub-stantially more valuable than at rank 10,000, as the former rep-resents a correctly prioritized lead while the latter indicates a missed opportunity. A conversion at rank 1 yields g(1) = 1 .0;at rank 1,000, g(1000) ≈ 0.1.
+
+Velocity bonus. Faster conversions indicate stronger purchase intent. We use linear decay over the conversion window T :leads that convert on day 1 receive the maximum velocity bonus ( v = 1 ), while those converting on day 30 receive zero (v = 0 ). This simple, interpretable signal differentiates among converted leads—something binary labels cannot do. 
+
+Reward properties. The reward Ri is zero for non-converted leads and strictly positive for converted leads, with magni-tude determined by ranking position and conversion speed. This design ensures that: (1) the model receives no credit for non-conversions, (2) correctly ranking high-value leads (early in the list) yields higher rewards, and (3) faster conversions are preferentially rewarded, encouraging the model to identify leads with immediate purchase intent. 
+
+## 3.4 Discriminative GRPO for Ranking 
+
+We adapt Group Relative Policy Optimization (GRPO) [28]— originally designed for generative language models—to dis-criminative ranking models . This adaptation, which we term Discriminative GRPO , preserves the core benefit of GRPO (variance reduction through group-normalized advan-tages) while enabling its application to scoring functions. 
+
+From generative to discriminative. In the original GRPO framework, the model generates multiple candidate responses for each prompt, and advantages are computed across candi-dates within each prompt group. In our discriminative setting, the model outputs a scalar score si = fθ (xi) for each lead. We treat each training batch as a “group” and compute relative advantages across leads within the batch. This parallels the generative case: instead of comparing different text outputs for the same input, we compare different lead scores within the same batch. 
+
+Scope of the adaptation. We emphasize which parts of GRPO we adopt and which we do not. We inherit GRPO’s central idea—replacing a learned value baseline with group-relative , within-batch advantage normalization—which is what stabilizes learning under our sparse rewards. We delib-erately do not carry over the components tied to autoregres-sive generation: there is no importance-sampling ratio πθ /π θold 
+
+and no PPO-style probability-ratio clipping. These are unnec-essary here because a discriminative ranker produces a sin-gle scalar per lead rather than a sampled token sequence, so there is no per-token, off-policy credit-assignment problem to correct. Instead, we regulate policy drift across iterations through the explicit BCE regularization of Eq. 7 and the con-servative warm-start learning rate described in the implemen-tation details. We therefore view Discriminative GRPO as a group-relative, reward-weighted listwise objective in the spirit of GRPO, rather than a literal transplant of the PPO-based al-gorithm. 
+
+Listwise optimization. For a training batch B =
+
+{(xi, R i)}Bi=1 :
+
+Step 1: Compute model scores. 
+
+si = fθ (xi), i = 1 , . . . , B. (4) 
+
+Step 2: Compute group-relative advantages. Standardize rewards within batch to obtain relative advantages: 
+
+Ai = Ri − ¯RσR + ϵ , ¯R = 1
+
+B
+
+> B
+
+X
+
+> j=1
+
+Rj , σR =
+
+vuut 1
+
+B
+
+> B
+
+X
+
+> j=1
+
+(Rj − ¯R)2,
+
+(5) where ϵ = 10 −8 for numerical stability. This standardization removes the batch-level mean and scales by variance, analo-gous to GRPO’s group normalization. In sparse-reward set-tings ( ∼1.5% conversion rate in our deployment), this reduces variance by centering around the batch average rather than an absolute baseline, which is critical for stable gradient estima-tion when the majority of labels are zero. 
+
+Step 3: Align distributions via KL divergence. We opti-mize the score distribution to match the advantage distribution: 
+
+Llist = DKL 
+
+
+
+softmax (A/γ ) softmax (s)
+
+
+
+, (6) where γ > 0 is a temperature controlling the sharpness of the target distribution. The two operations are complemen-tary rather than redundant: the standardization in Eq. 5 fixes the scale of advantages across batches, while γ controls how sharply probability mass concentrates on the highest-reward leads. Lower γ creates sharper targets that emphasize high-reward leads; higher γ produces softer targets. We set γ = 0 .1
+
+based on sensitivity analysis (§4.6). This formulation is listwise because the softmax couples all leads in the batch: changing one lead’s score affects its relative probability mass, directly optimizing the ranking distribution rather than individual predictions. 5Relation to ListNet. The listwise loss in Eq. 6 is structurally related to ListNet [2], which also matches score and target dis-tributions via a cross-entropy/KL objective. The key differ-ence is the source of the target: ListNet uses static relevance labels, whereas our target distribution is built from dynamic 
+
+performance-aware rewards that encode real deployment feed-back (position and velocity), combined with the group-relative normalization inherited from GRPO. 
+
+Training objective. We combine the listwise loss with pointwise regularization to prevent calibration drift: 
+
+Ltotal = Llist + α · L BCE (s, y), (7) where LBCE is binary cross-entropy against conversion labels and α controls regularization strength. The pointwise term anchors individual predictions to conversion labels, while the listwise term optimizes the relative ordering. We set α = 0 .5
+
+based on ablation studies. 
+
+## 3.5 Implementation Details 
+
+Model architecture. We use Qwen2.5-1.5B [23] as the language backbone for processing dialogue transcripts, aug-mented with a tabular encoder for structured features. Both representations are fused via cross-attention and projected to a scalar score through a linear head. This architecture follows our prior work on HPRO [37]. 
+
+Efficient fine-tuning. We apply LoRA [9] with rank r = 16 
+
+and scaling factor α = 32 , targeting query and value projec-tion layers. The tabular encoder and fusion layers are fully trained. Online iterations use a reduced learning rate of 10 −5
+
+(10 × lower than initial SFT) with batch size 64 for 3 epochs. This conservative update strategy serves two purposes: (1) it preserves the base model’s calibration while adapting to distri-butional shifts, and (2) it provides an implicit KL constraint be-tween consecutive iterations, complementing the explicit reg-ularization in Eq. 7. 
+
+Hyperparameters. Temperature γ = 0.1, regularization 
+
+α = 0 .5, conversion window T = 30 days. Iteration fre-quency: monthly, aligned with the 30-day conversion window. Initial model fθ0 is trained via supervised fine-tuning (SFT) on 9.2M historical samples (July–September 2025) with bi-nary cross-entropy loss. Optimization uses AdamW [16] with linear warmup (5% of steps) and cosine decay. 
+
+# 4 Experiments 
+
+We evaluate S ALES LOOP through a comprehensive experi-mental protocol spanning offline benchmarking, long-term on-line deployment across two provincial markets, and detailed mechanism analysis. Table 1: Dataset statistics for lead ranking evaluation.          
+
+> Statistic Value
+> Total leads (Historical) 9.2M Total leads (Online, 160 days) 16.5M Tabular features 47 Avg. dialogue tokens 2,682 Conversion window T30 days Operational capacity K10,000
+
+## 4.1 Experimental Setup 
+
+Datasets. We collect lead data from a leading New Energy Vehicle (NEV) manufacturer’s CRM system. Our evaluation uses two datasets spanning different operational periods: • Historical Dataset (9.2M samples, ∼1.5% positive): Collected from July–September 2025. Used for initial model training and fair comparison with offline baselines. • Online Deployment Dataset (16.5M samples, ∼1.5% positive): Collected from December 2025–June 2026, representing a 160-day production A/B test with delayed conversion feedback across two provincial markets. In addition, we use a 103-day production log (September 20 – December 31, 2025) from the same CRM system to charac-terize the ranking quality of the deployed base model prior to the A/B test (§4.5). Each lead comprises 47 tabular features (demographics, source channel, interaction history, behavioral signals) and sales dialogue transcripts (average 2,682 tokens). The opera-tional capacity K = 10 ,000 represents the top-ranked leads surfaced to sales specialists daily for prioritized follow-up. Conversion labels are determined by 30-day lock-in status. Ta-ble 1 summarizes statistics. 
+
+Baselines. We compare against representative methods spanning traditional ML, deep learning, and LLM-based ap-proaches: • XGBoost [4]: Gradient boosting on tabular features only, representing the traditional industrial baseline. • DeepFM [8]: Deep factorization machine capturing fea-ture interactions, representing deep CTR models. • LLM+SFT : Qwen2.5-1.5B fine-tuned on historical con-version labels with binary cross-entropy loss. This serves as our base model fθ0 and the control group in online A/B testing. • LLM+DPO [24]: Direct Preference Optimization us-ing converted vs. non-converted lead pairs, representing static preference-based methods. 6Metrics. We report standard ranking metrics at K = 10 ,000 :• Precision@K (P@K) : Fraction of Top-K leads that con-vert (lock-in rate within Top-K). • Recall@K (R@K) : Fraction of all conversions captured in Top-K.• NDCG@K : Normalized discounted cumulative gain. • AUC : Area under ROC curve for pointwise prediction ac-curacy. 
+
+Implementation. All LLM-based methods share the same architecture: Qwen2.5-1.5B with LoRA ( r = 16 , α = 32 )for efficient fine-tuning, targeting query and value projec-tions. The tabular encoder and cross-attention fusion layers are fully trained. Training uses AdamW with learning rate 
+
+10 −5, batch size 64, for 3 epochs per iteration on 8 ×A100 GPUs. SALES LOOP performs monthly online iterations on the deployment dataset, using the previous month’s conversion outcomes as reward signals. 
+
+Online A/B Test Configuration. The production A/B test was conducted simultaneously in two anonymized provincial markets with the following configuration: • Duration : 160 days (December 26, 2025 – June 4, 2026). • Province A : 60 treatment specialists (S ALES LOOP ) vs. 60 control specialists (LLM+SFT), randomly assigned. • Province B : 80 treatment specialists (S ALES LOOP ) vs. 80 control specialists (LLM+SFT), randomly assigned. • Primary metric : Cumulative lock-in conversions and per-specialist productivity. The control group uses the static LLM+SFT model ( fθ0 )throughout the entire test period without any parameter up-dates. The treatment group uses S ALES LOOP , which is ini-tialized from the same fθ0 but undergoes monthly online iter-ations using deployment feedback. 
+
+## 4.2 Offline Benchmarking 
+
+We first evaluate all methods under a controlled offline setting using the Historical Dataset, ensuring fair comparison with consistent data splits and temporal ordering. Table 2 presents results. 
+
+LLM backbones substantially outperform traditional models. LLM+SFT achieves +40.9% P@K over XGBoost (6.37% vs. 4.52%), demonstrating the value of dialogue un-derstanding. This aligns with our hypothesis: sales conversa-tions contain rich intent signals that tabular features alone can-not capture. However, the AUC gap between LLM+SFT and DeepFM (0.781 vs. 0.739) is notably smaller than the P@K gap (+26.4%), suggesting that AUC alone underestimates the business value of LLM-based ranking—precisely because of the pointwise-listwise gap we identified (Gap 2). 
+
+DPO does not uniformly improve over SFT. LLM+DPO achieves slightly higher P@K and NDCG@K than LLM+SFT (+2.5% and +1.2% respectively), but its AUC is lower (0.776 vs. 0.781) and MRR also drops. This suggests that DPO’s pair-wise preference objective can hurt pointwise calibration while improving top-K discrimination—a known trade-off between ranking and classification objectives [24]. 
+
+SALES LOOP achieves the best performance across all met-rics. Compared to the better of LLM+SFT and LLM+DPO on each metric, SALES LOOP improves P@K by +15.8% and NDCG@K by +7.9%, while also recovering AUC to 0.789. The consistent gains across both ranking-sensitive and pointwise metrics validate that our listwise optimization with performance-aware rewards effectively addresses Gap 2 with-out sacrificing calibration. 
+
+## 4.3 Online Deployment Results 
+
+We now present the core empirical contribution of this work: a 160-day production A/B test across two provincial markets. To our knowledge, this is among the longest continuously-running online RL evaluations reported for industrial lead ranking. 
+
+4.3.1 Overall Results 
+
+Table 3 summarizes the end-of-period results. SALES LOOP achieves statistically significant improvements in both markets: +4.7% cumulative lift in Province A ( p =0.047 , weekly paired t-test) and +8.7% in Province B ( p =0.002 ). The effect in Province B is strongly significant, while Province A, though significant at the 0.05 level, is more marginal—consistent with its longer warm-up period before the feedback loop takes effect (§4.3.2). In per-specialist terms, each sales specialist in the treatment group converts 1.6–2.7 additional leads over the 160-day period compared to their control counterparts. Because each conversion corresponds to a high-value durable good, these per-specialist gains translate into substantial revenue impact at team scale. 
+
+4.3.2 Temporal Dynamics: The Feedback Loop Effect 
+
+Beyond the end-of-period totals, the temporal dynamics of the treatment-control gap provide direct evidence for the feed-back loop mechanism. Figure 2 shows cumulative conversion curves for both provinces. As deployment feedback accumulates, S ALES LOOP crosses over the static baseline and steadily widens the gap in both 7Table 2: Offline results on Historical Dataset ( K = 10 ,000 ). For a controlled, single-round comparison with the static baselines, SALES LOOP is evaluated after 1 iteration using held-out feedback; the multi-iteration behavior is analyzed separately in the ablation (Table 5) and online study. Best in bold , second underlined.                               
+
+> Method AUC P@K R@K NDCG@K MRR
+> XGBoost 0.7241 4.52% 5.03% 0.3017 0.0891 DeepFM 0.7389 5.04% 5.61% 0.3185 0.0934 LLM+SFT 0.7814 6.37% 7.08% 0.3674 0.1102 LLM+DPO 0.7762 6.53% 7.26% 0.3718 0.1064
+> SALES LOOP 0.7891 7.56% 8.40% 0.4012 0.1203
+
+Table 3: Online A/B test results after 160 days of deployment.                  
+
+> Metric Province A Province B
+> Team size (per group) 60 80 Treatment conversions 2,142 2,653 Control conversions 2,046 2,441 Absolute lift +96 +212
+> Relative lift +4.7% +8.7%
+> Per-specialist lift +1.6 +2.7 Weekly t-test ( p-value) 0.047 0.002
+
+markets. The cumulative difference grows from 0 to +96 (Province A) and +212 (Province B) by the end of the obser-vation period, and once established the divergence does not reverse within our observation window—suggesting that the feedback loop yields a compounding advantage rather than a one-time boost. The onset is fast: Province B turns pos-itive within weeks, and the effect strengthens over succes-sive iterations. The main exception is an initial warm-up in Province A, where S ALES LOOP trails the control over roughly the first 70 days ( −5.9% on average) before the loop takes effect—a one-time, first-iteration transient that can be avoided by warming up the initial iteration offline. This difference in time-to-effect likely reflects market characteristics: Province B has a higher daily lead volume relative to team size, provid-ing denser reward signals, which suggests that S ALES LOOP ’s feedback loop efficiency is modulated by the information den-sity of the deployment environment. 
+
+4.3.3 Month-over-Month Analysis 
+
+Figure 3 presents the monthly relative lift, providing a granular view of the feedback loop’s temporal evolution. Table 4 reveals several important patterns: • Warm-up duration varies by market : Province A’s warm-up persists through February (three months of neutral-to-slightly-negative lift), while Province B reaches positive lift as early as January (+12.5%) despite a brief dip in February. • Lift magnitude grows over time : Both provinces show Table 4: Monthly conversion breakdown. Values are new con-versions per month. June 2025 is partial (through June 4, the end of the 160-day test window), hence the lower counts.                                                  
+
+> Province A Province B Month Treat Ctrl Lift Treat Ctrl Lift
+> Dec ’25 93 101 −7.9% 112 113 −0.9% Jan ’26 285 295 −3.4% 350 311 +12.5% Feb ’26 246 247 −0.4% 294 300 −2.0% Mar ’26 394 346 +13.9% 459 448 +2.5% Apr ’26 485 483 +0.4% 611 550 +11.1% May ’26 578 517 +11.8% 767 667 +15.0% Jun ’26 61 57 +7.0% 60 52 +15.4%
+
+their strongest lifts in the later months (May–June), con-firming the compounding nature of the feedback loop. As each iteration improves ranking quality, subsequent iter-ations benefit from higher-quality deployment data. • Non-monotonic but trending positive : The month-to-month lift is not perfectly monotonic (e.g., Province A shows +13.9% in March but only +0.4% in April), reflect-ing natural market fluctuations and the monthly granular-ity of model updates. 
+
+4.3.4 Cumulative Gap Analysis 
+
+Figure 4 visualizes the treatment-control gap over time for both provinces simultaneously, providing the clearest evidence of the feedback loop’s sustained effect. Both provinces converge to a clear divergence regime in which the gap grows approximately linearly (Province A: ∼1.0 additional conversions/day; Province B: ∼1.4/day), indicating stable per-iteration improvement rather than diminishing re-turns within the observation window. Province B enters this regime almost immediately, whereas Province A first passes through a brief warm-up before the gap crosses zero and be-gins to grow. This roughly linear growth suggests that, within the ob-served horizon, the feedback loop has not yet saturated— further iterations would likely continue to improve perfor-mance, consistent with the argument for continuous online 80
+
+> 500
+> 1000
+> 1500
+> 2000
+> Cumulative Conversions
+> Crossover
+
+(a) Province A (60 vs. 60 specialists): +96 conversions (+4.7%)      
+
+> Treatment (SalesLoop)
+> Control (LLM+SFT)
+> Jan Feb Mar Apr May Jun
+> Date
+> 0
+> 500
+> 1000
+> 1500
+> 2000
+> 2500
+> Cumulative Conversions
+> Crossover
+
+(b) Province B (80 vs. 80 specialists): +212 conversions (+8.7%) 
+
+> Treatment (SalesLoop)
+> Control (LLM+SFT)
+
+Figure 2: Cumulative lock-in conversions over 160 days. Green shading indicates periods where treatment outperforms control; red shading indicates the reverse. Vertical dashed lines mark the crossover point where S ALES LOOP begins to persistently outperform the static baseline. learning in non-stationary environments. 
+
+## 4.4 Ablation Study 
+
+We analyze the contribution of each component in Table 5. All variants are evaluated offline after 4 iterations, so that each component’s effect is measured once the feedback loop has had several rounds to take effect. 
+
+Listwise loss is the most critical component. Removing 
+
+Llist causes the largest single-component drop ( −8.9% P@K), confirming that group-relative optimization is essential. The “Pointwise Only” variant, which uses online deployment data but trains with BCE loss alone, performs only marginally bet-ter than the SFT baseline (6.61% vs. 6.37%). This demon-strates that access to online data alone is insufficient; the list-wise objective with performance-aware rewards is what drives the improvement. 
+
+Position gain provides substantial benefit. Removing g(r)
+
+reduces P@K by −5.0% . Position feedback directly encodes ranking quality from deployment: the model learns that cor-rectly ranking a conversion at position 50 is more valuable than at position 5,000. This signal is unique to the online setting and unavailable in offline training. 
+
+BCE regularization prevents calibration loss. Removing the BCE regularization term reduces P@K by −3.6% and no-tably drops AUC by −2.1% (from 0.789 to 0.772). This in-dicates that the listwise loss alone, while optimizing ranking quality, can cause the model to lose calibration on individual 9Table 5: Ablation study on reward and loss components (offline evaluation after 4 iterations). 
+
+Variant P@K R@K NDCG@K AUC ∆ P@K 
+
+SALES LOOP (Full) 7.56% 8.40% 0.4012 0.7891 —w/o Position g(r) 7.18% 7.98% 0.3814 0.7853 −5.0% 
+
+w/o Velocity v(τ ) 7.41% 8.23% 0.3936 0.7871 −2.0% 
+
+w/o Listwise Llist 6.89% 7.66% 0.3621 0.7812 −8.9% 
+
+Pointwise Only (BCE) 6.61% 7.35% 0.3548 0.7784 −12 .6% 
+
+w/o BCE Regularization 7.29% 8.10% 0.3889 0.7724 −3.6% Dec Jan Feb Mar Apr May Jun  
+
+> Month
+> 5
+> 0
+> 5
+> 10
+> 15
+> Monthly Conversion Lift (%)
+> -7.9%
+> -0.9%
+> -3.4%
+> 12.5%
+> -0.4%
+> -2.0%
+> 13.9%
+> 2.5%
+> 0.4%
+> 11.1% 11.8%
+> 15.0%
+> 7.0%
+> 15.4%
+> Month-over-Month Relative Lift: Treatment vs. Control
+> Province A
+> Province B
+
+Figure 3: Monthly conversion lift (%) of treatment over con-trol. Province B turns positive almost immediately and stays there, while Province A transitions from a neutral warm-up phase to consistently positive lift. Jan Feb Mar Apr May Jun 
+
+> Date
+> 50
+> 0
+> 50
+> 100
+> 150
+> 200
+> Cumulative Difference
+> (Treatment - Control)
+> Cumulative Conversion Gap Over Time
+> Province A
+> Province B
+
+Figure 4: Cumulative conversion difference (Treatment −
+
+Control) over time. Both curves show a clear regime change from negative/flat to persistently positive and growing. predictions. The regularization anchors pointwise predictions while the listwise term optimizes relative ordering. 
+
+Velocity provides incremental gains. Removing v(τ ) re-duces P@K by −2.0% . Faster conversions signal stronger pur-chase intent; this auxiliary signal refines the model’s quality estimation beyond binary conversion labels. 
+
+## 4.5 Ranking Quality Validation with Deploy-ment Metrics 
+
+The A/B test in §4.3 quantifies the relative gain of the online feedback loop over a static baseline. Here we complement it with an absolute assessment of ranking quality and business value in production. Concretely, we analyze the base ranker Table 6: Top-10% recall rates of the base ranker fθ0 over 103 days of production operation. Recall = conversions in Top-10% / total conversions. 
+
+Window Mean Std Range 
+
+7-day recall 44.1% 2.4% 37.6–48.7% 14-day recall 41.3% 2.1% 35.7–45.3% 30-day recall 35.8% 3.7% 24.5–40.2% 
+
+fθ0 —the supervised backbone from which S ALES LOOP is ini-tialized, prior to any online iteration—using production data from 103 days of operation (September 20 – December 31, 2025). This isolates the contribution of the ranking architec-ture itself: any lift the online loop adds (§4.3) is stacked on top of the strong absolute performance established here. 
+
+Top-10% Recall Analysis. We evaluate how effectively the model’s top-ranked leads capture actual conversions. Specifi-cally, we compute the 7-day and 14-day recall of the Top-10% ranked leads (i.e., the fraction of all conversions that fall within the model’s top decile). Table 6 reports summary statistics. The model consistently captures ∼44% of 7-day conver-sions and ∼41% of 14-day conversions within just the top decile of ranked leads. This demonstrates strong ranking qual-ity even before the online loop is engaged: a random ranker would achieve 10% recall at the 10% cutoff, while the base ranker achieves 4.4 × lift over random for 7-day conversions. 
+
+Incremental High-Intent Identification. A key business application of S ALES LOOP is identifying high-intent leads that sales specialists have not yet recognized. We define in-cremental leads as those ranked high-intent by the model but 
+
+not previously flagged by specialists as likely-to-convert (3/7-day intent markers). Over the same 103-day production window: • The model identifies ∼4,600 incremental high-intent leads per day. • These incremental leads achieve a 14-day conversion rate of 4.66% , compared to 2.05% for the specialist-flagged baseline—a 2.3 × improvement .10 Table 7: P@K relative lift of S ALES LOOP over LLM+DPO at different K.              
+
+> KRelative Lift Remark
+> 1K +21.4% strongest gain 5K +18.7% high-value window 10K +15.8% default setting 20K +11.2% moderate gain 50K +5.3% diluted advantage 100K +1.9% near full coverage
+
+• Cumulative incremental conversions attributed to the model: 7,220 lock-ins .These 7,220 lock-ins are especially consequential in our setting: each conversion corresponds to a high-value durable good, so incremental lock-ins that would otherwise have been overlooked translate directly into substantial revenue. More broadly, this validates that S ALES LOOP ’s ranking captures genuine purchase intent signals from dialogue understanding that complement human judgment, rather than merely repli-cating existing specialist labels. 
+
+Temporal Stability. Figure 7 in Appendix shows that the Top-10% 7-day recall remains stable between 40–48% throughout the 103-day observation, with no degradation trend. This confirms that the ranking backbone delivers con-sistent quality under real production traffic—a prerequisite for the online loop to build upon reliably in long-term deployment. 
+
+## 4.6 Sensitivity Analysis 
+
+We examine how S ALES LOOP ’s advantage varies with the op-erational capacity K, which determines the size of the daily lead pool distributed to sales specialists. Table 7 shows P@K lift over LLM+DPO at different K values. SALES LOOP ’s advantage is largest at smaller K values (+21.4% at K = 1 ,000 ) and diminishes as K increases. This is expected: the listwise optimization with position-weighted re-wards primarily improves Top-K ranking quality, which mat-ters most when the operational window is tight. At large K
+
+values approaching full coverage, the ranking advantage natu-rally diminishes as most convertible leads are already included regardless of ordering. Note that K is set by operational ca-pacity (here K = 10 ,000 leads per day) rather than tuned; the analysis shows that S ALES LOOP ’s benefit would be even larger under tighter capacity, and remains positive across the full range. 
+
+# 5 Conclusion 
+
+We presented S ALES LOOP , an online reinforcement learning framework for lead ranking that addresses three fundamen-tal gaps in existing approaches: the offline-online distribution mismatch, the pointwise-listwise objective misalignment, and the historical-current distribution drift. Our key contributions include: (1) formalizing these three gaps and proposing a closed-loop paradigm for continuous adaptation; (2) designing a performance-aware reward that in-corporates conversion outcomes, ranking position, and con-version velocity; and (3) developing Discriminative GRPO, a listwise optimization objective that adapts group-relative ad-vantages to discriminative ranking models. Comprehensive experiments on large-scale industrial data (16.5M leads, 160 days, two provincial markets with 280 spe-cialists) demonstrate that S ALES LOOP achieves consistent im-provements over static baselines. A production A/B test vali-dates +4.7% and +8.7% cumulative lift in lock-in conversions (p = 0 .047 and p = 0 .002 respectively), with the advan-tage widening as the feedback loop accumulates deployment data—evidence of its compounding nature. Deployment met-rics further validate the absolute ranking quality of the back-bone: Top-10% recall of 44.1% (4.4 × random) and 7,220 in-cremental high-value conversions from model-identified high-intent leads that specialists had overlooked. 
+
+Limitations and Future Work. The current system oper-ates at monthly granularity due to the 30-day conversion win-dow. Future directions include: (1) faster feedback : lever-aging intermediate signals (e.g., test drive bookings, show-room visits) to enable weekly or daily iterations; (2) multi-objective optimization : balancing short-term conversion with long-term customer lifetime value; (3) cross-domain trans-fer : extending S ALES LOOP to other long-cycle sales domains such as real estate and enterprise B2B; and (4) exploration-exploitation : incorporating uncertainty-aware selection to balance ranking quality with data collection for future learn-ing. Additionally, investigating alternative reward formula-tions (e.g., DPO-style pairwise preferences derived from per-formance outcomes) and more sophisticated listwise losses (e.g., NeuralNDCG [22]) are promising directions. 
+
+# References 
+
+[1] Chris Burges, Tal Shaked, Erin Renshaw, Ari Lazier, Matt Deeds, Nicole Hamilton, and Greg Hullender. Learning to rank using gradient descent. In Proceedings of ICML , pages 89–96, 2005. [2] Zhe Cao, Tao Qin, Tie-Yan Liu, Ming-Feng Tsai, and Hang Li. Learning to rank: from pairwise approach to listwise approach. In Proceedings of ICML , pages 129– 136, 2007. [3] Minmin Chen, Alex Beutel, Paul Covington, et al. Top-k off-policy correction for a reinforce recommender sys-tem. In Proceedings of WSDM , pages 456–464, 2019. 11 [4] Tianqi Chen and Carlos Guestrin. Xgboost: A scalable tree boosting system. In Proceedings of KDD , pages 785–794, 2016. [5] Heng-Tze Cheng et al. Wide & deep learning for recom-mender systems. In Proceedings of DLRS , pages 7–10, 2016. [6] Aleksandr Chuklin, Ilya Markov, and Maarten de Rijke. 
+
+Click models for web search . Morgan & Claypool Pub-lishers, 2015. [7] Jo˜ ao Gama, Indr˙ e ˇ Zliobait˙ e, Albert Bifet, Mykola Pech-enizkiy, and Abdelhamid Bouchachia. A survey on con-cept drift adaptation. ACM Computing Surveys , 46(4):1– 37, 2014. [8] Huifeng Guo, Ruiming Tang, Yunming Ye, Zhenguo Li, and Xiuqiang He. Deepfm: a factorization-machine based neural network for ctr prediction. In Proceedings of IJCAI , pages 1725–1731, 2017. [9] Edward J Hu, Yelong Shen, Phillip Wallis, Zeyuan Allen-Zhu, Yuanzhi Li, Shean Wang, Lu Wang, and Weizhu Chen. Lora: Low-rank adaptation of large language mod-els. In Proceedings of ICLR , 2022. [10] Kung-Hsiang Huang et al. Crmarena: Understand-ing the capacity of llm agents to perform professional crm tasks in realistic environments. arXiv preprint arXiv:2411.02305 , 2024. [11] Eugene Ie, Vihan Jain, Jing Wang, et al. Slateq: Atractable decomposition for reinforcement learning with recommendation sets. In Proceedings of IJCAI , pages 2592–2599, 2019. [12] Rolf Jagerman, Harrie Oosterhuis, and Maarten de Rijke. To model or to intervene: A comparison of counterfac-tual and online learning to rank from user interactions. In Proceedings of SIGIR , pages 15–24, 2019. [13] Daniel R Jiang, Alex Nikulkov, Yu-Chia Chen, Yang Bai, and Zheqing Zhu. Improving generative ad text on facebook using reinforcement learning. arXiv preprint arXiv:2507.21983 , 2025. [14] Jianxun Lian et al. xdeepfm: Combining explicit and implicit feature interactions for recommender systems. In Proceedings of KDD , pages 1754–1763, 2018. [15] Tie-Yan Liu. Learning to rank for information retrieval .Springer, 2009. [16] Ilya Loshchilov and Frank Hutter. Decoupled weight de-cay regularization. In Proceedings of ICLR , 2019. [17] Nandakishor Mukkunnoth et al. Salesrlagent: A re-inforcement learning approach for real-time sales con-version prediction and optimization. arXiv preprint arXiv:2503.23303 , 2025. [18] Harrie Oosterhuis and Maarten de Rijke. Differentiable unbiased online learning to rank. In Proceedings of CIKM , pages 1293–1302, 2018. [19] Long Ouyang, Jeffrey Wu, Xu Jiang, et al. Training lan-guage models to follow instructions with human feed-back. Advances in Neural Information Processing Sys-tems , 35:27730–27744, 2022. [20] German I Parisi, Ronald Kemker, Jose L Part, Christo-pher Kanan, and Stefan Wermter. Continual lifelong learning with neural networks: A review. Neural Net-works , 113:54–71, 2019. [21] Adrian Payne and Pennie Frow. A strategic framework for customer relationship management. Journal of Mar-keting , 69(4):167–176, 2005. [22] Przemysław Pobrotyn and Radosław Białobrzeski. Neu-ralndcg: Direct optimisation of a ranking metric via differentiable relaxation of sorting. arXiv preprint arXiv:2102.07831 , 2021. [23] Qwen, :, An Yang, Baosong Yang, Beichen Zhang, Binyuan Hui, Bo Zheng, Bowen Yu, Chengyuan Li, Day-iheng Liu, Fei Huang, Haoran Wei, Huan Lin, Jian Yang, Jianhong Tu, Jianwei Zhang, Jianxin Yang, Jiaxi Yang, Jingren Zhou, Junyang Lin, Kai Dang, Keming Lu, Ke-qin Bao, Kexin Yang, Le Yu, Mei Li, Mingfeng Xue, Pei Zhang, Qin Zhu, Rui Men, Runji Lin, Tianhao Li, Tianyi Tang, Tingyu Xia, Xingzhang Ren, Xuancheng Ren, Yang Fan, Yang Su, Yichang Zhang, Yu Wan, Yuqiong Liu, Zeyu Cui, Zhenru Zhang, and Zihan Qiu. Qwen2.5 technical report, 2025. [24] Rafael Rafailov, Archit Sharma, Eric Mitchell, Christo-pher D Manning, Stefano Ermon, and Chelsea Finn. Di-rect preference optimization: Your language model is se-cretly a reward model. Advances in Neural Information Processing Systems , 36, 2024. [25] Tobias Schnabel, Adith Swaminathan, Ashudeep Singh, Navin Chandak, and Thorsten Joachims. Recommenda-tions as treatments: Debiasing learning and evaluation. In Proceedings of ICML , pages 1670–1679, 2016. [26] John Schulman, Filip Wolski, Prafulla Dhariwal, Alec Radford, and Oleg Klimov. Proximal policy optimiza-tion algorithms. arXiv preprint arXiv:1707.06347 , 2017. [27] Shai Shalev-Shwartz. Online learning and online con-vex optimization. Foundations and Trends in Machine Learning , 4(2):107–194, 2012. 12 [28] Zhihong Shao et al. Deepseekmath: Pushing the limits of mathematical reasoning in open language models. arXiv preprint arXiv:2402.03300 , 2024. [29] Weiping Song et al. Autoint: Automatic feature interac-tion learning via self-attentive neural networks. In Pro-ceedings of CIKM , pages 1161–1170, 2019. [30] Yin Sun, Yiwen Liu, Junjie Song, Chenyu Zhang, Xinyuan Zhang, Lingjie Liu, Siqi Chen, and Yuji Cao. asllr: Llm based leads ranking in auto sales. arXiv preprint arXiv:2510.21713 , 2025. [31] Ruoxi Wang et al. Dcn v2: Improved deep & cross net-work and practical lessons for web-scale learning to rank systems. In Proceedings of WWW , pages 1785–1797, 2021. [32] Ruoxi Wang, Bin Fu, Gang Fu, and Mingliang Wang. Deep & cross network for ad click predictions. In Pro-ceedings of ADKDD , pages 1–7, 2017. [33] Russell S Winer. Customer relationship management: A framework, research directions, and the future . Univer-sity of California at Berkeley, 2001. [34] Fen Xia, Tie-Yan Liu, Jue Wang, Wensheng Zhang, and Hang Li. Listwise approach to learning to rank: theory and algorithm. In Proceedings of ICML , pages 1192– 1199, 2008. [35] Xiaoxiao Xu, Minzhi Xie, Runtong Li, et al. An end-to-end multi-objective ensemble ranking frame-work for video recommendation. arXiv preprint arXiv:2508.05093 , 2025. [36] Zhenghai Xue, Qingpeng Cai, Tianyou Zuo, Bin Yang, Lantao Hu, Peng Jiang, Kun Gai, and Bo An. Auro: Reinforcement learning for adaptive user retention op-timization in recommender systems. In Proceedings of WWW , 2025. [37] Chenyu Zhang, Yiwen Liu, Yin Sun, Xinyuan Zhang, Yuji Cao, Junming Jiao, and Juyi Qiao. Rethinking sales lead scoring with llm-based hierarchical preference rank-ing. arXiv preprint arXiv:2606.04387 , 2026. [38] Yunan Zhang, Le Yan, Zhen Qin, Honglei Zhuang, Ji-aming Shen, Xuanhui Wang, Michael Bendersky, and Marc Najork. Towards disentangling relevance and bias in unbiased learning to rank. In Proceedings of KDD ,2023. 
+
+# A Additional Online Deployment Analysis 
+
+This appendix provides supplementary analyses of the online deployment data to further characterize S ALES LOOP ’s feed-back loop dynamics. 
+
+## A.1 Daily Conversion Rate Analysis 
+
+Figure 5 presents the 7-day moving average of daily new con-versions for treatment and control groups in both provinces. Unlike the cumulative view in Figure 2, this visualization re-veals the instantaneous productivity differences. Key observations: • Province A : The treatment and control daily rates are nearly identical during December–February, with oc-casional crossovers. Starting March 2026, the treat-ment curve consistently exceeds the control, with the gap widening particularly during high-volume periods (March, May). • Province B : The treatment daily rate exceeds the con-trol almost immediately and maintains this advantage throughout, with the gap becoming more pronounced in later months as the feedback loop compounds. • Shared seasonal patterns : Both treatment and control exhibit similar seasonal fluctuations (e.g., dips during Chinese New Year in mid-February, peaks during promo-tional periods in March and May), confirming that the randomization successfully balanced external factors be-tween groups. 
+
+## A.2 Per-Specialist Productivity 
+
+To control for the difference in team sizes between provinces (60 per group in Province A vs. 80 in Province B), Figure 6 normalizes cumulative conversions by the number of special-ists in each group. After normalization, the per-specialist productivity reveals: • Both provinces have similar per-specialist baselines (∼30–36 conversions per specialist over 160 days). • S ALES LOOP provides +1.6 conversions per specialist in Province A and +2.7 in Province B. • The per-specialist curves are closely matched across provinces for the same condition (e.g., both control groups converge to ∼30–34/specialist), suggesting com-parable market conditions despite different team sizes. These normalized results confirm that the lift observed in aggregate is not an artifact of team size differences and reflects genuine per-specialist productivity gains from improved lead ranking. 13 0
+
+5
+
+10 
+
+15 
+
+20 
+
+25 
+
+> Daily conversions
+> (7-day moving avg)
+
+(a) Province A: Daily Conversion Rate (7-day MA) 
+
+Treatment 
+
+Control 
+
+Jan Feb Mar Apr May Jun 
+
+Date 
+
+0
+
+5
+
+10 
+
+15 
+
+20 
+
+25 
+
+30 
+
+> Daily conversions
+> (7-day moving avg)
+
+(b) Province B: Daily Conversion Rate (7-day MA) 
+
+Treatment 
+
+Control Figure 5: Daily new conversions (7-day moving average) for treatment and control groups. Province A shows treatment overtaking control around March 2026; Province B shows treatment consistently above control from early January. Jan Feb Mar Apr May Jun 
+
+> Date
+> 0
+> 5
+> 10
+> 15
+> 20
+> 25
+> 30
+> 35
+> Cumulative conversions
+> per specialist
+> Per-Specialist Productivity: Normalized by Team Size
+> Prov A Treatment (n=60)
+> Prov A Control (n=60)
+> Prov B Treatment (n=80)
+> Prov B Control (n=80)
+
+Figure 6: Cumulative conversions per specialist, enabling cross-province comparison on a normalized scale. 
+
+## A.3 Ranking Quality Temporal Stability 
+
+Figure 7 shows the daily Top-10% recall rates over the 103-day production window (September 20 – December 31, 2025). Key observations: • The 7-day recall remains in the 40–48% range during sta-ble periods, representing a 4.4 × lift over random (10% Oct Nov Dec Jan 
+
+> Date
+> 10
+> 20
+> 30
+> 40
+> 50
+> Recall@Top10% (%)  Mean: 43.7%
+> Mean: 40.9%
+> Top-10% Recall Stability Over 92 Days of Production Deployment
+> 7-day Recall@Top10%
+> 14-day Recall@Top10%
+> Random baseline (10%)
+
+Figure 7: Top-10% recall stability over 103 days. The base ranker fθ0 maintains 7-day recall between 37–49% (mean 44.1%) and 14-day recall between 36–45% (mean 41.3%), with no degradation trend. The random baseline (10%) is shown for reference. baseline). • No downward trend is observed over the 103-day win-dow, indicating that the ranking backbone is robust to day-to-day distribution shifts in production. 14 Specialist 
+
+> Baseline
+> (3/7-day flag)
+> SalesLoop
+> Incremental
+> Identification
+> 0
+> 1
+> 2
+> 3
+> 4
+> 5
+> 6
+> 14-day Conversion Rate (%)
+> 2.05%
+> 4.66%
+
+2.3× 
+
+> Incremental Lead Identification:
+> Model vs. Specialist Baseline
+
+Figure 8: 14-day conversion rate comparison: specialist-flagged leads (2.05%) vs. SALES LOOP incremental identi-fication (4.66%). The model identifies high-intent leads that specialists miss, at 2.3 × higher conversion rate. • Brief dips (e.g., early October, early November) coin-cide with major product launches that temporarily shift the lead distribution, after which recall recovers. 
+
+## A.4 Incremental Value Over Human Judgment 
+
+Figure 8 compares the conversion rate of SALES LOOP -identified incremental leads versus the specialist-flagged base-line. This result demonstrates that S ALES LOOP ’s dialogue-based ranking captures latent purchase intent signals that even ex-perienced sales specialists cannot identify from their standard workflow. The model effectively serves as a complementary intelligence layer rather than a replacement for human judg-ment. 15
