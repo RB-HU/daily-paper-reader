@@ -1,0 +1,69 @@
+{
+  "label": "2026-07-27",
+  "date": "2026-07-27",
+  "generated_at": "2026-07-27T21:37:36",
+  "count": 4,
+  "papers": [
+    {
+      "paper_id": "202607/27/2607.22157v1-learning-on-the-job-continual-learning-from-deployment-feedback-for-frozen-weights-agents",
+      "section": "deep",
+      "title_en": "Learning on the Job: Continual Learning from Deployment Feedback for Frozen-Weights Agents",
+      "authors": "Valentin Tablan, Scott Taylor, Kristoffer Bernhem",
+      "date": "2026-07-24",
+      "pdf": "https://arxiv.org/pdf/2607.22157v1",
+      "score": "9.0",
+      "evidence": "在银行领域τ-bench上通过部署反馈进行持续学习",
+      "tldr": "AI代理在部署期间模型权重冻结，每次解决难题后丢弃了所有学习信号，这些信号本可从运行结果和后续修正中提取。引入外部记忆，将每次任务的反馈提炼为可检索的自然语言规则，实现持续学习。在τ-bench银行域，基于结果判决的单次成功率提升至基线的1.6倍，基于修正的提升至2.6倍，解决了基线从未完成的84个任务中的22个。方法在Mistral Large和Claude Sonnet 5上验证，记忆可跨模型迁移，并开源工具与数据。",
+      "tags": "query:fla",
+      "abstract_en": "AI agents encounter learning opportunities in every episode they run, and discard nearly all of them: the underlying models are frozen at deployment, so an agent that resolves a difficult request today starts from zero when it recurs tomorrow. Yet ordinary operation already produces feedback, in the form of outcome verdicts and after-the-fact corrections. We show that this feedback is a sufficient signal for continual learning when the frozen model is paired with an external memory that distils each episode into retrievable natural-language rules. On the banking domain of $τ$-bench, against a static-RAG control retrieving over the complete policy corpus, learning from the one-bit outcome verdict lifts single-trial success to 1.6$\\times$ the baseline, and learning from corrections to 2.6$\\times$, converting 22 of the 84 tasks the baseline never solves. The result spans the deployment spectrum, measured on Mistral Large, an open-weights model that organisations with data sovereignty requirements can self-host, and replicated on a frontier model, Claude Sonnet 5. The accumulated memory also transfers: each model, reading the store built by the other, rises above its own no-memory baseline. The harness, protocol, and data are released.",
+      "source": "arxiv",
+      "selection_source": "fresh_fetch"
+    },
+    {
+      "paper_id": "202607/27/2607.21461v2-arex-towards-a-recursively-self-improving-agent-for-deep-research",
+      "section": "quick",
+      "title_en": "AREX: Towards a Recursively Self-Improving Agent for Deep Research",
+      "authors": "Shuqi Lu, Chaofan Li, Kun Luo, Zhang Zhang, Hui Wang, Hongwang Xiao, Lei Xiong, Jiahao Wang, Sen Wang, Xiyan Jiang, Wanli Li, Yuyang Hu, Hongjin Qian, Bingyu Yan, Jianlyu Chen, Ziyi Xia, Yingxia Shao, Kang Liu, Zhicheng Dou, Di He, Chaozhuo Li, Qiwei Ye, Zhongyuan Wang, Zheng Liu",
+      "date": "2026-07-23",
+      "pdf": "https://arxiv.org/pdf/2607.21461v2",
+      "score": "7.0",
+      "evidence": "通过验证递归自改进的智能体，类似后训练迭代精炼",
+      "tldr": "深度研究要求答案同时满足多个约束，发现成本高而逐约束验证易分解。AREX通过递归自我改进，交替内部研究循环构建临时答案与外部审计循环定位漏洞，并引导针对性后续研究；为支持长程改进，学习自主上下文压缩工具保存历史关键状态。在BrowseComp等多个搜索推理基准上，AREX显著超越同规模模型，与更大激活参数模型性能相当。该工作证实递归自我改进是提升深度研究代理长期效能的有效途径，并为自主研究提供可扩展框架。",
+      "tags": "query:fla",
+      "abstract_en": "Deep research requires agents to find answers that jointly satisfy multiple constraints. Discovering such answers is costly, whereas verifying a candidate can often be decomposed into tractable constraint-wise checks. This discovery--verification asymmetry suggests that a research agent should do more than simply search longer: it should recursively improve its current answer by verifying intermediate results and using the partially verified state to guide subsequent refinement. We introduce AREX, a family of Recursively Self-Improving (RSI) deep research agents. AREX alternates between an inner research loop that gathers evidence and constructs a provisional answer, and an outer self-improvement loop that audits the answer constraint-wise, identifies unresolved claims, and launches targeted follow-up research. To sustain RSI over long horizons, AREX learns an autonomous context-update tool that compresses growing interaction history into a compact improvement state preserving verified evidence and unresolved constraints, without relying on an external model. We train AREX on verified synthetic tasks and high-quality trajectories through agentic mid-training and long-horizon reinforcement learning. To mitigate sparse final rewards during long horizon learning, we emphasize key steps where decisive evidence is acquired or erroneous research directions are corrected. We instantiate a dense 4B model and a 122B-A10B Mixture-of-Experts model. Across BrowseComp, WideSearch, DeepSearchQA, Humanity's Last Exam (HLE), and other reasoning and tool-use benchmarks, AREX substantially outperforms comparable-scale baselines and remains competitive with models using substantially more activated parameters.",
+      "source": "arxiv",
+      "selection_source": "fresh_fetch"
+    },
+    {
+      "paper_id": "202607/27/2607.21503v1-agentic-context-management-solving-agent-memory-and-cost-by-treating-them-as-lifecycle-and-architecture-problems",
+      "section": "quick",
+      "title_en": "Agentic Context Management: Solving Agent Memory and Cost by Treating Them as Lifecycle and Architecture Problems",
+      "authors": "Gaurav Dadhich",
+      "date": "2026-07-23",
+      "pdf": "https://arxiv.org/pdf/2607.21503v1",
+      "score": "7.0",
+      "evidence": "面向自主智能体的上下文管理",
+      "tldr": "生产AI代理常因上下文管理不善导致记忆缺失，且token成本随对话轮次二次增长，仅视作存储检索问题过于狭隘。本文将上下文管理重新定义为生命周期问题，提出代理上下文管理(ACM)框架，包含架构、摄取、范围界定、预测及压缩五原语。其多租户实现Maximem Synap在LongMemEval和LoCoMo上分别达到92%和93.2%，并将成本增长从二次压缩为线性同时保持高保真，为组织级上下文管理开辟道路。",
+      "tags": "query:fla",
+      "abstract_en": "Production AI agents' failures are less often due to an inability to reason well and more often because they cannot manage what is in their reasoning context: conversation histories, large prompts, large tool definitions, and ballooning tool outputs. Agents drown in their own accumulating history while paying a token cost that grows every turn, producing missing recalls within and across conversations. The incumbent response treats this as a storage-and-retrieval problem. We argue that framing is too narrow. Actively managing what an agent holds in mind is a lifecycle, not merely a store: it spans deciding what to remember, extracting and structuring it, choosing the right store per data type, consolidating and forgetting while preserving provenance, deciding what is relevant now, anticipating what is needed next, and compacting context to a budget without losing what matters. In serious production this operates not over a single user but across an organizational scope hierarchy. We name this discipline Agentic Context Management (ACM) and decompose it into five primitives: architecting, ingesting, scoping, anticipating, and compacting & consolidation. We then make the economic case: naive context accumulation grows token cost quadratically in conversation length, crude summarization buys linear cost at the price of an accuracy cliff, and only validated compaction achieves linear cost with preserved fidelity. We describe a reference implementation, Maximem Synap, that realizes the five primitives as a multi-tenant service and reports 92% on LongMemEval and 93.2% on LoCoMo under the configuration detailed in Section 6. We close with dimensions existing benchmarks do not yet capture, latency, token efficiency, and context-rot resistance, and the frontier of decision-level and organization-level context the category points toward.",
+      "source": "arxiv",
+      "selection_source": "fresh_fetch"
+    },
+    {
+      "paper_id": "202607/27/2607.22186v1-deconstructing-off-policy-ratios-entropy-scaled-trust-regions-for-asynchronous-reinforcement-learning",
+      "section": "quick",
+      "title_en": "Deconstructing Off-Policy Ratios: Entropy-Scaled Trust Regions for Asynchronous Reinforcement Learning",
+      "authors": "Guanqun Zhao, Zijun Xie, Binbin Zheng, Enlei Gong, Jiafeng Lu, Yehan Yang, Aoqi Hu, Zeyu Chen",
+      "date": "2026-07-24",
+      "pdf": "https://arxiv.org/pdf/2607.22186v1",
+      "score": "7.0",
+      "evidence": "熵缩放信任域稳定异步强化学习的大模型后训练",
+      "tldr": "异步强化学习通过重叠采样优化加速大模型后训练，但离策略重要性比值的尺度随token熵变化，导致传统统一阈值方法同时放大噪声与抑制合法探索。本文提出熵缩放信任区域(ESTR)，基于局部熵动态缩放每个token的离策略偏差，无需额外前向传播。在长周期代理任务与数学推理基准上，ESTR显著超越现有异步方法，训练速度较同步GRPO提升2.6倍且精度持平。该工作揭示了熵比值缩放规律，为高效稳定异步训练提供了新机制。",
+      "tags": "query:fla",
+      "abstract_en": "Asynchronous reinforcement learning (RL) accelerates large language model (LLM) post-training by overlapping rollout generation with policy optimization, but the resulting stale, off-policy data can destabilize optimization and ultimately cause policy collapse. Existing methods typically retain or discard tokens based solely on the magnitude of their importance ratios, applying the same threshold uniformly across token positions. In this work, we reveal that the natural scale of the importance ratio varies systematically with token entropy. Under asynchronous dynamics, this entropy-ratio scaling dictates two distinct phenomena: at low entropy, the inherent train-inference discrepancy is drastically amplified into substantial sampling noise; at high entropy, in-flight weight updates naturally induce pronounced, legitimate exploratory deviations. Consequently, magnitude-only correction inadvertently admits the amplified noise while strictly masking out the essential exploration triggered by in-flight updates. To address this, we propose the Entropy-Scaled Trust Region (ESTR), which scales each token's off-policy deviation by its local entropy, requiring no auxiliary forward passes or explicit version-switch detection. Across long-horizon agentic tasks and mathematical reasoning benchmarks, ESTR consistently outperforms existing asynchronous methods and achieves the best train-inference consistency. Compared with synchronous GRPO, ESTR attains comparable accuracy while improving training speed by $2.6\\times$.",
+      "source": "arxiv",
+      "selection_source": "fresh_fetch"
+    }
+  ],
+  "errors": []
+}
