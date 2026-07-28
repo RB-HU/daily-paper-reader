@@ -6,34 +6,43 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-07-27
-- 运行时间：2026-07-27 21:37:23 UTC
+- 最新运行日期：2026-07-28
+- 运行时间：2026-07-28 20:47:16 UTC
 - 运行状态：成功
-- 本次总论文数：4
-- 精读区：1
-- 速读区：3
+- 本次总论文数：7
+- 精读区：6
+- 速读区：1
 
 ### 今日简报（AI）
-今日聚焦让冻结权重的智能体在部署中持续进化，深入解读了如何用轻量记忆模块吸收实时反馈，速读则覆盖递归自我改进、Agent记忆架构和异步强化学习新方法。  
-最有启发的结论是：即便不更新底层大模型，附加“工作记忆”也能让Agent从每一项任务反馈中学习，而AREX则提供了让研究型Agent递归升级的蓝图。  
-建议开发者优先尝试这种即插即用的持续学习范式，并将其与上下文生命周期管理结合，低成本打造能自动纠错、持久进步的智能助手。
-- 详情：[/202607/27/README](/202607/27/README)
+今天聚焦于Agent全能化突围，深入解读了全场景应用扩展和长周期任务上下文管理两大前沿。  
+最值得看的结论是：AgentOmnia通过规模化模型实现跨场景泛化，ACM则用智能上下文管理攻克了长程任务规划难题。  
+建议优先体验这类能在复杂、多步任务中保持状态的AI助手，感受从“单句问答”到“全程负责”的跃迁。
+- 详情：[/202607/28/README](/202607/28/README)
 
 ### 精读区论文标签
-1. [Learning on the Job: Continual Learning from Deployment Feedback for Frozen-Weights Agents](/202607/27/2607.22157v1-learning-on-the-job-continual-learning-from-deployment-feedback-for-frozen-weights-agents)  
+1. [AgentOmnia: Scaling Agentic Models for Full-Scenario Applications](/202607/28/2607.23124v1-agentomnia-scaling-agentic-models-for-full-scenario-applications)  
    标签：评分：9.0/10、query:fla
-   evidence：在银行领域τ-bench上通过部署反馈进行持续学习
+   evidence：设计了协调任务空间定义、数据合成、后训练、评估和改进的框架
+2. [ACM: Agentic Context Management for Long Horizon Tasks](/202607/28/2607.23809v1-acm-agentic-context-management-for-long-horizon-tasks)  
+   标签：评分：9.0/10、query:fla
+   evidence：开发一套后训练流程使智能体自主管理上下文。
+3. [EviBack: Search-Agent Reinforcement Learning via Evidence-Constrained Teacher Backoff](/202607/28/2607.23955v1-eviback-search-agent-reinforcement-learning-via-evidence-constrained-teacher-backoff)  
+   标签：评分：9.0/10、query:fla
+   evidence：基于教师退避的搜索代理强化学习后训练
+4. [Strategy-Aware Parameter-Efficient Adaptation for LLM-based Auto-Bidding](/202607/28/2607.24232v1-strategy-aware-parameter-efficient-adaptation-for-llm-based-auto-bidding)  
+   标签：评分：9.0/10、query:fla
+   evidence：面向出价场景的LLM代理参数高效微调
+5. [From Proprietary to Open-Source: Bridging the Distribution Gap via Multi-Agent Protocol Distillation in Agentic Search](/202607/28/2607.24280v1-from-proprietary-to-open-source-bridging-the-distribution-gap-via-multi-agent-protocol-distillation-in-agentic-search)  
+   标签：评分：9.0/10、query:fla
+   evidence：通过多智能体协议蒸馏和强化学习进行智能搜索的后训练
+6. [Kimi K3: Open Frontier Intelligence](/202607/28/2607.24653v1-kimi-k3-open-frontier-intelligence)  
+   标签：评分：9.0/10、query:fla
+   evidence：在大模型上针对智能体领域进行强化学习后训练
 
 ### 速读区论文标签
-1. [AREX: Towards a Recursively Self-Improving Agent for Deep Research](/202607/27/2607.21461v2-arex-towards-a-recursively-self-improving-agent-for-deep-research)  
-   标签：评分：7.0/10、query:fla
-   evidence：通过验证递归自改进的智能体，类似后训练迭代精炼
-2. [Agentic Context Management: Solving Agent Memory and Cost by Treating Them as Lifecycle and Architecture Problems](/202607/27/2607.21503v1-agentic-context-management-solving-agent-memory-and-cost-by-treating-them-as-lifecycle-and-architecture-problems)  
-   标签：评分：7.0/10、query:fla
-   evidence：面向自主智能体的上下文管理
-3. [Deconstructing Off-Policy Ratios: Entropy-Scaled Trust Regions for Asynchronous Reinforcement Learning](/202607/27/2607.22186v1-deconstructing-off-policy-ratios-entropy-scaled-trust-regions-for-asynchronous-reinforcement-learning)  
-   标签：评分：7.0/10、query:fla
-   evidence：熵缩放信任域稳定异步强化学习的大模型后训练
+1. [From RLVR to RLSVR: Task Transformation Induces Self-Verifiable Rewards for Open-Ended LLM Self-Improvement](/202607/28/2607.23802v1-from-rlvr-to-rlsvr-task-transformation-induces-self-verifiable-rewards-for-open-ended-llm-self-improvement)  
+   标签：评分：6.0/10、query:fla
+   evidence：提出RLSVR，一种具有自验证奖励的强化学习方法用于LLM自我改进，可能适用于智能体后训练。
 
 
 <div class="dpr-home-promo-card">
