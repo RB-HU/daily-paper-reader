@@ -1,0 +1,350 @@
+Title: Runtime Uncertainty Monitoring for LLM-Based Multi-Agent Systems Using Bayesian Networks
+
+URL Source: https://arxiv.org/pdf/2607.25877v1
+
+Published Time: Wed, 29 Jul 2026 01:10:59 GMT
+
+Number of Pages: 16
+
+Markdown Content:
+# Runtime Uncertainty Monitoring for LLM-Based Multi-Agent Systems Using Bayesian Networks 
+
+Bart Custers 1[0009 −0005 −7507 −4690] and Koorosh Aslansefat 1,2[0000 −0001 −9318 −8177]  
+
+> 1
+
+University of Hull, Hull HU6 7RX, UK bart_custers@hotmail.com  
+
+> 2
+
+k.aslansefat@hull.ac.uk 
+
+Abstract. This paper investigates how multi-agent systems (MAS)-based on large language models (LLMs) can support actuarial risk mod-elling, with a particular focus on uncertainty quantification. Actuarial workflows represent a high-stakes decision-support setting where unreli-able outputs may lead to incorrect risk assessment, unfair pricing, and regulatory non-compliance. To address uncertainty introduced by the probabilistic nature of LLMs and dependencies between agents, a multi-agent framework is proposed in which specialised agents perform data preparation, modelling, review, and explanation tasks under a central hub. The main contribution is a novel approach to uncertainty propa-gation using token-level log-probabilities and a Bayesian Network. Im-portantly, log probabilities are not treated as direct probabilities of cor-rectness or task success. Instead, length-normalised log-probability sum-maries are transformed into calibrated task-level confidence estimates before incorporation into the Bayesian Network. Results show that the framework reproduces baseline actuarial performance while providing ad-ditional insight into workflow stability and runtime uncertainty propa-gation. 
+
+Keywords: Multi-Agent Systems · Uncertainty Quantification · Run-time Monitoring · Actuarial Modelling 
+
+## 1 Introduction 
+
+Over the past decades, artificial intelligence (AI) has become increasingly im-portant in the insurance industry, particularly for predictive modelling and au-tomation [16]. Accurate risk estimation is central to insurance, as insurers rely on predictions of future claims to determine premiums and ensure both prof-itability and solvency. Risk modelling aims to capture differences in risk across policyholders, as these differences directly influence pricing decisions. For exam-ple, characteristics such as age or driving experience can significantly affect claim frequency, making accurate risk differentiation essential. Despite ongoing tech-nological progress, actuarial risk modelling remains a resource-intensive process that requires substantial manual effort. Recent advances in large language models (LLMs) have enabled the develop-ment of AI agents capable of performing complex reasoning tasks [21, 19]. These arXiv:2607.25877v1 [cs.AI] 28 Jul 2026 2 B. Custers et al. 
+
+agents can potentially automate actuarial workflows, which typically involve data preparation, model development, validation, and interpretation. However, the use of LLM-based agents in actuarial risk modelling remains largely unex-plored. A key challenge in adopting such systems is their lack of transparency. AI models are often perceived as “black boxes,” and LLM-based agents introduce additional concerns, including hallucinations and variability across runs [21]. For actuaries, this is problematic, as transparency and explainability are essential in a highly regulated environment [8]. The safety implications of LLM-based multi-agent systems are particularly important in insurance risk modelling, where automated decisions may directly affect pricing, customer fairness, and financial accessibility. Errors introduced by a single agent could propagate to subsequent workflow stages, potentially leading to incorrect or biased outcomes that may be difficult to detect. Exist-ing approaches do not sufficiently address how errors or uncertainty arise and propagate in multi-step, agent-based workflows. In addition to incorporating ex-plainability techniques such as concept-based explanations and fairness assess-ments, this work therefore introduces a novel uncertainty modelling approach. We propose a runtime safety-monitoring framework for LLM-based multi-agent systems in high-stakes insurance workflows. The main contribution lies in com-bining token-level log probabilities from LLM outputs with a Bayesian Network that captures dependencies between workflow stages. As a result, the framework provides a structured representation of uncertainty, and a safety mechanism that may help identify unsafe workflows states. 
+
+## 2 Background 
+
+2.1 Multi-Agent Systems 
+
+Multi-agent systems (MAS) extend the concept of single LLM-based agents by enabling multiple agents to collaborate on shared tasks. This collaborative setup is particularly useful for complex problem-solving, where tasks can be decom-posed into smaller, specialized components, which improves overall system per-formance [24]. In addition, MAS can enhance robustness, since failures in one component may be mitigated by other agents within the system [24, 20]. Frame-works such as AutoGen [22] and AgentVerse [2], for example, show how various agents are able to collaborate on complex tasks. Applications of MAS in the insurance domain, particularly for actuarial tasks, remain relatively limited. Ex-isting studies primarily focus on the use of LLMs for specific tasks, such as processing unstructured data or supporting actuarial analysis [5]. Despite all advances, MAS face several challenges. LLM-based agents are not inherently trained to collaborate, which may result in unpredictable behaviour or inconsis-tent reasoning [20]. Furthermore, issues such as hallucination and sensitivity to prompts persist in multi-agent settings. Evaluating LLM-based MAS is challenging due to their dynamic and proba-bilistic nature. Traditional evaluation metrics, which focus on task-specific per-formance, are often insufficient for capturing the broader behaviour of agent sys-Uncertainty Monitoring for LLM Agents 3
+
+tems. Recent research therefore emphasizes holistic evaluation approaches that consider multiple aspects of system performance [13, 25]. One such framework distinguishes between evaluation objectives and evaluation processes [13]. Eval-uation objectives define what should be assessed, including dimensions such as agent behaviour, capabilities, reliability, and safety or alignment. Despite these developments, several limitations remain. Many evaluation approaches still fo-cus on narrow aspects such as task accuracy or tool usage, while neglecting system-level properties like robustness and interaction dynamics [13]. 
+
+2.2 Uncertainty quantification 
+
+A key consideration in deploying MAS is the handling of uncertainty. In autore-gressive language models, uncertainty arises from the probability distribution over possible next tokens during text generation [11]. Token-level log probabil-ities provide a model-internal confidence-related signal, but not a direct proba-bility of correctness. The use of log probabilities ("logprobs") has been demon-strated by [1], where the authors propose Logprobs to monitor LLM updates. Furthermore, [23] use logprobs to calculate uncertainty and reduce LLM hallu-cinations. However, such uncertainty estimates do not capture how uncertainty accumulates across the workflow. In MAS, decisions are interdependent, meaning that the output of one agent influences subsequent steps. This leads to a distinc-tion between intrinsic uncertainty, which reflects uncertainty at a single step, and extrinsic uncertainty, which captures uncertainty propagated from earlier decisions [4]. Sampling-based approaches, such as Monte Carlo methods, have been proposed to approximate uncertainty propagation by generating multiple reasoning trajectories [11]. Although these methods can provide insights, they are computationally intensive and may be difficult to interpret. An alternative approach is to represent dependencies explicitly using a Bayesian Network, where nodes correspond to agent decisions and edges represent their relationships [7, 14, 3]. This allows uncertainty to be modeled in a structured and interpretable way. 
+
+## 3 Multi-agent system design 
+
+The framework, shown in Fig. 1, follows a centralised star topology [24]. A Cen-tral Hub coordinates four specialised agents through message passing, avoiding direct agent-to-agent communication and enabling controlled workflow oversight. The Data Preparation Agent performs data ingestion, cleaning, and encoding. The Modelling Agent develops predictive models. The Reviewing Agent evalu-ates data preparation and modelling outputs. The Explanation Agent supports interpretability and guardrails. Each agent records outputs and metadata, while shared memory stores information from previous workflow stages. The Central Hub routes tasks based on agent feedback. If the Reviewing Agent detects issues, the workflow can be revised or terminated. To reduce prompt complexity, each agent task is divided into layers such as planning, code 4 B. Custers et al. 
+
+generation, evaluation, and explanation. The Reviewing Agent checks perfor-mance, consistency, and modelling decisions. The Explanation Agent assesses internal beliefs, concept alignment, and fairness. Concept alignment is measured using Testing with Concept Activation Vectors [9], while fairness is assessed through group-level comparisons between predicted and observed outcomes for sensitive attributes such as age and population density.  
+
+> Fig. 1. Sketch of the application’s architecture
+
+The framework supports three LLM backends, all relatively small in size, as the aim was to invoke backends that can be quickly run on local machines. The three models, Llama 2 7B, and Llama 3.1 8B [12], and Qwen2.5 7B [18], can all be characterized as decoder-only transformer models and are all available as open source model. 
+
+## 4 Uncertainty quantification 
+
+4.1 Log probabilities and uncertainty estimation 
+
+Autoregressive language models generate outputs token-by-token from a pre-dictive distribution conditioned on the input prompt. Given an input x and model parameters θ, the predictive distribution over outputs y can be written as 
+
+pθ (y | x), and for a generated sequence of outputs y = ( z1, . . . , z L) with length 
+
+L, the probability can be decomposed into conditional token probabilities: 
+
+pθ (y|x) = 
+
+> L
+
+Y
+
+> t=1
+
+pθ (zt|z<t , x ) (1) Uncertainty Monitoring for LLM Agents 5
+
+Taking the logarithm yields the log probability of the sequence: 
+
+log pθ (y|x) = 
+
+> L
+
+X
+
+> t=1
+
+log pθ (zt|z<t , x ) (2) Log probabilities (’logprobs’) therefore provide a systematic approach to quantify how likely a particular outcome is according to the model, and they are directly derived from the predictive distribution. Because the text length of an input prompt can influence the magnitude of the log probability, it is common to apply length normalization to ensure fair comparison between responses of different lengths [4]. Hence, the normalized log probability ¯ℓ(y) is computed as: 
+
+¯ℓ(y) = 1
+
+L
+
+> L
+
+X
+
+> t=1
+
+log pθ (zt|z<t , x ) (3) Although log probabilities provide useful confidence-related signals, they do not directly represent the probability that an agent successfully completed its task, since LLMs may assign high likelihood to fluent but incorrect outputs. Therefore, the proposed framework treats log-probability summaries as uncer-tainty features rather than direct success probabilities. For agent i, the length-normalised log-probability summary is computed as 
+
+si = 1
+
+LiLiX
+
+> t=1
+
+log pθ (zt|z<t , x ), (4) which is transformed into a bounded confidence feature qi = exp( si). The prob-ability of successful task completion is then estimated as 
+
+P (Xi = success | qi) = fcal (qi) (5) where fcal denotes a calibration function estimated using validation runs. The calibrated value is then incorporated into the Bayesian Network as probabilistic evidence. 
+
+4.2 Bayesian Networks 
+
+In this MAS approach, uncertainty propagation is represented using a Bayesian Network that models the dependencies between agents. Each stage of the work-flow is modelled as a node, and dependencies between stages are captured through directed edges, as shown in Fig. 2. Token-level log probabilities are used to quan-tify uncertainty at each node, which is then propagated through the network to estimate overall system uncertainty. Bayesian Networks (BNs) are probabilis-tic graphical models that represent the joint probability distribution of a set of random variables using a directed acyclic graph [17]. Each node in the graph corresponds to a random variable, and directed edges represent conditional de-pendencies between variables. Let X = {X1, ..., X n} that denotes workflow tasks. 6 B. Custers et al. 
+
+For example, X1 may represent successful data preparation, X2 the successful review of the data, and X3 the successful training of a model. The defining prop-erty of a Bayesian Network is that the joint distribution factorizes according to the structure of the graph: 
+
+P (X1, ..., X n) = 
+
+> n
+
+Y
+
+> i=1
+
+P (Xi|Pa( Xi)) (6) where Pa( Xi) denotes the set of parent nodes of Xi [17]. Each conditional prob-ability term is specified through a conditional probability table (CPT). These tables quantify how the probability of a node depends on its parents. Hence, Bayesian Networks are suitable frameworks to visualize how conditional depen-dence and uncertainty accumulate through a network. In the context of the agent workflow, each node Xi in the Bayesian Network represents the successful ex-ecution of a task performed by an agent. The confidence score obtained from the log probabilities of the agent’s response is used to parametrize the prior probability of that node, where yi denotes the output produced by agent i is 
+
+P (Xi = success ) = c(yi). 
+
+> Fig. 2. Bayesian Network representation of the actuarial workflow, including posteriors for each phase success (1) or failure (0).
+
+The Bayesian Network used in this study represents an abstracted execution trace of the workflow rather than the full control logic of the agentic system. We do not model temporal ordering beyond direct parent-child dependencies, nor do we explicitly represent task priority, repeated execution, feedback loops, or iterative revision cycles. If an agent requests a revision, the final accepted output of that stage is used as the evidence for the corresponding node. This assumption keeps the graph acyclic and interpretable, which is appropriate for the present proof-of-concept study. Extending the model to dynamic Bayesian Networks or influence diagrams is left for future work. These values form the initial probability assignments for nodes that do not have parent variables. For nodes that depend on preceding steps in the workflow, the confidence score contributes to the conditional probability tables. As a CPT example, Fig. 3 Uncertainty Monitoring for LLM Agents 7
+
+shows that the relationship between WorkflowOK and its three parent nodes can be characterized as an "AND" gate, implying that WorkflowOK can only be true if all parent nodes are true. The CPT on the right shows the probability of WorkflowOK being true (1) for each combination of parent outcomes. When all parent nodes are true, the probability of WorkflowOK being true is equal to its prior (0.99), or posterior when evidence is gathered during the workflow process.  
+
+> Fig. 3. CPT example of WorkflowOK, depending on three parent nodes. The “AND” gate label indicates that WorkflowOK succeeds only if all parent nodes pass.
+
+Along the workflow run, new evidence is included in the network, and pos-terior probabilities are updated. The resulting network provides a dependency graph of uncertainty propagation within the workflow, as visualized in Fig. 2. An important advantage of a Bayesian Network is its interpretability. The graph-ical structure makes it possible to identify which components of the workflow contribute most to overall uncertainty. If a particular node shows high uncer-tainty or strongly influences downstream tasks, it could be flagged as a potential problem in the workflow. 
+
+4.3 Inference and uncertainty quantification 
+
+Once the Bayesian Network structure and conditional probability tables are de-fined, probabilistic inference can be performed to estimate posterior probabilities across the workflow. The objective of this inference is to determine how uncer-tainty in individual agent outputs affects the reliability of the final workflow outcome. The Bayesian Network for the actuarial workflow stores prior prob-abilities, CPTs, and holds functions to update the network and for inference. Throughout the workflow, the agents log the uncertainty measurements in the metadata, which is then extracted by the Central Hub that updates the Bayesian Network accordingly. At the end of the workflow, this results in a Bayesian Net-work graph with conditional probabilities on workflow subtasks. Fig. 2 shows an example of the Bayesian Network graph produced by the actuarial workflow. It visualizes for each step or agent in the workflow the in-ferred average and standard deviation of the logprobs, based on the underlying 8 B. Custers et al.          
+
+> Table 1. Scenario-based probability of successful workflow execution.
+> Scenario Description P(WorkflowOK)
+> ASafe scenario: low temperature (0.2) for all agents 87.1% BMixed scenario: low temperature (0.2) for data prep and modelling agent, medium temperature (0.7) for reviewing and explanation agent 69.0% CModerate scenario: medium temperature (0.7) for all agents (default) 59.2% DRisky scenario: high temperature (1.2) for one agent 42.8%
+
+dependencies. Here, most steps in the workflow show a certainty around 80%. However, the Bayesian Network also shows the propagation of uncertainty, as combining multiple agent outputs to finish the workflow results in a final cer-tainty of 55% in this presented example, which is significantly less compared to the individual agent certainties. To further test uncertainty propagation, the workflow can be tested with different settings, such as the structure (e.g. sequen-tial), or LLM temperature. The scenarios for tests with different temperature settings for the LLM backends are shown in Table 1. By testing with different LLM temperatures, the amount of randomness in the agent’s responses is var-ied, which has a direct effect on uncertainty. The scenarios in Table 1 illustrate how increased randomness and uncertainty propagate through the network and reduce the probability that the overall workflow succeeds (1). In a conservative scenario (A), all agents operate with a low temperature (0.2). As expected, the probabilities of success are high across the network and the final WorkflowOK node shows the highest reliability. Scenario B introduces a mixed configuration: low temperature for the Data Preparation and Modelling agents, but medium temperature for Reviewing and Explanation agents. This increases variability in some tasks and leads to a decline in the probability that the workflow succeeds. Scenario C applies a moderate temperature (0.7) to all agents, thereby repre-senting the default settings of the LLM backends. Finally, Scenario D maintains moderate temperatures but increases the temperature of the Explanation agent (1.2), showing how higher uncertainty in a single component can significantly re-duce the reliability of the overall workflow. Hence, this approach provides useful insights into workflow certainty and possible weak elements in the workflow. 
+
+## 5 Evaluation 
+
+The evaluation of the MAS focuses on four key dimensions: agent behaviour, consistency, agent capabilities (including error detection and adaptability), and safety. The analysis is based on repeated executions of the workflow using three LLM backends. Each backend was tested on the original dataset (10 runs) and on 20 systematically perturbed datasets designed to introduce controlled errors. Results are summarized in Table 2. In terms of general performance and agent behaviour, the MAS achieved a high task success rate, with at least 80% of runs Uncertainty Monitoring for LLM Agents 9
+
+completed successfully across all backends. The predictive performance, mea-sured using RMSE, was comparable to a baseline model, indicating that the MAS reliably reproduced standard actuarial results. While the Llama models performed similarly to the baseline, the Qwen backend achieved slightly bet-ter average performance. However, workflow certainty, derived from a Bayesian Network, varied significantly across backends, suggesting differences in how con-fidently each model evaluated its own outputs. Additionally, agent decisions dif-fered across backends: Llama 2 tended to approve workflows more easily, while Llama 3.1 and Qwen more frequently included critical notes, highlighting vari-ability in agent judgement despite identical prompts.                                       
+
+> Table 2. Workflow performance metrics, perturbed test metrics, and agent-level un-certainty comparison of LLM backends
+> Metric Llama 2 7B Llama 3.1 8B Qwen2.5 7B
+> Main workflow metrics
+> Task Success Rate 0.8000 0.9000 0.8000
+> Baseline model RMSE 0.8853 0.8853 0.8853
+> Mean RMSE 0.8856 0.8839 0.8671
+> Mean workflow uncertainty 0.7345 0.5506 0.6012
+> Test perturbed dataset metrics
+> Error Detection Rate 0.4500 0.6500 0.9000
+> Mean RMSE 1.0655 1.0728 1.0157
+> Mean workflow uncertainty 0.7342 0.5573 0.5833
+> Agent-level uncertainty scores
+> Data Preparation Agent 0.9226 0.8604 0.8648
+> Reviewing Agent 0.9086 0.8107 0.8710
+> Modelling Agent 0.9097 0.8292 0.8410
+> Explanation Agent 0.8819 0.8429 0.8052
+> Overall Workflow 0.7345 0.5506 0.6012
+
+A key focus of the evaluation was error detection and adaptability under per-turbed datasets. Here, substantial differences between backends emerged. The Qwen model achieved a high error detection rate (90%), significantly outperform-ing Llama 2 (45%) and Llama 3.1 (65%). It also showed better predictive per-formance under perturbations and demonstrated a stronger tendency to adapt by retraining models or changing strategies. In contrast, the Llama models often failed to detect severe issues and rarely adjusted their approach. Further anal-ysis showed that the MAS was particularly sensitive to distributional changes (population shifts), while other perturbations, such as missing values or sparsity, were less reliably detected. This highlights specific weaknesses in the validation process and suggests areas for improvement. Regarding safety, the Explanation Agent acts as a guardrail by evaluating belief consistency, interpretability (via TCAV), and fairness. The uncertainty tracking through the Bayesian Network 10 B. Custers et al. 
+
+provided useful insights. Table 2, the third part shows the average uncertainty scores per agent, and the combined uncertainty over the whole workflow. These results highlight how, even with high individual uncertainty scores for the agents, the propagation through the workflow can significantly reduce the score. 
+
+Table 3. Overview of test datasets, severity indicators and uncertainty scores                                                                                                                                                                                  
+
+> ID Description Sparsity Row Column Missing Target Population Correlation Uncertainty Change Change Rate Shift Shift Shift
+> T1 Missing values - low 0.0946 na na 0.0083 na 0.0000 0.0016 0.5874
+> T2 Missing values - high 0.1279 na na 0.0417 na 0.0000 0.0035 0.5737
+> T3 Missing rows - low 0.0862 0.0295 na na 0.0001 0.0000 0.0017 0.5734
+> T4 Missing rows - high 0.0862 0.1475 na na 0.0008 0.0000 0.0047 0.5858
+> T5 Missing column - low 0.0863 na 0.0833 na na na na 0.6033 T6 Missing column - high 0.0950 na 0.1667 na na na na 0.5737 T7 Data increase - low 0.0863 0.0500 na na 0.0001 0.0000 0.0018 0.5558
+> T8 Data increase - high 0.0862 0.2500 na na 0.0004 0.0000 0.0035 0.5536
+> T9 Extra column - var1 0.0796 na 0.0833 na na na na 0.5648 T10 Extra column - var2 0.0796 na 0.0833 na na na na 0.5837 T11 Inject feature noise - var1 0.0862 na na na na 0.0022 0.0071 0.5963
+> T12 Inject feature noise - var2 0.0862 na na na na 0.0006 0.0066 0.5843
+> T13 Inject label noise - low 0.0823 na na na 0.2093 na 0.0574 0.6078
+> T14 Inject label noise - high 0.0705 na na na 0.8303 na 0.1074 0.6065
+> T15 Distribution shift - var1 0.0853 0.1653 na na 0.0027 0.0130 0.0303 0.5785
+> T16 Distribution shift - var2 0.0861 0.0287 na na 0.0026 0.0033 0.0584 0.5607
+> T17 Fairness test - low 0.0818 na na na 0.2389 na 0.5973 0.5897
+> T18 Fairness test - high 0.0740 na na na 0.6504 na 0.3707 0.6139
+> T19 Counterfactual test 1 0.0862 na na na na na 0.7575 0.5727
+> T20 Counterfactual test 2 0.0862 na na na na na 0.1612 0.5998
+
+Each backend was also tested on 20 perturbed datasets to assess error de-tection and handling. Table 3 summarises these perturbations and reports the uncertainty score for each run, with derivations in Appendix A. Following [15], these scores help examine how dataset characteristics relate to workflow uncer-tainty. Appendix B compares the uncertainty distributions of default and perturbed runs for the Qwen backend, which showed the strongest error detection and adaptability. Runs with detected issues may fall outside the default distribution, while the scenarios in Table 1 are shown as individual points. Large deviations, for example measured using conformal prediction, could serve as warning signals for further review. 
+
+## 6 Conclusion 
+
+This work presented a runtime uncertainty-monitoring framework for LLM-based multi-agent systems in actuarial risk prediction. The system uses spe-cialised agents for data preparation, modelling, review, and explanation, coor-dinated through a central hub. Its main contribution is the use of calibrated token-level log-probability signals together with a Bayesian Network to model how uncertainty propagates across agent outputs and workflow stages. Rather than assessing each agent in isolation, the framework traces uncertainty through Uncertainty Monitoring for LLM Agents 11 
+
+the full workflow, helping to identify weak points and cases where human review may be needed. This is particularly important in actuarial settings, where unre-liable outputs may lead to incorrect risk assessment, unfair pricing, or regulatory concerns. The results show that the MAS can reproduce baseline actuarial modelling performance while providing additional insight into workflow-level confidence. However, the effectiveness of the approach depends on the selected LLM back-end, with differences observed in error detection, adaptability, and uncertainty behaviour. The proposed Bayesian Network should therefore be interpreted as a runtime uncertainty-propagation monitor, not as a proof of output correctness. This study has several limitations. The Bayesian Network abstracts the work-flow as a directed acyclic dependency model and does not explicitly represent execution sequence, task priority, repeated revisions, or feedback loops between agents. These aspects are handled operationally by the central hub, while the Bayesian Network uses the final accepted output of each stage as evidence. Future work will extend the framework to better distinguish intrinsic and extrinsic un-certainty [4], introduce symptom layers for identifying the causes of uncertainty [10, 6], and explore dynamic Bayesian Networks to capture temporal behaviour and iterative repair cycles. 
+
+Data and Code Availability Regarding research reproducibility, the Python im-plementation, datasets, and evaluation notebooks supporting this paper are publicly available on GitHub: https://github.com/bart-custers/actuarial_agents 
+
+Disclosure of Interests. The authors have no competing interests. 
+
+## References 
+
+1. Chauvin, T., Merrer, E.L., Taïani, F., Tredan, G.: Log probability tracking of llm apis. arXiv 2512.03816 (12 2025). https://doi.org/10.48550/arXiv.2512.03816 2. Chen, W., Su, Y., Zuo, J., Yang, C., Yuan, C., Chan, C.M., Yu, H., Lu, Y., Hung, Y.H., Qian, C., Qin, Y., Cong, X., Xie, R., Liu, Z., Sun, M., Zhou, J.: Agent-verse: Facilitating multi-agent collaboration and exploring emergent behaviors. arXiv 2308.10848 (10 2023). https://doi.org/10.48550/arXiv.2308.10848 3. Donaldson, L., Walker, C., Aslansefat, K., Papadopoulos, Y.: Bayesian uncertainty propagation for agentic rag pipelines: A proof-of-concept study on multi-hop ques-tion answering. arXiv preprint arXiv:2607.00972 (2026) 4. Duan, J., Diffenderfer, J., Madireddy, S., Chen, T., Kailkhura, B., Xu, K.: Uprop: Investigating the uncertainty propagation of llms in multi-step agentic decision-making. arXiv 2506.17419 (6 2025). https://doi.org/10.48550/arXiv.2506.17419 5. Hatzesberger, S., Nonneman, I.: Advanced applications of generative ai in actuarial science: Case studies beyond chatgpt. arXiv 2506.18942 (6 2025). https://doi.org/10.48550/arXiv.2506.18942 6. He, X., Wu, D., Zhai, Y., Sun, K.: Sentinelagent: Graph-based anomaly detection in multi-agent systems. arXiv 2505.24201 (2025). https://doi.org/10.48550/arXiv.2505.24201 12 B. Custers et al. 7. Hu, Z., Zheng, T., Huang, H.: A bayesian approach to harnessing the power of llms in authorship attribution. arXiv 2410.21716 (10 2024). https://doi.org/10.48550/arXiv.2410.21716 8. International Actuarial Association: Artificial intelligence governance framework - general actuarial practice. https://actuaries.org/paper/artificial-intelligence-governance-framework/ [Accessed 3/12/25] (2024) 9. Kim, B., Wattenberg, M., Gilmer, J., Cai, C., Wexler, J., Viegas, F., Sayres, R.: Interpretability beyond feature attribution: Quantitative test-ing with concept activation vectors (tcav). arXiv 1711.11279 (6 2017). https://doi.org/10.48550/arXiv.1711.11279 10. Liu, Z., Liu, Y., Cai, B., Zheng, C.: An approach for developing diagnostic bayesian network based on operation procedures. Expert Systems with Applications 42 (4), 1917–1926 (2015). https://doi.org/https://doi.org/10.1016/j.eswa.2014.10.020, 
+
+https://www.sciencedirect.com/science/article/pii/S0957417414006447 
+
+11. Malinin, A., Gales, M.: Uncertainty estimation in autoregressive structured pre-diction. arXiv 2002.07650 (2 2020). https://doi.org/10.48550/arXiv.2002.07650 12. Meta AI: Introducing llama 3.1. https://ai.meta.com/blog/meta-llama-3-1/ [Ac-cessed 25/1/2026] (7 2024) 13. Mohammadi, M., Li, Y., Lo, J., Yip, W.: Evaluation and benchmarking of llm agents: A survey. In: Proceedings of the 31st ACM SIGKDD Conference on Knowl-edge Discovery and Data Mining V.2. pp. 6129–6139. Association for Computing Machinery (ACM) (8 2025). https://doi.org/10.1145/3711896.3736570 14. Nafar, A., Venable, K.B., Cui, Z., Kordjamshidi, P.: Extracting probabilistic knowl-edge from large language models for bayesian network parameterization. arXiv 2505.15918 (8 2025). https://doi.org/10.48550/arXiv.2505.15918 15. Oreski, D., Oreski, S., Klicek, B.: Effects of dataset characteristics on the per-formance of feature selection techniques. Applied Soft Computing 52 , 109–119 (3 2017). https://doi.org/10.1016/j.asoc.2016.12.023 16. Owens, E., Sheehan, B., Mullins, M., Cunneen, M., Ressel, J., Castignani, G.: Explainable artificial intelligence (xai) in insurance. Risks 10 , 230 (12 2022). https://doi.org/10.3390/risks10120230 17. Pearl, J.: Probabilistic Reasoning in Intelligent Systems. Morgan Kaufmann Pub-lishers Inc., San Francisco, USA (1988). https://doi.org/10.1016/C2009-0-27609-4 18. Qwen Team: Qwen2.5-7b-instruct (model card). https://huggingface.co/Qwen/Qwen2.5-7B-Instruct [Accessed 25/1/2026] (2025) 19. Sapkota, R., Roumeliotis, K.I., Karkee, M.: Ai agents vs. agentic ai: A con-ceptual taxonomy, applications and challenges. arXiv 2505.10468 (5 2025). https://doi.org/10.48550/arXiv.2505.10468 20. Tran, K.T., Dao, D., Nguyen, M.D., Pham, Q.V., O’Sullivan, B., Nguyen, H.D.: Multi-agent collaboration mechanisms: A survey of llms. arXiv 2501.06322 (1 2025). https://doi.org/10.48550/arXiv.2501.06322 21. Wang, L., Ma, C., Feng, X., Zhang, Z., Yang, H., Zhang, J., Chen, Z., Tang, J., Chen, X., Lin, Y., Zhao, W.X., Wei, Z., Wen, J.: A survey on large language model based autonomous agents. Frontiers of Computer Science 18 (12 2024). https://doi.org/10.1007/s11704-024-40231-1 22. Wu, Q., Bansal, G., Zhang, J., Wu, Y., Li, B., Zhu, E., Jiang, L., Zhang, X., Zhang, S., Liu, J., Awadallah, A.H., White, R.W., Burger, D., Wang, C.: Autogen: Enabling next-gen llm applications via multi-agent conversation. arXiv 2308.08155 (10 2023). https://doi.org/10.48550/arXiv.2308.08155 Uncertainty Monitoring for LLM Agents 13 23. Xu, M., Gan, Q., Zhu, Z., Qin, H.: Logprobs know uncertainty: Fighting llm hallu-cinations. In: Proceedings of the ACM SIGSOFT Symposium on the Foundations of Software Engineering. pp. 1242–1243. Association for Computing Machinery (7 2025). https://doi.org/10.1145/3696630.3731433 24. Yang, Y., Peng, Q., Wang, J., Wen, Y., Zhang, W.: Llm-based multi-agent systems: Techniques and business perspectives. arXiv 2411.14033 (12 2024). https://doi.org/10.48550/arXiv.2411.14033 25. Yehudai, A., Eden, L., Li, A., Uziel, G., Zhao, Y., Bar-Haim, R., Cohan, A., Shmueli-Scheuer, M.: Survey on evaluation of llm-based agents. arXiv 2503.16416 (3 2025). https://doi.org/10.48550/arXiv.2503.16416 
+
+## A Appendix: Dataset severity indicators 
+
+To quantify how strongly a dataset has changed between a baseline dataset Db
+
+and a perturbed dataset Dp, several indicators were computed. These indicators capture structural, statistical, and distributional changes between the datasets. 
+
+A.1 Row Change 
+
+The row change indicator measures the relative change in the number of obser-vations between the baseline and perturbed dataset. RowChange = |np − nb|
+
+nb
+
+(7) where: 
+
+– nb is the number of rows in the baseline dataset, 
+
+– np is the number of rows in the perturbed dataset. 
+
+A.2 Column Change 
+
+The column change indicator measures the relative change in the number of features (columns). ColChange = |pp − pb|
+
+pb
+
+(8) where: 
+
+– pb is the number of columns in the baseline dataset, 
+
+– pp is the number of columns in the perturbed dataset. 14 B. Custers et al. 
+
+A.3 Missing values 
+
+The missing value indicator measures how the total number of missing values changes between datasets relative to the number of cells. It is computed as: Missingness = |M (Dp) − M (Db)|
+
+nbpb
+
+(9) where: 
+
+– M (Dp) is the number of missing values in the perturbed dataset, 
+
+– M (Db) is the number of missing values in the baseline dataset. 
+
+A.4 Target Shift 
+
+Target shift measures the standardized difference in the mean of the target vari-able between datasets. Let Y denote the target variable (in this case the number of claims). Define the mean of the target value as μb = EDb[Y ] and μp = EDp[Y ].The target shift is then defined as: TargetShift = |μp − μb|
+
+σb
+
+(10) where: 
+
+– mu p is the mean target value in the perturbed dataset, 
+
+– mu b is the mean target value in the baseline dataset, 
+
+– sigma b is the standard deviation of the target value in the baseline dataset. 
+
+A.5 Sparsity 
+
+Sparsity measures the proportion of elements that are either zero or missing. Let the number of zero values Z(D) and the number of missing values M (D) be defined by: 
+
+Z(D) = 
+
+> n
+
+X
+
+> i=1
+> p
+
+X
+
+> j=1
+
+1(xij = 0) , M (D) = 
+
+> n
+
+X
+
+> i=1
+> p
+
+X
+
+> j=1
+
+1(xij = NA )
+
+The sparsity of dataset D is defined as: Sparsity (D) = Z(D) + M (D)
+
+np (11) where np is the total number of elements in the dataset. Uncertainty Monitoring for LLM Agents 15 
+
+A.6 Population Shift 
+
+Population shift is measured using a population stability index (PSI), which quantifies changes in the distribution of a variable between datasets. First, the baseline variable is divided into K quantile-based bins. Let N bk and N pk be the numbers of observations from the base and perturbed datasets, respectively, that fall into bin Ik. The corresponding proportions are 
+
+pbk = N bk
+
+nb
+
+, ppk = N pk
+
+nn
+
+, k = 1 , . . . , K. 
+
+The PSI is then defined as PSI =
+
+> K
+
+X
+
+> k=1
+
+(ppk − pbk) log 
+
+ ppk
+
+pbk
+
+
+
+(12) A higher PSI indicates stronger distributional drift. 
+
+A.7 Correlation Shift 
+
+Correlation shift is measured by how much the correlation structure between the numeric columns of two data sets changes. It computes the correlation matrix of all numeric variables in each dataset D and then returns the Euclidean (L2) norm of the difference between these two correlation matrices (i.e., a single number summarizing the overall shift in pairwise correlations): CorrShift = ∥Rp − Rb∥ (13) where: 
+
+– Rb = corr (Db) is the correlation matrix of the baseline dataset, 
+
+– Rp = corr (Dp) is the correlation matrix of the perturbed dataset, 
+
+– ∥.∥ is the default matrix 2-norm. 
+
+## B Appendix: Uncertainty distribution 16 B. Custers et al. 
+
+Fig. 4. Uncertainty distribution, compared between original (default) and test datasets, for workflow runs with Qwen backend. The four individual points represent the uncer-tainty outcomes from the test scenarios in Table 1.
