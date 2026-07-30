@@ -1,0 +1,862 @@
+Title: AlphaSchema: Exploring the Space of Trading Semantics for LLM-Based Alpha Mining
+
+URL Source: https://arxiv.org/pdf/2607.26642v1
+
+Published Time: Thu, 30 Jul 2026 00:38:23 GMT
+
+Number of Pages: 18
+
+Markdown Content:
+# AlphaSchema: Exploring the Space of Trading Semantics for LLM-Based Alpha Mining ∗† 
+
+Jingyang Yi 1,2 Jian Yang 2,3 Yifei Jin 1,2
+
+Yuqi Li 2,4 Jian Li 5
+
+> 1
+
+X-Tech 2Xtech-PandaAI-Waton Joint Lab 
+
+> 3
+
+Monash University 4PandaAI 5IIIS, Tsinghua University 
+
+Abstract 
+
+Automated alpha mining has increasingly adopted large lan-guage model (LLM) agents for factor generation and itera-tive discovery. However, existing LLM-based systems often delegate both factor construction and search decisions to the agent itself, without an explicit exploration space or a prin-cipled mechanism for navigating that space. As a result, ex-ploration remains largely implicit and difficult to control or optimize systematically. We introduce ALPHASCHEMA, which constructs and explores a structured space of trading seman-tics for alpha mining. Each point in this space is a schema plan composed of Event , Context , Qualities , Direction , and Out-put , specifying the semantics of a candidate factor before im-plementation. ALPHASCHEMA decouples exploration from im-plementation: an LLM translates selected schema plans into executable factors, while evaluated rewards are accumulated to learn a surrogate model over the semantic space. An itera-tive selection mechanism uses this model to balance global exploration, surrogate-guided exploitation, and local muta-tion. Experiments on the Chinese stock market show that AL-PHASCHEMA discovers factor pools with strong predictive and portfolio performance. Further analyses show that the seman-tic search process navigates diverse regions while increasingly allocating evaluations toward high-reward regions, and that implementations of the same schema plans by different LLMs exhibit comparable predictive quality, suggesting that alpha mining quality is largely robust to the choice of LLM within our framework. 
+
+1 Introduction 
+
+Alpha mining aims to discover trading signals that are pre-dictive, executable, interpretable, and stable out of sample. Traditional asset-pricing research derives factors from eco-nomic hypotheses and empirical anomalies (Sharpe 1964; Fama and French 1992; 1993), but the vast and evolving space of potential trading mechanisms makes manual dis-covery inherently limited. An automated factor-mining sys-tem should therefore not only generate candidate signals, but also efficiently explore meaningful trading hypotheses while preserving economic interpretation, implementation valid-ity, and reproducible evaluation. 
+
+> ∗
+
+Preprint. Correspondence: yijingyang@x-tech.net.cn 
+
+and jyan0311@student.monash.edu 
+
+> †
+
+https://github.com/JingyangYi/AlphaSchema 
+
+Existing automated systems have expanded alpha dis-covery through formulaic and evolutionary search. Formu-laic and evolutionary methods represent factors as expres-sions, syntax trees, or operator programs (Kakushadze 2016; Koza 1994; Zhaofan, Jianwu, and Chengshan 2022; Zhang et al. 2020; Cui et al. 2021; Yu et al. 2023; Shi et al. 2025), enabling large-scale exploration of implementation spaces. However, the search process is primarily driven by mathe-matical composition rather than explicit economic seman-tics, making it difficult to incorporate higher-level trading hypotheses into the discovery process. More recent LLM-based agents introduce planning, code generation, memory systems, trajectory evolution, and guarded execution into factor discovery (Li et al. 2024; Tang et al. 2025; Shi, Duan, and Li 2026; Lin et al. 2026; Han et al. 2026; Shi et al. 2026; Liu et al. 2026; Chen et al. 2025). However, many existing LLM-based systems couple search-space construction, search-trajectory selection, and code-level realization inside the LLM agent. Consequently, the candidate space is shaped implicitly by prompts, memory traces, and model-specific proposal behavior, making diver-sity difficult to measure, coverage difficult to control, and search trajectories difficult to reproduce or improve system-atically. Moreover, the performance of such paradigms re-mains tightly coupled with the capabilities of frontier LLMs, incurring substantial computational costs and limiting the scalability of large-scale automated mining. We propose ALPHASCHEMA, a semantic-space exploration framework for automated alpha mining that separates what to search from how to implement it . Instead of treating code or formulas as the primary search object, ALPHASCHEMA repre-sents each candidate as a structured trading-semantic plan 
+
+p = ( e, c, Q, d, o ), (1) where e denotes a market event, c its conditioning context, 
+
+Q a set of quality constraints, d the directional hypothesis, and o the output form. The search process operates over this schema space, while an LLM translates selected plans into executable factor implementations for evaluation. ALPHASCHEMA maintains a reward buffer of evaluated plans and trains a LightGBM reward model over schema fea-tures (Ke et al. 2017). At each round, a large sampled can-didate pool is scored before LLM implementation. A quota selector allocates the limited implementation and backtest-arXiv:2607.26642v1 [cs.AI] 29 Jul 2026 Figure 1: Overview of ALPHASCHEMA. ALPHASCHEMA performs iterative alpha mining over a structured trading-semantic space. At each round, semantic plans are generated and selected by a quota-based semantic scheduler that allocates the evaluation budget among structural exploration, surrogate-guided exploitation, and local mutation. Selected plans are realized into executable factors by an LLM agent and evaluated through guarded backtesting. The resulting plan–reward pairs are accumulated to update the semantic scorer, which guides subsequent search rounds. ing budget across structurally novel candidates, surrogate-ranked high-reward candidates, and mutation-based refine-ments around historically strong plans. By associating eval-uation feedback with schema plans rather than generated code or operators, ALPHASCHEMA learns reusable priors over which trading semantics are worth exploring. The main contributions of this work are summarized as follows: • We introduce structured trading-semantic plans as the new search abstraction for automated alpha mining. Un-like formula- or program-level mining, ALPHASCHEMA explores an explicit semantic space of market events, con-texts, quality constraints, directions, and output forms be-fore code realization. • We develop a reward-guided semantic exploration algo-rithm for LLM-based alpha mining. Using accumulated plan-level rewards and adaptive selection, ALPHASCHEMA makes the search space explicit and optimizable, reducing reliance on implicit exploration behaviors of individual LLM agents. • We empirically validate the proposed semantic search framework. Experiments show strong predictive and port-folio performance of discovered factors, while further analyses demonstrate that semantic plans provide learn-able search signals, support effective exploration, and re-main robust across different LLM realizations. 
+
+2 Preliminary 
+
+Alpha Mining 
+
+An alpha factor is a rule that transforms historical market in-formation into a cross-sectional signal for asset ranking or prediction. Given N tradable assets observed over T trad-ing dates, let Xt ∈ RN ×D denote the market state at date 
+
+t, where rows correspond to assets and columns correspond to observable market features. A factor f maps a historical window of market states into a signal vector: 
+
+vt = f (Xt−τ +1: t), vt ∈ RN .
+
+Beyond its executable implementation, a factor typically reflects an underlying market mechanism that provides an in-terpretable rationale for its predictive relationship with future returns. Therefore, alpha mining involves not only finding predictive transformations, but also discovering meaningful mechanisms and realizing them as executable factors. Formally, we distinguish a semantic factor plan from its executable realization. Let p ∈ P denote a candidate trading-semantic plan, and let 
+
+Γ : P → ∆( F)
+
+denote a realization process that maps a semantic plan to a distribution over executable factors. A realized factor 
+
+f ∼ Γ( p) is evaluated by a factor-quality objective J (f ).The objective of semantic factor discovery can therefore be written as 
+
+p∗ = arg max  
+
+> p∈P
+
+Ef ∼Γ( p)[J (f )] .A plan does not uniquely determine an executable factor: different realizations may adopt different operators, parame-ters, and functional forms. Thus, the objective concerns the reward distribution induced by a plan rather than a deter-ministic mapping, and each observed reward provides only a sample of this distribution. In practice, however, evaluating this distribution requires a trade-off between reward estima-tion accuracy and search coverage under a limited mining budget. 
+
+Structured Semantic Plans 
+
+To search over trading semantics, ALPHASCHEMA represents each candidate factor as a structured semantic plan. 1 Rather than assuming a unique ontology of market mechanisms, we define a practical and expressive representation that captures recurring dimensions of factor construction. A semantic plan describes the intended trading mechanism before implemen-tation and can subsequently be translated into an executable factor by an LLM. Formally, a semantic plan is represented as 
+
+p = ( e, c, Q, d, o ) ∈ P ,
+
+where the five dimensions jointly characterize different as-pects of a candidate trading mechanism: • Event : the market phenomenon or signal-generating event being captured, such as breakout, volume expan-sion, or volatility compression; • Context : the market state or reference condition under which the event is interpreted, such as a recent extreme, VWAP region, volatility regime, or cross-sectional quan-tile; • Qualities : additional properties or validation criteria that refine the mechanism, such as volume confirmation, multi-horizon consistency, or outlier filtering; • Direction : the expected relationship between the mecha-nism and future returns, such as continuation, reversal, or range oscillation; • Output : the form in which the mechanism is expressed as a tradable signal, such as a continuous score, event decay, or cross-sectional rank. Together, these dimensions specify what market phe-nomenon is considered, under which conditions it is inter-preted, what evidence supports it, how it is expected to af-fect future returns, and how the resulting signal is expressed. Unlike formula trees or sequential decision processes, a se-mantic plan does not impose a predefined ordering or compo-sitional structure among these dimensions. They jointly de-fine a point in the trading-semantic space, allowing the search process to explore different combinations of trading concepts without assuming a fixed construction procedure. 
+
+3 Methodology 
+
+Given the trading-semantic space defined in Section 2, AL-PHASCHEMA performs iterative search under a fixed genera-tion and backtesting budget. In each round, candidate plans 
+
+> 1See Appendix C for the schema-vocabulary construction, JSON representation, and a concrete plan-to-code example.
+
+are proposed and selected using predicted reward, structural novelty, and local mutation. Selected plans are implemented as executable factors, validated, and backtested. Their corre-sponding rewards are added to a buffer to update the semantic surrogate for the next round. The search loop has three components: (1) semantic plan proposal and selection , which combines global sampling, lo-cal mutation, and quota-based allocation; (2) plan realiza-tion and evaluation , which generates executable factors and applies execution, leakage, and backtesting checks; and (3) 
+
+semantic reward learning , which learns from accumulated plan–reward observations to score sampled candidate plans. Figure 1 summarizes the closed-loop workflow. 
+
+Semantic Plan Space Construction 
+
+We instantiate a trading-semantic space using configurable vocabularies for events, contexts, qualities, directions, and outputs. Let these vocabularies be denoted by VE , VC , VQ,
+
+VD , and VO , respectively. The resulting plan space is 
+
+P = VE × V C × Q set × V D × V O .
+
+Here 
+
+Qset = {Q ⊆ V Q : 0 ≤ | Q| ≤ 3}
+
+denotes the admissible sets of quality constraints. The quality position may therefore contain zero to three complementary constraints, whereas the remaining four positions select one primary schema item each. The vocabularies can be derived from domain expertise, academic and practitioner literature, existing factor libraries, and findings from previous discovery runs. They need not cover all trading semantics and can instead be configured for a target domain, such as equity fundamentals or futures term structure. A plan describes only trading logic, without prescribing operators, library functions, or numerical parameters. We also impose no hand-crafted compatibility rules across di-mensions. Unusual or potentially inconsistent combinations are evaluated through code realization and empirical feed-back, avoiding complex prior constraints while retaining un-conventional combinations that may still produce useful fac-tors. 
+
+Plan Realization and Execution Validation 
+
+Given a selected plan p, the code agent receives its semantic specification, data contract, and implementation constraints, and translates it into executable factor functions. The plan specifies only the intended trading logic; the agent indepen-dently chooses the operators, functional form, and numerical parameters. It implements each plan at a fast and a slow time scale, yielding realizations fp, fast and fp, slow .Before backtesting, each realization passes through exe-cution guards that verify contract compliance and compu-tational validity, test numerical stability, and screen for po-tential look-ahead leakage. Invalid implementations receive one repair attempt; if they still fail, the plan is assigned zero reward, using unrecoverable realization failure as negative semantic feedback. 2
+
+> 2The zero reward is a realization-feasibility penalty rather than
+
+Semantic Reward Modeling 
+
+For each valid realization fp,s of plan p, where s ∈{fast , slow }, we define 
+
+rp,s = α RankIC (fp,s ) + β RankICIR (fp,s )
+
+− λ ∆lag (fp,s ), (2) where 
+
+∆lag (f ) = max {0, RankIC (f ) − RankIC (L1f )} ,
+
+and L1f denotes the signal delayed by one period. The co-efficients α, β, λ > 0 control predictive strength, temporal stability, and lag sensitivity, respectively; their experimental values are reported in Appendix A. The plan reward is 
+
+r(p) = max 
+
+> s∈{ fast ,slow }
+
+rp,s .
+
+After each round, new plan–reward pairs are added to the reward buffer 3
+
+Dt = Dt−1 ∪ { (pi, r (pi)) }i∈B t .
+
+A LightGBM reward model is retrained on the expanded buffer using structured plan features ϕ(p), which encodes the selected schemas with one-hot features, category and scope counts, and pairwise schema-component interactions. In each subsequent round, we sample a large candidate pool from the schema space and assign each sampled plan a pre-dicted score ˆrt(p).
+
+Adaptive Quota-Based Plan Selection 
+
+Let B denote the number of plans evaluated in each search round. We allocate this batch across exploration, surrogate-guided exploitation, and local mutation. If nt plans have been evaluated before round t, the exploration share is 
+
+ρt = ρmin + ( ρmax − ρmin ) exp 
+
+(
+
+− nt
+
+τ
+
+)
+
+,
+
+where 0 ≤ ρmin ≤ ρmax ≤ 1 and τ > 0. As more plans are evaluated, ρt gradually decreases from ρmax toward ρmin . In practice, we precede this schedule with a short cold-start pe-riod in which the full batch is allocated to exploration. After the cold start, a fraction ρt of each batch is allocated to ex-ploration. The remaining fraction 1 − ρt is divided between exploitation and mutation. Both exploration and surrogate-guided exploitation se-lect plans from the sampled candidate pool: the former fa-vors structural novelty, while the latter ranks candidates by 
+
+ˆrt(p).4 Mutation starts from evaluated high-reward plans and changes one schema component to generate unseen neighbors, providing a simple way to search locally around promising regions. This local search is particularly relevant in alpha mining, where the objective is to identify a small set of strong factors. 
+
+> a claim that the plan has zero latent alpha. Keeping failed plans in the buffer helps the surrogate avoid repeatedly selecting semantic structures that are difficult to implement as valid, robust factors.
+> 3We use an accumulated buffer because each realized plan provides expensive schema-level supervision; retaining all obser-vations improves surrogate accuracy and later exploitation. Ap-pendix A discusses this choice.
+> 4Appendix A gives the exact coverage-novelty score and local mutation operator used by the selector.
+
+4 Experiments 
+
+This section first describes the experimental setup, includ-ing the dataset, evaluation protocol, baselines, and search configuration. We then report the downstream backtest-ing performance of the factor pools discovered by AL-PHASCHEMA, comparing them with representative predictive models, open-source factor libraries, and agentic mining sys-tems. 
+
+Experimental Setup 
+
+Dataset and Metrics. Following recent Qlib-based alpha-mining studies, we use the CSI300 universe as the primary benchmark. The data are split into training (Jan 1, 2016 – Dec 31, 2020), validation (Jan 1, 2021 – Dec 31, 2022), and testing (Jan 1, 2023 – Dec 31, 2025). The prediction target is the 5-day forward close-to-close return. We report IC, ICIR, RankIC, and RankICIR for predictive performance, together with benchmark-relative AER, IR, and MDD for portfolio evaluation. Data processing, trading costs, and metric defi-nitions are provided in Appendix A. 
+
+Baselines. We compare against four baseline families. Machine-learning predictors include MLP and XGBoost (Chen and Guestrin 2016). Deep sequence models include Transformer (Vaswani et al. 2017), GRU (Cho et al. 2014), and LSTM (Graves 2012). Open-source factor libraries in-clude Alpha158 and Alpha360 (Yang et al. 2020). Agentic mining systems include RD-Agent (Li et al. 2026) and Quan-taAlpha (Han et al. 2026). Predictor baselines use the same train/validation/test split. 
+
+Implementation Details. ALPHASCHEMA searches over a price-volume semantic space consisting of 140 components, including 40 Events, 40 Contexts, 50 Qualities, 3 Directions, and 7 Outputs. 5 These components describe trading seman-tics derived from OHLCV and VWAP information, while ad-ditional fundamental schemas are introduced separately in the +FUNDAMENTAL setting. DeepSeek-V4-Flash is used as the default code-agent backend due to its low inference cost. Each run evaluates 16 plans per round for 80 rounds, with the first 10 rounds using exploration only and later rounds grad-ually introducing surrogate-guided selection and mutation. We conduct five independent runs and construct final factor pools from validated outputs using reward ranking and cor-relation filtering. 
+
+Main Results 
+
+Pool-Level Evaluation The principal evaluation of AL-PHASCHEMA is conducted at the factor-pool level. Table 1 reports predictive and portfolio performance on the held-out test period. 6 The OHLCV setting contains 120 discov-ered factors and achieves the strongest IC (0.0382) and ICIR (0.2374) among the compared methods. 
+
+> 5Appendix F provides examples of schema records from each category.
+> 6Appendix B reports an additional CSI500 backtest using an in-dependently mined and selected factor pool under the same down-stream protocol.
+
+Table 1: Main-result table on CSI300. “Fund. Schema” indicates whether the mining process is allowed to use fundamental semantic schema fields. Higher is better for all metrics except MDD. Best results are bolded and second-best results are under-lined. 
+
+Category Method Fund. Schema Factor Predictive Power Strategy Performance IC ICIR Rank IC Rank ICIR IR AER (%) MDD (%) ↓
+
+Machine-Learning Predictors 
+
+Machine Learning MLP 7 0.0236 0.1408 0.0389 0.2471 0.5901 5.16 11.47 XGBoost 7 0.0284 0.2024 0.0373 0.2699 0.3556 2.55 10.30 
+
+Deep Sequence Models 
+
+Deep Learning Transformer 7 0.0289 0.1561 0.0507 0.2775 0.6929 6.14 12.03 GRU 7 0.0310 0.1782 0.0565 0.3242 0.4609 3.73 13.21 LSTM 7 0.0380 0.2269 0.0587 0.3521 0.6317 5.14 11.51 
+
+Open-Source Factor Libraries 
+
+Factor Library Alpha158 7 0.0347 0.2081 0.0504 0.3009 0.5474 4.36 15.87 Alpha360 7 0.0231 0.1710 0.0292 0.2100 0.4024 2.99 8.86 
+
+Agentic Mining Systems 
+
+Agentic Mining RD-Agent 7 0.0242 0.1494 0.0504 0.3094 0.9861 6.81 15.57 QuantaAlpha 7 0.0208 0.1619 0.0380 0.2934 0.6726 5.57 14.18 Ours ALPHASCHEMA (OHLCV) 7 0.0382 0.2374 0.0498 0.2912 0.7624 8.53 18.63 
+
+ALPHASCHEMA (+Fund.) 3 0.0380 0.2365 0.0487 0.2857 1.0877 11.94 15.43 
+
+We also report a +FUNDAMENTAL variant, which augments the OHLCV pool with 30 factors whose schema plans in-clude fundamental fields. This expanded 150-factor pool fur-ther improves portfolio performance, achieving the strongest IR (1.0877) and AER (11.94%). LSTM records the high-est Rank IC and Rank ICIR, while ALPHASCHEMA performs best on several other predictive and portfolio metrics. Over-all, the results show that semantic-plan search can discover useful factors and produce competitive downstream perfor-mance when the resulting factors are combined. Figure 2 provides a complementary library-level view of the same held-out period. It compares the net asset value (NAV) trajectories of the exported ALPHASCHEMA factor pools with representative predictive models, agentic mining systems, open-source factor libraries, and the CSI300 bench-mark under the same backtest setting. The ALPHASCHEMA curves maintain higher NAV growth through the test win-dow, indicating that the selected factor pools convert predic-tive signal into stronger realized portfolio value. 
+
+5 Analysis 
+
+Beyond overall performance, we further analyze why AL-PHASCHEMA is effective as a semantic search framework for alpha mining. Our analyses focus on four aspects: (1) how the proposed schema decomposition contributes semantic struc-ture to factor discovery; (2) how search redistributes evalua-tions across the resulting semantic space; (3) how realization budget should be allocated under stochastic plan-to-factor mapping; and (4) how implementation robustness changes across different LLMs. 2023-06 2023-12 2024-06 2024-12 2025-06 2025-12 
+
+> Test period
+> 0.8
+> 1.0
+> 1.2
+> 1.4
+> 1.6
+> NAV index
+> NAV Index on CSI300 Test Period
+> AlphaSchema (+Fund.)
+> AlphaSchema (OHLCV)
+> QuantaAlpha
+> RD-Agent
+> Alpha158 + LightGBM
+> Transformer + Alpha360
+> LSTM + Alpha360
+> XGBoost + Alpha360
+> CSI300 benchmark
+
+Figure 2: Held-out NAV trajectories against representative baselines and the CSI300 benchmark over the 2023–2025 test period. All learned factor pools use the same CSRan-kNorm, LightGBM combiner, and Top50/Drop5 backtest protocol. 
+
+Semantic Component Ablation 
+
+We first examine how individual schema components con-tribute useful information to factor discovery. Unless other-wise noted, all variants share the same LLM backend and evaluation protocol. We select 100 complete schema plans and construct five leave-one-component-out variants by removing one field from {Event , Context , Qualities , Direction , Output }. Each incomplete plan is provided to DeepSeek-V4-Flash for fac-tor realization, with one repair opportunity allowed under the same execution protocol. The generated factors are then eval-uated after execution validation and backtesting. Figure 3 summarizes the results. Removing any schema w/o Event      
+
+> w/o Output
+> w/o Quality
+> w/o Direction
+> w/o Context
+> 0
+> 10
+> 20
+> 30
+> Drop from full (%)
+> 21.1
+> 24.9 27.1 28.3 30.6
+> 7.0
+> 4.0 5.0
+> 12.0
+> 6.0
+> Schema component ablation
+> |Rank IC| drop Validity drop
+
+Figure 3: Component-wise schema ablation. component leads to a degradation in factor quality, while the implementation success rate decreases only moderately. Here, successful implementation requires passing execution checks including data-contract compliance, numerical valid-ity, and look-ahead leakage screening. The relatively small drop in validity suggests that the LLM can still construct exe-cutable factors even from incomplete semantic descriptions 7,but the missing components reduce the quality of the result-ing factors. Across all leave-one-out variants, removing a single se-mantic component causes a clear reduction in Rank IC com-pared with the complete schema plans. This indicates that the five schema dimensions provide complementary information for factor discovery: although the realization model can com-pensate for missing semantic details, the resulting factors are less effective when important aspects of the trading mecha-nism are omitted. 
+
+Semantic Navigation During Search 
+
+To examine how ALPHASCHEMA navigates the semantic space, we trace all schema plans generated during a com-plete search run. Each plan is embedded from its semantic description and reduced to a 50-dimensional representation using PCA. We first cluster all plans in this space using K-means to identify global semantic regions. For each search stage, we identify the dominant region based on the distribu-tion of generated plans, with temporal smoothing applied to obtain a stable region trajectory. Figure 4 visualizes all plans in the first two principal components, with arrows connecting the dominant regions across search stages. 8
+
+The search process initially covers diverse semantic re-gions and later allocates more evaluations toward high-reward regions, while maintaining multiple active areas of exploration. This pattern indicates that the selector reallo-cates budget toward reward-enriched semantic regions with-out collapsing the search to a single narrow cluster. 
+
+> 7
+
+See Appendix E for further discussion of ablated-schema exe-cutability. 
+
+> 8
+
+See Appendix E for embedding and clustering details, round-level dominance definitions, and the schema interpretation of dom-inant manifolds. 0.3 0.2 0.1 0.0 0.1 0.2 0.3 
+
+> PCA-1 semantic coordinate
+> 0.2
+> 0.1
+> 0.0
+> 0.1
+> 0.2
+> PCA-2 semantic coordinate
+> 0.0
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> 1.0
+> Normalized reward
+
+Figure 4: Semantic-space navigation across search rounds. 1 2 3 4 5    
+
+> Rollouts per plan
+> 0.4
+> 0.6
+> 0.8
+> Rank correlation
+> Reward estimation
+> 12345
+> Rollouts per plan
+> 0.2
+> 0.3
+> 0.4
+> 0.5
+> Top-plan recall per rollout  Budget efficiency
+
+Figure 5: Plan quality estimation and top-plan discovery ef-ficiency. 
+
+Realization Variance and Budget Efficiency 
+
+A semantic plan induces a distribution of executable realiza-tions rather than a deterministic factor. We study the trade-off between estimating plan quality more accurately and discov-ering high-quality plans under a limited realization budget. For each plan, repeated realizations provide a better estimate of its expected quality, but consume budget that could other-wise explore additional semantic candidates. Using 100 schema plans with up to eight realizations, we treat the average reward across realizations as an approxi-mate reference quality. Figure 5 shows that increasing the number of realizations improves ranking consistency with this reference. However, when normalized by the number of realizations, the efficiency of identifying top-quality plans decreases substantially. These results show that repeated re-alizations improve plan-quality estimation, but with dimin-ishing returns for identifying top-quality plans. Thus, sin-gle realization provides a more efficient estimator for large-scale alpha mining, where the objective is ranking promising candidates rather than accurately estimating every plan’s ex-pected reward. 9
+
+> 9
+
+See Appendix E for the repeated-realization bootstrap and Ap-pendix E for the schema-level predictability argument. A realized reward is a noisy sample of plan quality: repeated rollouts reduce GPT-5.4  
+
+> Claude 4.6
+> Kimi-K2.7-Code
+> GPT-5.4 mini
+> GLM-5.2
+> DS-V4-Flash
+> Qwen3.6-Flash
+> 0.0
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> 1.0
+> Pass@1 rate
+> Pass@1 rate Mean |Rank IC|
+> 0.000
+> 0.005
+> 0.010
+> 0.015
+> 0.020
+> Mean |Rank IC|
+
+Figure 6: Effect of LLM realization models on implementa-tion success and factor quality. 
+
+LLM Realization Robustness 
+
+Many LLM-based alpha-mining pipelines rely on strong frontier models because the same model often performs proposal, reflection, selection, and factor implementation (Tang et al. 2025; Shi, Duan, and Li 2026; Lin et al. 2026; Han et al. 2026; Shi et al. 2026; Liu et al. 2026; Chen et al. 2025). We therefore examine whether ALPHASCHEMA’s dis-covered factor quality depends on the LLM used for realiza-tion. Holding 100 schema plans fixed, seven LLM backends generate factor implementations under the same prompt and validation protocol. As shown in Figure 6, Pass@1 varies substantially across models, indicating different levels of in-struction following and implementation reliability. 10 How-ever, among successful realizations, mean |RankIC | remains in a narrow range (0.0116–0.0168), with no monotonic re-lationship to model capability. This suggests that stronger LLMs mainly improve realization success, while factor qual-ity is primarily determined by the semantic plan being imple-mented. 
+
+6 Related Work 
+
+Automated alpha mining has evolved from human-crafted factors and symbolic heuristics toward large-scale search. Early studies formalized interpretable return predictors through factor models and anomaly research (Fama and French 1992; 1993; Hou, Xue, and Zhang 2017; Kakushadze 2016). Later approaches automated factor construction through genetic programming, reinforcement learning, and generative search (Koza 1994; Zhaofan, Jianwu, and Cheng-shan 2022; Zhang et al. 2020; Cui et al. 2021; Yu et al. 2023; Shi et al. 2025). While these methods expanded the space 
+
+> noise for one plan, whereas evaluating more plans exposes more schema combinations. Since schema features recur across plans, the surrogate can pool noisy single-realization rewards at the feature level.
+> 10 Pass@1 is measured before repair and therefore reflects each model’s one-shot task-completion ability. The reported Rank IC statistics are computed after allowing one additional repair attempt when available, so they measure the quality of successfully realized factors under the full realization protocol.
+
+of executable factor constructions, their search objects re-mained formulas or program structures, leaving the underly-ing trading hypotheses implicit before implementation. Re-cent LLM-based systems extend alpha mining by introduc-ing planning, memory, trajectory evolution, and guarded ex-ecution. FAMA and AlphaAgent improve factor generation through experience reuse and hypothesis-aware selection, while MCTS-Alpha, FactorEngine, QuantaAlpha, Hubble, CogAlpha, and AlphaSAGE explore increasingly structured search processes over formulas, programs, or mining tra-jectories (Li et al. 2024; Tang et al. 2025; Shi, Duan, and Li 2026; Lin et al. 2026; Han et al. 2026; Shi et al. 2026; Liu et al. 2026; Chen et al. 2025). However, these sys-tems still largely evaluate candidates after concrete realiza-tion, making it difficult to learn reusable priors over trading mechanisms before implementation. More broadly, agentic and self-evolving systems demonstrate the value of mem-ory, structured feedback, and evaluator-driven improvement (Yao et al. 2023; Romera-Paredes et al. 2024; Novikov et al. 2025; Hu et al. 2026). Inspired by these developments, AL-PHASCHEMA changes the search abstraction itself by intro-ducing explicit semantic plans over event, context, qualities, direction, and output. This allows alpha mining to learn and navigate a reusable semantic space of trading mechanisms before code realization, while preserving executable valida-tion through the implementation stage. 
+
+7 Conclusion 
+
+We introduced ALPHASCHEMA, a framework that shifts al-pha mining from searching over factor implementations to exploring structured trading semantics. By representing can-didate factors as semantic plans before code realization, the framework enables learning and navigating a reusable search space of trading mechanisms. Experiments on the Chinese stock market show that the discovered semantic factors achieve strong predictive and portfolio performance. Further analyses demonstrate that the semantic space con-tains learnable reward structures, supports adaptive explo-ration under limited realization budgets, and remains ro-bust across different LLM realizations. These results suggest that semantic-level search provides a promising direction for scalable and interpretable automated alpha discovery. 
+
+References 
+
+Chen, T., and Guestrin, C. 2016. Xgboost: A scalable tree boosting system. In Proceedings of the 22nd acm sigkdd international conference on knowledge discovery and data mining , 785–794. Chen, B.; Ding, H.; Shen, N.; Huang, J.; Guo, T.; Liu, L.; and Zhang, M. 2025. Alphasage: Structure-aware alpha mining via gflownets for robust exploration. arXiv preprint arXiv:2509.25055 .Cho, K.; Van Merriënboer, B.; Gulçehre, Ç.; Bahdanau, D.; Bougares, F.; Schwenk, H.; and Bengio, Y. 2014. Learning phrase representations using rnn encoder–decoder for statis-tical machine translation. In Proceedings of the 2014 confer-ence on empirical methods in natural language processing (EMNLP) , 1724–1734. Cui, C.; Wang, W.; Zhang, M.; Chen, G.; Luo, Z.; and Ooi, B. C. 2021. Alphaevolve: A learning framework to discover novel alphas in quantitative investment. In Proceedings of the 2021 International conference on management of data ,2208–2216. Fama, E. F., and French, K. R. 1992. The cross-section of expected stock returns. the Journal of Finance 47(2):427– 465. Fama, E. F., and French, K. R. 1993. Common risk fac-tors in the returns on stocks and bonds. Journal of financial economics 33(1):3–56. Graves, A. 2012. Long short-term memory. Supervised sequence labelling with recurrent neural networks 37–45. Han, J.; Zhang, S.; Li, W.; Dong, Y.; Hu, T.; Zhu, Y.; Yu, X.; Guo, X.; Liu, Z.; Wang, K.; et al. 2026. Quantaalpha: An evolutionary framework for llm-driven alpha mining. arXiv preprint arXiv:2602.07085 .Hou, K.; Xue, C.; and Zhang, L. 2017. Replicating anoma-lies. Technical report, National Bureau of Economic Re-search. Hu, T.; Chen, R.; Zhang, S.; Yin, J.; Feng, M. X.; Liu, J.; Zhang, S.; Jiang, W.; Fang, Y.; Hu, S.; et al. 2026. Controlled self-evolution for algorithmic code optimization. 
+
+arXiv preprint arXiv:2601.07348 .Kakushadze, Z. 2016. 101 formulaic alphas. Wilmott 
+
+2016(84):72–81. Ke, G.; Meng, Q.; Finley, T.; Wang, T.; Chen, W.; Ma, W.; Ye, Q.; and Liu, T.-Y. 2017. Lightgbm: A highly efficient gradient boosting decision tree. Advances in neural informa-tion processing systems 30. Koza, J. R. 1994. Genetic programming as a means for programming computers by natural selection. Statistics and computing 4(2):87–112. Li, Z.; Song, R.; Sun, C.; Xu, W.; Yu, Z.; and Wen, J.-R. 2024. Can large language models mine interpretable finan-cial factors more effectively? a neural-symbolic factor min-ing agent model. In Findings of the Association for Compu-tational Linguistics: ACL 2024 , 3891–3902. Li, Y.; Yang, X.; Yang, X.; Wang, X.; Liu, W.; and Bian, J. 2026. R&d-agent-quant: a multi-agent framework for data-centric factors and model joint optimization. Advances in Neural Information Processing Systems 38. Lin, Q.; Feng, R.; Feng, Y.; Huang, Z.; Chen, Y.; Yang, Z.; Zhou, L.; Fei, B.; Liu, J.; and Li, Y. 2026. Fac-torengine: A program-level knowledge-infused factor min-ing framework for quantitative investment. arXiv preprint arXiv:2603.16365 .Liu, F.; Huang, Y.; Luo, S.; Wang, Y.; Yang, Y.; Li, X.; Hu, Z.; Feng, J.; and Liu, Q. 2026. Cognitive alpha mining via llm-driven code-based evolution. In Proceedings of the 64th Annual Meeting of the Association for Computational Lin-guistics (Volume 1: Long Papers) , 11715–11749. Novikov, A.; Vũ, N.; Eisenberger, M.; Dupont, E.; Huang, P.-S.; Wagner, A. Z.; Shirobokov, S.; Kozlovskii, B.; Ruiz, F. J.; Mehrabian, A.; et al. 2025. Alphaevolve: A coding agent for scientific and algorithmic discovery. arXiv preprint arXiv:2506.13131 .Romera-Paredes, B.; Barekatain, M.; Novikov, A.; Balog, M.; Kumar, M. P.; Dupont, E.; Ruiz, F. J.; Ellenberg, J. S.; Wang, P.; Fawzi, O.; et al. 2024. Mathematical discover-ies from program search with large language models. Nature 
+
+625(7995):468–475. Sharpe, W. F. 1964. Capital asset prices: A theory of market equilibrium under conditions of risk. The journal of finance 
+
+19(3):425–442. Shi, H.; Song, W.; Zhang, X.; Shi, J.; Luo, C.; Ao, X.; Ar-ian, H.; and Seco, L. A. 2025. Alphaforge: A framework to mine and dynamically combine formulaic alpha factors. In Proceedings of the AAAI conference on artificial intelli-gence , volume 39, 12524–12532. Shi, R.; Yan, S.; Cai, Y.; and Lv, C. 2026. Hubble: An llm-driven agentic framework for safe, diverse, and reproducible alpha factor discovery. arXiv preprint arXiv:2604.09601 .Shi, Y.; Duan, Y.; and Li, J. 2026. Navigating the alpha jungle: An llm-powered mcts framework for formulaic alpha factor mining. In Proceedings of the AAAI Conference on Artificial Intelligence , volume 40, 997–1005. Tang, Z.; Chen, Z.; Yang, J.; Mai, J.; Zheng, Y.; Wang, K.; Chen, J.; and Lin, L. 2025. Alphaagent: Llm-driven alpha mining with regularized exploration to counteract alpha de-cay. In Proceedings of the 31st ACM SIGKDD Conference on Knowledge Discovery and Data Mining V. 2 , 2813–2822. Vaswani, A.; Shazeer, N.; Parmar, N.; Uszkoreit, J.; Jones, L.; Gomez, A. N.; Kaiser, Ł.; and Polosukhin, I. 2017. At-tention is all you need. Advances in neural information pro-cessing systems 30. Yang, X.; Liu, W.; Zhou, D.; Bian, J.; and Liu, T.-Y. 2020. Qlib: An ai-oriented quantitative investment platform. arXiv preprint arXiv:2009.11189 .Yao, S.; Yu, D.; Zhao, J.; Shafran, I.; Griffiths, T.; Cao, Y.; and Narasimhan, K. 2023. Tree of thoughts: Deliberate prob-lem solving with large language models. Advances in neural information processing systems 36:11809–11822. Yu, S.; Xue, H.; Ao, X.; Pan, F.; He, J.; Tu, D.; and He, Q. 2023. Generating synergistic formulaic alpha collections via reinforcement learning. In Proceedings of the 29th ACM SIGKDD conference on knowledge discovery and data min-ing , 5476–5486. Zhang, T.; Li, Y.; Jin, Y.; and Li, J. 2020. Autoalpha: an efficient hierarchical evolutionary algorithm for mining alpha factors in quantitative investment. arXiv preprint arXiv:2002.08245 .Zhaofan, S.; Jianwu, L.; and Chengshan, Z. 2022. Genetic algorithm based quantitative factors construction. In 2022 IEEE 20th International Conference on Industrial Informat-ics (INDIN) , 650–655. IEEE. 
+
+A Experimental and Evaluation Details 
+
+Dataset Split and Universe 
+
+We use CSI300 as the stock universe and SH000300 as the benchmark index. The time span is split into training (Jan 1, 2016 – Dec 31, 2020), validation (Jan 1, 2021 – Dec 31, 2022), and testing (Jan 1, 2023 – Dec 31, 2025). The main label is the 5-day forward return: 
+
+yi,t = Ref (close , −6) 
+
+Ref (close , −1) − 1. (3) Factor selection, correlation filtering, and model selection are performed only on the training and validation windows. The 2023–2025 period is reserved for held-out reporting. 
+
+Search and Realization Configuration 
+
+The main search space contains 140 price-volume seman-tic components: 40 Events, 40 Contexts, 50 Qualities, 3 Di-rections, and 7 Outputs. These components are defined over OHLCV and VWAP information. Additional fundamental schema fields are enabled only in the +FUNDAMENTAL vari-ant. DeepSeek-V4-Flash is used as the default realization backend due to its low inference cost. Each run evaluates 16 schema plans per round for 80 rounds. The first 10 rounds use exploration only; later rounds gradually introduce surrogate-guided selection and mutation. A realization is admitted only after passing execution checks, data-contract checks, numerical-validity checks, and look-ahead leakage screening. Plans whose implementations still fail after one repair attempt are kept in the reward buffer with zero reward. As in Section 3, each selected plan is im-plemented at fast and slow time scales. For a valid realization 
+
+fp,s , the search reward is 
+
+rp,s = α RankIC (fp,s ) + β RankICIR (fp,s )
+
+− λ ∆lag (fp,s ), (4) and the plan reward is r(p) = max s∈{ fast ,slow } rp,s . Un-less otherwise stated, the main experiments use (α, β, λ ) = (10 , 1, 2) . This reward is used for online semantic reward learning and final factor-pool selection; IC and ICIR are re-ported as evaluation metrics rather than as terms in the search reward. 
+
+Adaptive Selector Details 
+
+The post-cold-start selector allocates each round’s imple-mentation budget across three sources. At each round, we randomly sample 10,000 candidate plans from the schema space before deduplication and validity filtering. Struc-tural exploration favors under-covered event-context struc-tures, while surrogate-guided exploitation ranks sampled plans by the LightGBM predicted score ˆrt(p). Local mu-tation starts from high-reward evaluated plans and changes one schema component at a time. These quotas are ap-plied before code realization, so all selected plans still pass through the same implementation, execution-validation, leakage-screening, and reward-evaluation pipeline. 
+
+Exploration Novelty and Local Mutation 
+
+Let p = ( e, c, Q, d, o ) be a sampled candidate plan, and let 
+
+NE (e), NC (c), and NEC (e, c ) denote the numbers of previ-ously evaluated plans containing event e, context c, and their pair. The exploration score is 
+
+ν(p) = 0 .60 1
+
+√1 + NEC (e, c ) + 0 .25 1
+
+√1 + NE (e)+ 0 .15 1
+
+√1 + NC (c) .
+
+Exploration selects high-ν(p) candidates from the sampled pool, after removing already evaluated plans and duplicate plan keys. This score prioritizes rare event-context combina-tions while still discouraging repeated use of the same event or context alone. Mutation uses the top reward-ranked evaluated plans as parents and applies one local edit per candidate. The edit is sampled from replacing a quality (0 .22) , replacing the context (0 .16) , replacing the output (0 .16) , adding a qual-ity (0 .14) , dropping a quality (0 .12) , replacing the direction 
+
+(0 .12) , or replacing the event (0 .08) . Quality edits respect the 
+
+0–3 quality constraint, and invalid, duplicate, or previously evaluated plans are filtered. The resulting mutation candi-dates are then ranked by ˆrt(p) under the same reward model before selection. 
+
+Accumulated Reward Buffer 
+
+The surrogate is trained on the accumulated reward buffer rather than a sliding window. Each evaluated plan provides costly supervision about the relationship between schema structure and realized reward, so retaining all observations improves coverage of the sparse semantic space and reduces surrogate estimation variance. Sliding windows are useful in some reinforcement-learning settings because the policy, state distribution, or en-vironment may change over time, making old samples less relevant. In our offline discovery protocol, search rounds in-dex the order of plan discovery under a fixed evaluation pro-tocol. Older labels therefore remain valid supervision, and discarding them would weaken later reward-guided exploita-tion and mutation. 
+
+Final Factor-Pool Selection 
+
+The final modeling pool is selected from the validated factor pool by a reward-ranked filter rule. Let V denote the set of valid candidate factors with available search rewards as de-fined in Appendix A. Candidates are first sorted in descend-ing order by this reward. We then scan this ordered list greed-ily and add a candidate f to the selected pool S only if max  
+
+> g∈S
+
+|corr (f, g )| < 0.7, (5) where the correlation is computed from factor values on the pool-selection window. This rule prioritizes high-reward factors while controlling redundancy in the exported pool. The reported +Fundamental export contains the 120 selected OHLCV factors together with 30 additional factors whose schema plans use fundamental fields. 
+
+Downstream Combiner for Factor Pools 
+
+For methods that produce an explicit factor pool, the selected factors are combined by a LightGBM ranker. Given an ex-ported factor pool F = {f1, . . . , f K }, we construct 
+
+zi,t = [ f1(i, t ), . . . , f K (i, t )] (6) for stock i on day t. Missing values and infinite values are processed before training, invalid labels are removed, and both features and labels are normalized by cross-sectional rank normalization. LightGBM is trained on the training window, while early stopping and hyperparameter selec-tion use the validation window before test evaluation. The factor-pool experiments use 500 boosting rounds, early stop-ping after 50 rounds without validation improvement, and a fixed hyperparameter configuration across the corresponding factor-pool runs. The OHLCV ALPHASCHEMA pool in Table 1 contains 120 selected factors. The +FUNDAMENTAL pool augments this set with 30 additional factors whose schema plans use funda-mental fields, yielding a 150-factor pool. All learned factor-pool baselines in the NAV comparison use the same com-biner and Top50/Drop5 backtest protocol unless otherwise stated. 
+
+Predictive Metrics 
+
+We follow the standard factor-evaluation convention used in Qlib-style alpha-mining papers and report both linear-correlation and rank-correlation metrics. For each test day t,let ˆyi,t be the model score, yi,t the realized label, and Ut the tradable cross-section after suspension, missing-label, and validity filters. 
+
+Information Coefficient (IC). IC measures whether predicted scores are linearly aligned with realized cross-sectional returns: IC t = corr i∈U t (ˆ yi,t , y i,t ),
+
+IC = 1
+
+|T test |
+
+∑
+
+> t∈T test
+
+IC t. (7) 
+
+IC Information Ratio (ICIR). 
+
+ICIR = mean t(IC t)
+
+std t(IC t) . (8) 
+
+Rank Information Coefficient (Rank IC). 
+
+RankIC t = corr i∈U t
+
+(rank (ˆ yi,t ), rank (yi,t )),
+
+RankIC = 1
+
+|T test |
+
+∑
+
+> t∈T test
+
+RankIC t. (9) 
+
+Rank IC Information Ratio (Rank ICIR). 
+
+RankICIR = mean t(RankIC t)
+
+std t(RankIC t) . (10) Predictive metrics are computed on the held-out test/backtest window and do not include transaction costs. Days with too few tradable assets or degenerate prediction/label vectors are excluded. 
+
+Trading Strategy 
+
+Strategy-level evaluation uses Qlib’s 
+
+TopkDropoutStrategy with topk=50 and 
+
+n_drop=5 . On each rebalance date, stocks are ranked by ˆyi,t . The target portfolio holds the top 50 names with equal weights. To reduce turnover, existing holdings that remain sufficiently highly ranked are retained; at most five lowest-ranked current holdings are replaced by the highest-ranked non-held names. Rebalancing is daily. This Top50/Drop5 rule follows recent Qlib-based alpha-mining protocols and keeps the comparison focused on signal quality rather than portfolio optimization. 
+
+Execution Assumptions and Costs 
+
+Trades are executed at the open price on the trading day after signal generation ( deal_price=open ). Transac-tion costs are modeled as a buying cost of 0.05% and a selling cost of 0.15%, with a minimum fee of 5 cur-rency units per trade and a round-trip friction of approx-imately 0.20%. Limit-up/limit-down filtering is enabled with limit_threshold=0.095 . Untradable names are skipped for new purchases, while existing holdings are han-dled according to Qlib exchange rules. 
+
+Portfolio Metrics 
+
+Predictive metrics measure ranking quality but not tradabil-ity. We therefore report portfolio-level metrics under the Top50/Drop5 strategy. Let gport  
+
+> t
+
+be the gross portfolio return before transaction costs, gbench  
+
+> t
+
+the CSI300 benchmark return, and ct the transaction-cost term deducted once by the back-test. The daily excess return is defined as 
+
+et = gport  
+
+> t
+
+− gbench  
+
+> t
+
+− ct, (11) where the benchmark is SH000300. All portfolio metrics be-low are computed from {et}, with N denoting the number of trading days in the evaluation window and 252 trading days per year. 
+
+Annualized Excess Return (AER). 
+
+AER =
+
+( N∏
+
+> t=1
+
+(1 + et)
+
+)252/ N
+
+− 1. (12) AER is therefore the compound annualized benchmark-relative excess return after transaction costs, rather than the annualized raw portfolio return. 
+
+Information Ratio (IR). 
+
+IR = mean t(et)
+
+std t(et)
+
+√252 . (13) Because the excess return is defined relative to CSI300 rather than a risk-free rate, IR measures benchmark-relative risk-adjusted performance. 
+
+Maximum Drawdown (MDD). MDD is computed on the same cumulative excess-return curve induced by {et}:MDD = max 
+
+> t≤N
+
+(
+
+1 − Ct
+
+max s≤t Cs
+
+)
+
+, Ct =
+
+> t
+
+∏
+
+> s=1
+
+(1 + es).
+
+(14) B Additional Market Results 
+
+We include CSI500 as an additional held-out universe to test whether the same semantic-mining protocol remains effective beyond the CSI300 setting used in the main pa-per. The protocol mirrors Appendix A: the training, vali-dation, and testing windows remain unchanged, the bench-mark is replaced by the CSI500 index, and the downstream Top50/Drop5 strategy is kept fixed. Rather than transferring the CSI300 factor pool, we conduct an independent multi-round discovery run on CSI500 with the same reward defi-nition and a configuration analogous to the CSI300 setting. Candidate factors are then sorted directly by the CSI500 reward and filtered by the same correlation-control rule to form the CSI500 factor pool. The LightGBM combiner is trained on the CSI500 training window and selected on the CSI500 validation window. It uses the same preprocessing, feature normalization, hyperparameters, early-stopping rule, and backtest configuration as the CSI300 protocol. Figure 7 reports the resulting cumulative-return curves over the 2023– 2025 test period. The ALPHASCHEMA curve remains in the upper envelope of the comparison set, providing an out-of-universe check of the full discovery-and-selection pipeline rather than a transfer evaluation of a CSI300-mined factor pool. 
+
+Factor Decay Analysis 
+
+We analyze factor decay on daily Rank IC observations re-stricted to the held-out 2023–2025 test period. For each test trading day, we compute cross-sectional Rank IC between each factor and the 5-day open-to-open executable return la-bel, apply the fixed factor-direction vector supplied with the evaluation artifact, and average the direction-adjusted Rank IC values across each pool. We then compute a 252-trading-day rolling mean using only these test-period daily observa-tions. Consequently, the curve begins after the first complete 252-day test window, on Jan 15, 2024. The direction con-vention is held fixed to match the supplied evaluation artifact. This diagnostic uses the executable open-to-open label avail-able in the factor-decay artifact; the main predictive metrics in Table 1 use the close-to-close label defined in Appendix A. Figure 8 shows that the exported pool remains above Al-pha158 on 466 of 467 valid test-period rolling dates. The mean rolling Rank IC gap is 0.0149. The year-end gaps are 0.0216 in 2024 and 0.0127 in 2025. This test-period view in-dicates that the final factor pool retains more persistent rank-ing signal than the Alpha158 reference library over the test period. 
+
+C Construction of the Schema Vocabulary 
+
+We construct a practical, extensible vocabulary rather than an exhaustive ontology of market mechanisms. Each record has a clear functional role and can be recombined, implemented, and evaluated as part of a schema plan. 
+
+Formal Schema Notation 
+
+The semantic plan space is written as 
+
+P = VE × V C × Q set × V D × V O .
+
+Here P denotes the set of all candidate plans. The five com-ponent sets correspond to Event choices VE , Context choices 
+
+VC , Quality choices VQ, Direction choices VD , and Output 
+
+choices VO . The quality-set choices are 
+
+Qset = {Q ⊆ V Q : 0 ≤ | Q| ≤ 3},
+
+so a plan may include zero to three confirmation or filtering conditions, whereas the other fields usually select one pri-mary option. Thus, a plan can be written as p = ( e, c, Q, d, o ), where 
+
+e ∈ V E , c ∈ V C , Q ∈ Q set , d ∈ V D , and o ∈ V O . Its canonical key is key (p) = e | c | q1 | · · · | qm | d | o, 
+
+which supports deduplication, coverage tracking, mutation, and surrogate scoring. 
+
+Functional Roles and Compositional Grammar 
+
+Each category has a designated role. An Event identifies what happened; a Context specifies the market state or reference condition; Qualities confirm, filter, or reweight the event; Di-rection relates it to future returns; and Output specifies the numerical form of the tradable signal. Together they describe what happened, under which conditions, with what support-ing evidence, how it should be traded, and how it should be expressed. A plan is represented as 
+
+p = ( e, c, Q, d, o ), (15) where Q may contain zero to three complementary quality conditions. The plan is therefore compositional and search-able, but leaves its mathematical realization to the implemen-tation agent. These roles are functional rather than strictly independent. Event, Context, and Quality may overlap; for example, vol-ume expansion can be an event or a confirmation of a price event. This helps explain the ablation results in Section E: the agent can recover related cues from the remaining fields and often retain executable code, but cannot fully recover the missing semantic constraint, so factor quality declines more than validity. 
+
+JSON Representation and Semantic Constraints 
+
+Each vocabulary element is a structured JSON record whose core fields are summarized in Table 2. The description carries the market logic, and terms 
+
+disambiguates its key concepts; the remaining fields support identification and composition. No field prescribes an oper-ator, function, window, threshold, or parameter. The code agent chooses these under the data contract and execution constraints. Event, Context, and Quality also avoid unneces-sarily fixing a continuation or reversal interpretation, which is primarily assigned to Direction. The same plan can thus admit multiple implementations without changing its seman-tics. 2023-06 2023-12 2024-06 2024-12 2025-06 2025-12 
+
+Test period 
+
+> -20
+> 0
+> 20
+> 40
+> 60
+> Cumulative return (%)
+
+Cumulative Return on CSI500 
+
+> CSI500 Benchmark
+> AlphaSchema
+> QuantaAlpha
+> RD-Agent
+> Alpha158 + LightGBM
+> Transformer + Alpha360
+> LSTM + Alpha360
+> XGBoost + Alpha360
+> Alpha360 + LightGBM
+
+Figure 7: CSI500 held-out cumulative-return curves over the 2023–2025 test period. The factor pool is independently mined and selected on CSI500 using a configuration analogous to CSI300; the LightGBM combiner is trained and validated on CSI500 with the same downstream protocol. 2024 2025 2026   
+
+> −0.01
+> 0
+> 0.01
+> 0.02
+> 0.03
+> 0.04
+> Mean gap: 0.0149 Positive dates: 466/467 (99.8%)
+> Window: 252 test-period trading days; label: 5-day open-to-open executable return; curve begins Jan. 15, 2024.
+> Date
+> 252-day rolling mean direction-adjusted Rank IC  AlphaSchema Final150 Alpha158
+
+Figure 8: Test-period factor-decay analysis. We plot the test-only 252-day rolling mean direction-adjusted Rank IC of the exported 150-factor pool and Alpha158 from Jan 2024 to Dec 2025, using a 5-day open-to-open executable return la-bel. 
+
+Sources, Abstraction, and Iterative Expansion 
+
+Sources include sell-side reports, papers, books, practitioner blogs, and researcher objectives, such as dedicated cover-age of futures term structure, inventory, or warehouse re-ceipts. We extract the underlying market mechanism, remove implementation-specific formulas and parameters, assign its category and scope, define its key terms, and check it for du-plication and coverage. Between discovery cycles, the vocabulary grows in two ways: semantic mutations of records associated with strong plans deepen promising regions, while new mechanisms ab-sent from the existing schema and factor pools expand cover-age in approximately orthogonal directions. This offline vo-cabulary expansion creates or revises records and is distinct Table 2: Core fields of an individual schema record. 
+
+Field Role 
+
+schema_id Stable identifier used in plan construction, logging, and deduplication. 
+
+category Functional class: Event, Context, Quality, Direction, or Output. 
+
+scope Whether the concept is defined time-series-wise or cross-sectionally. 
+
+name Short human-readable name of the market concept. 
+
+description Primary statement of the intended market logic. 
+
+terms Supplementary definitions that disam-biguate important terms appearing in the description. 
+
+from online plan mutation, which only recombines records already in the vocabulary. 
+
+D Example Schema-to-Factor Realization 
+
+This section gives one concrete example of how a seman-tic schema plan is realized into executable factor code un-der the CSI300 stock-data contract. The factor is generated by DeepSeek-V4-Flash. Using 5-day open-to-open future re-turns as labels, its best period is 20 and its Rank IC on CSI300 is 0.0462 on 2016–2021 training, 0.0483 on 2022 validation, and 0.0474 on 2023–2025 test. The plan measures whether price movement and trading-volume change are jointly strong relative to the same-day uni-verse, conditions this event on the stock’s distance from its own VWAP or moving-average reference, downweights re-Table 3: CSI300 Rank IC of the example schema-realized factor using 5-day open-to-open future returns as labels. 
+
+Split Window Rank IC 
+
+Train 2016–2021 0.0462 Validation 2022 0.0483 Test 2023–2025 0.0474 
+
+peated events through the Quality component, keeps a con-tinuation interpretation, and stores the result through causal event memory. The corresponding user message specifies the seman-tic composition order, the implementation workflow, cross-sectional leakage constraints, and the complete task JSON. The concrete JSON plan supplied for this example is reported next. 
+
+Concrete Schema JSON Records 
+
+The following records list one complete JSON object from each schema class in the same plan. 
+
+Event schema. 
+
+{"schema_id": "event.cross_section_effort_result_breakout_rank", "category": "event", "scope": "cross_sectional", "name": "Cross-sectional effort-result breakout rank", "description": "Compares stocks by the efficiency strength with which input-variable changes and price outcomes jointly form a directional breakout.", "terms": {"effort-result breakout": "input variables such as trading volume change while price also shows a directional movement .", "efficiency strength": "the relative degree of synchronization and amplification between input changes and price outcomes." }}
+
+Context schema. 
+
+{"schema_id": "context.cross_section_reference_distance_rank", "category": "context", "scope": "cross_sectional", "name": "Cross-sectional reference-distance rank", "description": "Compares stocks by the standardized distance between the event location and each stock's own reference level, such as VWAP or a moving average.", "terms": {"reference distance": "the standardized distance from pivot, channel, VWAP, moving-average, or other stock-specific reference locations.", "relative position context": "same-date comparison of distance or proximity across stocks." }}
+
+Quality schema. 
+
+{"schema_id": "quality.event_cooldown", "category": "quality", "scope": "time_series", "quality_type": "filter", "name": "Event-cooldown filter", "description": "Downweight or filter same-type events when they occur repeatedly in a short period, reducing repeated-event stacking.", "terms": {"event cooldown": "a spacing or downweighting rule between similar events.", "repeated-event stacking": "multiple similar events appearing within a short interval." }}
+
+Direction schema. 
+
+{"schema_id": "direction.continuation", "category": "direction", "scope": "time_series", "name": "Continuation direction guidance", "description": "Treat the event as an alpha-construction tendency in which price is expected to continue along the event-implied direction.", "terms": {"continuation": "after the event occurs, price continues along the event-implied direction.", "event-implied direction": "a direction obtained from breakouts, returns, deviations, or relative strength." }}
+
+Output schema. 
+
+{"schema_id": "output.event_decay_signal", "category": "output", "scope": "time_series", "name": "Event-decay signal output", "description": "Keeps finite memory after a valid event trigger and gradually decays the final signal as the event becomes older.", "terms": {"finite memory": "the event affects the signal only within a limited observation window.", "event age": "the time elapsed since the most recent event trigger or confirmation." }}
+
+Schema-to-Code Mapping and Complete Factor 
+
+The complete implementation below is a stock-compatible realization of the schema records above. It makes the causal data handling and the five schema-to-code correspondences explicit. 
+
+Complete realized alpha factor. 
+
+# Implementation plan: # event: compute price-volume synergy and cross-sectional z-score it. # context: z-score the distance from VWAP or SMA across stocks. # quality: cool repeated events using a causal EWM-based downweighting term. # direction: keep the sign of the original price-volume synergy. # output: store the signal through causal exponential event memory .
+
+import numpy as np 
+
+import pandas as pd FACTOR_META = {"source_plan_id": ("event.cross_section_effort_result_breakout_rank|" "context.cross_section_reference_distance_rank|" "quality.event_cooldown|direction.continuation|" "output.event_decay_signal" ), "name": "effort_result_reference_cooldown_memory", "input_type": "cross_sectional_panel", "periods": [20, 100], "best_period": 20, "period_reason": ("best period=20 for short-term effort-result behavior; ""period=100 provides a longer event-memory and cooldown reference" ), "uses_columns": ["close", "volume", "vwap"] }
+
+def F_some_factor_name( panel: dict [str , pd.DataFrame], period: int 
+
+) -> pd.DataFrame: close = pd.DataFrame({ s: df["close"].astype( float ) for s, df in panel.items() }).sort_index() volume = pd.DataFrame({ s: df["volume"].astype( float )
+
+for s, df in panel.items() if "volume" in df }).sort_index() 
+
+if volume.empty: amount = pd.DataFrame({ s: df["amount"].astype( float )
+
+for s, df in panel.items() if "amount" in df }).sort_index() 
+
+if not amount.empty: volume = amount / close.replace(0, np.nan) * 100 
+
+else :volume = pd.DataFrame(1.0, index=close.index, columns= close.columns) common_idx = close.index.intersection(volume.index) close = close.loc[common_idx] volume = volume.loc[common_idx].fillna(0) pct_chg = close.pct_change().fillna(0) vol_chg = volume.pct_change().fillna(0) synergy = pct_chg * vol_chg x_mean = synergy.mean(axis=1, skipna=True) x_std = synergy.std(axis=1, skipna=True).replace(0, 1) event_z = synergy.sub(x_mean, axis=0).div(x_std, axis=0).fillna (0) 
+
+try :first_sym = next (iter (panel)) 
+
+if "vwap" in panel[first_sym].columns: vwap = pd.DataFrame({ s: df["vwap"].astype( float ) for s, df in panel. items() }).sort_index().loc[common_idx] 
+
+else :vwap = None 
+
+except (StopIteration, KeyError): vwap = None 
+
+if vwap is not None: distance = (close - vwap). abs () / vwap.replace(0, np.nan) 
+
+else :sma = close.rolling(period, min_periods=1).mean() distance = (close - sma). abs () / sma.replace(0, np.nan) distance = distance.fillna(0) d_mean = distance.mean(axis=1, skipna=True) d_std = distance.std(axis=1, skipna=True).replace(0, 1) context_z = distance.sub(d_mean, axis=0).div(d_std, axis=0). fillna(0) combined = event_z + 0.5 * context_z ewm_combined = combined.ewm(span=period, adjust=False).mean() cooling_factor = 1.0 / (1.0 + ewm_combined. abs () * 0.3) cooled = combined * cooling_factor direction = np.sign(pct_chg * vol_chg).replace(0, 0.01) interim = cooled. abs () * direction signal = interim.ewm(span=period, adjust=False).mean() signal = signal.fillna(0) signal = signal.replace([np.inf, -np.inf], 0) signal = signal.clip(-5, 5) 
+
+return signal 
+
+This example illustrates why the schema is useful as an intermediate search object. The generated code is not merely an opaque formula: each block has a direct correspondence to the event, context, quality, direction, and output fields. Be-fore inclusion in the final pool, such implementations are subjected to execution validation, numerical checks, look-ahead screening, reward evaluation, and correlation-aware pool selection. 
+
+Implementation-Agent System Prompt 
+
+The system instruction associated with the stock cross-sectional realization example is reported below. Tasks con-taining a schema with scope="cross_sectional" 
+
+use this cross-sectional prompt variant. The selected seman-tic plan is supplied separately in the user message as a struc-tured JSON object. 
+
+You are a stock cross-sectional factor implementation agent. Given afactor plan, write a vectorized pandas factor function. The task contains at least one schema with scope="cross_sectional ", so the implementation may combine causal time-series features with same-date cross-sectional comparison, normalization, or neutralization. Hard requirements: - Output only one Python file, including required imports. - Begin with concise comments mapping the implementation to event, context, quality, direction, and output. - Use the signature `def F_some_factor_name(panel: dict[str, pd.DataFrame], period: int) -> pd.DataFrame:`. - `panel` maps each stock symbol to a daily OHLCV/VWAP DataFrame. - Return a date-by-symbol `pd.DataFrame` factor matrix. - Use `period` as the only primary parameter; derive secondary windows, thresholds, and smoothers from it. - Include `FACTOR_META` with input type, name, source plan id, periods, period reason, and used columns. - The signal at time t may only use information available at or before t. - Same-date cross-sectional ranking, z-scoring, winsorization, demeaning, and neutralization are allowed when required by the schema. - Prefer vectorized pandas operations such as `shift`, `rolling`, `ewm`, `rank(axis=1)`, `where`, `clip`, and `tanh`. - Return finite values and degrade gracefully if optional columns are unavailable. 
+
+E Analysis Experiment Details 
+
+Semantic Navigation Details 
+
+The semantic-navigation analysis maps the structured plans selected during one complete multibar search run into a continuous embedding space. Each plan is converted to a canonical text containing its Event, Context, Qualities, Di-rection, and Output descriptions; reward, round index, se-lection policy, validation status, and generated code are ex-cluded from the embedded text. We then L2-normalize the 1024-dimensional text embeddings, reduce them to 50 PCA components, and run K-means with 12 clusters. The first two PCA coordinates are used only for visualization, while the cluster assignments are obtained in the 50-dimensional PCA space. For each round t and manifold k, we compute 
+
+pt(k) = #{selected plans in manifold k at round t}
+
+#{selected plans at round t} .
+
+The dominant manifold of a round is the region with largest 
+
+pt(k). To interpret these regions, we reverse-map each dom-inant manifold to the most frequent schema components among plans assigned to that cluster. Table 4 reports the corresponding semantic schema patterns. This table comple-ments the trajectory visualization in the main text by making the dominant regions economically interpretable. The dominant trajectory is therefore semantically inter-pretable. Early stages mostly occupy broad exploratory re-gions related to compression, local extremes, and breakout-style events. Later stages shift toward reward-enriched re-gions defined by short–long efficiency conflicts and multi-window alignment patterns. The final two dominant man-ifolds are especially concentrated: cluster 6 is dominated by multi-window range-efficiency alignment with bounded continuous outputs, while cluster 2 is dominated by multi-window close-extreme alignment with event-decay outputs. Table 4: Semantic interpretation of the dominant manifolds along the search trajectory. Each dominant schema is obtained by reverse-mapping the manifold to the most frequent Event, Context, and Output components in that cluster.                                                       
+
+> Stage Rounds Cluster Mode Dominant semantic schema Mean reward Mass
+> M1 0–3 8Explore entropy compression then directional move; multi-session reference; persistent condition signal 1.415 0.239 M2 4–28 3Explore close-position extreme; multi-window volatility conflict; event-decay signal 1.540 0.276 M3 29–36 1Explore effort-result breakout; multi-session reference; bounded continuous signal 1.626 0.283 M4 37–42 9Mutation short-long efficiency conflict; multi-session reference; persistent condition signal 2.039 0.240 M5 43–48 1Explore effort-result breakout; multi-session reference; bounded continuous signal 1.626 0.185 M6 49–72 11 Mutation short-long efficiency conflict; multi-session reference; event-decay signal 2.236 0.259 M7 73–79 6Exploit multi-window range-efficiency alignment; close-extreme memory zone; bounded continuous signal 2.516 0.258 M8 80–99 2Exploit multi-window close-extreme alignment; high-information entropy state; event-decay signal 2.480 0.297
+
+Table 5: Realization-budget efficiency under repeated im-plementations of the same semantic plans. Increasing k im-proves plan-quality estimation, but the top-plan recall ob-tained per realization decreases.                          
+
+> kρSw.r.t. reference MAE Top-20% Recall Recall / Realization
+> 10.445 0.00664 0.462 0.462 20.640 0.00427 0.570 0.285 30.763 0.00307 0.653 0.218 40.852 0.00221 0.712 0.178 50.919 0.00147 0.780 0.156
+
+This indicates that the search does not merely move through an embedding space; it reallocates evaluations toward spe-cific schema combinations with higher average realized re-ward. 
+
+Realization-Budget Efficiency Details 
+
+The realization-budget experiment complements the main search results by measuring how many independent code re-alizations should be spent on the same semantic plan. We use 100 schema plans with up to eight realizations per plan. Each realization shares the same semantic plan and implementa-tion prompt but uses an independent generation attempt and one repair opportunity. To avoid mixing realization variance with period-selection variance, all successful realizations are re-materialized and re-evaluated at a fixed period of 30. For plan i, let ai,j denote the absolute Rank IC of its j-th successful realization. We define an approximate reference quality by averaging all available successful realizations, 
+
+qRIC  
+
+> i
+
+= 1
+
+mimi∑
+
+> j=1
+
+ai,j ,
+
+where mi is the number of successful realizations for that plan. For each budget k ∈ { 1, . . . , 5}, we repeatedly sample 
+
+k realizations per plan, average them to estimate plan qual-ity, and compare the induced plan ranking with the ranking from qRIC  
+
+> i
+
+. The bootstrap uses 3,000 repetitions and reports Spearman correlation, mean absolute error, top-20% recall, and recall per realization. The results show the expected bias–variance trade-off in code realization: more realizations give a cleaner estimate of a fixed plan’s expected quality, but each extra realization Table 6: Detailed schema-grammar leave-one-out results. Full is the source full-plan reference used to construct the ablation tasks.                                    
+
+> Variant Missing Field Valid |RankIC | ↑ Rel. (%) Reward
+> ALPHASCHEMA (Full source) –100/100 0.0185 100.0 4.174 w/o Event Event 93/100 0.0147 78.9 2.199 w/o Context Context 94/100 0.0131 69.4 2.249 w/o Qualities Qualities 95/100 0.0134 72.9 2.483 w/o Direction Direction 88/100 0.0134 71.7 2.219 w/o Output Output 96/100 0.0141 75.1 2.310
+
+consumes budget that could have evaluated a new seman-tic candidate. Since the search objective is to discover and rank many promising plans under a fixed mining budget, the single-realization protocol is a budget-efficient choice even though it is not the lowest-variance estimator of any indi-vidual plan’s expected reward. The reference qRIC  
+
+> i
+
+is a finite rollout average rather than a noiseless oracle, so this exper-iment should be interpreted as an internal budget-efficiency diagnostic. 
+
+Schema Grammar Ablation 
+
+The schema ablation is a leave-one-component-out experi-ment over the five semantic fields E, C, Q, D, O . We sample 100 high-reward full schema plans and construct five blind variants for each plan by removing one field at a time. The implementation agent receives only the visible fields and is not told which component was removed. This yields 500 implementation tasks, of which 466 pass the full validity and evaluation pipeline. The primary metric is mean abso-lute Rank IC, because this experiment measures whether a generated factor contains ranking information regardless of whether the profitable direction is positive or negative. The full reference is not reimplemented under the blind ab-lation prompt; it is read from the source full-plan runs used to build the 100-plan task set. We therefore use this exper-iment as a component-level diagnostic rather than as a fi-nal portfolio-level comparison. A complete paired subset in which all five ablated variants are valid contains 71 source plans and yields the same qualitative ordering: every leave-one-out variant remains below the full source reference. Figure 3 visualizes the same comparison in the main pa-per. Every field removal reduces retained signal strength, while most variants still maintain high implementation valid-ity. The degradation is therefore not only an execution failure effect, but also reflects weaker schema semantics. 
+
+Why Ablated Schemas Remain Executable 
+
+The high validity rate in the leave-one-component-out exper-iment does not mean that the implementation agent recon-structs the omitted schema field. Removing a schema com-ponent removes one trading-design constraint, but it does not remove the implementation contract: the agent still receives the stock-panel input format, admissible OHLCV/VWAP fields, causal-computation rules, finite-output requirements, and the required date-by-symbol output matrix. These con-straints make the task operationally complete even when one semantic field is absent. The remaining fields also provide correlated cues. Events may imply signed price movement, contexts may specify rel-ative regimes, qualities may suggest confirmation or filter-ing, and outputs may imply ranking, smoothing, or bounded transformations. The agent can further close underspecified programs with generic factor-programming priors such as returns, VWAP deviations, rolling statistics, cross-sectional ranks or z-scores, clipping, and tanh compression. This is functional completion rather than recovery of the missing de-sign variable. Thus, the ablation separates operational completeness from semantic completeness. Operational completeness is largely enforced by the implementation contract, explaining why 466 of 500 ablated tasks remain valid. Semantic com-pleteness depends on the five schema fields, explaining why all leave-one-out variants still lose predictive strength and re-tain only 69.4%–78.9% of the full-source absolute Rank IC. 
+
+Schema-Space Reward Predictability 
+
+The predictability experiment evaluates whether reward can be inferred from the discrete schema representation alone. Its dataset is an aggregate reward archive collected for this analysis, rather than only the five CSI300 production search runs reported in Section 4. The archive contains 12,126 valid plan–reward pairs and 11,295 unique schema keys, includ-ing auxiliary search trajectories used exclusively for reward-prediction analysis. We use an 80/20 split grouped by canon-ical schema key, so repeated observations of the same se-mantic combination do not cross the train/test boundary; this yields 2,430 held-out test examples. The target is the real-ized scalar plan reward defined in Appendix A. The feature construction intentionally excludes schema text embeddings, TF–IDF features, generated code, factor values, and backtest trajectories. The two main feature sets are: (i) single-schema indicators with category/scope counts; and (ii) schema-pair features with pairwise schema, category, and scope interac-tions. The mean baseline predicts a constant reward, while the shuffled-reward control preserves the feature matrix and model class but randomly permutes reward labels. The shuffled-reward control remains near random, sup-porting that the observed predictability reflects a genuine schema–reward relationship rather than feature dimension-ality alone. Figure 9 visualizes the same control logic: schema features yield nontrivial ranking and top-decile enrichment, pair in-Table 7: Full predictability results for schema-space reward prediction. Top10% lift is measured against random selec-tion.                                                     
+
+> Feature Set Model ρSρPRMSE ↓Top10% Lift
+> Mean baseline Mean 0.000 0.000 0.0908 1.000 Single schema Ridge 0.212 0.214 0.0892 1.413 Single schema ElasticNet 0.214 0.217 0.0888 1.381 Single schema LGBM 0.237 0.245 0.0884 1.506 Single schema MLP 0.121 0.123 0.0963 1.295 Schema + pair interaction LGBM 0.239 0.250 0.0884 1.519
+> Schema + pair interaction MLP 0.204 0.201 0.0903 1.273 Shuffled reward LGBM 0.029 0.021 0.0917 0.946 Shuffled Schema Schema + add. features
+> 0.0
+> 0.1
+> 0.2
+> Spearman
+> 0.01 0.03 0.02
+> 0.21
+> 0.24
+> 0.12
+> 0.24 0.24
+> 0.20
+> ElasticNet LGBM MLP
+
+Figure 9: Reward predictability from structured schema fea-tures. teractions add a small gain, and shuffled rewards collapse toward random selection. 
+
+Why Single-Realization Rewards Remain Predictable 
+
+Each reward-buffer entry is a stochastic realization outcome rather than a noiseless estimate of plan quality. Let r(k)(p)
+
+denote the reward from the k-th realization of plan p, under the fixed backend, prompt, validation checks, fast/slow real-ization protocol, and reward definition. Here r(k)(p) follows the same search-reward definition as r(p) in Section 3, with the superscript indexing independent realization attempts. We write the corresponding expected realized reward as 
+
+q(p) = E[r(k)(p) | p],
+
+so a single observed reward can be decomposed as 
+
+r(k)(p) = q(p) + ε(k)(p), E[ε(k)(p) | p] = 0 .
+
+Here ε(k)(p) includes implementation choices, repair paths, and finite-sample backtest noise. The quantity q(p) is not a separate objective; it is the expected version of the realized reward already used by the search loop. Single-realization labels increase estimation variance, but they do not change the population target of schema-level re-ward learning. For a predictor trained from structured fea-tures ϕ(p), the squared-loss optimum is 
+
+g∗(ϕ) = E[r(k)(p) | ϕ(p) = ϕ].
+
+Because ϕ(p) is a function of p, the zero-mean realization noise also satisfies E[ε(k)(p) | ϕ(p)] = 0 by iterated expec-tations. Therefore 
+
+g∗(ϕ) = E[q(p) | ϕ(p) = ϕ].Table 8: Repair-aware code-agent backend robustness on the same 100 schema plans. 
+
+Backend Pass@1 Repair Final |RankIC | ↑ RankIC 
+
+GPT-5.4 97/100 2 99/100 0.0116 0.0040 GPT-5.4-mini 81/100 10 91/100 0.0129 0.0073 Kimi-K2.7-Code 82/100 10 92/100 0.0138 0.0075 Claude Opus 4.6 94/100 3 97/100 0.0157 0.0113 DeepSeek-V4-Flash 63/100 30 93/100 0.0168 0.0121 Qwen3.6-Flash 49/100 40 89/100 0.0161 0.0115 GLM-5.2 75/100 22 97/100 0.0145 0.0109 
+
+The surrogate is thus learning the conditional average reward associated with schema structure, not predicting the exact re-ward of the next random implementation. This averaging occurs across structurally related plans rather than through many repetitions of the same plan. The same schema IDs, categories, scopes, and pairwise interac-tions recur across many different canonical plans, allowing the model to pool noisy observations at the feature level. The held-out Spearman correlation and top-decile lift should therefore be interpreted as evidence of reusable schema-level ordering information under the historical realization and evaluation pipeline. The canonical-key group split de-scribed above prevents exact-plan repetition from being mis-taken for unseen-plan predictability. 
+
+Code-Agent Backend Robustness 
+
+This experiment isolates the effect of the implementation backend. We fix the same 100 schema plans and ask seven code agents to realize them. Pass@1 records first-attempt success; failed cases receive at most one retry/repair when available. A run is counted as successful only when the gen-erated factor passes evaluation and receives a valid reward. Signal quality is measured by mean |RankIC | over final suc-cessful factors. The corresponding visualization is reported in Figure 6 in the main paper. The results separate execution reliabil-ity from factor quality. Retry mainly improves completion rates for lower Pass@1 backends, while successful factors from different backends remain in a comparable signal range. This supports the view that the schema provides transferable implementation intent rather than relying on a single agent backend. 
+
+F Additional Schema Vocabulary Examples 
+
+We provide example schema records from each category. These examples follow the same JSON format as the schema-to-code example in Appendix D. 
+
+Event schemas. 
+
+{"schema_id": "event.range_shock_directional_move", "category": "event", "scope": "time_series", "name": "Range-shock directional move", "description": "True range or candle-body range expands materially relative to its recent level while price shows a clear directional move.", "terms": {"range shock": "an unusually large high-low, true-range, or candle-body movement.", "directional move": "price moves clearly upward or downward during the same event window." }}{"schema_id": "event.gap_fill_or_hold", "category": "event", "scope": "time_series", "name": "Gap fill or hold", "description": "After a significant opening gap, subsequent price either fills the pre-gap reference region or holds near the gap edge.", "terms": {"gap": "an opening price discontinuity relative to a previous reference price.", "gap edge": "the boundary of the discontinuity, such as the previous close, high, or low." }}{"schema_id": "event. cross_section_volume_expansion_directional_move_rank", "category": "event", "scope": "cross_sectional", "name": "Cross-sectional volume-expansion directional move rank ", "description": "Ranks stocks by the strength of volume expansion accompanied by a directional price move at the same timestamp.", "terms": {"volume expansion": "trading volume is materially higher than its own recent baseline.", "cross-sectional rank": "relative ordering across stocks at the same timestamp." }}
+
+Context schemas. 
+
+{"schema_id": "context.pivot_high_zone", "category": "context", "scope": "time_series", "name": "Pivot-high zone", "description": "Interprets the event according to whether price occurs near a recently confirmed local swing high.", "terms": {"pivot high": "a local high confirmed by a price swing.", "near": "a region close to the reference level, with width chosen during implementation." }}{"schema_id": "context.vwap_near_zone", "category": "context", "scope": "time_series", "name": "VWAP-near price zone", "description": "Interprets the event according to whether price is near its volume-weighted average price.", "terms": {"VWAP": "the volume-weighted average price.", "VWAP-near": "a price region close to VWAP, with width chosen during implementation." }}{"schema_id": "context.cross_section_premium_discount_rank", "category": "context", "scope": "cross_sectional", "name": "Cross-sectional premium-discount rank", "description": "Compares stocks by whether their price lies in arelatively premium or discount region within each stock's own reference range.", "terms": {"premium-discount": "a high or low position relative to a stock-specific reference range.", "cross-sectional comparison": "same-date relative ordering across stocks." }}
+
+Quality schemas. 
+
+{"schema_id": "quality.volume_confirmation", "category": "quality", "scope": "time_series", "quality_type": "confirmation", "name": "Volume confirmation", "description": "Uses participation changes to judge whether the event is supported by external trading activity.", "terms": {"participation": "market activity measured by volume, amount, or related variables.", "confirmation": "an auxiliary variable supports the behavior expressed by the event." }}{"schema_id": "quality.path_cleanliness", "category": "quality", "scope": "time_series", "quality_type": "cleanliness", "name": "Price-path cleanliness", "description": "Weights the event by whether the recent price path is direct rather than repeatedly reversing.", "terms": {"price path": "the trajectory of prices within the observation window.", "cleanliness": "the extent to which the path has limited back-and-forth noise." }}{"schema_id": "quality.cross_section_volatility_confirmation_rank ", "category": "quality", "scope": "cross_sectional", "quality_type": "confirmation", "name": "Cross-sectional volatility-confirmation rank", "description": "Compares stocks by how strongly the event is accompanied by volatility expansion at the same timestamp.", "terms": {"volatility confirmation": "the event is accompanied by range or true-range expansion.", "relative confirmation": "confirmation strength measured against other stocks at the same timestamp." }}
+
+Direction schemas. 
+
+{"schema_id": "direction.continuation", "category": "direction", "scope": "time_series", "name": "Continuation direction guidance", "description": "Treats the event as an alpha-construction tendency in which price is expected to continue along the event-implied direction.", "terms": {"continuation": "after the event occurs, price continues along the event-implied direction.", "event-implied direction": "a direction obtained from breakouts, returns, deviations, or relative strength." }}{"schema_id": "direction.reversal", "category": "direction", "scope": "time_series", "name": "Reversal direction guidance", "description": "Treats the event as an alpha-construction tendency in which price is expected to move against the event-implied direction.", "terms": {"reversal": "after the event occurs, price moves opposite to the event-implied direction.", "repair or pullback": "price returns toward a reference, equilibrium, or opposite region." }}{"schema_id": "direction.range_oscillation", "category": "direction", "scope": "time_series", "name": "Range-oscillation direction guidance", "description": "Treats the event as insufficient for trend continuation and constructs direction from boundaries or equilibrium locations in the context.", "terms": {"oscillation": "price is more likely to rotate within a reference space than leave it unidirectionally.", "reference space": "a range, boundary, zone, equilibrium, or higher-timeframe location supplied by the context." }}
+
+Output schemas. 
+
+{"schema_id": "output.bounded_continuous_signal", "category": "output", "scope": "time_series", "name": "Bounded continuous signal output", "description": "Compresses the directional and quality-weighted semantic score into a stable bounded final signal.", "terms": {"semantic score": "a continuous signed score formed by the event-context-quality-direction composition.", "bounded": "the final signal is restricted to a stable finite range." }}{"schema_id": "output.event_decay_signal", "category": "output", "scope": "time_series", "name": "Event-decay signal output", "description": "Keeps finite memory after a valid event trigger and gradually decays the final signal as the event becomes older.", "terms": {"finite memory": "the event affects the signal only within a limited observation window.", "event age": "the time elapsed since the most recent event trigger or confirmation." }}{"schema_id": "output.cross_section_zscore_signal", "category": "output", "scope": "cross_sectional", "name": "Cross-sectional z-score signal output", "description": "At each timestamp, demeans and standardizes the semantic score across stocks to form a relative-strength matrix.", "terms": {"demeaning": "subtracting the cross-sectional mean at the same timestamp.", "standardization": "dividing by the cross-sectional standard deviation and clipping extreme values." }}

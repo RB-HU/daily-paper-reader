@@ -6,58 +6,37 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-07-29
-- 运行时间：2026-07-29 21:36:46 UTC
+- 最新运行日期：2026-07-30
+- 运行时间：2026-07-30 21:44:55 UTC
 - 运行状态：成功
-- 本次总论文数：12
-- 精读区：6
-- 速读区：6
+- 本次总论文数：5
+- 精读区：2
+- 速读区：3
 
 ### 今日简报（AI）
-今日聚焦记忆增强式智能体：从可解释记忆轨迹到长程搜索智能体的规模化训练。  
-最值得关注的方向是《MemChain》的显式记忆读写机制与《SearchArt》的合成验证任务生成，它们分别解决了智能体决策透明度和长期任务数据稀缺难题。  
-建议读者跟进记忆架构如何缓解对齐成本，尤其在个性化推理场景中的实践潜力。
-- 详情：[/202607/29/README](/202607/29/README)
+今日深挖了5篇AI前沿论文，精读聚焦于智能体技能进化与大小模型高效协作。  
+SkillRise让智能体能像打游戏练级一样自我演化跨任务技能，PyroDash则用“大小模型接力”大幅降低推理成本。  
+若想了解更自主的AI与更划算的模型应用，建议直接从这两篇高分精读入手。
+- 详情：[/202607/30/README](/202607/30/README)
 
 ### 精读区论文标签
-1. [MemChain: Learning Interpretable Memory Traces for Memory-Augmented LLM Agents](/202607/29/2607.24097v1-memchain-learning-interpretable-memory-traces-for-memory-augmented-llm-agents)  
-   标签：评分：10.0/10、query:fla
-   evidence：训练检索后记忆策略，为LLM智能体构建紧凑证据轨迹
-2. [SearchArt: Training Long-Horizon Search Agent with Scalable Synthetic and Verified Task](/202607/29/2607.24850v1-searchart-training-long-horizon-search-agent-with-scalable-synthetic-and-verified-task)  
+1. [SkillRise: Agentic Reinforcement Learning for Cross-Task Skill Evolution](/202607/30/2607.26784v1-skillrise-agentic-reinforcement-learning-for-cross-task-skill-evolution)  
    标签：评分：9.0/10、query:fla
-   evidence：引入多阶段后训练流水线以训练长期搜索智能体
-3. [Speculate While You Reason: Teaching Agents to Predict Their Next Tool Call via Joint Agent-Speculator RL](/202607/29/2607.25816v1-speculate-while-you-reason-teaching-agents-to-predict-their-next-tool-call-via-joint-agent-speculator-rl)  
-   标签：评分：9.0/10、query:fla
-   evidence：联合强化学习训练智能体预测下一工具调用，降低延迟
-4. [CHILL-Harness: Counterfactual Harness Learning for Efficient Reasoning in Long-Horizon Agents](/202607/29/2607.25825v1-chill-harness-counterfactual-harness-learning-for-efficient-reasoning-in-long-horizon-agents)  
-   标签：评分：9.0/10、query:fla
-   evidence：使用反事实推理学习智能体 harness 的自适应编排策略
-5. [Inverse RL Helps Align AI by Imitating Humans](/202607/29/2607.24900v1-inverse-rl-helps-align-ai-by-imitating-humans)  
+   evidence：通过跨任务技能学习的RL进行LLM智能体后训练
+2. [PyroDash: Cost-Efficient Token-Level Small-Large Language Model Collaborative Inference](/202607/30/2607.20327v1-pyrodash-cost-efficient-token-level-small-large-language-model-collaborative-inference)  
    标签：评分：8.0/10、query:fla
-   evidence：利用从演示中逆向强化学习恢复隐含奖励以对齐语言模型
-6. [PLATO: Pointer Learner for Agent and Task Openness](/202607/29/2607.25082v1-plato-pointer-learner-for-agent-and-task-openness)  
-   标签：评分：8.0/10、query:fla
-   evidence：指针网络与GNN评判器结合的多智能体强化学习实现智能体开放性后训练
+   evidence：通过强化学习训练小模型决定何时卸载至大模型，展示了一种智能体协作行为的后训练技术。
 
 ### 速读区论文标签
-1. [ODYSSE: Episode-wise Policy Optimization for Personalized Agentic Reasoning](/202607/29/2607.25369v1-odysse-episode-wise-policy-optimization-for-personalized-agentic-reasoning)  
-   标签：评分：8.0/10、query:fla
-   evidence：用于个性化智能体推理的强化微调框架，是一种后训练技术
-2. [MemSFT: Mitigating Alignment Tax with an External Parametric Memory](/202607/29/2607.25614v1-memsft-mitigating-alignment-tax-with-an-external-parametric-memory)  
-   标签：评分：8.0/10、query:fla
-   evidence：通过参数记忆进行领域特化以避免灾难性遗忘，可应用于金融微调
-3. [Language-Routed RAG and Direct Option Scoring for Multilingual Financial QA: DS@GT at FinMMEval](/202607/29/2607.22841v1-language-routed-rag-and-direct-option-scoring-for-multilingual-financial-qa-dsgt-at-finmmeval)  
+1. [PLATO: Pointer Learner for Agent and Task Openness](/202607/30/2607.25082v2-plato-pointer-learner-for-agent-and-task-openness)  
    标签：评分：7.0/10、query:fla
-   evidence：为金融认证考试研发多语言金融问答系统，采用检索增强生成
-4. [EviBack: Search-Agent Reinforcement Learning via Evidence-Constrained Teacher Backoff](/202607/29/2607.23955v2-eviback-search-agent-reinforcement-learning-via-evidence-constrained-teacher-backoff)  
+   evidence：基于指针网络和GNN评论家的多智能体后训练方法
+2. [Post-Training at the Edge of Detectability: A Game-Theoretic Approach to Fine-Tuning](/202607/30/2607.26358v1-post-training-at-the-edge-of-detectability-a-game-theoretic-approach-to-fine-tuning)  
    标签：评分：7.0/10、query:fla
-   evidence：基于证据约束教师回退的搜索智能体强化学习训练
-5. [Everyone is unique: Towards Behaviorally Heterogeneous Negotiation Dialogue Systems for Debt Collection](/202607/29/2607.25218v1-everyone-is-unique-towards-behaviorally-heterogeneous-negotiation-dialogue-systems-for-debt-collection)  
+   evidence：面向智能体策略的博弈论RL微调
+3. [AlphaSchema: Exploring the Space of Trading Semantics for LLM-Based Alpha Mining](/202607/30/2607.26642v1-alphaschema-exploring-the-space-of-trading-semantics-for-llm-based-alpha-mining)  
    标签：评分：7.0/10、query:fla
-   evidence：构建富含人格角色的债务催收谈判对话基准
-6. [Runtime Uncertainty Monitoring for LLM-Based Multi-Agent Systems Using Bayesian Networks](/202607/29/2607.25877v1-runtime-uncertainty-monitoring-for-llm-based-multi-agent-systems-using-bayesian-networks)  
-   标签：评分：7.0/10、query:fla
-   evidence：基于大模型的多智能体系统用于精算风险建模，金融领域的任务导向型智能体应用
+   evidence：基于大模型的自动化金融因子挖掘代理
 
 
 <div class="dpr-home-promo-card">
