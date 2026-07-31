@@ -1,0 +1,325 @@
+Title: CACHE-UK: A Stability-Aware Memory Editor for Sequentially Updated Quantized LLMs in Finance
+
+URL Source: https://arxiv.org/pdf/2607.28292v1
+
+Published Time: Fri, 31 Jul 2026 01:09:54 GMT
+
+Number of Pages: 10
+
+Markdown Content:
+# CACHE-UK: A Stability-Aware Memory Editor for Sequentially Updated Quantized LLMs in Finance 
+
+# Anubhav Lakra 1 Yue Feng 21Indian Institute of Technology Madras, Chennai, India 
+
+> 2
+
+# University of Birmingham, Birmingham, United Kingdom  
+
+> a4anubhavlakra@gmail.com, y.feng.6@bham.ac.uk
+
+# Abstract 
+
+Large Language Models (LLMs) deployed in dynamic fi-nancial environments face a critical challenge: maintain-ing factual accuracy as market conditions, regulations, and corporate facts change continuously. While 4-bit quantization enables efficient deployment, it severely lim-its the viability of sequential memory editing-existing meth-ods undergo catastrophic performance degradation under this “quantization stability crisis.” We introduce CACHE-UK (Contextual Adaptive Continual Hybrid Editor for UK Finance), a stability-aware memory editing framework specifically designed for domain-specific, quantized LLMs. CACHE-UK integrates three components: a rank-1 LoRA perturbation mechanism that confines edits to the low-rank adapter subspace, a financial domain prioritization module for content-adaptive edit strength, and a closed-loop Sta-bility Controller that tracks “degradation debt” to prevent catastrophic forgetting across sequential updates. Evalu-ated on a 4-bit quantized OpenLLaMA-3B model with a cu-rated UK financial corpus of 88,021 documents, CACHE-UK reduces knowledge degradation by 11–17% relative to adapted baselines under identical 4-bit constraints - its most robust effect - while attaining the highest test suc-cess (generalization) rate observed in our setting (28%, a 6 percentage point improvement over the strongest adapted baseline). These results indicate that stability-aware editing can improve factual maintenance in resource-constrained financial LLM deployments, though absolute generalization rates remain low. 
+
+# 1. Introduction 
+
+The deployment of Large Language Models (LLMs) in fi-nancial services has grown rapidly, driven by their capacity for complex reasoning, fact retrieval, and language under-standing [2, 17]. Yet these models embed a static snapshot of world knowledge from training time. In the UK financial sector - where regulatory guidance, executive appointments, interest rate policies, and company filings change on a daily basis - this staleness poses an operational risk [10, 19]. Consider a concrete example: when BP’s CEO changed from Bernard Looney to Murray Auchincloss in September 2023, any LLM trained before that date would confidently output the wrong answer to “Who is the CEO of BP?” - a factual error with real consequences for automated financial analysis, compliance reporting, and client-facing advisory systems. Such changes occur across hundreds of UK-listed companies each year, making periodic retraining impracti-cal. Full-model fine-tuning can incorporate new data, but it is computationally prohibitive, risks catastrophic forgetting of general capabilities [11], and cannot realistically keep pace with the cadence of financial updates. Memory edit-ing has emerged as a computationally efficient alternative: rather than retraining, it surgically modifies specific facts stored within a model’s parameters [18, 20]. Methods such as ROME [12], MEMIT [13], and MEND [14] have demon-strated success on full-precision models. However, prac-tical deployment increasingly relies on 4-bit quantization for resource efficiency [5, 6], and the interaction between memory editing and quantization remains critically under-explored. We identify and empirically characterize the quantiza-tion stability crisis : a phenomenon in which sequential edits on low-precision models cause cascading memory degrada-tion. Quantization maps continuous weights to a discrete grid, creating a resolution barrier - a surgical rank-one up-date may be smaller than the quantization step size, causing it to be rounded to zero. This drastically narrows the “sta-bility margin” for any edit, and repeated edits compound the interference. To address this, we propose CACHE-UK (Contextual Adaptive Continual Hybrid Editor for UK Finance), a mod-ular framework for stable, sequential knowledge updates in quantized, domain-adapted LLMs. Our contributions are: • A characterization of the quantization stability crisis both arXiv:2607.28292v1 [cs.CL] 30 Jul 2026 Figure 1. CACHE-UK overview. Stale financial knowledge (left) is updated via domain prioritization, rank-1 LoRA perturbation, and degradation debt control under 4-bit quantization (right). 
+
+analytically - the 4-bit quantization step size is 16 ×
+
+coarser than 8-bit - and empirically: all adapted baselines collapse to 12–22% test success under 4-bit quantization. • A three-component framework integrating rank-1 LoRA perturbation (operating on rank-16 adapter matrices with 51K parameters rather than full weight matrices with 10.2M), financial domain prioritization, and a closed-loop Stability Controller governed by a “degradation debt” metric. • Empirical evaluation on a curated UK financial corpus of 88,021 documents, demonstrating improved performance over the adapted baselines we evaluate in test success (+6pp) and degradation reduction (11–17%). • A documented pipeline from corpus curation through do-main adaptation to stability-aware editing, applicable to LoRA-adapted quantized models in regulated domains. 
+
+# 2. Background and Related Work 
+
+2.1. Memory Editing Methods 
+
+Memory editing seeks to modify factual knowledge in LLMs without full retraining, grounded in the observation that factual associations are localized in feed-forward net-works (FFNs) acting as key-value memories [7]. 
+
+Solver-based methods compute a direct weight update. ROME [12] applies a rank-one update to a causal-traced critical layer; MEMIT [13] generalizes this to batch edits via a constrained least-squares formulation across multiple layers. 
+
+Meta-learning frameworks train an auxiliary editor net-work. MEND [14] learns to predict low-rank updates from factual error gradients. KnowledgeEditor [3] uses a hyper-network with constrained optimization to modify facts while minimizing collateral damage. Other approaches include representation engineering for steering model behaviour through activation manipula-tion [21] and toolkit frameworks such as EasyEdit [18] that unify multiple editing strategies under a common API. All of these methods target full-precision models and have not been evaluated under post-training quantization - the setting we address. 
+
+2.2. Quantization and Efficient Deployment 
+
+Post-training quantization (PTQ) techniques such as GPTQ [6] and QLoRA [5] have made 4-bit inference prac-tical for large-scale deployments. Low-Rank Adaptation (LoRA) [9], which injects trainable low-rank matrices while freezing base weights, has become the standard PEFT ap-proach for domain adaptation [8]. Our framework operates natively within the LoRA adapter subspace, making it di-rectly compatible with quantized deployments without re-quiring dequantization of the frozen base weights. 
+
+2.3. Continual Learning and Catastrophic Forget-ting 
+
+Sequential updates in neural models risk catastrophic for-getting - the overwriting of previously learned knowl-edge [11]. Continual learning methods typically address this through regularization (e.g., EWC) or rehearsal; how-ever, these are not designed for the specific setting of surgical, fact-level edits under quantization constraints. CACHE-UK addresses this gap via a closed-loop controller inspired by integral control theory. Figure 2. Conceptual schematic (not measured data): an illus-trative model of edit stability across precisions. INT4 quantiza-tion narrows the stable edit-strength region relative to INT8 and FP16. The shaded region indicates the approximate viable operat-ing range for 4-bit editing. 
+
+# 3. The Quantization Stability Crisis 
+
+3.1. The Resolution Barrier 
+
+Quantization maps the continuous weight space to a dis-crete set of values, creating a resolution barrier . For b-bit quantization with range R, the step size is q = R/ (2 b − 1) .A rank-one update ∆W with ∥∆W ∥∞ < q is effectively rounded to zero, nullifying the edit entirely. For 4-bit quan-tization ( b = 4 , q = R/ 15 ), this step size is 16 × larger 
+
+than for 8-bit ( b = 8 , q = R/ 255 ), drastically narrowing the window of edit strengths that are both large enough to register and small enough not to cause catastrophic interfer-ence. Figure 2 illustrates this phenomenon: the stable region of edit strengths is dramatically narrower for INT4 than for higher-precision formats. 
+
+3.2. Inter-Edit Interference 
+
+Compounding the resolution barrier, sequential edits accu-mulate interference. As shown in Figure 3, key activation vectors from different edits can share high cosine similar-ity. In quantized space, where the representational capacity is already constrained, these conflicts amplify - leading to sudden collapse of general model knowledge. The practical consequences are confirmed in Section 7, where all baseline methods achieve near-perfect edit success yet generalize to only 12–22% of paraphrased queries under 4-bit quantiza-tion. 
+
+3.3. Why LoRA-Space Editing Mitigates the Crisis 
+
+A key insight motivating CACHE-UK is that editing within the LoRA adapter subspace reduces quantization collision risk. As illustrated in Figure 4, the full weight matrix 
+
+W0 ∈ R3200 ×3200 contains 10.2M parameters mapped onto a dense quantization grid, where edit perturbations are  
+
+> Figure 3. Cosine similarity heatmap between edit key activations. Bright off-diagonal entries indicate high interference potential be-tween sequential edit pairs.
+> Figure 4. Conceptual illustration of quantization collision risk. Left: edit perturbations in the full weight space (10.2M params) mapped to a dense quantization grid. Right: edits in the rank-16 LoRA subspace (51K params) occupy a sparser parameter space with reduced collision probability.
+
+likely to collide with existing quantized values. In contrast, the LoRA adapter B ∈ R3200 ×16 contains only 51K pa-rameters in a sparse, low-rank subspace where the effective quantization grid is much finer-grained. 
+
+# 4. The CACHE-UK Framework 
+
+CACHE-UK is a modular, three-component framework for stable sequential editing in quantized LLMs. Figure 6 shows the architecture, and Table 1 summarizes the com-ponents. 
+
+4.1. Component 1: Rank-1 LoRA Perturbation 
+
+Following the ROME formulation [12], a fact edit is posed as a constrained optimization: given a key activation k at a target layer, find the minimal ∆W such that (W +∆ W )k =Component Description                       
+
+> Rank-1 LoRA Perturbation Rank-one update to the LoRA B
+> matrix for precise fact insertion in the adapter subspace. Domain Prioritization Scales edit strength by finan-cial relevance using adomain lexicon, providing content-aware modulation. Stability Controller Tracks cumulative “degradation debt” and attenuates subsequent edit strength to prevent catas-trophic forgetting. Table 1. Core components of the CACHE-UK framework.
+
+vnew . The closed-form solution is: 
+
+∆W = (vnew − W k ) kT
+
+kT k (1) Our key innovation is to apply this update not to the large, frozen base weight W0 but to the smaller LoRA B matrix. The LoRA forward pass is h = W0x + BAx ; we compute a rank-one ∆B and apply it directly to B, confining the edit to the efficient adapter subspace and reducing the quantization resolution risk. Figure 5 details this mechanism. For a LoRA adapter with B ∈ Rdout ×r and A ∈ Rr×din , we compute the key activation k ∈ Rdin as the hidden state at the last subject-token position in the target layer. The rank-one perturbation is: 
+
+∆B = α · outer (∆ ′, k A) (2) where kA = Ak ∈ Rr , yielding ∆B ∈ Rdout ×r match-ing the shape of B. The target layer is selected via causal tracing on the LoRA-adapted model, following [12]. For OpenLLaMA-3B with LoRA rank r = 16 , ∆B has 3200 ×
+
+16 = 51 ,200 entries, compared to the 3200 ×3200 = 10 .2Mentries in the full weight matrix - a 200 × reduction in the parameter count affected per edit. 
+
+4.2. Component 2: Financial Domain Prioritization 
+
+The base update ∆ is scaled by domain relevance: 
+
+∆′ = ∆ · λ (1 + βuk suk + βbank sbank ) (3) where suk , s bank ∈ { 0, 1} are binary keyword relevance scores against a curated UK financial lexicon, and βuk ,
+
+βbank are boost coefficients. This ensures that edits critical to the financial domain - such as CEO changes at FTSE 100 companies or Bank of England policy updates - receive pro-portionally stronger updates, while general-knowledge edits use the base strength.    
+
+> Figure 5. Rank-1 LoRA perturbation mechanism. The subject token’s hidden state is projected into the 16-dimensional LoRA subspace, and the rank-1 update is applied to the small B matrix (51K params) rather than the frozen W 0(10.2M params).
+
+4.3. Component 3: Stability Controller 
+
+The Stability Controller is a closed-loop feedback mecha-nism inspired by integral (I) control from control theory. After each edit at timestep t, it evaluates the model on a fixed preservation set . The degradation debt Ddebt accumu-lates when performance falls below a threshold: 
+
+Ddebt ,t =
+
+(
+
+Ddebt ,t −1 + 1 if deg t > T 
+
+max(0 , D debt ,t −1 − δ) otherwise (4) The strength α of the next edit is then modulated as: 
+
+αt+1 ∝ 11 + Ddebt ,t 
+
+(5) High debt forces a more conservative edit, allowing the model to stabilize before the next update. When degra-dation stays below the threshold, debt decays by δ = 0 .5
+
+per timestep, progressively restoring full edit strength. This prevents the cumulative impact of many sequential edits from triggering sudden knowledge collapse while ensuring the controller does not permanently suppress future edits. 
+
+# 5. Experimental Setup 
+
+Dataset. We introduce the CACHE-UK corpus for the UK financial domain (Figure 7). From an initial pool of over 23.9 million documents spanning UK financial news (30,000 articles), Bank of England policy docu-ments (3,000), Companies House filings (25,000), and the FinRED relation extraction dataset [16] (13,646 entries), Figure 6. CACHE-UK architecture. An edit request is scored for domain relevance, then applied as a rank-1 perturbation to the LoRA B matrix. The Stability Controller monitors degradation via a preservation set and attenuates future edit strength through degradation debt feedback. 
+
+we curated 88,021 high-quality documents via minimum-length filtering ( ≥128 tokens), MinHash LSH deduplica-tion, keyword-based financial relevance scoring, and quality filtering to remove malformed entries. 
+
+Model. Our base model is OpenLLaMA-3B [15] (3.4B parameters), loaded in 4-bit quantization via BitsAnd-Bytes [4] to simulate resource-constrained financial deploy-ment. We domain-adapt this model using LoRA [9] (rank 
+
+r = 16 , α = 32 ), applied to q proj and v proj for one epoch on a stratified 12,000-document subset. Ex-periments ran on 4 ×NVIDIA A100-40 GB GPUs on the BlueBEAR HPC cluster (University of Birmingham), with additional compute from Kaggle GPU credits. We se-lected OpenLLaMA-3B because: (i) it is fully open-source, enabling complete reproducibility; (ii) the 3B parameter scale permits single-GPU experimentation representative of the resource-constrained environments motivating this work; and (iii) our contributions are methodological - the CACHE-UK framework is architecture-agnostic and appli-cable to any LoRA-adapted model. 
+
+Evaluation Data. We gathered over 700 real-world UK financial facts (CEO names, company headquarters, sec-tor classifications) via yfinance [1] and manual verifica-tion against official filings, covering 66 companies across 6 FTSE sectors. Knowledge stability is measured on a static preservation set of over 1,100 facts never used during editing. The preservation set comprises general-knowledge facts and UK financial facts from different companies and time periods than the edit set, ensuring no overlap. 
+
+Baselines. We compare against ROME [12], MEMIT [13], EasyEdit [18], and KnowledgeEditor [3]. Since official implementations are not designed for BitsAndBytes-quantized models, we implemented func-tionally equivalent adaptations, verifying functional equivalence by reproducing published edit success rates on standard prompts prior to our experiments. We ac-knowledge that these adapted implementations may not represent the full optimized potential of the original meth-ods on unconstrained hardware. Because every method is evaluated on the identical OpenLLaMA-3B backbone, the same 4-bit BitsAndBytes quantization, the same LoRA adapter, and the same edit and preservation splits, this comparison isolates the contribution of the stability-aware mechanism under fixed conditions. We therefore report controlled relative results, not claims about each method’s full-precision ceiling. 
+
+Hyperparameters. Table 2 lists the values used in all ex-periments. 
+
+Metrics. We evaluate on: Edit Success (ES) - correct output on the original editing prompt; Test Success (TS) 
+
+- correct output on paraphrased prompts (generalization); Figure 7. End-to-end pipeline. From 23.9M raw documents, we curate 88,021 documents, domain-adapt a 4-bit OpenLLaMA-3B with LoRA, apply CACHE-UK edits, and evaluate on ES, TS, and DS. 
+
+Hyperparameter Value Description 
+
+λ 1.0 Base enhancement factor 
+
+βuk 0.3 UK finance boost 
+
+βbank 0.2 Banking domain boost 
+
+BASE STRENGTH 0.1 Base edit strength 
+
+T 0.6 Degradation threshold 
+
+δ 0.5 Debt decay factor Table 2. CACHE-UK hyperparameter values used in all experi-ments. 
+
+Degradation Score (DS) - performance on the preservation set (lower is better); Memory Retention Efficiency - ratio of TS to ES. 
+
+# 6. Algorithm 
+
+Algorithm 1 describes the sequential editing procedure. The critical distinction from baseline methods lies in two steps: the domain-aware scaling of ∆′ (line 4) and the debt-attenuated update strength α (line 10). Standard meth-ods such as ROME apply an unmodulated rank-one up-date; CACHE-UK makes the process both context-aware and self-regulating. 
+
+# 7. Results and Analysis 
+
+7.1. Main Performance Comparison 
+
+Table 3 and Figure 8 show performance on 4-bit quan-tized OpenLLaMA-3B. All methods achieve near-perfect Edit Success - they can force the model to output a new fact for a specific prompt. However, a stark gap emerges in Test Success (generalization to paraphrased queries). 
+
+CACHE-UK achieves a Test Success rate of 28% , a 6 
+
+Algorithm 1 CACHE-UK Sequential Editing 
+
+Require: Model M , edit (p, t ), state (Ddebt , T ),
+
+λ, β uk , β bank 
+
+Ensure: Edited model M ′, updated debt D′ 
+
+> debt
+> 1:
+
+// 1. Domain Prioritization  
+
+> 2:
+
+suk ← HasKeyword (p, UK LEXICON ) 
+
+> 3:
+
+sbank ← HasKeyword (p, BANK LEXICON ) 
+
+> 4:
+
+λenh ← λ(1 + βuk suk + βbank sbank ) 
+
+> 5:
+
+// 2. Rank-1 LoRA Perturbation  
+
+> 6:
+
+k ← GetKeyActivation (M, p ) 
+
+> 7:
+
+∆ ← GetEmbedding (t) − GetOutput (M, k ) 
+
+> 8:
+
+∆′ ← ∆ · λenh  
+
+> 9:
+
+// 3. Stability-Gated Update  
+
+> 10:
+
+α ← BASE STRENGTH / (1 + Ddebt ) 
+
+> 11:
+
+∆B ← α · outer (∆ ′, k A) 
+
+> 12:
+
+M ′ ← ApplyUpdate (M, ∆B) 
+
+> 13:
+
+// 4. Controller Feedback  
+
+> 14:
+
+deg ← EvaluatePreservation (M ′) 
+
+> 15:
+
+if deg > T then  
+
+> 16:
+
+D′ 
+
+> debt
+
+← Ddebt + 1  
+
+> 17:
+
+else  
+
+> 18:
+
+D′ 
+
+> debt
+
+← max(0 , D debt − 0.5)  
+
+> 19:
+
+end if  
+
+> 20:
+
+return M ′, D ′
+
+> debt
+
+absolute percentage point improvement (27% relative) over the strongest adapted baseline (KnowledgeEditor, 22%). 28% generalization is not deployment-ready, but it is the highest test success observed under 4-bit quantization in our experiments. All figures in this section are from a single edit-ordering run; we report point estimates and treat gaps of a few points as indicative rather than definitive. Method ES(%) TS(%) Ret.(%) Speed                          
+
+> (TS/ES) (ed/min) ROME ∼100 15 15 430 MEMIT ∼100 12 11 440 EasyEdit ∼100 14 16 445 KnowledgeEditor ∼100 22 23 455
+> CACHE-UK ∼100 28 29 450 Table 3. Performance on the 4-bit quantized model. ES = Edit Success; TS = Test Success; Ret. = Memory Retention Efficiency.
+> Figure 8. Edit Success vs. Test Success across methods. All achieve near-perfect ES ( ∼100%); CACHE-UK obtains the high-est TS (28%) under 4-bit quantization.
+> Figure 9. Memory Retention Efficiency (TS/ES %). CACHE-UK achieves the highest retention, indicating edits that generalize be-yond the original prompt template.
+
+7.2. Memory Retention Efficiency 
+
+Figure 9 shows Memory Retention Efficiency (TS/ES ratio) across methods. CACHE-UK achieves ∼29%, the highest among all methods. Because Edit Success is ∼100% across all methods, Memory Retention Efficiency (TS/ES) tracks Test Success closely; we report both for continuity with prior work but treat them as a single generalization signal rather than independent findings.        
+
+> Figure 10. Final Knowledge Degradation Score after sequential editing. Lower is better. CACHE-UK achieves ∼55%, 11–17% lower than all baselines.
+> Figure 11. Stability Controller dynamics over a sequence of edits. Top: degradation score relative to threshold T.Bottom: corre-sponding degradation debt. Debt increases when degradation ex-ceeds Tand decays otherwise.
+
+7.3. Stability and Memory Preservation 
+
+Figure 10 shows final knowledge degradation scores after sequential editing. CACHE-UK achieves ∼55% , com-pared to ∼61–66% for baselines - a relative improvement of 11–17% and the most consistent effect we observe. This supports the Stability Controller’s role in mitigating catas-trophic forgetting in the quantized sequential editing set-ting. 
+
+7.4. Stability Controller Dynamics 
+
+Figure 11 plots degradation score and degradation debt over a sequence of edits. When deg t breaches the threshold (e.g., at timestep 3), debt rises and attenuates subsequent edit strength. As the model stabilizes, debt decays - an integral-like control that prevents runaway degradation while allow-ing recovery. Figure 12. Batch size sensitivity. Left: edit effectiveness decreases with larger batches. Right: processing speed remains constant across batch sizes tested.         
+
+> Figure 13. Efficiency map: Test Success vs. editing speed. CACHE-UK achieves the best generalization at competitive throughput.
+
+7.5. Batch Size Sensitivity 
+
+Figure 12 shows CACHE-UK’s performance across differ-ent batch sizes. Smaller batches (5 facts) achieve the highest memory change rate (40%), while larger batches (200 facts) show reduced effectiveness (25%) - consistent with the ex-pectation that sequential interference accumulates with edit volume. Processing speed remains stable at ∼450 edits/min regardless of batch size. 
+
+7.6. Efficiency Analysis 
+
+Figure 13 plots Test Success against editing speed. CACHE-UK achieves the highest generalization rate while maintaining processing throughput at 450 edits/min, com-parable to all baselines tested. 
+
+# 8. Discussion 
+
+Contextualizing the 28% test success. 28% generaliza-tion is low in absolute terms. For reference, the original ROME and MEMIT papers report test success rates of 70– 90% on full-precision models using different benchmarks and architectures [12, 13]. While not directly compara-ble (different models, datasets, and evaluation protocols), this gap illustrates the difficulty introduced by 4-bit quan-tization: all methods in our setting drop to 12–22%, and CACHE-UK’s 28% is the best result we observe under these constraints. The 6pp improvement over the strongest base-line is consistent across all metrics. 
+
+The stability-accuracy tradeoff. The Stability Con-troller intentionally sacrifices some edit effectiveness to pre-serve model stability. This is a deliberate design choice ap-propriate for regulated financial environments, where a par-tially successful edit that preserves existing knowledge is preferable to a fully successful edit that corrupts the model’s broader capabilities. 
+
+Memory editing vs. retrieval augmentation. An alter-native to memory editing is retrieval-augmented genera-tion (RAG), which supplements the model with an external knowledge base. Memory editing and RAG address com-plementary needs: RAG is appropriate when facts change frequently and latency permits retrieval, while editing is preferable when the updated knowledge must be paramet-rically embedded (e.g., for reasoning consistency) or when inference-time retrieval is not feasible. 
+
+# 9. Conclusion 
+
+We introduced CACHE-UK, a framework for stable, se-quential memory editing of 4-bit quantized LLMs in the UK financial domain. By empirically characterizing the quan-tization stability crisis and addressing it through a rank-1 LoRA perturbation mechanism, financial domain prior-itization, and a closed-loop Stability Controller, CACHE-UK reduces knowledge degradation by 11–17% relative to adapted baselines under identical quantization constraints -its most consistent effect - and attains the highest test suc-cess in our setting (28%). Absolute generalization remains low, consistent with the difficulty of knowledge editing un-der severe quantization. These results show that, in this con-strained setting, stability-aware parameter-efficient editing improves on the adapted baselines we evaluate, and that the degradation debt mechanism effectively limits catastrophic forgetting. Future work will focus on: (i) semantic domain pri-oritization via embedding-based classifiers to replace key-word matching; (ii) scalability testing on larger, more re-cent model families (Llama-3, Mistral); (iii) multi-run eval-uation with randomized edit orderings to establish statisti-cal robustness; and (iv) comparison across quantization bit-widths (4-bit vs. 8-bit vs. full precision) to further charac-terize the stability crisis. Limitations 
+
+Experiments were conducted with a single HPC allocation, requiring a 12,000-document fine-tuning subset (13.6% of the full corpus) and limiting sequential editing scale. Scala-bility to 70B+ models or distributed environments remains unverified. The domain prioritization module relies on key-word matching rather than semantic embeddings, which may miss relevant edits lacking surface-level indicators. Baseline implementations were adapted for quantized com-patibility and may not represent the full optimized potential of those methods on unconstrained hardware. All results are from single experimental runs; future work should report variance across multiple randomized edit orderings. The absolute test success rate of 28% indicates that CACHE-UK is a research prototype demonstrating methodological via-bility, not a deployment-ready solution. Generalization to other specialized domains (medicine, law) is left for future work. 
+
+# Ethical Statement 
+
+This work processes publicly available UK financial data from regulated filings and public APIs. No personal or sensitive individual data was collected. CACHE-UK is de-signed to improve factual accuracy of LLMs in regulated financial settings, where outdated model knowledge poses operational risk. We acknowledge that memory editing techniques could in principle be misused to implant false in-formation; responsible deployment requires access controls and audit mechanisms. Code and implementation details will be released upon publication. 
+
+# Acknowledgements 
+
+The authors thank the University of Birmingham for access to the BlueBEAR HPC facility, on which GPU computa-tions were performed. Additional compute was provided via Kaggle’s GPU research programme. Anubhav Lakra conducted this research during his time at IIT Madras, in collaboration with the University of Birmingham. 
+
+# References 
+
+[1] Ran Aroussi. yfinance Python library. https:// github.com/ranaroussi/yfinance , 2024. [2] Tom B. Brown, Benjamin Mann, Nick Ryder, Melanie Subbiah, Jared Kaplan, Prafulla Dhariwal, Arvind Neelakantan, Pranav Shyam, Girish Sastry, Amanda Askell, Sandhini Agarwal, Ariel Herbert-Voss, Gretchen Krueger, Tom Henighan, Rewon Child, Aditya Ramesh, Daniel M. Ziegler, Jeffrey Wu, Clemens Winter, Christopher Hesse, Mark Chen, Eric Sigler, Mateusz Litwin, Scott Gray, Benjamin Chess, Jack Clark, Christopher Berner, Sam McCandlish, Alec Radford, Ilya Sutskever, and Dario Amodei. Language models are few-shot learners. In Advances in Neural Information Processing Systems 33 , pages 1877–1901, 2020. [3] Nicola De Cao, Wilker Aziz, and Ivan Titov. Editing factual knowledge in language models. In Proceed-ings of the 2021 Conference on Empirical Methods in Natural Language Processing (EMNLP) , pages 6491– 6506, 2021. [4] Tim Dettmers, Mike Lewis, Sam Shleifer, and Luke Zettlemoyer. 8-bit optimizers via block-wise quanti-zation. In International Conference on Learning Rep-resentations (ICLR) , 2022. [5] Tim Dettmers, Artidoro Pagnoni, Ari Holtzman, and Luke Zettlemoyer. QLoRA: Efficient finetuning of quantized LLMs. arXiv:2305.14314, 2023. [6] Elias Frantar and Dan Alistarh. GPTQ: Accurate post-training quantization for generative pre-trained trans-formers. arXiv:2210.17323, 2022. [7] Mor Geva, Roei Schuster, Jonathan Berant, and Omer Levy. Transformer feed-forward layers are key-value memories. arXiv:2012.14913, 2020. [8] Neil Houlsby, Andrei Giurgiu, Stanislaw Jastrzeb-ski, Bruna Morrone, Quentin de Laroussilhe, An-drea Gesmundo, Mona Attariyan, and Sylvain Gelly. Parameter-efficient transfer learning for NLP. arXiv:1902.00751, 2019. [9] Edward J. Hu, Yelong Shen, Phillip Wallis, Zeyuan Allen-Zhu, Yuanzhi Li, Shean Wang, Lu Wang, and Weizhu Chen. LoRA: Low-rank adaptation of large language models. arXiv:2106.09685, 2021. [10] Zhe Ke, Yubo Ming, and Xuan-Phi Nguyen. De-mystifying domain-adaptive post-training for financial LLMs. arXiv:2501.04961, 2025. [11] Michael McCloskey and Neal J. Cohen. Catastrophic interference in connectionist networks: The sequential learning problem. Psychology of Learning and Moti-vation , 24:109–165, 1989. [12] Kevin Meng, David Bau, Alex Andonian, and Yonatan Belinkov. Locating and editing factual associations in GPT. In Advances in Neural Information Process-ing Systems 35 (NeurIPS 2022) , pages 17359–17372, 2022. [13] Kevin Meng, Arnab Sen Sharma, Alex Andonian, Yonatan Belinkov, and David Bau. Mass-editing memory in a transformer. arXiv:2210.07229, 2023. [14] Eric Mitchell, Charles Lin, Antoine Bosselut, Chelsea Finn, and Percy Liang. Fast model editing at scale. arXiv:2110.11309, 2022. [15] OpenLM Research. OpenLLaMA: An open repro-duction of LLaMA. https://github.com/ openlm-research/open_llama , 2023. [16] Shubham Sharma, Ankur GTM, and Himanshu Beni-wal. FinRED: A dataset for relation extraction in fi-nancial domain. In Proceedings of the 31st ACM In-ternational Conference on Information & Knowledge Management , pages 4843–4847, 2022. [17] Ashish Vaswani, Noam Shazeer, Niki Parmar, Jakob Uszkoreit, Llion Jones, Aidan N. Gomez, Łukasz Kaiser, and Illia Polosukhin. Attention is all you need. In Advances in Neural Information Processing Sys-tems 30 , pages 5998–6008, 2017. [18] Peng Wang, Ningyu Zhang, Xin Xie, Yunzhi Yao, Bozhong Tian, Mengru Wang, Zekun Xi, Siyuan Cheng, Kangwei Liu, Guozhou Zheng, and Hua-jun Chen. EasyEdit: An easy-to-use knowl-edge editing framework for large language models. arXiv:2308.07269, 2023. [19] Shuai Wang, Yichong Zhu, Hongzhan Liu, Pin-Yu Chen, and Lidong Bing. A comprehensive survey on memory editing for large language models. ACM Computing Surveys , 2024. Preprint. [20] Yunzhi Yao, Chuanhao Li, Yu-Chen Lin, Shen-Hui Lee, Haitao Mi, Tung-Hsien Chung, and Hung yi Lee. A comprehensive study of knowledge editing for large language models. arXiv:2305.13172, 2024. [21] Andy Zou, Long Phan, Sarah Chen, James Campbell, Phillip Guo, Richard Ren, Alexander Pan, Xuwang Yin, Mantas Mazeika, Ann-Kathrin Dombrowski, Shashwat Goel, Nathaniel Li, Michael J. Byun, Zi-fan Wang, Alex Mallen, Steven Basart, Sanmi Koyejo, Dawn Song, Matt Fredrikson, J. Zico Kolter, and Dan Hendrycks. Representation engineering: A top-down approach to AI transparency. arXiv:2310.01405, 2023.
