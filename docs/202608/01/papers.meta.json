@@ -1,0 +1,69 @@
+{
+  "label": "2026-08-01",
+  "date": "2026-08-01",
+  "generated_at": "2026-08-01T21:28:53",
+  "count": 4,
+  "papers": [
+    {
+      "paper_id": "202608/01/2607.23263v1-seekjudge-a-practical-reward-framework-for-reinforcement-learning-in-computer-use-agents",
+      "section": "deep",
+      "title_en": "SeekJudge: A Practical Reward Framework for Reinforcement Learning in Computer-Use Agents",
+      "authors": "Yang Wan, Zhenhao Zhang, Jierui Wang, Linchao Zhu",
+      "date": "2026-07-25",
+      "pdf": "https://arxiv.org/pdf/2607.23263v1",
+      "score": "9.0",
+      "evidence": "用于训练计算机使用智能体的强化学习奖励框架",
+      "tldr": "长程图形用户界面任务中，基于规则的评价难以对齐人类意图且易受应用更新影响，现有模型判断性能仍不及规则方法。我们提出SeekJudge框架，引入Condense、Ground、Seek、Analyze四个角色特化代理，通过Seek-Analyze循环评估轨迹，并采用种子校准蒸馏训练9B共享骨干。SeekJudge在在线强化学习中首次实现模型奖励的下游成功率匹配甚至超越原生规则监督，同时提供步骤级判断、低成本和长上下文适应性。这一进展使得模型奖励可实际替代规则评价，用于CUA强化学习训练。",
+      "tags": "query:fla",
+      "abstract_en": "Deciding whether a trajectory actually fulfills its instruction governs how we measure computer-use agents on long-horizon graphical-user-interface tasks and how we train them with reinforcement learning. This judgment has long relied on rule-based evaluation, which struggles to align with human intention and goes stale when an app updates or its online content drifts. Existing model-based judges attempt to address these problems but still leave a performance gap to the rule-based evaluation. We propose the \\textbf{SeekJudge} framework, in which four role-specialized agents, a Condense, a Ground, a Seek and an Analyze agent, reach a verdict through a Seek--Analyze loop over the trajectory. A seed-calibrated distillation pipeline trains one specialized $9$B model to serve as the shared backbone for all four agents. Measured by downstream success rate on held-out RL test goals, SeekJudge is the first practical model-based reward to match or surpass native rule-based supervision in online RL. Beyond accuracy, SeekJudge provides step-level judgments, runs far cheaper than a closed-source large model, and keeps a small per-call context that scales to much longer trajectories. We further contribute a general architectural improvement to the reward server that speeds up judging in RL. Together these make model-based reward a practical drop-in for rule-based supervision in CUA reinforcement learning.",
+      "source": "arxiv",
+      "selection_source": "fresh_fetch"
+    },
+    {
+      "paper_id": "202608/01/2607.28076v1-group-reflective-self-distillation-for-agentic-reinforcement-learning",
+      "section": "deep",
+      "title_en": "Group-Reflective Self-Distillation for Agentic Reinforcement Learning",
+      "authors": "Binbin Zheng, Zijun Xie, Guanqun Zhao, Enlei Gong, Xing Ma, Xiaoliang Fu, Zeyu Chen",
+      "date": "2026-07-30",
+      "pdf": "https://arxiv.org/pdf/2607.28076v1",
+      "score": "9.0",
+      "evidence": "结合自蒸馏的智能体增强学习后训练方法",
+      "tldr": "基于可验证奖励的LLM代理训练中，终端奖励的粗粒度导致行为混杂，且外部技能自蒸馏存在能力失配。GRSD通过分组反思：策略反思自身验证轨迹组，利用停止梯度快照对比成败反思，得到组级特权指导；以此调节优势函数，实现精细化轮次信用分配。实验表明，GRSD在多个代理环境与模型规模上均优于基线，并泛化至新任务，验证了从策略经验中蒸馏群体反思的有效性。",
+      "tags": "query:fla",
+      "abstract_en": "Reinforcement learning with verifiable rewards (RLVR) is effective for training large language model agents. However, terminal rewards provide only coarse trajectory-level supervision, leaving successful behaviors, recurring mistakes, and incidental choices entangled in the same outcome signal. Existing agentic self-distillation methods enrich sparse supervision with natural-language skills, but skills retrieved externally or extracted from a single trajectory by stronger models may mismatch current experience, exceed the policy's capability, or remain path-specific. We propose Group-Reflective Self-Distillation (GRSD), which derives capability-aligned and outcome-discriminative guidance from the policy's own verified rollouts. For each prompt, the policy reflects on each verified trajectory in an on-policy group, and a stop-gradient snapshot contrasts the resulting reflections from successful and failed rollouts to construct group-level privileged guidance. Conditioned on this guidance, a self-teacher refines turn-level credit assignment by modulating outcome-based advantages while preserving the verifier-determined learning direction. Experiments across multiple agentic environments and model scales demonstrate that GRSD consistently outperforms competitive baselines and generalizes more effectively to unseen tasks.",
+      "source": "arxiv",
+      "selection_source": "fresh_fetch"
+    },
+    {
+      "paper_id": "202608/01/2607.26873v1-serpo-self-evolving-rubric-policy-optimization-for-open-ended-test-time-reinforcement-learning",
+      "section": "quick",
+      "title_en": "SERPO: Self-Evolving Rubric Policy Optimization for Open-Ended Test-Time Reinforcement Learning",
+      "authors": "Jianze Wang, Kunwang Zheng, Ying Liu, Yu Cao, Qilong Zhang, Jinlong Chen, Hua Yang, Qianglong Chen",
+      "date": "2026-07-29",
+      "pdf": "https://arxiv.org/pdf/2607.26873v1",
+      "score": "7.0",
+      "evidence": "基于自进化评分策略的测试时强化学习，用于智能体自适应",
+      "tldr": "测试时强化学习（TTRL）使语言模型在推理阶段自我改进，但当前的答案投票方法难以推广到无标准答案的开放生成场景。SERPO提出自演化评分标准策略优化，通过Good-Normal-Bad响应进化构建有序档案，演化查询特定评分标准，并将评分标准转化为奖励信号优化策略，形成闭环。在HealthBench和ResearchQA上分别取得20.63和20.31分的提升，六个基准平均提高8.06分，展现出域外迁移能力。这项工作证明了自演化评分标准在测试时强化中的潜力，为开放域推理的自适应优化提供了新范式。",
+      "tags": "query:fla",
+      "abstract_en": "Test-time reinforcement learning (TTRL) enables language models to self-evolve at inference time without labeled feedback. Existing methods rely on answer voting and therefore do not extend naturally to open-ended generation, where valid responses cannot be mapped to a shared canonical answer. Without external reward models or stronger judges, adaptation must instead construct reliable rewards from the model's own outputs. We introduce SERPO (Self-Evolving Rubric Policy Optimization), which replaces answer voting with a closed loop that co-evolves response evidence, query-specific rubrics, and policy parameters. Good-Normal-Bad (G-N-B) response evolution organizes maximally separated rollouts into ordered archives; rubric evolution retains criteria that discriminate these archives; probabilistic criterion scoring converts verdict-token likelihoods into reward signals; and policy evolution optimizes the actor with the resulting signals. New actor rollouts then refresh both the archives and rubrics, closing the three-way evolution loop. Across two model configurations, two in-domain benchmarks, and four OOD benchmarks, SERPO improves HealthBench and ResearchQA by up to 20.63 and 20.31 points over the corresponding base models, raises the six-benchmark macro-average by up to 8.06 points, and supports OOD transfer and continued cross-benchmark evolution.",
+      "source": "arxiv",
+      "selection_source": "fresh_fetch"
+    },
+    {
+      "paper_id": "202608/01/2607.21993v1-three-body-alignment-aligning-chess-agent-with-human-reasoning-through-reranked-rationale",
+      "section": "quick",
+      "title_en": "Three-Body Alignment: Aligning Chess Agent with Human Reasoning through Reranked Rationale",
+      "authors": "Jaymari Chua, Chen Wang, Liming Zhu, Lina Yao",
+      "date": "2026-07-24",
+      "pdf": "https://arxiv.org/pdf/2607.21993v1",
+      "score": "6.0",
+      "evidence": "通过重排理由的对齐技术，可迁移至金融智能体",
+      "tldr": "随着推理代理日益复杂，如何将其决策与人类推理对齐成为AI安全的关键挑战。本研究以国际象棋为场景，提出三体对齐分析框架，收集特级大师、NNUE辅助评论与LLM产生的理由数据，构建多源数据集。通过t-SNE可视化发现三类理由在语义空间形成显著独立簇，揭示概念分歧；重排序实验表明可提升人类对齐但伴随战术性能下降。此外开源数据集与初步叙述结构，为异构推理代理对齐及可解释AI奠定基础。",
+      "tags": "query:fla",
+      "abstract_en": "As reasoning agents become increasingly complex, aligning their underlying reasoning and decision-making processes with human conceptual models is a challenge for AI security and safety. When modelling expert knowledge, understanding how to characterise and integrate insights from agents with fundamentally different reasoning architectures is necessary for safe and predictable deployment. We investigate this alignment through a \\emph{three-body alignment} in chess, analysing the semantic divergence between rationales produced by human experts (Grandmasters), engine-assisted human commentators (who rationalise the outputs of efficiently updatable neural networks, or NNUEs), and Large Language Models (LLMs). Our contributions include: (1) A novel multisource rationale dataset, constructed using an agentic data engineering pipeline to transform unstructured expert commentary into structured, queryable data for alignment evaluation. (2) An empirical analysis of the semantic embedding space. Using t-SNE visualisation, we demonstrate that these sources form distinct clusters, confirming significant heterogeneity and reflecting fundamentally different conceptual approaches to the same environment. (3) An experiment demonstrating that reranking mechanisms can improve human alignment, while quantifying the explicit trade-off with tactical performance, offering a pathway for more interpretable agent decision-making. (4) The preliminary development of an enriched chess narrative dataset structure, designed to lay the groundwork for future evaluations of text rationale similarity and to address the limitations of standard dense retrieval. (5) Finally, we open-source our chess rationales dataset\\footnote{Hugging Face: https://huggingface.co/datasets/jaymarichua/trichess} to support developing novel techniques that integrate diverse expert knowledge into human-aligned intelligent agents.",
+      "source": "arxiv",
+      "selection_source": "fresh_fetch"
+    }
+  ],
+  "errors": []
+}
