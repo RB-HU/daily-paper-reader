@@ -1,0 +1,54 @@
+{
+  "label": "2026-08-02",
+  "date": "2026-08-02",
+  "generated_at": "2026-08-02T20:18:22",
+  "count": 3,
+  "papers": [
+    {
+      "paper_id": "202608/02/2607.25415v1-a-control-system-a-dataset-and-a-recipe-for-making-frozen-llm-agents-learn-a-domain",
+      "section": "deep",
+      "title_en": "A Control System, a Dataset, and a Recipe for Making Frozen LLM Agents Learn a Domain",
+      "authors": "Debjyoti Paul",
+      "date": "2026-07-28",
+      "pdf": "https://arxiv.org/pdf/2607.25415v1",
+      "score": "8.0",
+      "evidence": "基于 RL 的 harness 优化让冻结的 LLM 智能体学习领域知识",
+      "tldr": "生产LLM Agent的harness优化通常代价高昂且不可审计，本文提出将harness视为固定、可读的动作空间，采用ε-贪心上下文老虎机和REINFORCE等样本高效强化学习算法在线学习策略，利用多目标奖励（任务成功、验证分、合规、成本、延迟及惩罚）优化。在工具使用、代码生成和多跳QA三个任务上超越静态基线，并发布控制系统、数据集和部署配方，为组织定制提供蓝图。",
+      "tags": "query:fla",
+      "abstract_en": "Production LLM agents are increasingly assembled from a frozen model wrapped in a harness: a prompt template, a tool set, a memory/retrieval layer, a planning strategy, and a verification policy. Two 2026 systems, Meta-Harness (Lee et al., 2026) and HyperAgents (Meta AI, 2026), show that this harness can itself be optimized or even self-rewritten by an agentic proposer -- at the cost of either an expensive code-search loop or unconstrained self-modifying code, neither of which is auditable or usable with a fully black-box model API. We take a narrower, more constrained position: treat the harness as a small, fixed, human-legible action space and learn a policy over it online with classic sample-efficient reinforcement learning (an $ε$-greedy contextual bandit and REINFORCE), scored against a multi-objective reward (task success, verifier score, policy compliance, cost, latency, and an unsupported-claim penalty). We instantiate this control system with DSPy (Khattab et al., 2024) as both the context assembler and the source of the strongest non-adaptive baseline (a DSPy BootstrapFewShot static prompt), and evaluate it across three verifiable task domains -- tool-use workflows, code generation (HumanEval), and multi-hop retrieval QA (HotpotQA) -- and two model providers (a local Ollama model and AWS Bedrock). We release the harness-control-system code, the cross-domain verifiable task suite, the full trajectory/reward-decomposition logs from training, and a provider-agnostic deployment recipe for applying this to a new organization's domain and verification setup.",
+      "source": "arxiv",
+      "selection_source": "fresh_fetch"
+    },
+    {
+      "paper_id": "202608/02/2607.27083v1-scores-are-not-decisions-cost-aware-stopping-for-tool-acquisition-in-llm-agents",
+      "section": "quick",
+      "title_en": "Scores Are Not Decisions: Cost-Aware Stopping for Tool Acquisition in LLM Agents",
+      "authors": "Yicheng Feng, Yan Zhang, Yan Cheng, Wei Qi",
+      "date": "2026-07-29",
+      "pdf": "https://arxiv.org/pdf/2607.27083v1",
+      "score": "7.0",
+      "evidence": "离线强化学习训练成本感知的工具获取停止策略",
+      "tldr": "LLM智能体在获取外部工具时面临数量与成本的权衡：选少了信息不足，选多了增加开销。本文提出成本感知的边际决策聚焦停止方法CAM-DF，将工具排序转化为考虑异构成本的停止决策，通过直接优化停止与继续的收益差距进行训练。在五个领域的实验中，CAM-DF在多种排名和成本方案下均优于基线，可减少37%的工具暴露且任务成功率相当。该方法作为轻量级预执行插件，无需微调底层LLM，为成本敏感的工具获取提供了有效解决方案。",
+      "tags": "query:fla",
+      "abstract_en": "As LLM agents increasingly depend on diverse external services such as search engines, databases, and connectors, agent harnesses face a fundamental tool-selection challenge: acquiring too few tools leaves the task under-informed, while too many adds cost, context load, and privacy exposure. Routers and retrievers can rank candidate tools by relevance, but a ranking alone does not determine how many are worth selecting. Existing approaches leave acquisition under heterogeneous costs unaddressed. We formulate this decision as cost-aware marginal decision-focused stopping (CAM-DF) over ranked tool prefixes, with CAM-DF-lite as a compact interpretable variant. We train directly on the offline gap between stopping now and the best continuation: its sign labels the decision, its magnitude weights each error by the payoff at stake. We prove this objective is Bayes-aligned with the stopping target and that score-only rules are suboptimal under heterogeneous costs. We evaluate on 1,343 tasks across five tool-use domains. On $τ$-bench Retail, CAM-DF attains the highest payoff among deployable methods, with gains over a predict-then-threshold baseline across all five ranking sources and two cost regimes. Our approach is state-of-the-art under heterogeneous costs and high cost pressure, with larger gains under weaker rankings. In live execution, CAM-DF exposes the agent to 37\\% fewer tools than full access while maintaining comparable task success. The CAM-DF family is a lightweight pre-execution plugin that turns existing tool rankings into lower-cost acquisition decisions without fine-tuning the underlying LLM.",
+      "source": "arxiv",
+      "selection_source": "fresh_fetch"
+    },
+    {
+      "paper_id": "202608/02/2607.27789v1-from-understanding-to-action-feedback-grounded-policy-discovery-for-generative-recommendation",
+      "section": "quick",
+      "title_en": "From Understanding to Action: Feedback-Grounded Policy Discovery for Generative Recommendation",
+      "authors": "Zhi Chen, Minmao Wang, Xingchen Liu, Haoqiang Liang, Huihuang Lin, Likang Wu, Hongke Zhao, Yulong Wang, Shijie Yi, Fei Pan, Peng Jiang",
+      "date": "2026-07-30",
+      "pdf": "https://arxiv.org/pdf/2607.27789v1",
+      "score": "6.0",
+      "evidence": "基于反馈的策略发现桥接LLM理解与行动",
+      "tldr": "基于语义ID的生成式推荐仅依赖行为共现监督，无法深层理解用户意图，而大语言模型虽能推理需求，但因缺乏推荐反馈，语言合理推理未必有效，形成理解-行动差距。本文区分意图知识（捕捉当前需求）与策略知识（指定推荐方向与拒绝边界），提出反馈驱动的代理框架：先诱导任务导向意图，再基于增量效用发现策略，利用结果反馈而非语言合理性优化，并通过双空间关系蒸馏将两类知识压缩为轻量级语义ID生成器的两个潜在令牌，实现无LLM的高效在线推理。公开基准实验和在线A/B测试显示一致改进，收入提升4.506%，ADVV提升4.621%，有效弥合了理解-行动差距，显著提升生成式推荐的实用性与效果。",
+      "tags": "query:fla",
+      "abstract_en": "Semantic-ID-based generative recommenders enable efficient next-item generation, but their item-level supervision mainly captures behavioral co-occurrence and local transitions. Large language models (LLMs) can complement these models by reasoning over heterogeneous interaction histories to understand the user's current demand. However, LLMs are not inherently trained with recommendation-specific outcome feedback, and linguistically plausible reasoning therefore does not necessarily lead to effective recommendation decisions. We term this mismatch the Understanding-Action Gap. Accordingly, we distinguish intent knowledge, which captures the user's current demand, from policy knowledge, which specifies the recommendation direction and rejection boundary under that demand. To bridge this gap, we propose a feedback-driven agent framework that first induces task-oriented intent and then discovers recommendation policies according to their incremental utility over an intent-only baseline. Candidate policies are evaluated and refined using outcome-derived feedback rather than linguistic plausibility. We further transfer the resulting intent and policy knowledge into two latent tokens of a lightweight Semantic-ID generator through dual-space relational distillation, enabling LLM-free online inference. Experiments on public benchmarks show consistent improvements over baselines, while large-scale online A/B tests achieve gains of 4.506% in Revenue and 4.621% in ADVV.",
+      "source": "arxiv",
+      "selection_source": "fresh_fetch"
+    }
+  ],
+  "errors": []
+}
