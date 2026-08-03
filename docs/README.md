@@ -6,31 +6,40 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-08-02
-- 运行时间：2026-08-02 20:18:11 UTC
+- 最新运行日期：2026-08-03
+- 运行时间：2026-08-03 21:39:09 UTC
 - 运行状态：成功
-- 本次总论文数：3
-- 精读区：1
-- 速读区：2
+- 本次总论文数：6
+- 精读区：3
+- 速读区：3
 
 ### 今日简报（AI）
-我们探索了如何让冻结的大模型智能体高效习得领域专长，并平衡工具调用的成本与收益。  
-最值得关注的发现是：一套闭环控制系统加上专项数据集，就能让不更新参数的 LLM 智能体学会新领域能力。  
-若想跟进，建议从智能体的“工具使用时机”入手，思考何时该付费调用工具、何时该果断停止。
-- 详情：[/202608/02/README](/202608/02/README)
+AI智能体正从被动学习走向主动进化，今日深度解析了自我博弈、技能进化与自验证奖励三大前沿路径。  
+最值得关注的是，让智能体自己出题、自己解、自己记（《Self-Play Meets Skill Evolution》），以及通过任务转化生成可自我验证的奖励信号（《From RLVR to RLSVR》），这两种方法都在无需人类标注的情况下实现了能力的持续提升。  
+普通开发者若想跟上这波“自我改进”浪潮，建议先从组合自我对弈环境与可验证任务入手，为智能体搭建一个能自发成长的试验场。
+- 详情：[/202608/03/README](/202608/03/README)
 
 ### 精读区论文标签
-1. [A Control System, a Dataset, and a Recipe for Making Frozen LLM Agents Learn a Domain](/202608/02/2607.25415v1-a-control-system-a-dataset-and-a-recipe-for-making-frozen-llm-agents-learn-a-domain)  
+1. [Self-Supervised Skill Optimization](/202608/03/2607.28777v1-self-supervised-skill-optimization)  
+   标签：评分：9.0/10、query:fla
+   evidence：自监督技能优化的智能体后训练框架
+2. [Self-Play Meets Skill Evolution: Self-Evolving Search Agents that Pose, Solve, and Remember](/202608/03/2607.29468v1-self-play-meets-skill-evolution-self-evolving-search-agents-that-pose-solve-and-remember)  
+   标签：评分：9.0/10、query:fla
+   evidence：自我博弈与进化技能记忆用于搜索智能体后训练
+3. [Learning Latent Reasoning Traces for Scalar Reward Models End-to-End](/202608/03/2607.29185v1-learning-latent-reasoning-traces-for-scalar-reward-models-end-to-end)  
    标签：评分：8.0/10、query:fla
-   evidence：基于 RL 的 harness 优化让冻结的 LLM 智能体学习领域知识
+   evidence：改进RLHF奖励模型，是后训练对齐的核心
 
 ### 速读区论文标签
-1. [Scores Are Not Decisions: Cost-Aware Stopping for Tool Acquisition in LLM Agents](/202608/02/2607.27083v1-scores-are-not-decisions-cost-aware-stopping-for-tool-acquisition-in-llm-agents)  
+1. [From RLVR to RLSVR: Task Transformation Induces Self-Verifiable Rewards for Open-Ended LLM Self-Improvement](/202608/03/2607.23802v2-from-rlvr-to-rlsvr-task-transformation-induces-self-verifiable-rewards-for-open-ended-llm-self-improvement)  
    标签：评分：7.0/10、query:fla
-   evidence：离线强化学习训练成本感知的工具获取停止策略
-2. [From Understanding to Action: Feedback-Grounded Policy Discovery for Generative Recommendation](/202608/02/2607.27789v1-from-understanding-to-action-feedback-grounded-policy-discovery-for-generative-recommendation)  
+   evidence：面向开放式任务的自验证奖励强化学习用于LLM自我提升
+2. [Benchmarks Are Not Validation: A System-Level View of Financial LLM Applications](/202608/03/2607.28840v1-benchmarks-are-not-validation-a-system-level-view-of-financial-llm-applications)  
+   标签：评分：7.0/10、query:fla
+   evidence：面向金融LLM应用（含智能体）的系统级验证框架
+3. [Recursive Governance: A Graph-Theoretic Framework for Risk Propagation and Drift Detection in Agentic AI Systems](/202608/03/2607.23916v1-recursive-governance-a-graph-theoretic-framework-for-risk-propagation-and-drift-detection-in-agentic-ai-systems)  
    标签：评分：6.0/10、query:fla
-   evidence：基于反馈的策略发现桥接LLM理解与行动
+   evidence：针对金融代理系统的治理框架，应对风险与漂移
 
 
 <div class="dpr-home-promo-card">
