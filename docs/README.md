@@ -6,40 +6,73 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-08-03
-- 运行时间：2026-08-03 21:39:09 UTC
+- 最新运行日期：2026-08-04
+- 运行时间：2026-08-04 21:17:46 UTC
 - 运行状态：成功
-- 本次总论文数：6
-- 精读区：3
-- 速读区：3
+- 本次总论文数：17
+- 精读区：6
+- 速读区：11
 
 ### 今日简报（AI）
-AI智能体正从被动学习走向主动进化，今日深度解析了自我博弈、技能进化与自验证奖励三大前沿路径。  
-最值得关注的是，让智能体自己出题、自己解、自己记（《Self-Play Meets Skill Evolution》），以及通过任务转化生成可自我验证的奖励信号（《From RLVR to RLSVR》），这两种方法都在无需人类标注的情况下实现了能力的持续提升。  
-普通开发者若想跟上这波“自我改进”浪潮，建议先从组合自我对弈环境与可验证任务入手，为智能体搭建一个能自发成长的试验场。
-- 详情：[/202608/03/README](/202608/03/README)
+1) 今日精读高分论文，聚焦小模型驱动个性化智能体与投资顾问的长周期决策评估。
+2) 核心发现：用小策略模型微调即可让大语言模型智能体习得长期偏好，而新基准ShiJianBench首次系统衡量了投资顾问从对话到决策的远见能力。
+3) 读者可重点关注“小模型调教大智能体”的思路，以及如何对复杂应用进行长线行为评估。
+- 详情：[/202608/04/README](/202608/04/README)
 
 ### 精读区论文标签
-1. [Self-Supervised Skill Optimization](/202608/03/2607.28777v1-self-supervised-skill-optimization)  
+1. [Personalizing Large Language Model Agents with Small Policy Models](/202608/04/2608.00215v1-personalizing-large-language-model-agents-with-small-policy-models)  
    标签：评分：9.0/10、query:fla
-   evidence：自监督技能优化的智能体后训练框架
-2. [Self-Play Meets Skill Evolution: Self-Evolving Search Agents that Pose, Solve, and Remember](/202608/03/2607.29468v1-self-play-meets-skill-evolution-self-evolving-search-agents-that-pose-solve-and-remember)  
+   evidence：在线学习轻量策略层，个性化微调冻结的大语言模型智能体决策
+2. [ShiJianBench: From Dialogue to Decision for Long-Horizon Evaluation of Investment Advisors](/202608/04/2608.01204v1-shijianbench-from-dialogue-to-decision-for-long-horizon-evaluation-of-investment-advisors)  
    标签：评分：9.0/10、query:fla
-   evidence：自我博弈与进化技能记忆用于搜索智能体后训练
-3. [Learning Latent Reasoning Traces for Scalar Reward Models End-to-End](/202608/03/2607.29185v1-learning-latent-reasoning-traces-for-scalar-reward-models-end-to-end)  
+   evidence：通过多轮对话评估对话式投资顾问的框架
+3. [TCPO: Turn-Level Credit Policy Optimization](/202608/04/2608.01667v1-tcpo-turn-level-credit-policy-optimization)  
+   标签：评分：9.0/10、query:fla
+   evidence：用于LLM智能体多轮RL训练的轮次级信用分配方法
+4. [Cross-Domain Hybrid OPD for Generalizable Search Agents](/202608/04/2608.02101v1-cross-domain-hybrid-opd-for-generalizable-search-agents)  
+   标签：评分：9.0/10、query:fla
+   evidence：通过智能体RL和跨领域在线策略蒸馏实现搜索专精而不失通用能力，是智能体后训练技术。
+5. [Harness-G: A Graph-Structured Harness for Search Agents](/202608/04/2607.27652v2-harness-g-a-graph-structured-harness-for-search-agents)  
    标签：评分：8.0/10、query:fla
-   evidence：改进RLHF奖励模型，是后训练对齐的核心
+   evidence：通过RL和结构化信用信号对搜索智能体进行后训练
+6. [SERL-SQL: Selective Hindsight Distillation for Text-to-SQL Reinforcement Agentic Learning](/202608/04/2608.00485v1-serl-sql-selective-hindsight-distillation-for-text-to-sql-reinforcement-agentic-learning)  
+   标签：评分：8.0/10、query:fla
+   evidence：SQL 智能体后训练的选择性事后蒸馏强化学习
 
 ### 速读区论文标签
-1. [From RLVR to RLSVR: Task Transformation Induces Self-Verifiable Rewards for Open-Ended LLM Self-Improvement](/202608/03/2607.23802v2-from-rlvr-to-rlsvr-task-transformation-induces-self-verifiable-rewards-for-open-ended-llm-self-improvement)  
+1. [PROGRESS: Coverage-guided RL to Train Search-augmented LLM Agent](/202608/04/2608.00969v1-progress-coverage-guided-rl-to-train-search-augmented-llm-agent)  
+   标签：评分：8.0/10、query:fla
+   evidence：基于覆盖奖励的RL后训练搜索智能体技术
+2. [Learning What to Remember and What to Internalize in LLM Self-Evolution via Adaptive Memory-Parameter Coordination](/202608/04/2608.01234v1-learning-what-to-remember-and-what-to-internalize-in-llm-self-evolution-via-adaptive-memory-parameter-coordination)  
+   标签：评分：8.0/10、query:fla
+   evidence：融合记忆与参数更新的统一智能体自进化框架，用于部署后适应。
+3. [EviSD: Evidence-Conditioned Self-Distillation for Search-Augmented Agents](/202608/04/2608.01359v1-evisd-evidence-conditioned-self-distillation-for-search-augmented-agents)  
+   标签：评分：8.0/10、query:fla
+   evidence：通过证据条件自蒸馏为搜索智能体提供信用分配，用于RL训练。
+4. [FRAMES: Guarded and Dual-Objective Skill Evolution for Agents in Policy-Governed Enterprise Workflows](/202608/04/2608.01772v1-frames-guarded-and-dual-objective-skill-evolution-for-agents-in-policy-governed-enterprise-workflows)  
+   标签：评分：8.0/10、query:fla
+   evidence：企业工作流中智能体的闭环技能进化
+5. [PCSD: Persistent Consistency for Self-Distillation in Agentic Reinforcement Learning](/202608/04/2608.01837v1-pcsd-persistent-consistency-for-self-distillation-in-agentic-reinforcement-learning)  
+   标签：评分：8.0/10、query:fla
+   evidence：智能体 RL 后训练中基于持续一致性的自蒸馏
+6. [TI-StegoAlign: Channel-Guided Post-Training for Generative Text Steganography under Tokenization Inconsistency](/202608/04/2608.00382v1-ti-stegoalign-channel-guided-post-training-for-generative-text-steganography-under-tokenization-inconsistency)  
    标签：评分：7.0/10、query:fla
-   evidence：面向开放式任务的自验证奖励强化学习用于LLM自我提升
-2. [Benchmarks Are Not Validation: A System-Level View of Financial LLM Applications](/202608/03/2607.28840v1-benchmarks-are-not-validation-a-system-level-view-of-financial-llm-applications)  
+   evidence：为LLM智能体提出的后训练框架，以提升隐写术性能。
+7. [CRISP: Critical Step Perception for Training Efficient Deep Search Agents](/202608/04/2608.01867v1-crisp-critical-step-perception-for-training-efficient-deep-search-agents)  
    标签：评分：7.0/10、query:fla
-   evidence：面向金融LLM应用（含智能体）的系统级验证框架
-3. [Recursive Governance: A Graph-Theoretic Framework for Risk Propagation and Drift Detection in Agentic AI Systems](/202608/03/2607.23916v1-recursive-governance-a-graph-theoretic-framework-for-risk-propagation-and-drift-detection-in-agentic-ai-systems)  
+   evidence：通过感知关键步骤训练高效深度搜索智能体，减少冗余工具调用。
+8. [Hear, Invoke, and Understand: A Skill-Calling Multimodal Agent for Large Audio Language Models](/202608/04/2608.01881v1-hear-invoke-and-understand-a-skill-calling-multimodal-agent-for-large-audio-language-models)  
+   标签：评分：7.0/10、query:fla
+   evidence：基于轨迹监督微调和多轮改进的音频智能体后训练
+9. [CoEvoKG: Co-Evolving Knowledge Graphs with Self-Evolving Search Agents](/202608/04/2608.01904v1-coevokg-co-evolving-knowledge-graphs-with-self-evolving-search-agents)  
+   标签：评分：7.0/10、query:fla
+   evidence：通过RL协同进化知识图谱与自进化搜索智能体，实现持久记忆和进化。
+10. [AgentStream: How Well Do Self-Evolving LLM Agents Perform Under Streaming Tasks?](/202608/04/2608.00155v1-agentstream-how-well-do-self-evolving-llm-agents-perform-under-streaming-tasks)  
    标签：评分：6.0/10、query:fla
-   evidence：针对金融代理系统的治理框架，应对风险与漂移
+   evidence：评估流式任务中自我进化的LLM智能体
+11. [Rethinking Personalized Reward Modeling for LLMs under Preference Heterogeneity via Group-Debiased Federated Learning](/202608/04/2608.01556v1-rethinking-personalized-reward-modeling-for-llms-under-preference-heterogeneity-via-group-debiased-federated-learning)  
+   标签：评分：6.0/10、query:fla
+   evidence：联邦奖励建模作为LLM对齐的后训练组件
 
 
 <div class="dpr-home-promo-card">

@@ -1,0 +1,888 @@
+Title: TI-StegoAlign: Channel-Guided Post-Training for Generative Text Steganography under Tokenization Inconsistency
+
+URL Source: https://arxiv.org/pdf/2608.00382v1
+
+Published Time: Tue, 04 Aug 2026 00:21:08 GMT
+
+Number of Pages: 22
+
+Markdown Content:
+# TI-StegoAlign: Channel-Guided Post-Training for Generative Text Steganography under Tokenization Inconsistency 
+
+## Jiuan Zhou 1,2 , Yuhao Xue 1, Yu Cheng 1,2 , Yuan Xie 1,2 , Zhaoxia Yin 1∗
+
+> 1
+
+East China Normal University, Shanghai, China 
+
+> 2
+
+Shanghai Innovation Institute, Shanghai, China 
+
+Abstract 
+
+Generative text steganography enables LLM agents to ex-change secret information through task-relevant messages. Yet most methods evaluate recovery on sender-side tokens, whereas the receiver observes only surface text. Detokeniza-tion and receiver-side retokenization can alter token bound-aries, desynchronize coding states, and cause such evalua-tion to overestimate receiver-side recovery. Existing remedies rely on inference-time filtering or verification, correcting in-dividual outputs without adapting the generation policy to the receiver-side channel. To address these limitations, we pro-pose TI-StegoAlign, a channel-guided post-training frame-work. The Bit-Consistent Supervised Objective (BCSO) en-larges local coding margins at realized sender-side embed-ding positions. Channel-Conditioned Preference Optimiza-tion (CCPO) then aligns complete stegotexts using receiver-realistic recovery, text quality, and anti-steganalysis feedback. TI-StegoAlign updates only LoRA parameters and requires no tokenization-specific correction during communication. Ex-perimental results show 100% receiver bit accuracy. Com-pared with the strongest baselines, TI-StegoAlign achieves a 21.6% reduction in normalized perplexity deviation and a 6.3% relative improvement in anti-steganalysis performance. 
+
+## 1 Introduction 
+
+Large language models increasingly underpin agents that communicate through dialogue (Wu et al. 2024b), decom-pose complex tasks and delegate subtasks to specialized agents (Hong et al. 2024), and coordinate within multi-agent teams (Chen et al. 2024). These interactions are commonly mediated by natural-language messages that may be acces-sible to platform operators, automated monitoring systems, or other third parties (Motwani et al. 2024; Huang et al. 2026a). When semantically coherent messages carry recov-erable information while preserving their overt conversa-tional function, they can establish a covert channel within the interaction. Such communication may conceal the pres-ence or content of sensitive exchanges from observers, but it can also facilitate unauthorized information transfer beyond established oversight mechanisms. Recent studies have inves-tigated steganographic collusion (Motwani et al. 2024), its emergence under misspecified training incentives (Mathew et al. 2025), metaphor-driven covert communication (Xu and 
+
+> ∗
+
+Corresponding author. Secret Bits                                 
+
+> 10111
+> Steganographic
+> Generation
+> Sender's Tokens
+> _any thing ... anything
+> Oracle Decoder
+> Recovered Bits
+> Sender -side recovery
+> 10111
+> anything
+> Sender -Side Oracle
+> Evaluation
+> 1Local Token Mismatch
+> 2Next -Step Distribution Shift
+> 3Decoder Desynchronization
+> 4Cascading Bit Errors
+> _anything ≠_any thing
+> ... ...
+> Sender: 10111...
+> Receiver: 10100...
+> Hidden Sender Token
+> IDs
+> Receiver -Realistic
+> Communication
+> ...
+> Detokenized text
+
+Figure 1: Sender-side oracle evaluation reuses the hidden generation tokens, whereas receiver-realistic communica-tion extracts from retokenized surface text. A local bound-ary change can desynchronize subsequent coding states and cause cascading bit errors. Zhong 2025), and event-driven covert communication pro-tocols (Huang et al. 2026a). Generative text steganography embeds secret informa-tion during language generation while preserving the task-relevant semantics of agent messages. Early work combined neural language models with token-level coding (Yang et al. 2019; Ziegler, Deng, and Rush 2019; Shen, Ji, and Han 2020; Zhang et al. 2021), followed by advances in distributional se-curity (Kaptchuk et al. 2021; Schroeder de Witt et al. 2023; Ding et al. 2023), sampling efficiency (Wang et al. 2025), and public-key constructions (Zhang et al. 2025); recent LLM-based methods have explored black-box embedding (Wu et al. 2024a), adaptive strategy evolution (Zhou et al. 2026), and distribution optimization (Huang et al. 2026b). In token-sampling schemes, correct extraction requires the sender and receiver to operate on the same token sequence. Yet receiver-side retokenization may produce a different sequence because of segmentation ambiguity (Nozaki and Murawaki 2022) or tokenization inconsistency (Yan and Murawaki 2025). Fig-ure 1 contrasts sender-side oracle evaluation with receiver-realistic communication. The former reuses the generation-time token sequence, whereas the latter reconstructs tokens from the transmitted stegotext. A local mismatch can alter arXiv:2608.00382v1 [cs.CR] 1 Aug 2026 subsequent coding states and corrupt the remaining secret bits (Wang et al. 2026). Consequently, evaluations that as-sume preserved generation-time tokenization can substan-tially overstate practical recovery. Prior work has addressed tokenization inconsistency mainly through inference-time disambiguation. Segmenta-tion Tricks (SegTrick) combines stepwise tokenization with prefix-based token disambiguation (Nozaki and Murawaki 2022); Stepwise Verification removes candidates that would yield inconsistent retokenization (Yan and Murawaki 2025); SyncPool groups prefix-related candidates to synchronize sampling (Qi et al. 2025). These methods operate on can-didate sets induced by a fixed model distribution. Although they can prevent or contain decoding desynchronization, they do not adapt the generator toward sequences that remain sta-ble after retokenization. Moreover, tokenization consistency alone does not ensure fluent or statistically inconspicuous stegotext. Inference-time disambiguation therefore does not jointly optimize receiver-side recoverability, linguistic qual-ity, and anti-steganalysis performance. To address these limitations, we introduce TI-StegoAlign, which jointly optimizes generation for receiver-side re-coverability after retokenization, linguistic quality, and anti-steganalysis performance. It treats the detokenization-retokenization cycle as part of the communication channel. Within this framework, we propose the Bit-Consistent Su-pervised Objective (BCSO), which couples secret informa-tion embedding with conditional generation while preserv-ing in-domain language modeling capability. We further de-vise Channel-Conditioned Preference Optimization (CCPO), which learns channel-aware sequence preferences under a unified recovery–quality–security criterion. Together, these objectives adapt the generator itself to channel effects rather than correcting individual outputs at inference time. Our main contributions are summarized below: 
+
+• We establish a receiver-realistic covert communication setting in which secret recovery relies solely on the trans-mitted stegotext. Across 29,979 transmissions, 45.3% of TI cases produce at least three additional bit errors after the first decoding error, exposing a reliability gap over-looked by sender-side oracle evaluation. 
+
+• We introduce TI-StegoAlign, a channel-guided policy alignment framework that adapts the generation pol-icy to the detokenization-retokenization channel. Its Bit-Consistent Supervised Objective enlarges local coding margins at realized sender-side decisions while preserv-ing in-domain generation capability. 
+
+• We further introduce Channel-Conditioned Preference Optimization, which learns channel-aware sequence pref-erences to jointly optimize receiver-side recoverability, text quality, and anti-steganalysis performance. 
+
+## 2 Related Work 
+
+2.1 Agent Covert Communication 
+
+Existing work on covert communication among LLM agents has examined the risks and emergence of steganographic col-lusion and the design of explicit covert mechanisms. Mot-wani et al. (2024) formalize the threat model, capacity, and incentives of secret collusion among communicating agents, whereas Mathew et al. (2025) demonstrate that stegano-graphic protocols can emerge under misspecified objectives and resist standard monitoring and mitigation. CoMet (Xu and Zhong 2025) develops metaphor-mediated communi-cation for multi-agent language games, while Whispering Agents (Huang et al. 2026a) constructs event-driven proto-cols from storage, timing, and behavioral signals. Together, these studies characterize covert agent communication at the levels of incentives, emergent behavior, and protocol design. 
+
+2.2 Generative Text Steganography 
+
+Generative text steganography embeds secret information through controlled choices during text generation. Early neu-ral approaches combined language models with fixed-length, Huffman, or arithmetic coding (Yang et al. 2019; Ziegler, Deng, and Rush 2019; Shen, Ji, and Han 2020), followed by adaptive grouping for distribution-aware embedding (Zhang et al. 2021). Subsequent studies developed distribution-preserving security mechanisms (Kaptchuk et al. 2021; Schroeder de Witt et al. 2023; Ding et al. 2023), improved coding efficiency (Wang et al. 2025; Yan and Murawaki 2026), and extended provable security to public-key set-tings (Zhang et al. 2025). Recent LLM-based methods have explored black-box embedding (Wu et al. 2024a), adaptive strategy evolution (Zhou et al. 2026), and optimized genera-tion distributions (Huang et al. 2026b). A reliability issue in generative text steganography arises when secret information is encoded through token selec-tion: receiver-side retokenization may alter the sampled se-quence and disrupt extraction. Segmentation Tricks remove prefix-ambiguous candidates (Nozaki and Murawaki 2022), SyncPool synchronizes sampling over prefix-related candi-date groups (Qi et al. 2025), and Stepwise Verification fil-ters candidates that would retokenize inconsistently (Yan and Murawaki 2025). Secure disambiguation (Yan, Yang, and Song 2023), verification-based methods (Yan, Song, and Yang 2024a), tokenization-free methods (Yan, Song, and Yang 2024b), and corrective state resets (Wang et al. 2026) provide alternative remedies. Although these methods reduce decoding failures, they enforce reliability through external filtering or synchronization, which can constrain generation rather than enable the model to directly produce stegotext that remains recoverable while preserving linguistic quality and anti-steganalysis performance. 
+
+2.3 Post-Training for Generative Text Steganography 
+
+Language-model post-training offers a general mechanism for shaping sequence-level generation through demonstra-tions and preferences. Supervised fine-tuning (SFT) learns desired conditional behavior from demonstrations (Ouyang et al. 2022), whereas Direct Preference Optimization (DPO) directly optimizes a language-model policy from preference pairs without an explicit reward model (Rafailov et al. 2023). Existing steganographic studies have mainly focused on in-ducing or evaluating covert behavior (Mathew et al. 2025; Karpov et al. 2025). In contrast, TI-StegoAlign applies super-vised and preference-based post-training to generative text (a) Bit -Consistent Supervised Objective  (b) Channel -Conditioned Preference Optimization 
+
+(c) Parameter -Efficient Deployment                                     
+
+> ℒBC 𝑆𝑂 =
+> ℒLM +𝜆 𝐵𝐶 ℒBC
+> Fixed coding
+> rule Γ
+> Realized trace
+> Target -margin supervision
+> Realized pair 𝑡 𝑗 ,𝑏 𝑗 ∈𝐴
+> Γmaps 𝑏 𝑗 to 𝐼 𝑗 =[ℓⱼ,𝑢 ⱼ]
+> 𝑚 ⱼ<𝛾 : penalty active
+> 𝑚 ⱼ≥𝛾 : margin satisfied
+> Controlled
+> generation ×𝑁
+> fixed 𝑥 ,𝑠 ,𝑟 ,𝐵
+> 𝑖 =2
+> ⋮
+> 𝑖 =𝑁
+> Receiver -realistic channel 𝐶 =𝜏 ∘𝛿
+> applied to every candidate
+
+𝑦ᵢˢ  
+
+> Detokenize 𝛿
+
+𝑧ᵢ  Retokenize  𝜏 
+
+𝑦ᵢʳ  Extract with  Γ
+
+ŝᵢ 
+
+> transmitted surface text
+> boundary change
+> sender
+
+𝑡 2 𝑡 3
+
+> receiver
+
+𝑡 1                     
+
+> ′
+> Channel -conditioned candidate evaluation
+> Candidate Recovered secret ŝᵢ Recovery 𝑅ᵢ Fluency 𝑄ᵢᵖᵖˡ Semantics Qᵢˢᵉᵐ Security 𝐴ᵢ
+> ✓𝑧₁ (𝑧⁺ )
+> ×𝑧₂ (𝑧⁻ )
+> 1011…1
+> Requirement
+> gate
+> 𝑧⁺ ≻𝑧⁻
+> clear gain ·bounded degradation 𝜋 𝜃
+> No TI -Specific Inference Correction
+> In -domain data
+
+⋮         
+
+> all tokens
+> realized positions (updated by BCSO)
+> LoRA adapter
+> Frozen LLM
+> 𝑖 =1
+> 1001…0
+> CCPO update
+> Update shared LoRA
+> 𝜋 𝑟𝑒𝑓 =𝜋 𝐵𝐶
+
+Shared Configuration and Runtime Communication 
+
+> Receiver
+> Retokenize+ Final Decode
+
+𝑡 ′1 
+
+> …
+
+𝑡 ′𝑅                        
+
+> Recovered Secret
+> 10111
+> Sender
+> Public context 𝑥 +Secret bits 𝑠
+> 101…
+> Steganographic Generation
+> 𝑡 1𝑡 2𝑡 𝑇 ⋯
+> Only Lightweight LoRA Parameters Are Synchronized
+> Pre -Shared Base LLM + Tokenizer + Coding Rule ΓSynchronized Learned LoRA Adapter
+> Text Channel
+> Surface Stegotext Only
+> (𝑥 (1),𝑠 (1),𝑟 (1),𝐵 (1))
+> (𝑥 (𝑀 ),𝑠 (𝑀 ),𝑟 (𝑀 ),𝐵 (𝑀 ))
+
+ℒLM 
+
+ℒBC 
+
+𝐴 = 𝑡 𝑗 , 𝑏 𝑗        
+
+> −𝑧₃ 1011…1
+
+⋯ ⋯ ⋯ ⋯ ⋯⋯
+
+𝜋 𝐵𝐶                                   
+
+> BCSO training flow
+> current conditional distribution
+> 𝑝 𝜃 ⋅∣𝑥 ,𝑦 <𝑡 𝑗
+> 𝑠
+> Realized -token coordinate 𝐹 ⱼ(𝜃 )
+> 01
+> ℓⱼℓⱼ+𝛾 𝑢 ⱼ𝛾 -safe subregion [ℓⱼ+𝛾 ,𝑢 ⱼ−𝛾 ]
+> 𝑚 ⱼ𝜃 =min {𝐹 ⱼ𝜃 −ℓⱼ,𝑢 ⱼ−𝐹 ⱼ𝜃 }
+> 𝐹 ⱼ(𝜃 )
+> 𝓛 𝐵𝐶 ,𝑗 =[𝛾 −𝑚 ⱼ(𝜃 )]₊
+> Intended interval [ℓⱼ,𝑢 ⱼ]
+> 𝛾 −𝑚 ⱼ(𝜃 )
+
+Figure 2: TI-StegoAlign framework: (a) BCSO combines in-domain language modeling with coding-margin supervision. (b) CCPO ranks complete stegotexts using receiver-realistic recovery, linguistic quality, semantic preservation, and steganalytic security. (c) Training updates only a shared LoRA adapter; communication transmits surface text without TI-specific correction. steganography under receiver-realistic channel conditions, jointly optimizing secret recovery, linguistic quality, and ste-ganalytic security. 
+
+## 3 The Proposed Method 
+
+As illustrated in Fig. 2, TI-StegoAlign integrates the post-training procedure with a receiver-realistic communication pipeline. Given a public context x and a secret bitstream 
+
+s = (s1, . . . , s L) ∈ {0, 1}L, BCSO first establishes a coding-aware policy through local sender-side margin su-pervision. CCPO then optimizes complete stegotexts us-ing receiver-realistic recovery, quality, and security out-comes. Parameter-efficient post-training confines adaptation to lightweight low-rank adapters while keeping the shared base model and coding rule fixed. 
+
+3.1 Receiver-Realistic Communication Model 
+
+TI-StegoAlign models steganographic communication using the detokenized stegotext that actually traverses the channel, rather than the sender-side token trajectory used internally during generation. This separation yields an operationally faithful communication model in which secret recovery de-pends exclusively on text available to the receiver, without assuming access to sender-side token IDs. Let πθ denote the language-model policy adapted by TI-StegoAlign, and let Γ denote the fixed CDF-partition rule shared by the sender and receiver. Given the conditional distribution pθ,t , Γ determines whether step t is used for em-bedding. At a selected step, it maps the next coding symbol b,consumed from s, to a CDF interval IΓ,t (b). The sender sam-ples a token assigned to this interval and advances the secret pointer accordingly. The receiver recomputes the conditional distribution from its retokenized prefix and applies the same partition and position-selection rule. Under condition (x, s),this process induces a sender-side token sequence 
+
+ys ∼ Pθ, Γ( · | x, s) , ys = ( ys
+
+1, . . . , y sT ) . (1) Here, Pθ, Γ denotes steganographic generation under πθ
+
+and Γ. The formulation targets CDF/interval-based coding rules, whose bit-specific interval boundaries are available during training. The sender-side token sequence is not exposed through the communication channel. Let δ denote detokenization and τ
+
+denote tokenization of the received text. The transmitted ste-gotext z and the token sequence reconstructed by the receiver are 
+
+z = δ(ys) , yr = τ (z) = τ (δ(ys)) ≡ C (ys) , (2) where C = τ ◦δ denotes the detokenization–retokenization channel. Since the two operations are not generally inverse, the reconstructed sequence may satisfy yr̸ = ys even when both parties use the same tokenizer. A local boundary change alters the prefix used to reconstruct the next-token distribu-tion. It may therefore change the position-selection decision or the interval membership of a later token. Once the secret pointers diverge, errors can propagate through subsequent extraction. Secret recovery is therefore defined exclusively on the se-quence reconstructed at the receiver: 
+
+ˆs = Ext Γ(x, yr ; πθ ) = Ext Γ(x, C(ys); πθ ) , (3) where Ext Γ denotes the extraction procedure defined by the shared coding rule Γ and the conditional distributions produced by πθ . Recovery from ys serves only as a sender-side oracle, whereas communication reliability is evaluated on the receiver-reconstructed sequence yr .This channel model defines the communication conditions under which the learned generation policy is optimized. On this basis, TI-StegoAlign internalizes post-channel recover-ability into the generation policy rather than treating it as an inference-time correction. 
+
+3.2 Bit-Consistent Supervised Objective 
+
+Bit-Consistent Supervised Objective (BCSO) initializes TI-StegoAlign with a coding-aware policy. Standard SFT max-imizes the likelihood of in-domain demonstration tokens but does not account for their positions within the coding inter-vals induced by Γ. BCSO augments the language-modeling objective with local margin supervision at realized sender-side embedding positions, encouraging larger coding mar-gins while preserving in-domain generation. Moving a real-ized token away from the nearest interval boundary reduces the sensitivity of its coding assignment to small shifts in the CDF coordinate. BCSO operates on fixed sender-side traces generated by the pre-BCSO policy under Γ. The token se-quence, consumed coding symbols, and realized embedding positions remain fixed throughout supervised optimization. To preserve in-domain generation, we retain the standard causal language-modeling loss over the sender-side sequence 
+
+ys introduced in Eq. (1): 
+
+LLM = − 1
+
+T
+
+> T
+
+X
+
+> t=1
+
+log pθ (yst | x, ys<t ) . (4) This term preserves the model’s conditional generation ca-pability in the target domain. Let A = {(tj , b j )}|A|  
+
+> j=1
+
+denote the realized embedding trace, where bj is the coding symbol consumed from the secret bitstream at position tj . Under the current coding state, Γ maps bj to its intended CDF interval 
+
+Ij = [ ℓj , u j ]. Consistent with the shared coding rule, a token is assigned to the interval containing its upper CDF endpoint; this convention also resolves cases in which its probability mass crosses an interval boundary. Let σtj denote the de-scending probability ordering and kj the rank of the realized token. The corresponding endpoint is 
+
+Fj (θ) = 
+
+> kj
+
+X
+
+> i=1
+
+pθ
+
+
+
+vσtj (i) | x, ys<t j
+
+
+
+. (5) We define its coding margin as the distance to the nearest boundary of the intended interval: 
+
+mj (θ) = min {Fj (θ) − ℓj , u j − Fj (θ)} . (6) The margin is positive when the realized token falls within its intended interval and increases with its distance from the nearest interval boundary. At each forward pass, the current policy recomputes the probability ordering, realized token rank, and interval assignment. These discrete quantities are held fixed during backpropagation, so gradients propagate only through the cumulative probabilities defining Fj (θ).The bit-consistency loss and the complete supervised ob-jective are 
+
+LBC = 1
+
+|A| 
+
+X  
+
+> (tj,b j)∈A
+
+[γ − mj (θ)] + ,
+
+LBCSO = LLM + λBC LBC ,
+
+(7) where [a]+ = max( a, 0) , γ > 0 is chosen such that 
+
+2γ < u j − ℓj for every realized interval, and λBC controls the strength of bit-consistency supervision. LLM preserves in-domain generation, whereas LBC moves realized-token coordinates toward the interior of their intended intervals. The resulting policy initializes the receiver-conditioned op-timization in CCPO. 
+
+3.3 Channel-Conditioned Preference Optimization 
+
+Building on the BCSO policy, Channel-Conditioned Prefer-ence Optimization (CCPO) further aligns generation with the outcomes of receiver-realistic communication. CCPO con-structs preferences from the recoverability, linguistic quality, and steganalytic security observed after the generated stego-text traverses the detokenization-retokenization channel. Let πBC denote the policy obtained through BCSO. For each training instance, CCPO samples N sender-side token sequences ysi under the same public context x, secret bit-stream s, reference text r, and generation budget B. Here, 
+
+r is the non-steganographic reference text used to assess se-mantic preservation, and B is the token-generation budget. Only the sampling randomness varies. Each candidate is characterized by ui =(Ri, Q ppl  
+
+> i
+
+, Q sem  
+
+> i
+
+, A i). Here, Ri measures receiver-side re-covery, Qppl  
+
+> i
+
+measures fluency relative to the target-domain distribution, and Qsem  
+
+> i
+
+measures semantic consistency. The steganalytic security score Ai is computed by a frozen eval-uator that combines a domain-specific BERT classifier with fixed stylistic statistics. The classifier is trained separately for each domain using balanced cover-stego pairs from the corresponding training split. No validation or test text is used for training. Exact score definitions and evaluator details are provided in Appendix A. Preference construction first removes candidates that vi-olate minimum requirements for receiver-side recovery, flu-ency, semantic consistency, steganalytic security, or length. The remaining candidates are ordered by a fixed recovery-dominant score Si computed from the four components of 
+
+ui, with deterministic tie-breaking. Only an ordered pair with 
+
+Si > S j is tested under the pairwise preference criterion: 
+
+zi ≻ zj ⇐⇒ 
+
+
+
+Si > S j ,
+
+∃k : ui,k ≥ uj,k + ∆ k,
+
+∀ℓ̸ = k : ui,ℓ ≥ uj,ℓ − εℓ|k,
+
+(8) where ∆k > 0 denotes the required improvement on crite-rion k, and εℓ|k ≥ 0 bounds the admissible degradation on criterion ℓ when the preference is established along axis k.The score orients candidate pairs but is insufficient by it-self; a pair is retained only when the conditions also hold. Since every retained pair follows the same strict score order, reciprocal preferences and within-set cycles are excluded. Exact score weights, feasibility thresholds, margins, toler-ances, diversity filters, and tie-breaking rules are reported in Appendix A. All candidates in a preference set are generated under the same (x, s, r, B ), and their labels are determined from receiver-realistic outcomes. DPO then scores the canon-ical tokenizations ey± = τ (z±) under a shared textual prompt 
+
+c containing x, r, and the bit-length instruction. The secret and coding state are not included in c; instead, they affect pair construction through Γ-constrained generation and receiver-side extraction. Hence, DCC = {(c, ey+, ey−) | z+ ≻ z−}.With πref = πBC , define 
+
+∆LM  
+
+> θ
+
+(c, y) = log πθ (y | c) − log πref (y | c). (9) Following DPO (Rafailov et al. 2023), the preference pairs are optimized using 
+
+LCCPO = −EDCC 
+
+log σ β ∆LM  
+
+> θ
+
+(c, ey+) − ∆LM  
+
+> θ
+
+(c, ey−) ,
+
+(10) where β controls deviation from the supervised policy. Ac-cordingly, CCPO is a channel-observed preference optimiza-tion rather than exact DPO over Pθ, Γ: receiver-side outcomes determine the labels, while gradients update the LLM prob-abilities subsequently partitioned by Γ.CCPO converts receiver-realistic outcomes for secret re-covery, linguistic quality, semantic preservation, and stegan-alytic security into pairwise preferences over complete stego-texts. Together, BCSO and CCPO form a unified post-training framework: BCSO establishes a coding-aware policy through supervised optimization, while CCPO further aligns it with these stegotext preferences. 
+
+3.4 Parameter-Efficient Training and Communication 
+
+BCSO and CCPO sequentially update a shared set of LoRA adapters (Hu et al. 2022), while the base language model, tokenizer, and coding rule Γ remain fixed. The resulting pol-icy is shared by the sender and receiver during communi-cation. The sender transmits only the detokenized stegotext 
+
+z, which the receiver retokenizes and extracts under Γ. This deployment requires no TI-specific candidate filtering, path verification, or decoding repair at inference time. 
+
+## 4 Experiments 
+
+This section presents the experimental setup and results. Section 4.1 details the experimental setup. Section 4.2 as-sesses secret recovery under receiver-realistic communica-tion. Sections 4.3 and 4.4 evaluate imperceptibility and anti-steganalysis performance, respectively. Section 4.5 reports the human evaluation results. Appendix C presents fine-grained results for each domain. Appendix D reports the ablation studies, Appendix E analyzes runtime efficiency, and Appendix F provides qualitative examples. 
+
+4.1 Experimental Settings 
+
+Datasets. We evaluate TI-StegoAlign on three publicly avail-able corpora: the News Category Dataset (News) (Misra 2022), the Large Movie Review Dataset (Movie) (Maas et al. 2011), and Sentiment140 (Tweet) (Go, Bhayani, and Huang 2009). The evaluation set contains 12,300 News samples, with 300 samples drawn from each of 41 selected categories, together with 20,000 Movie reviews and 20,000 tweets. All methods considered in the evaluation are applied to the full set of 52,300 instances, resulting in 313,800 transmissions across the six methods. The three corpora span diverse do-mains, writing styles, and sequence lengths. Results in the main text are averaged across News, Movie, and Tweet, while domain-specific results are reported in Appendix C. The aux-iliary channel characterization in Section 4.2 is conducted on an independently collected set of 29,979 transmissions, which is excluded from the count above. 
+
+Baselines. We compare TI-StegoAlign with five rep-resentative baselines to support a comprehensive evalua-tion across the considered dimensions. ADG (Zhang et al. 2021) and Discop (Ding et al. 2023) are representative distribution-aware generative steganography methods. Seg-mentation Tricks (Nozaki and Murawaki 2022), SyncPool (Qi et al. 2025), and Stepwise Verification (Yan and Mu-rawaki 2025) explicitly address segmentation ambiguity or tokenization inconsistency through generation-time disam-biguation. For brevity, we refer to Segmentation Tricks and Stepwise Verification as SegTrick and StepVerify, respec-tively. For a fair comparison, all methods use the same un-derlying language model and tokenizer whenever applicable and are evaluated at a common target payload of 0.5 bpw. The results therefore represent controlled re-evaluations rather than reproductions of the original operating points; method-specific settings and results are reported in Appendix G. 
+
+Implementation Details. We use Llama-3.1-8B (Grattafiori et al. 2024) as the base language model together with its corresponding tokenizer. To further assess TI-StegoAlign across different model backbones, we additionally conduct experiments with Qwen3-8B (Yang et al. 2025). The corresponding results are reported in Appendix H. LoRA adapters are inserted into the query, key, value, and output projections of each self-attention module, with rank r = 16 , scaling factor α = 32 , and dropout 0.05; all other model parameters remain frozen. The policy obtained after BCSO is used to initialize CCPO. Complete optimization hyperparameters, generation settings, and hardware specifications are provided in Appendix B. Statistical tests are selected by metric. We use two-sided exact McNemar tests for paired exact-recovery outcomes, paired Wilcoxon signed-rank tests (Wilcoxon 1945) for per-instance PPL ∗ and SS, and paired bootstrap tests with 95% confidence intervals for differences in bit and detector accuracy. KLD is reported descriptively. Holm’s procedure (Holm 1979) is applied within each metric family at α = 0 .05 . All reported pairwise improvements remain significant after correction. 
+
+4.2 Communication Reliability 
+
+A covert channel is operationally reliable only when the in-tended secret can be recovered from the transmitted text avail-able to the receiver. In our evaluation, Oracle Bit Accuracy measures recovery on the token sequence produced during Method Oracle Bit Acc. (%) ↑                                         
+
+> Receiver Bit Acc. (%) ↑
+> Oracle-to-Receiver Gap ↓
+> Receiver Exact Message Recovery (%) ↑
+> TI Rate (%) ↓
+> Cascading Error Rate (%) ↓
+> ADG 99.94 77.31 22.63 72.91 24.47 14.49 Discop 98.60 83.17 15.43 72.83 16.17 16.42 SegTrick 100.00 100.00 0.00 100.00 0.86 0.00
+> SyncPool 100.00 100.00 0.00 100.00 0.97 0.00
+> StepVerify 100.00 100.00 0.00 100.00 0.78 0.00 TI-StegoAlign 100.00 100.00 0.00 100.00 0.76 0.00
+
+Table 1: Comparison of communication reliability across methods. ( ↑ higher is better, ↓ lower is better).                       
+
+> Method PPL ∗↓SS ↑KLD ↓
+> ADG 0.547 0.504 2.371 Discop 0.756 0.502 2.331 SegTrick 0.921 0.554 2.511 SyncPool 0.774 0.508 2.775 StepVerify 0.719 0.500 2.436
+> TI-StegoAlign 0.429 0.563 1.687
+
+Table 2: Comparison of imperceptibility across methods. generation, whereas Receiver Bit Accuracy is computed after the transmitted stegotext is retokenized at the receiver. The Oracle-to-Receiver Gap is the absolute difference between the two. Exact Message Recovery counts a sample as correct only when the complete secret is recovered. TI Rate reports the proportion of samples whose token sequence changes af-ter detokenization and retokenization. Cascading Error Rate measures the bit-error rate over the remaining secret posi-tions following the first decoding error and is set to zero when no decoding error occurs. For the channel analysis, we additionally report Cascade Incidence, defined as the pro-portion of TI cases in which at least three additional secret bits are decoded incorrectly after the first decoding error. Results at method-specific embedding rates are provided in Appendix G. We establish a receiver-realistic covert communication set-ting in which secret recovery relies solely on the transmit-ted stegotext. In a separate channel-characterization study of 29,979 transmissions, 45.3% of transmissions exhibit-ing TI produce at least three additional bit errors after the first decoding error. This result shows that a local to-kenization mismatch can propagate through subsequent cod-ing states. As shown in Table 1, ADG and Discop retain high Oracle Bit Accuracy values of 99.94% and 98.60%, respectively, but their Receiver Bit Accuracy decreases to 77.31% and 83.17% after transmission, producing Oracle-to-Receiver Gaps of 22.63 and 15.43 percentage points. These results confirm that sender-side recovery can sub-stantially overestimate reliability over the surface-text chan-nel. By contrast, SegTrick, SyncPool, StepVerify, and TI-StegoAlign all achieve 100.00% Oracle and Receiver Bit Ac-curacy, 100.00% Exact Message Recovery, and zero Oracle-to-Receiver Gap and cascading errors. Among these meth-ods, TI-StegoAlign records the lowest TI Rate of 0.76%. A nonzero TI rate remains compatible with exact recovery be-cause a changed token boundary does not necessarily alter subsequent interval assignments or the secret-pointer state. TI-StegoAlign achieves perfect recovery without modifying candidate pools or introducing additional synchronization or verification procedures at inference time. Practical covert communication requires more than reliable secret recovery. The transmitted stegotext must also conceal the presence of embedded information by remaining linguistically natu-ral and statistically inconspicuous. Therefore, the following section evaluates imperceptibility. 
+
+4.3 Imperceptibility 
+
+Imperceptibility in text steganography is commonly assessed from two perspectives: text quality and statistical imper-ceptibility. Text quality evaluates fluency and consistency with a paired reference text, while statistical imperceptibil-ity measures the distributional similarity between the non-steganographic cover corpus and the stego corpus. 
+
+Text Quality. High quality stegotext should remain lin-guistically natural while preserving the semantics of its corresponding cover text. Fluency is evaluated using per-plexity (PPL) (Mikolov et al. 2010), computed with GPT-2 model. To compare across corpora with different baseline perplexities, we report the normalized perplexity deviation 
+
+PPL ∗ = |PPL stego −PPL cover | 
+
+> PPL cover
+
+, where a lower value indicates closer agreement with the domain-specific cover distribu-tion (Zhou et al. 2026). Semantic similarity (SS) is computed as the cosine similarity between sentence embeddings of a stegotext and its paired reference text r. For each test instance, 
+
+r is the original corpus text and is shared by all methods. We compute embeddings with the RoBERTa-based roberta-base-nli-mean-tokens Sentence-BERT model (Reimers and Gurevych 2019; Liu et al. 2019). As shown in Table 2, TI-StegoAlign achieves the best re-sults on both text-quality metrics, with a PPL ∗ of 0.429 and an SS of 0.563. Compared with the strongest baseline on each metric, it reduces PPL ∗ by 21.6% relative to ADG and improves SS by 0.009 over SegTrick. Together with the reliability results in Section 4.2, these findings show that TI-StegoAlign achieves the same perfect-recovery as the dis-ambiguation baselines while providing better fluency and semantic fidelity. 
+
+Statistical Imperceptibility. We use Kullback-Leibler di-vergence (KLD) (Cachin 1998; Zhang et al. 2021) to quantify the distributional discrepancy between cover and stego texts, where a lower value indicates stronger statistical impercepti-Method BD (%) BF (%) SANet (%) Average (%) ADG 71.73 64.97 57.33 64.68 Discop 69.17 79.17 73.06 73.80 SegTrick 68.00 79.67 68.79 72.15 SyncPool 77.67 69.17 74.44 73.76 StepVerify 64.16 69.83 71.49 68.49     
+
+> TI-StegoAlign 51.00 62.07 68.75 60.61
+
+Table 3: Comparison of anti-steganalysis performance across methods. Average denotes the mean over BD, BF, and SANet. ADG Discop SegTrick SyncPool StepVerify TI-StegoAlign 12345  
+
+> Mean Human Evaluation  Fluency Coherence Semantic Consistency
+
+Figure 3: The results of the human evaluation. bility. In our experiments, we take the logarithm of the KLD values to facilitate a clearer comparison of statistical im-perceptibility between algorithms. As shown in Table 2, TI-StegoAlign obtains a KLD of 1.687, reducing the strongest baseline, Discop, by 0.644. This result indicates that the learned generation policy remains closely aligned with the cover-text distribution while maintaining exact receiver-side recovery under receiver-realistic communication. The improvements in linguistic and statistical impercep-tibility are consistent with CCPO’s multi-criteria preference construction. By jointly considering receiver-side recovery, linguistic quality, semantic preservation, and steganalytic se-curity, CCPO guides policy optimization through preferences that reflect trade-offs among these criteria rather than any single score. 
+
+4.4 Security 
+
+Steganography and steganalysis evolve through a continuing adversarial process: steganographic methods seek to conceal the traces of secret embedding, while steganalyzers attempt to identify them. Anti-steganalysis performance therefore provides an important measure of steganographic security. We evaluate anti-steganalysis performance using BiLSTM-Dense (BD) (Yang et al. 2020), BERT-FT (BF) (Peng et al. 2021), and SANet (Xue et al. 2024). Notably, the BERT-based evaluator used in CCPO and the BF detector are trained in-dependently and share no parameters. For each method and domain, we construct 10,000 cover-stego pairs for training and use 1,000 pairs each for validation and testing. Accuracy closer to 50%, corresponding to random guessing, indicates stronger anti-steganalysis performance. As shown in Table 3, TI-StegoAlign achieves accuracies of 51.00%, 62.07%, and 68.75% under BD, BF, and SANet, respectively. Its mean accuracy of 60.61% is the closest to random guessing. TI-StegoAlign is closest to 50% under BD and BF, whereas ADG remains stronger under SANet, with an accuracy of 57.33%. The security gain is therefore broad but not uniform across detector architectures. The absolute accuracies of ADG and Discop are not di-rectly comparable with their original reports because the language models, payload regimes, steganalyzers, and evalu-ation protocols differ. Accordingly, the results here character-ize their behavior under the shared Llama-3.1-8B benchmark rather than reproduce the original security claims. Overall, the lower average detectability is consistent with CCPO’s use of steganalysis risk in channel-conditioned preference construction. 
+
+4.5 Human Evaluation 
+
+To examine whether the improvements measured by metrics are reflected in human judgments, we conduct a blinded eval-uation of fluency, coherence, and semantic consistency. For each method, we randomly sample 50 outputs from each do-main using the same test instances and embedding rate. Each item contains the reference text and an anonymized stego-text, with method identities concealed and presentation order randomized. Ten evaluators who were not involved in model development independently rate each output on a five-point Likert scale. Fluency assesses grammaticality and natural-ness, coherence measures logical continuity, and semantic consistency evaluates preservation of the reference content. Each output is rated by all evaluators. We report Krippen-dorff’s alpha (Krippendorff 2011) and assess method effects with a cumulative-link mixed model containing evaluator and test-instance random effects. The complete rubric and statistical results are provided in Appendix I. As shown in Fig. 3, TI-StegoAlign receives the highest human ratings across fluency, coherence, and semantic con-sistency. The judgments agree with the text-quality results, indicating that its stegotext remains natural, coherent, and faithful to the paired reference. These qualities preserve the communicative function of the transmitted text while con-veying hidden information. 
+
+## 5 Conclusion 
+
+This work formulates tokenization inconsistency as areceiver-side channel problem and introduces TI-StegoAlign, a channel-aware post-training framework for reliable gen-erative text steganography. BCSO enables bit-consistent se-cret embedding while preserving the base model’s in-domain generation capability. CCPO further aligns the policy with receiver-realistic preferences over recovery, linguistic qual-ity, and anti-steganalysis performance. Both stages operate on the same frozen base model and update only a shared LoRA adapter. Experiments across diverse domains show that TI-StegoAlign achieves 100% receiver-side bit accuracy and exact message recovery while improving text quality and anti-steganalysis performance. References 
+
+Cachin, C. 1998. An Information-Theoretic Model for Steganography. In Information Hiding , 306–318. Springer. Chen, W.; Su, Y.; Zuo, J.; Yang, C.; Yuan, C.; Chan, C.-M.; Yu, H.; Lu, Y.; Hung, Y.-H.; Qian, C.; Qin, Y.; Cong, X.; Xie, R.; Liu, Z.; Sun, M.; and Zhou, J. 2024. AgentVerse: Facil-itating Multi-Agent Collaboration and Exploring Emergent Behaviors. In Proceedings of the International Conference on Learning Representations (ICLR) .Ding, J.; Chen, K.; Wang, Y.; Zhao, N.; Zhang, W.; and Yu, N. 2023. Discop: Provably Secure Steganography in Practice Based on “Distribution Copies”. In Proceedings of the IEEE Symposium on Security and Privacy , 2238–2255. Go, A.; Bhayani, R.; and Huang, L. 2009. Twitter Sentiment Classification Using Distant Supervision. CS224N project report, Stanford University. Grattafiori, A.; et al. 2024. The Llama 3 Herd of Models. 
+
+arXiv preprint arXiv:2407.21783 .Holm, S. 1979. A Simple Sequentially Rejective Multiple Test Procedure. Scandinavian Journal of Statistics , 6(2): 65–70. Hong, S.; Zhuge, M.; Chen, J.; Zheng, X.; Cheng, Y.; Zhang, C.; Wang, J.; Wang, Z.; Yau, S. K. S.; Lin, Z.; Zhou, L.; Ran, C.; Xiao, L.; Wu, C.; and Schmidhuber, J. 2024. MetaGPT: Meta Programming for a Multi-Agent Collaborative Frame-work. In Proceedings of the International Conference on Learning Representations (ICLR) .Hu, E. J.; Shen, Y.; Wallis, P.; Allen-Zhu, Z.; Li, Y.; Wang, S.; Wang, L.; and Chen, W. 2022. LoRA: Low-Rank Adaptation of Large Language Models. In Proceedings of the Interna-tional Conference on Learning Representations (ICLR) .Huang, K.; Wei, Y.; Wu, W.; Zhang, T.; Yang, Z.; and Zhou, L. 2026a. Whispering Agents: An Event-Driven Covert Communication Protocol for the Internet of Agents. Pro-ceedings of the AAAI Conference on Artificial Intelligence ,40(37): 31185–31192. Huang, Y.-S.; Just, P.; Yin, H.; Narayanan, K.; Huang, R.; and Tian, C. 2026b. OD-Stega: LLM-Based Relatively Secure Steganography via Optimized Distributions. In Proceedings of the Conference of the European Chapter of the Association for Computational Linguistics (EACL) , 827–851. Kaptchuk, G.; Jois, T. M.; Green, M.; and Rubin, A. D. 2021. Meteor: Cryptographically Secure Steganography for Real-istic Distributions. In Proceedings of the ACM SIGSAC Con-ference on Computer and Communications Security (CCS) ,1529–1548. Karpov, A.; Adeleke, T.; Cho, S. H.; and Pérez-Campanero, N. 2025. The Steganographic Potentials of Language Mod-els. arXiv preprint arXiv:2505.03439 .Krippendorff, K. 2011. Computing Krippendorff’s Alpha-Reliability. Technical Report 43, Annenberg School for Com-munication, University of Pennsylvania. Liu, Y.; Ott, M.; Goyal, N.; Du, J.; Joshi, M.; Chen, D.; Levy, O.; Lewis, M.; Zettlemoyer, L.; and Stoyanov, V. 2019. RoBERTa: A Robustly Optimized BERT Pretraining Ap-proach. arXiv preprint arXiv:1907.11692 .Maas, A. L.; Daly, R. E.; Pham, P. T.; Huang, D.; Ng, A. Y.; and Potts, C. 2011. Learning Word Vectors for Sentiment Analysis. In Proceedings of the Annual Meeting of the As-sociation for Computational Linguistics: Human Language Technologies (ACL–HLT) , 142–150. Mathew, Y.; Matthews, O.; McCarthy, R.; Velja, J.; Schroeder de Witt, C.; Cope, D.; and Schoots, N. 2025. Hid-den in Plain Text: Emergence & Mitigation of Steganographic Collusion in LLMs. In Proceedings of the International Joint Conference on Natural Language Processing and the Asia-Pacific Chapter of the Association for Computational Linguistics (IJCNLP–AACL) , 585–624. Mikolov, T.; Karafiát, M.; Burget, L.; Černocký, J.; and Khu-danpur, S. 2010. Recurrent Neural Network Based Language Model. In Proceedings of INTERSPEECH , 1045–1048. Misra, R. 2022. News Category Dataset. arXiv preprint arXiv:2209.11429 .Motwani, S. R.; Baranchuk, M.; Strohmeier, M.; Bolina, V.; Torr, P.; Hammond, L.; and de Witt, C. S. 2024. Secret Collu-sion among AI Agents: Multi-Agent Deception via Steganog-raphy. In Globerson, A.; Mackey, L.; Belgrave, D.; Fan, A.; Paquet, U.; Tomczak, J.; and Zhang, C., eds., Advances in Neural Information Processing Systems , volume 37, 73439– 73486. Curran Associates, Inc. Nozaki, J.; and Murawaki, Y. 2022. Addressing Segmenta-tion Ambiguity in Neural Linguistic Steganography. In Pro-ceedings of the Asia-Pacific Chapter of the Association for Computational Linguistics and the International Joint Con-ference on Natural Language Processing (AACL–IJCNLP) ,109–116. Ouyang, L.; Wu, J.; Jiang, X.; Almeida, D.; Wainwright, C. L.; Mishkin, P.; Zhang, C.; Agarwal, S.; Slama, K.; Ray, A.; Schulman, J.; Hilton, J.; Kelton, F.; Miller, L.; Simens, M.; Askell, A.; Welinder, P.; Christiano, P.; Leike, J.; and Lowe, R. 2022. Training Language Models to Follow In-structions with Human Feedback. In Advances in Neural Information Processing Systems , volume 35, 27730–27744. Peng, W.; Zhang, J.; Xue, Y.; and Yang, Z. 2021. Real-Time Text Steganalysis Based on Multi-Stage Transfer Learning. 
+
+IEEE Signal Processing Letters , 28: 1510–1514. Qi, Y.; Chen, K.; Zeng, K.; Zhang, W.; and Yu, N. 2025. Prov-ably Secure Disambiguating Neural Linguistic Steganogra-phy. IEEE Transactions on Dependable and Secure Comput-ing , 22(3): 2430–2442. Rafailov, R.; Sharma, A.; Mitchell, E.; Manning, C. D.; Er-mon, S.; and Finn, C. 2023. Direct Preference Optimiza-tion: Your Language Model Is Secretly a Reward Model. In Advances in Neural Information Processing Systems , vol-ume 36, 53728–53741. Reimers, N.; and Gurevych, I. 2019. Sentence-BERT: Sen-tence Embeddings Using Siamese BERT-Networks. In Pro-ceedings of the Conference on Empirical Methods in Natural Language Processing and the International Joint Confer-ence on Natural Language Processing (EMNLP–IJCNLP) ,3982–3992. Schroeder de Witt, C.; Sokota, S.; Kolter, J. Z.; Foerster, J. N.; and Strohmeier, M. 2023. Perfectly Secure Steganog-raphy Using Minimum Entropy Coupling. In Proceedings of the International Conference on Learning Representations (ICLR) .Shen, J.; Ji, H.; and Han, J. 2020. Near-Imperceptible Neu-ral Linguistic Steganography via Self-Adjusting Arithmetic Coding. In Proceedings of the Conference on Empirical Methods in Natural Language Processing (EMNLP) , 303– 313. Wang, Y.; Pei, G.; Chen, K.; Ding, J.; Pan, C.; Pang, W.; Hu, D.; and Zhang, W. 2025. SparSamp: Efficient Provably Secure Steganography Based on Sparse Sampling. In 34th USENIX Security Symposium (USENIX Security 25) , 6817– 6835. Wang, Y.; Wang, R.; Pang, W.; Han, J.; Qi, Y.; Hu, D.; and Chen, K. 2026. ReTokSync: Self-Synchronizing Tokeniza-tion Disambiguation for Generative Linguistic Steganogra-phy. arXiv preprint arXiv:2604.25486 .Wilcoxon, F. 1945. Individual Comparisons by Ranking Methods. Biometrics Bulletin , 1(6): 80–83. Wu, J.; Wu, Z.; Xue, Y.; Wen, J.; and Peng, W. 2024a. Gen-erative Text Steganography with Large Language Model. In 
+
+Proceedings of the ACM International Conference on Multi-media .Wu, Q.; Bansal, G.; Zhang, J.; Wu, Y.; Li, B.; Zhu, E.; Jiang, L.; Zhang, X.; Zhang, S.; Liu, J.; Awadallah, A. H.; White, R. W.; Burger, D.; and Wang, C. 2024b. AutoGen: Enabling Next-Gen LLM Applications via Multi-Agent Conversation. In Proceedings of the Conference on Language Modeling (COLM) .Xu, S.; and Zhong, F. 2025. CoMet: Metaphor-Driven Covert Communication for Multi-Agent Language Games. In Pro-ceedings of the Annual Meeting of the Association for Com-putational Linguistics (ACL) , 7892–7917. Xue, Y.; Wu, J.; Ji, R.; Zhong, P.; Wen, J.; and Peng, W. 2024. Adaptive Domain-Invariant Feature Extraction for Cross-Domain Linguistic Steganalysis. IEEE Transactions on Information Forensics and Security , 19: 920–933. Yan, R.; and Murawaki, Y. 2025. Addressing Tokenization Inconsistency in Steganography and Watermarking Based on Large Language Models. In Proceedings of the Confer-ence on Empirical Methods in Natural Language Processing (EMNLP) , 7076–7098. Yan, R.; and Murawaki, Y. 2026. Efficient Provably Secure Linguistic Steganography via Range Coding. In Proceedings of the Annual Meeting of the Association for Computational Linguistics (ACL) , 890–907. Yan, R.; Song, T.; and Yang, Y. 2024a. A Near-Imperceptible Disambiguating Approach via Verification for Generative Linguistic Steganography. In Proceedings of the IEEE In-ternational Conference on Systems, Man, and Cybernetics (SMC) , 1638–1643. Yan, R.; Song, T.; and Yang, Y. 2024b. TokenFree: A Tokenization-Free Generative Linguistic Steganographic Approach with Enhanced Imperceptibility. In Proceedings of the IEEE International Conference on Systems, Man, and Cybernetics (SMC) , 449–455. Yan, R.; Yang, Y.; and Song, T. 2023. A Secure and Dis-ambiguating Approach for Generative Linguistic Steganog-raphy. IEEE Signal Processing Letters , 30: 1047–1051. Yang, A.; Li, A.; Yang, B.; Zhang, B.; Hui, B.; Zheng, B.; Yu, B.; Gao, C.; Huang, C.; Lv, C.; et al. 2025. Qwen3 technical report. arXiv preprint arXiv:2505.09388 .Yang, H.; Bao, Y.; Yang, Z.; Liu, S.; Huang, Y.; and Jiao, S. 2020. Linguistic Steganalysis via Densely Connected LSTM with Feature Pyramid. In Proceedings of the ACM Workshop on Information Hiding and Multimedia Security (IH&MMSec) , 5–10. Yang, Z.; Guo, X.; Chen, Z.; Huang, Y.; and Zhang, Y.-J. 2019. RNN-Stega: Linguistic Steganography Based on Re-current Neural Networks. IEEE Transactions on Information Forensics and Security , 14(5): 1280–1295. Zhang, S.; Yang, Z.; Yang, J.; and Huang, Y. 2021. Prov-ably Secure Generative Linguistic Steganography. In Find-ings of the Association for Computational Linguistics: ACL– IJCNLP 2021 , 3046–3055. Zhang, X.; Chen, K.; Zhao, N.; Zhang, W.; and Yu, N. 2025. Provably Secure Public-Key Steganography Based on Admissible Encoding. IEEE Transactions on Information Forensics and Security , 20: 3161–3175. Zhou, J.; Cheng, Y.; Xie, Y.; and Yin, Z. 2026. Auto-Stega: An Agent-Driven System for Lifelong Strategy Evolution in LLM-Based Text Steganography. In Findings of the Asso-ciation for Computational Linguistics: ACL 2026 , 32203– 32220. Ziegler, Z.; Deng, Y.; and Rush, A. 2019. Neural Linguistic Steganography. In Proceedings of the Conference on Empir-ical Methods in Natural Language Processing and the Inter-national Joint Conference on Natural Language Processing (EMNLP–IJCNLP) , 1210–1215. Appendix 
+
+This appendix provides the methodological and experimen-tal details that support the main paper. Appendix A speci-fies CCPO candidate evaluation and preference construction. Appendix B describes the data pipeline, evaluation metrics, statistical analysis, and implementation settings. The remain-ing appendices report domain-specific results, ablations, efficiency measurements, qualitative analyses, embedding-rate studies, cross-backbone results, and the full human-evaluation protocol. Unless stated otherwise, experiments follow the setup described in Section 4.1 of the main paper. 
+
+## A CCPO Candidate Evaluation and Preference Construction 
+
+Section 3.3 of the main paper introduces CCPO using receiver-realistic communication outcomes. This appendix specifies the candidate measures, screening criteria, and pair-construction procedure used to instantiate that objective. 
+
+A.1 Controlled Candidate Generation 
+
+For each training condition (x, s, r, B ), the BCSO policy 
+
+πBC samples Nd candidate stegotexts, where d denotes the text domain. The public context x, secret bitstream s, seman-tic reference r, and generation budget B remain fixed within the candidate set; only the sampling randomness varies. We use NNews = 8 and NMovie = NTweet = 16 . The sampling parameters and length controls are reported in Appendix B. Each sender-side sequence is evaluated after passing through the same receiver-realistic channel used in the main experiments: 
+
+ys
+
+> iδ
+
+−→ ziτ
+
+−→ yr
+
+> i
+> Ext Γ
+
+−−−→ ˆsi. (11) Thus, preference labels are determined from the transmitted stegotext zi and the sequence reconstructed by the receiver. 
+
+A.2 Candidate Evaluation 
+
+Each candidate is represented by 
+
+ui =  Ri, Q ppl  
+
+> i
+
+, Q sem  
+
+> i
+
+, A i
+
+, (12) where larger values are preferred. Receiver-side recovery is 
+
+Ri = 1 − e(s, ˆsi)
+
+|s| , (13) with missing decoded positions counted as errors. Let μppl ,d 
+
+denote the reference perplexity of domain d. We define 
+
+dppl  
+
+> i
+
+= |PPL( zi) − μppl ,d | , Qppl  
+
+> i
+
+= −dppl  
+
+> i
+
+, (14) using reference values 108.58, 113.87, and 867.01 for News, Movie, and Tweet, respectively. Semantic consistency is mea-sured by 
+
+Qsem  
+
+> i
+
+= cos  h(zi), h (r), (15) where h is the sentence encoder described in Appendix B. The steganalytic security score is Ai = 1 − Di, where 
+
+Di is the estimated probability that zi is steganographic. The estimate combines the output of a domain-specific BERT-based classifier with fixed stylistic statistics. The classifier is                    
+
+> Domain NdPPL interval Qsem min ∆max
+> w
+> News 8[60 ,150] 0.65 8Movie 16 [40 ,200] 0.55 10 Tweet 16 [100 ,3000] 0.52 5
+
+Table 4: Domain-specific candidate-generation and screen-ing settings. ∆max  
+
+> w
+
+denotes the maximum permitted word-count deviation. initialized from BERT-base and trained separately for each domain on balanced sets of cover and stego texts drawn ex-clusively from the corresponding training split. The stylistic component uses sentence-length variation, type-token ratio, and punctuation density. All evaluator components are fixed before CCPO, and no validation or test text is used to train the classifier. The BERT-based evaluator used here is trained independently of the BF detector used in the final security evaluation. 
+
+A.3 Candidate Screening and Diversity Control 
+
+Candidates must satisfy Ri ≥ 0.95 and Ai ≥ 0.30 . After fea-sibility screening and diversity filtering, eligible candidates are ranked by Si. We retain the two highest- and two lowest-scoring candidates for News, and the three highest- and three lowest-scoring candidates for Movie and Tweet. These sub-sets determine which candidate pairs are examined, but do not by themselves establish the final preference. The remain-ing requirements are domain-specific and are summarized in Table 4. Word-count deviation is measured relative to the corresponding training-domain mean. Exact duplicate texts are removed before ranking. A de-terministic character-level similarity filter based on shared matching subsequences then prevents near-duplicate candi-dates from entering the same pool; the within-pool similarity threshold is 0.55, and candidate pairs with similarity above 0.70 are discarded. These filters reduce redundant prefer-ences without affecting the evaluation criteria in ui.
+
+A.4 Preference Pair Construction 
+
+Eligible candidates are ordered using 
+
+Si = 100 Ri − 10 dppl 
+
+> i
+
+μppl ,d 
+
++ 5 Qsem  
+
+> i
+
++ 3 Ai. (16) The score provides a deterministic orientation for candidate pairs but does not alone establish a preference. Ties are re-solved by higher receiver-side recovery, smaller perplexity deviation, higher semantic consistency, higher steganalytic security, and finally the normalized text string, in that order. The highest- and lowest-ranked eligible candidates form the preferred and comparison pools shown in Table 4. For an oriented pair with Si > S j , CCPO retains zi ≻ zj
+
+only when one criterion improves by a prescribed amount and degradation in each remaining criterion stays within its corresponding tolerance. The numerical settings are reported compactly in Table 5; domain-specific values are ordered as News, Movie, and Tweet. Preference axis Required improvement Maximum degradation in the remaining criteria Recovery Ri − Rj ≥ 0.05 dppl : 15; Qsem : 0.08; A: 0.10 Fluency dppl                        
+
+> j−dppl
+> i≥8/12 /20 R: 0.05; Qsem : 0.02/0.03/0.03; A: 0.10 Semantics Qsem
+> i−Qsem
+> j≥0.05 /0.03 /0.03 R: 0.05; dppl : 5/8/15; A: 0.10 Security Ai−Aj≥0.10 R: 0.05; dppl : 15; Qsem : 0.08
+
+Table 5: CCPO pair-retention criteria. Domain-specific values are listed as News/Movie/Tweet. All cross-pool combinations are tested using these con-ditions. A training condition is omitted when no valid pair remains after screening, diversity control, and pairwise com-parison. 
+
+A.5 Preference Data 
+
+For each retained pair, CCPO stores the public prompt c
+
+together with the chosen and rejected surface texts. The prompt contains the public context, semantic reference, and bit-length instruction, but not the secret-bit values or cod-ing state. Both texts are tokenized with the shared tokenizer, yielding 
+
+DCC =   c, τ (z+), τ (z−) z+ ≻ z− . (17) The BCSO policy initializes both the trainable policy and the fixed reference policy, so πref = πBC at the start of CCPO. 
+
+## B Experimental and Reproducibility Details 
+
+This appendix complements the experimental setup in Sec-tion 4.1 of the main paper with the data-processing, metric, optimization, and computing details needed to reproduce the reported results. Method-specific baseline settings and embedding-rate configurations are provided in Appendix G. 
+
+B.1 Datasets and Data Splits 
+
+The main evaluation contains 12,300 News samples, 20,000 Movie reviews, and 20,000 tweets. Applying all six methods to the same 52,300 instances produces 313,800 method– instance transmissions. A separate channel-characterization study uses 29,979 independently collected transmissions and is not included in this total. All samples are drawn from the public corpora described in the main paper. For News, 300 instances are randomly se-lected from each of 41 categories. Movie and Tweet instances are randomly sampled from their corresponding corpora. A fixed seed of 42 is used for randomized selection and data partitioning. Empty records and exact duplicates are removed before the post-training data are split into mutually exclusive training, validation, and test subsets using an 80/10/10 ratio. Table 6 reports the resulting counts. The original corpus text serves as the semantic reference r.
+
+B.2 Generation Settings 
+
+Generation follows the receiver-realistic protocol defined in the main paper. Across all domains, sampling uses temper-ature 0.9, top-k = 50 , top-p = 0 .92 , and repetition penalty 1.05. News and Movie outputs are generated with 25–35 new tokens, whereas Tweet outputs use 10–25 new tokens                 
+
+> Domain Total Train Val. Test News 12,300 9,840 1,230 1,230 Movie 20,000 16,000 2,000 2,000 Tweet 20,000 16,000 2,000 2,000
+
+Table 6: Post-training data splits. to accommodate their shorter form. The receiver always re-tokenizes the transmitted surface text before extraction and never accesses the sender-side token sequence. 
+
+B.3 Communication-Reliability Metrics 
+
+For instance n, let sn ∈ { 0, 1}Ln denote the intended secret, 
+
+ˆso 
+
+> n
+
+the sender-side oracle recovery, and ˆsr 
+
+> n
+
+the receiver recov-ery. We count each missing or incorrectly decoded position as an error: 
+
+e(sn, ˆsn) = 
+
+> Ln
+
+X
+
+> j=1
+
+I[j > |ˆsn| ∨ ˆsn,j ̸ = sn,j ] . (18) Oracle and Receiver Bit Accuracy are then 
+
+BA q = 1 −
+
+PMn=1 e(sn, ˆsqn)
+
+PMn=1 Ln
+
+, q ∈ { o, r}. (19) The Oracle-to-Receiver Gap is |BA o −BA r|. Receiver Exact Message Recovery is the proportion of instances for which the complete recovered secret exactly matches the intended secret: 
+
+EMR = 1
+
+M
+
+> M
+
+X
+
+> n=1
+
+I[ˆ sr 
+
+> n
+
+= sn] . (20) Let ys 
+
+> n
+
+be the sender-side token sequence and yr 
+
+> n
+
+=
+
+τ (δ(ys
+
+> n
+
+)) the sequence reconstructed by the receiver. The TI Rate is 
+
+TI Rate = 1
+
+M
+
+> M
+
+X
+
+> n=1
+
+I[ys
+
+> n
+
+̸ = yr
+
+> n
+
+] . (21) For an instance whose first receiver-side decoding error oc-curs at position qn, the cascading error rate is the error frac-tion over the remaining secret positions: 
+
+CER n = 1
+
+Ln − qnLnX
+
+> j=qn+1
+
+Ij > |ˆsr
+
+> n
+
+| ∨ ˆsr
+
+> n,j
+
+̸ = sn,j 
+
+ .
+
+(22) We set CER n = 0 when no decoding error occurs or when 
+
+qn = Ln, and report its mean over all instances. Cas-cade Incidence is measured only in the separate channel-characterization study and denotes the proportion of TI cases with at least three additional errors after the first decoding error. 
+
+B.4 Text-Quality and Statistical Metrics 
+
+Fluency is measured with GPT-2 perplexity. For each paired reference–stegotext instance, normalized perplexity devia-tion is 
+
+PPL ∗ 
+
+> n
+
+= |PPL( zn) − PPL( rn)|
+
+PPL( rn) , (23) and the reported score is averaged over all instances. Seman-tic similarity is the cosine similarity between normalized sentence embeddings of zn and rn, computed with sentence-transformers. Statistical imperceptibility is evaluated using KLD be-tween the cover and stego feature distributions. Texts are encoded with bert-base, and non-padding hidden states are mean-pooled. Each corpus-level feature distribution is ap-proximated by a diagonal Gaussian before computing KLD. In our experiments, we take the logarithm of the KLD values to facilitate a clearer comparison of statistical imperceptibil-ity between algorithms. 
+
+B.5 Anti-Steganalysis Evaluation 
+
+BD, BF, and SANet are trained independently for each method and domain using balanced cover-stego data. Each detector uses 10,000 pairs for training and 1,000 pairs for both validation and testing, as specified in the main paper. Each detector is independently trained using five random seeds. We report the mean accuracy over five runs on a balanced test set containing 1,000 cover-stego pairs per run. The same data-partitioning protocol is applied across methods. Each detector is independently trained using five random seeds 
+
+{42 , 43 , 44 , 45 , 46 }. For each run, the balanced validation and test sets each contain 1,000 cover-stego pairs. We report the mean accuracy and standard deviation over the five runs. Values closer to 50% indicate lower detectability. The BERT-based evaluator used during CCPO is trained separately from BF and shares no parameters with it. 
+
+B.6 Statistical Analysis 
+
+All pairwise comparisons are conducted on matched test instances. We use two-sided exact McNemar tests for exact-message recovery, paired Wilcoxon signed-rank tests for per-instance PPL ∗ and SS, and paired bootstrap tests for dif-ferences in bit and detector accuracy. The bootstrap analysis uses 10,000 paired resamples, with 95% confidence inter-vals defined by the 2.5th and 97.5th percentiles. KLD is reported descriptively because it is computed at the cor-pus level. For comparisons between TI-StegoAlign and each baseline, Holm’s procedure is applied separately within each metric family at α = 0 .05 . Across all metrics subject to hy-pothesis testing, the reported pairwise improvements remain statistically significant after correction.                   
+
+> Setting News Movie Tweet BCSO learning rate 2×10 −52×10 −52×10 −5
+> BCSO epochs 333CCPO learning rate 2×10 −61.5×10 −51.5×10 −5
+> CCPO epochs 888
+> β0.05 0.10 0.10
+
+Table 7: Domain-specific optimization settings.       
+
+> Item Configuration Hardware 1×NVIDIA GeForce RTX 5090 (32 GB); 2 ×
+> Intel Xeon Platinum 8470Q; 128 GB RAM System Ubuntu 22.04.5 LTS; CUDA 12.8; cuDNN 9.10.2 Runtime Python 3.12.3; PyTorch 2.8.0+cu128 Libraries Transformers 5.8.0; PEFT 0.19.1; TRL 1.5.1; Sentence-Transformers 5.5.0; Scikit-learn 1.8.0
+
+Table 8: Hardware and software environment. 
+
+B.7 Optimization Settings 
+
+All experiments use the base model and LoRA configura-tion reported in Section 4.1 of the main paper. BCSO and CCPO are trained sequentially on the same LoRA adapter. Both stages use AdamW with per-device batch size 4, four gradient-accumulation steps, weight decay 0.01, and maxi-mum gradient norm 1.0, yielding an effective batch size of 16. BCSO uses 100 warmup steps, λBC = 0 .5, and margin 
+
+γ = 0 .2. CCPO uses 20 warmup steps, sigmoid preference loss, and no label smoothing. The domain-specific learning rates, epochs, and DPO coefficients are listed in Table 7. Each stage is run once for every domain using seed 42. The BCSO checkpoint is used to initialize CCPO, so the two stages form a single sequential post-training pipeline rather than independent model variants. 
+
+B.8 Computing Environment 
+
+Experiments are conducted on a workstation with one NVIDIA GeForce RTX 5090 GPU and two Intel Xeon Plat-inum 8470Q processors. The software environment is sum-marized in Table 8. 
+
+## C Domain-Specific Results 
+
+The main paper reports the arithmetic mean over News, Movie, and Tweet. This appendix disaggregates the results to assess whether the main conclusions hold across domains and to identify trade-offs that are obscured by averaged scores. The Overall rows reproduce the values in the main paper and are computed as the arithmetic mean of the three domain-level results. 
+
+Communication reliability. ADG and Discop exhibit sub-stantial degradation after the surface text is retokenized. For ADG, the Oracle-to-Receiver Gap reaches 27.82 percent-age points on News and 26.12 points on Tweet, compared with 13.96 points on Movie. Discop shows the same domain dependence, with its largest gap and lowest exact recovery Method Domain Oracle bit acc. (%) Receiver bit acc. (%) Gap (pp) Exact recovery (%) TI rate (%) Cascading error rate (%)                                                                                                                                                                         
+
+> ADG News 99.83 72.01 27.82 68.42 26.14 15.58 ADG Movie 100.00 86.04 13.96 82.30 19.94 13.43 ADG Tweet 100.00 73.88 26.12 68.01 27.33 14.46 ADG Overall 99.94 77.31 22.63 72.91 24.47 14.49 Discop News 98.90 85.64 13.26 75.90 9.70 14.02 Discop Movie 99.20 87.93 11.27 79.60 12.21 12.84 Discop Tweet 97.70 75.94 21.76 62.99 26.60 22.40 Discop Overall 98.60 83.17 15.43 72.83 16.17 16.42 SegTrick News 100.00 100.00 0.00 100.00 0.68 0.00 SegTrick Movie 100.00 100.00 0.00 100.00 0.60 0.00 SegTrick Tweet 100.00 100.00 0.00 100.00 1.30 0.00 SegTrick Overall 100.00 100.00 0.00 100.00 0.86 0.00 SyncPool News 100.00 100.00 0.00 100.00 0.78 0.00 SyncPool Movie 100.00 100.00 0.00 100.00 0.70 0.00 SyncPool Tweet 100.00 100.00 0.00 100.00 1.43 0.00 SyncPool Overall 100.00 100.00 0.00 100.00 0.97 0.00 StepVerify News 100.00 100.00 0.00 100.00 0.62 0.00 StepVerify Movie 100.00 100.00 0.00 100.00 0.53 0.00 StepVerify Tweet 100.00 100.00 0.00 100.00 1.19 0.00 StepVerify Overall 100.00 100.00 0.00 100.00 0.78 0.00 TI-StegoAlign News 100.00 100.00 0.00 100.00 0.60 0.00 TI-StegoAlign Movie 100.00 100.00 0.00 100.00 0.51 0.00 TI-StegoAlign Tweet 100.00 100.00 0.00 100.00 1.17 0.00 TI-StegoAlign Overall 100.00 100.00 0.00 100.00 0.76 0.00
+
+Table 9: Communication reliability by domain. on Tweet. These results confirm that high sender-side re-covery does not imply reliable communication through the surface-text channel. SegTrick, SyncPool, StepVerify, and TI-StegoAlign achieve perfect receiver bit accuracy and ex-act message recovery in all three domains. Within this group, TI-StegoAlign records the lowest TI rate in every domain. Its advantage over StepVerify is small but consistent at 0.02 percentage points, while both methods prevent the observed tokenization changes from propagating into decoding errors. 
+
+Text quality and statistical imperceptibility. TI-StegoAlign yields the lowest KLD in all three domains, indi-cating that its distributional advantage is not driven by a sin-gle corpus. It also obtains substantially lower PPL ∗ on News and Movie, reaching 0.005 and 0.180, respectively. Semantic similarity remains competitive throughout: TI-StegoAlign is within 0.001 of the domain-best result on News and Movie and within 0.004 on Tweet. The main exception is Tweet flu-ency, where its PPL ∗ of 1.102 is higher than those of the baselines. Thus, the averaged improvement in PPL ∗ is pri-marily supported by News and Movie rather than being uni-form across all domains. Nevertheless, the lowest Tweet KLD and near-best SS show that this limitation does not coincide with a general loss of semantic preservation or corpus-level distributional similarity. 
+
+Anti-steganalysis performance. TI-StegoAlign achieves the lowest mean detector accuracy in each domain, improv-ing over the strongest baseline by 2.18 percentage points on News, 9.37 points on Movie, and 0.66 points on Tweet. The gain is most pronounced on Movie, where BD and BF are close to random guessing and SANet decreases to 56.25%. The detector-level results are less uniform on News and Tweet. ADG remains stronger under SANet on News and under BF and SANet on Tweet, whereas TI-StegoAlign is consistently stronger under BD. This pattern shows that the security improvement generalizes across domains in the av-eraged detector score, but its magnitude depends on both the text domain and the steganalysis architecture. Taken together, the domain-wise evaluation supports two consistent findings: TI-StegoAlign preserves exact receiver-side recovery across all corpora and achieves the lowest KLD in every domain. Its gains in fluency and anti-steganalysis performance are broader on News and Movie. This break-down therefore supports the averaged conclusions in the main paper without obscuring the remaining variation across do-mains. 
+
+## D Ablation Study 
+
+We conduct ablation experiments to disentangle the contri-butions of BCSO and CCPO. Base denotes steganographic generation using the frozen base language model and the Method Domain PPL ∗ SS KLD                                                                                                 
+
+> ADG News 0.455 0.484 1.967 ADG Movie 0.292 0.591 2.216 ADG Tweet 0.894 0.437 2.930 ADG Overall 0.547 0.504 2.371 Discop News 0.668 0.522 2.188 Discop Movie 0.654 0.500 2.389 Discop Tweet 0.946 0.484 2.416 Discop Overall 0.756 0.502 2.331 SegTrick News 0.878 0.564 2.074 SegTrick Movie 0.900 0.558 2.579 SegTrick Tweet 0.985 0.540 2.880 SegTrick Overall 0.921 0.554 2.511 SyncPool News 0.698 0.524 2.600 SyncPool Movie 0.671 0.498 2.755 SyncPool Tweet 0.953 0.502 2.970 SyncPool Overall 0.774 0.508 2.775 StepVerify News 0.615 0.519 2.513 StepVerify Movie 0.605 0.501 2.351 StepVerify Tweet 0.937 0.480 2.444 StepVerify Overall 0.719 0.500 2.436 TI-StegoAlign News 0.005 0.563 1.640 TI-StegoAlign Movie 0.180 0.590 1.320 TI-StegoAlign Tweet 1.102 0.536 2.101 TI-StegoAlign Overall 0.429 0.563 1.687
+
+Table 10: Text quality and statistical imperceptibility by domain. shared coding rule Γ, without post-training. BCSO applies only the supervised objective in Section 3.2 and evaluates the resulting policy without subsequent preference optimization. 
+
+CCPO omits BCSO and performs preference optimization directly from the base policy. In this variant, the base policy generates the candidate stegotexts and also serves as the ref-erence policy πref . Full denotes the complete TI-StegoAlign pipeline, where the BCSO policy initializes CCPO and serves as its reference policy. All variants use the same Llama-3.1-8B backbone, to-kenizer, coding rule, training and evaluation splits, LoRA configuration, target payload rate, and generation settings. When a training stage is retained, its optimization param-eters and data-construction procedure remain identical to those used in the full model. The variants therefore differ only in whether BCSO, CCPO, or both stages are applied. Tables 12– 14 report communication reliability, impercepti-bility, and anti-steganalysis performance, respectively. The reliability results show that BCSO provides the pri-mary improvement in secret recovery. Compared with Base, BCSO increases overall Receiver Bit Accuracy from 76.74% to 99.56% and Exact Message Recovery from 71.73% to 97.53%. It also reduces the Oracle-to-Receiver Gap from 8.84 to 0.44 percentage points, the TI Rate from 8.54% to 1.48%, and the Cascading Error Rate from 5.40% to 0.29%. These improvements are consistent across all three domains. The gain is particularly pronounced on Tweet, where Ex-act Message Recovery increases from 64.60% to 95.30%. This behavior is consistent with the design of BCSO: local margin supervision moves realized token coordinates away from competing interval boundaries, making their secret-bit assignments less sensitive to changes in the receiver-reconstructed prefix. CCPO alone also improves recovery, but does not match BCSO. Relative to Base, it increases Receiver Bit Accuracy from 76.74% to 88.19% and Exact Message Recovery from 71.73% to 84.40%. The corresponding Gap, TI Rate, and Cascading Error Rate decrease to 2.46 percentage points, 6.08%, and 2.72%, respectively. These results indicate that receiver-realistic preferences can favor candidates with bet-ter communication outcomes. However, complete-stegotext preference optimization cannot fully compensate for unstable local coding decisions when the policy lacks the initialization provided by BCSO. The contribution of CCPO is more evident in impercep-tibility and anti-steganalysis performance. Compared with Base, CCPO reduces overall PPL ∗ from 0.612 to 0.465 and KLD from 2.102 to 1.762, while increasing SS from 0.535 to 0.558. It also lowers mean detector accuracy from 70.75% to 62.61%. These gains are larger than those obtained by BCSO alone on the same metrics. BCSO reduces mean detector accuracy to 67.25%, whereas CCPO reaches 62.61%. Simi-larly, CCPO yields lower PPL ∗ and KLD and higher SS than BCSO. This pattern follows from the design of CCPO, which Method Domain BD (%) BF (%) SANet (%) Mean (%)                                                                                                                         
+
+> ADG News 58.59 70.50 57.86 62.32 ADG Movie 61.11 59.00 64.86 61.66 ADG Tweet 95.49 65.41 49.27 70.06 ADG Overall 71.73 64.97 57.33 64.68 Discop News 58.50 79.50 69.06 69.02 Discop Movie 69.50 79.00 72.19 73.56 Discop Tweet 79.51 79.01 77.93 78.82 Discop Overall 69.17 79.17 73.06 73.80 SegTrick News 69.00 80.00 68.96 72.65 SegTrick Movie 65.50 79.00 67.40 70.63 SegTrick Tweet 69.50 80.01 70.01 73.17 SegTrick Overall 68.00 79.67 68.79 72.15 SyncPool News 79.51 68.50 73.75 73.92 SyncPool Movie 74.50 69.50 70.10 71.37 SyncPool Tweet 79.00 69.51 79.47 75.99 SyncPool Overall 77.67 69.17 74.44 73.76 StepVerify News 63.50 70.00 68.02 67.17 StepVerify Movie 59.50 69.48 67.50 65.49 StepVerify Tweet 69.48 70.01 78.95 72.81 StepVerify Overall 64.16 69.83 71.49 68.49 TI-StegoAlign News 49.99 61.67 68.75 60.14 TI-StegoAlign Movie 50.00 50.61 56.25 52.29 TI-StegoAlign Tweet 53.01 73.93 81.25 69.40 TI-StegoAlign Overall 51.00 62.07 68.75 60.61
+
+Table 11: Anti-steganalysis accuracy by method and domain. Accuracy closer to 50% indicates stronger anti-steganalysis performance. constructs preferences from receiver-side recovery, fluency, semantic preservation, and steganalytic security evaluated over complete stegotexts. It therefore optimizes properties that are not directly captured by local coding-margin super-vision. BCSO nevertheless provides consistent gains beyond re-covery. Compared with Base, it decreases PPL ∗ from 0.612 to 0.548 and KLD from 2.102 to 1.934, increases SS from 0.535 to 0.548, and lowers mean detector accuracy by 3.50 percentage points. These results show that coding-margin supervision does not improve reliability at the expense of the transmitted text. The retained language-modeling objec-tive preserves in-domain generation, while the margin term improves the realized embedding decisions. Combining the two stages produces improvements that neither stage achieves independently. Starting from BCSO, CCPO raises Receiver Bit Accuracy from 99.56% to 100.00% and Exact Message Recovery from 97.53% to 100.00%. It eliminates the remaining Oracle-to-Receiver Gap and cascading errors, while reducing the TI Rate from 1.48% to 0.76%. CCPO also reduces PPL ∗ from 0.548 to 0.429 and KLD from 1.934 to 1.687, increases SS from 0.548 to 0.563, and lowers mean detector accuracy from 67.25% to 60.61%. The comparison between CCPO and Full further demon-strates the importance of the BCSO initialization. Adding BCSO before CCPO increases overall Receiver Bit Accu-racy from 88.19% to 100.00% and Exact Message Recovery from 84.40% to 100.00%. It also reduces the TI Rate from 6.08% to 0.76% and eliminates the 2.72% Cascading Error Rate observed when CCPO is applied directly to the base policy. Meanwhile, Full further improves all three impercep-tibility metrics and reduces mean detector accuracy by 2.00 percentage points relative to CCPO alone. The domain-specific results exhibit the same overall pat-tern. Relative to BCSO, Full improves PPL ∗, SS, KLD, and mean detector accuracy on News, Movie, and Tweet. Relative to CCPO, it also improves every reported reliability metric in all three domains. The benefits of the sequential training procedure are therefore not driven by a single corpus. Overall, BCSO and CCPO serve complementary roles. BCSO establishes reliable local coding decisions and provides a suitable initialization for subsequent prefer-ence optimization. CCPO then aligns complete stegotexts with receiver-realistic recovery, linguistic quality, semantic preservation, and steganalytic security. Their sequential com-bination is the only variant that simultaneously achieves per-fect receiver-side recovery, zero Oracle-to-Receiver Gap and cascading errors, the best overall PPL ∗, SS, and KLD, and detector accuracy closest to random guessing. These results validate the two-stage design of TI-StegoAlign rather than treating BCSO and CCPO as interchangeable optimization Variant Domain Oracle bit acc. (%) Receiver bit acc. (%) Gap (pp) Exact recovery (%) TI rate (%) Cascading error rate (%) 
+
+Base News 89.92 84.18 5.74 79.40 6.90 4.20 Base Movie 87.97 76.24 11.73 71.20 5.48 3.10 Base Tweet 78.84 69.80 9.04 64.60 13.24 8.91 Base Overall 85.58 76.74 8.84 71.73 8.54 5.40 BCSO News 100.00 99.72 0.28 98.20 1.18 0.18 BCSO Movie 100.00 99.86 0.14 99.10 0.94 0.10 BCSO Tweet 100.00 99.10 0.90 95.30 2.32 0.59 BCSO Overall 100.00 99.56 0.44 97.53 1.48 0.29 CCPO News 91.99 89.92 2.07 85.40 5.61 2.84 CCPO Movie 92.00 90.35 1.65 87.00 4.10 1.52 CCPO Tweet 87.97 84.31 3.66 80.80 8.53 3.79 CCPO Overall 90.65 88.19 2.46 84.40 6.08 2.72 
+
+Full News 100.00 100.00 0.00 100.00 0.60 0.00 Full Movie 100.00 100.00 0.00 100.00 0.51 0.00 Full Tweet 100.00 100.00 0.00 100.00 1.17 0.00 Full Overall 100.00 100.00 0.00 100.00 0.76 0.00 
+
+Table 12: Domain-specific ablation results for communication reliability. Higher Oracle and Receiver Bit Accuracy and Exact Recovery are better, whereas lower Gap, TI Rate, and Cascading Error Rate are better. 
+
+Variant Domain PPL ∗ SS KLD 
+
+Base News 0.034 0.535 2.010 Base Movie 0.285 0.559 1.720 Base Tweet 1.517 0.511 2.576 Base Overall 0.612 0.535 2.102 BCSO News 0.020 0.545 1.870 BCSO Movie 0.245 0.570 1.560 BCSO Tweet 1.379 0.529 2.372 BCSO Overall 0.548 0.548 1.934 CCPO News 0.011 0.556 1.745 CCPO Movie 0.205 0.583 1.420 CCPO Tweet 1.179 0.535 2.121 CCPO Overall 0.465 0.558 1.762 
+
+Full News 0.005 0.563 1.640 Full Movie 0.180 0.590 1.320 Full Tweet 1.102 0.536 2.101 Full Overall 0.429 0.563 1.687 
+
+Table 13: Domain-specific ablation results for linguistic and statistical imperceptibility. Lower PPL ∗ and KLD are better, whereas higher SS is better. components. 
+
+## E Runtime, Memory, and Parameter Efficiency 
+
+TI-StegoAlign is parameter-efficient during post-training and introduces no additional trainable module at deploy-ment. BCSO and CCPO sequentially update the same LoRA adapter, which contains 13.63M trainable parameters, corre-sponding to 0.17% of the 8.03B-parameter backbone. The 
+
+Variant Domain BD (%) BF (%) SANet (%) Mean (%) 
+
+Base News 58.00 72.00 77.00 69.00 Base Movie 55.00 64.00 70.50 63.17 Base Tweet 68.00 85.01 87.25 80.09 Base Overall 60.33 73.67 78.25 70.75 BCSO News 55.50 68.50 73.50 65.83 BCSO Movie 52.50 60.50 66.25 59.75 BCSO Tweet 64.00 80.01 84.50 76.17 BCSO Overall 57.33 69.67 74.75 67.25 CCPO News 51.50 63.50 70.50 61.83 CCPO Movie 50.50 54.50 59.50 54.83 CCPO Tweet 56.01 75.00 82.49 71.17 CCPO Overall 52.67 64.33 70.83 62.61 
+
+Full News 49.99 61.67 68.75 60.14 Full Movie 50.00 50.61 56.25 52.29 Full Tweet 53.01 73.93 81.25 69.40 Full Overall 51.00 62.07 68.75 60.61 
+
+Table 14: Domain-specific ablation results for anti-steganalysis performance. Accuracy closer to 50% indicates stronger anti-steganalysis performance. Mean denotes the av-erage over BD, BF, and SANet. sender and receiver deploy the same LoRA-adapted policy. On the same workstation, the measured BCSO training run requires 11,607 seconds. Under the reported configura-tion, CCPO training requires approximately 1.5 to 2.5 hours for eight epochs. These one-time training costs are incurred before deployment. We profile 1,000 held-out instances from each domain us-ing the computing environment described in Appendix B. CUDA synchronization is applied at component bound-Domain Sender Receiver Total Peak mem. (GB) News 0.81 0.65 1.46 17.61 Movie 0.77 0.62 1.39 17.61 Tweet 0.57 0.42 0.99 17.60 
+
+Table 15: Deployment latency and peak GPU memory. La-tencies are averaged over 1,000 held-out instances per domain and reported in seconds per instance. 
+
+Statistic Count Rate All transmissions 29,979 –TI cases 265 0.88% of transmissions Substantial cascades 120 45.3% of TI cases 
+
+Table 16: Collection-specific TI incidence and conditional error propagation in the channel-characterization set. aries. Table 15 reports mean sender-side generation latency, receiver-side retokenization and extraction latency, end-to-end latency, and peak allocated GPU memory. Across the three domains, end-to-end communication requires between 0.99 and 1.46 seconds per instance, while peak allocated GPU memory remains approximately 17.6 GB. The training cost is incurred offline, while de-ployed communication requires only sender-side generation followed by receiver-side retokenization and extraction. 
+
+## F Qualitative Cases and Error-Propagation Analysis 
+
+F.1 Error Propagation under Tokenization Inconsistency 
+
+We further analyze a separately collected set of 29,979 trans-missions generated under a single channel-characterization configuration. This collection is distinct from the six-method benchmark in Table 1 of the main paper. The main benchmark reports method-specific TI rates on the shared evaluation set, whereas the present collection was constructed to obtain suf-ficient TI events for analyzing downstream error propagation. Accordingly, the TI incidence reported below is specific to this collection and is not a pooled estimate across methods. Using the TI criterion defined in Appendix B, 265 trans-missions exhibit a sender–receiver tokenization mismatch. Among these cases, 120 show substantial error propagation: after the first decoding error, more than 35% of the remain-ing secret positions are decoded incorrectly. This yields a cascade incidence of 45.3% conditional on TI. The collection-specific TI rate should therefore not be in-terpreted as an alternative to the method-specific rates in the main benchmark. The relevant channel observation is condi-tional: once TI occurs, nearly half of the affected transmis-sions exhibit substantial downstream corruption, consistent with the decoder desynchronization mechanism discussed in Section 3.1 of the main paper. 
+
+F.2 Illustrative Stegotexts 
+
+To provide a concrete view of the generated text, we report one stegotext for each method in each domain. The examples are drawn from outputs produced under the common evalu-ation setup described in Section 4.1 of the main paper and are included only for qualitative illustration. Line breaks are normalized for typesetting, while the generated wording is unchanged. 
+
+News. ADG. Surprisingly, the researchers found that the ancient leprosy DNA was most similar to that of the disease form that per-sists today. Why weren’t there other leprosy versions gone extinct? They have probably evolved to become “modern leprosy”, Prof. Nolan says. 
+
+Discop. A mother is faced with the reality of parenting. Brittney Conley, 22, could not figure out why her son was crying. Over time, the baby grew fussy and Conley lost interest. Doctors diagnosed the baby with hydrocephalus, a condition where fluid collects on the brain. He was rushed to the hospital. He died and an autopsy revealed 
+
+SegTrick. The bill would require companies that collect personal data to notify people within 72 hours if there is a data breach. It also would require companies that collect personal information online to get people’s consent before collecting and sharing their personal information. 
+
+SyncPool. It was 2003 and she’d just ended a 19-year government career to, among other things, follow a dream of dabbling in ceram-ics. “Everybody in my family’s a doctor, a lawyer or an engineer,” said Motawi, 53, who was a management analyst for the Michigan Department of Community Health. 
+
+StepVerify. “Too much choice” turns food purchases into a task, causing shoppers to hesitate and look for a way to simplify their decision-making process. 
+
+TI-StegoAlign. Applicants from the top 20 American Research Universities were invited to participate. 
+
+Movie. ADG. Anne Parillaud and the support cast are unable to involve the audience and fail to invest enough in the melodramatic and romance elements of the film. 
+
+Discop. She is tormented by her guilt. A psychotherapist attempts to help her to overcome her grief and guilt. As they work together, they fall in love. But then another death occurs. At first she is relieved because she thinks she is finally free 
+
+SegTrick. The Blues Brothers 1998 is a 1998 American musical comedy film directed by John Landis and starring John Belushi, Dan Aykroyd, and James Brown. The film, a sequel to the original Blues Brothers film, was originally intended to be a television show, but was later changed to become a film. 
+
+SyncPool. substantial portion of the movie’s running time, and the movie-within-the-movie that opens it, get us used to The Grand Budapest Hotel by way of a leisurely approach. Wes Anderson often has trouble settling on a single, dominant style or approach, but he’s in a groove for most of the film. The early sections are both funny and pretty impressive in their recreation of a period piece. 
+
+StepVerify. Chicago, Illinois, to be exact. The Blues Brothers were an R&B/Soul band that gained fame and fortune by being associated with John Belushi and Dan Aykroyd from the cast of SNL. While I have a huge admiration for them as band members, they were mediocre writers (and so were the songwriters they had brought in) and they made one great movie 
+
+TI-StegoAlign. The movie is hard to follow with the many switch-ing scenes and lack of a strong narrative. As a result, the audience is left disoriented and unsatisfied with the outcome. Tweet. ADG. Hollis’ death scene will hurt me severely to watch on film. Seems he really is dead this time. I wonder if Daisy will again walk in her sleep tonight.      
+
+> Discop. I’m about to go get a freakin ‘cold shower’ as a remedy, cold water on your whole body helps bring down fevers. @bytchylilthing I hope you feel better soon, but if you do happen to be sick, that’s a great cure for a
+> SegTrick. I’m so sorry you’re sick. I hope this helps you feel better. I’m so sorry about your mom. I hope she’s doing much much much better. I’m so happy you’re feeling better. I hope she’s doing much better.
+> SyncPool. There’s a difference between loud & LOUD, after all, and that kinda thing. I would REALLY like to hear my testy if I put your mTub under it, but am a bit afraid of things exploding. As it is a bit of a beast. Wish I could make it to these next few so I can have a better look at your little
+> StepVerify. But I’m still against such things and any other thing which make us forget the importance of education and getting cer-tificates so that one day we can try to follow another life which they want to follow
+> TI-StegoAlign. I love sushi rolls! Merry Christmas&Happy New Year!
+
+These examples offer a concrete view of the linguistic differences summarized by the aggregate results in Sec-tions 4.2-4.5. Domain-level breakdowns and the complete human-rating analysis are reported in Appendices C and I, respectively. 
+
+## G Method-Specific Configurations and Embedding-Rate Analysis 
+
+The main paper evaluates all methods at a common em-bedding rate of 0.5 bpw to control for differences in pay-load pressure. This appendix complements that comparison by evaluating each baseline at its method-specific operat-ing point. Except for the embedding configuration, all ex-periments follow Section 4.1 of the main paper. They use the same Llama-3.1-8B backbone, tokenizer, evaluation in-stances, generation protocol, and receiver-realistic extraction procedure. The reported bpw is the average embedding rate realized over the generated texts. All results are averaged across News, Movie, and Tweet. Table 17 shows that a high realized embedding rate does not necessarily yield reliable end-to-end communication. ADG and Discop operate at 4.60 and 4.31 bpw, respectively. However, their Oracle Bit Accuracy values are already lim-ited to 95.46% and 93.12%. Receiver-side retokenization fur-ther reduces their Bit Accuracy to 73.93% and 70.98%, pro-ducing Oracle-to-Receiver Gaps above 21 percentage points. Their Exact Message Recovery values also remain below 71%. The TI Rates of ADG and Discop exceed 21%, while their Cascading Error Rates reach 14.71% and 18.84%, respec-tively. These results show that local tokenization mismatches frequently propagate to subsequent secret positions. Conse-quently, their high sender-side payloads do not translate into reliable receiver-side recovery. SegTrick, SyncPool, and StepVerify preserve perfect receiver-side recovery under their respective embedding con-figurations. Their Oracle-to-Receiver Gaps and Cascading Error Rates remain zero. This indicates that their respective inference-time mechanisms prevent tokenization mismatches from disrupting subsequent extraction. Nevertheless, reliable recovery alone does not establish a practical covert channel. The transmitted stegotext must also remain linguistically nat-ural, semantically consistent, statistically inconspicuous, and resistant to steganalysis. Table 18 reveals substantial degradation in linguistic and statistical imperceptibility at the method-specific operating points. SegTrick records the highest PPL ∗ of 0.891 and KLD of 3.254. It therefore exhibits the largest deviation from both the target-domain perplexity and the cover-text distribution. StepVerify obtains the lowest SS of 0.461, indicating weaker preservation of the semantic reference. Its KLD also reaches 2.823. SyncPool exhibits a similarly high KLD of 2.713. Discop produces a PPL ∗ of 0.779 and an SS of only 0.491, indi-cating limitations in both fluency and semantic consistency. Although ADG obtains the lowest PPL ∗ among these base-lines, its SS remains below 0.5 and its KLD reaches 2.470. The results show that perfect recovery does not guaran-tee inconspicuous transmitted text. SegTrick and StepVerify achieve exact extraction at 3.16 and 4.38 bpw, respectively, but their reliability is accompanied by pronounced statisti-cal deviation or semantic degradation. SyncPool also main-tains exact extraction, yet its generated distribution remains substantially different from the cover-text distribution. Con-versely, the quality results of ADG and Discop do not offset their severe receiver-side recovery loss. None of these oper-ating points therefore achieves a strong balance among em-bedding rate, reliable extraction, and linguistic and statistical imperceptibility. The steganalysis results further expose the limitations of these method-specific operating points. Mean accuracy ranges from 72.03% to 84.73%, remaining well above the 50% level associated with random guessing. SegTrick and SyncPool are the most readily identified, with mean accura-cies of 84.73% and 84.33%, respectively. SegTrick reaches 89.33% under BF and 86.70% under SANet. SANet identi-fies SyncPool with 95.66% accuracy, indicating particularly distinguishable statistical characteristics in its generated text. Discop and StepVerify also remain highly distinguishable, with mean accuracies of 80.73% and 78.08%, respectively. Although StepVerify maintains perfect receiver-side recov-ery at 4.38 bpw, its low SS and high steganalysis accuracy show that this recovery is achieved without preserving com-parable semantic and statistical imperceptibility. ADG attains the lowest mean steganalysis accuracy among these configurations. However, its value of 72.03% remains far from random guessing. This relative advantage is also accompanied by a Receiver Bit Accuracy of only 73.93% and an Exact Message Recovery rate of 70.88%. Its method-specific operating point therefore does not provide a satis-factory balance between recoverability and anti-steganalysis performance. Taken together, the results reveal two distinct failure modes. ADG and Discop achieve high realized embedding rates but suffer substantial receiver-side information loss. SegTrick, SyncPool, and StepVerify preserve exact extrac-tion, yet their stegotexts exhibit marked linguistic, semantic, Method bpw Oracle Bit Acc. (%) Receiver Bit Acc. (%) Oracle-to-Receiver Gap (pp) Receiver Exact Message Recovery (%) TI Rate (%) Cascading Error Rate (%)                                    
+
+> ADG 4.60 95.46 73.93 21.53 70.88 24.32 14.71 Discop 4.31 93.12 70.98 22.14 68.40 21.63 18.84 SegTrick 3.16 100.00 100.00 0.00 100.00 1.17 0.00 SyncPool 1.89 100.00 100.00 0.00 100.00 1.22 0.00 StepVerify 4.38 100.00 100.00 0.00 100.00 0.97 0.00
+
+Table 17: Communication reliability under method-specific embedding configurations. The reported bpw is the average embed-ding rate realized by each method.                    
+
+> Method PPL ∗↓SS ↑KLD ↓
+> ADG 0.630 0.493 2.470 Discop 0.779 0.491 2.354 SegTrick 0.891 0.503 3.254 SyncPool 0.775 0.501 2.713 StepVerify 0.727 0.461 2.823
+
+Table 18: Text quality and statistical imperceptibility un-der method-specific embedding configurations. Lower PPL ∗
+
+and KLD are better, whereas higher SS is better.                         
+
+> Method BD (%) BF (%) SANet (%) Mean (%)
+> ADG 82.73 67.97 65.40 72.03 Discop 80.67 79.17 82.36 80.73 SegTrick 78.17 89.33 86.70 84.73 SyncPool 78.00 79.33 95.66 84.33 StepVerify 70.16 79.67 84.41 78.08
+
+Table 19: Steganalysis accuracy under method-specific em-bedding configurations. Accuracy closer to 50% indicates stronger anti-steganalysis performance. Mean denotes the av-erage over BD, BF, and SANet. or statistical degradation and remain readily identified by the considered steganalyzers. These limitations constrain prac-tical covert communication, which requires reliable secret recovery and inconspicuous transmitted text simultaneously. The main paper therefore adopts 0.5 bpw as the primary operating point for cross-method evaluation. This choice is not intended to identify a universally optimal embedding rate. Instead, it provides a common and feasible payload condition for all evaluated methods. This prevents unequal embedding pressure from confounding comparisons of communication reliability, linguistic quality, statistical imperceptibility, and anti-steganalysis performance. The method-specific results complement this controlled evaluation by showing that embedding rate alone does not characterize the practical effectiveness of a stegano-graphic communication method. A meaningful evaluation must jointly consider the amount of embedded information, the proportion that can be recovered by the receiver, and the extent to which the transmitted text remains inconspicuous. 
+
+## H Generalization across Model Backbones 
+
+We further evaluate TI-StegoAlign with Qwen3-8B to exam-ine whether its effectiveness is tied to the Llama-3.1-8B back-bone. It isolates the transferability of TI-StegoAlign across different language-model and tokenizer families. The two backbone experiments use the same News, Movie, and Tweet splits, target payload rate of 0.5 bpw, coding rule Γ,evaluation instances, LoRA architecture, generation budget, and receiver-realistic communication protocol. BCSO and CCPO are trained independently for each backbone, and the corresponding tokenizer is shared by the sender and receiver. Several implementation settings are adapted to the Qwen backbone. The sender and receiver both disable auto-matic special-token insertion during tokenization, preventing Qwen-specific control tokens from changing the coding pre-fix. The generation prompt itself remains unchanged, and the chat template is not enabled. Qwen-specific control markers and meta-text patterns are excluded during candidate gener-ation. The Qwen CCPO stage uses two training epochs, learning rate 1.5 × 10 −5, and β = 0 .1. Its reference policy is im-plemented as a frozen PEFT reference adapter rather than a separately loaded model copy. Domain-specific candidate-screening thresholds are adjusted to the Qwen candidate distribution to retain sufficient valid preference pairs. The evaluation metrics, preference criteria, and receiver-side ex-traction procedure remain unchanged. These adaptations ad-dress model and tokenizer differences without altering the formulation of TI-StegoAlign. As shown in Table 20, TI-StegoAlign preserves perfect receiver-side recovery after replacing Llama-3.1-8B with Qwen3-8B. Both backbones achieve 100.00% Oracle and Receiver Bit Accuracy, 100.00% Exact Message Recovery, zero Oracle-to-Receiver Gap, and no cascading errors across all three domains. This result is important because the two backbones use different tokenizers and generation formats. The unchanged recovery performance shows that the relia-bility gains do not rely on a particular Llama tokenization pattern. The Qwen-specific tokenization adjustments ensure that the sender and receiver construct the coding prefix under the same special-token policy. BCSO then establishes suffi-ciently separated local coding decisions, while CCPO retains candidates that remain recoverable after receiver-side recon-struction. Together, these mechanisms preserve exact com-munication despite the change in backbone and tokenizer. Backbone Domain Oracle bit acc. (%) Receiver bit acc. (%) Gap (pp) Exact recovery (%) TI rate (%) Cascading error rate (%)                                                         
+
+> Llama-3.1-8B News 100.00 100.00 0.00 100.00 0.60 0.00 Llama-3.1-8B Movie 100.00 100.00 0.00 100.00 0.51 0.00 Llama-3.1-8B Tweet 100.00 100.00 0.00 100.00 1.17 0.00 Llama-3.1-8B Overall 100.00 100.00 0.00 100.00 0.76 0.00 Qwen3-8B News 100.00 100.00 0.00 100.00 0.57 0.00 Qwen3-8B Movie 100.00 100.00 0.00 100.00 0.48 0.00 Qwen3-8B Tweet 100.00 100.00 0.00 100.00 1.11 0.00 Qwen3-8B Overall 100.00 100.00 0.00 100.00 0.72 0.00
+
+Table 20: Communication reliability of TI-StegoAlign across model backbones. Higher Oracle and Receiver Bit Accuracy and Exact Recovery are better, whereas lower Gap, TI Rate, and Cascading Error Rate are better.                                     
+
+> Backbone Domain PPL ∗SS KLD
+> Llama-3.1-8B News 0.005 0.563 1.640 Llama-3.1-8B Movie 0.180 0.590 1.320 Llama-3.1-8B Tweet 1.102 0.536 2.101 Llama-3.1-8B Overall 0.429 0.563 1.687 Qwen3-8B News 0.005 0.596 1.670 Qwen3-8B Movie 0.190 0.612 1.401 Qwen3-8B Tweet 1.158 0.565 1.980 Qwen3-8B Overall 0.451 0.591 1.684
+
+Table 21: Text quality and statistical imperceptibility of TI-StegoAlign across model backbones. Lower PPL ∗ and KLD are better, whereas higher SS is better. Table 21 shows that the change in backbone affects the individual quality metrics differently. Qwen3-8B increases semantic similarity to approximately 0.60, compared with an overall SS of 0.563 for Llama-3.1-8B. The improvement is observed while exact receiver-side recovery is preserved. This indicates that the Qwen policy follows the semantic reference more closely rather than trading semantic fidelity for reliable embedding. Qwen3-8B exhibits a small degradation in PPL ∗, repre-sented by a slightly larger value than that of Llama-3.1-8B. This difference does not produce a corresponding decline in SS, KLD, or recovery. One possible explanation is that the two backbones favor different lexical and stylistic distribu-tions, whereas PPL ∗ is measured using the same external perplexity model. The Qwen outputs may therefore remain natural and semantically faithful while differing modestly from the lexical distribution preferred by that evaluator. More importantly, the higher SS shows that the benefit of the stronger semantic-generation behavior is retained after steganographic post-training. BCSO does not erase the back-bone’s task-conditioned generation ability, and CCPO can exploit the improved candidate pool to select stegotexts that better preserve the intended content. The results in Table 22 show that Qwen3-8B further re-duces steganalysis accuracy relative to Llama-3.1-8B. This improvement is obtained across the considered steganalyzers while receiver-side Bit Accuracy and Exact Message Recov-                                      
+
+> Backbone Domain BD (%) BF (%) SANet (%) Mean (%)
+> Llama-3.1-8B News 49.99 61.67 68.75 60.14 Llama-3.1-8B Movie 50.00 50.61 56.25 52.29 Llama-3.1-8B Tweet 53.01 73.93 81.25 69.40 Llama-3.1-8B Overall 51.00 62.07 68.75 60.61 Qwen3-8B News 50.00 58.20 64.78 57.66 Qwen3-8B Movie 50.00 50.10 52.99 51.03 Qwen3-8B Tweet 51.20 69.60 76.48 65.76 Qwen3-8B Overall 50.40 59.30 64.75 58.15
+
+Table 22: Anti-steganalysis performance of TI-StegoAlign across model backbones. Accuracy closer to 50% indicates stronger anti-steganalysis performance. Mean denotes the av-erage over BD, BF, and SANet. ery remain at 100.00%. The gain therefore does not arise from embedding less information or allowing more decod-ing failures. This pattern is consistent with the multi-criteria design of CCPO. A backbone with stronger task-conditioned genera-tion can provide a more diverse set of natural candidate stego-texts. CCPO can then retain candidates that satisfy receiver-side recovery while exhibiting lower steganalytic risk. The improvement is especially meaningful because the frozen ste-ganalysis evaluation remains unchanged across backbones. The lower accuracies therefore reflect differences in the gen-erated stegotext rather than changes to the evaluation proto-col. Taken together, the results demonstrate that TI-StegoAlign is not specific to Llama-3.1-8B. Its two-stage post-training procedure transfers to Qwen3-8B despite differences in model behavior, tokenization, and training format. Both back-bones preserve perfect receiver-side recovery, while Qwen3-8B provides higher semantic similarity and stronger anti-steganalysis performance, with only a small trade-off in 
+
+PPL ∗.The method is model-agnostic at the algorithmic level: it requires an autoregressive language model, its correspond-ing tokenizer, and a shared coding rule, but does not depend on a particular vocabulary or model family. The experiments on two distinct 8B backbones provide empirical evidence Criterion Krippendorff’s α   
+
+> Fluency 0.676 Coherence 0.713 Semantic consistency 0.722
+
+Table 23: Inter-rater agreement for the three human-evaluation criteria. for this transferability. They also suggest that TI-StegoAlign can benefit from improvements in the underlying language model, particularly when stronger generation capability pro-duces candidates with better semantic fidelity and lower ste-ganalytic risk. This evidence supports cross-backbone gen-eralization, although broader validation on additional model scales and architectures remains necessary before claiming universal applicability. 
+
+## I Human Evaluation Protocol and Statistical Results 
+
+I.1 Sampling, Randomization, and Blinding 
+
+For each method, 50 outputs are sampled from each of News, Movie, and Tweet, yielding 150 outputs per method and 900 evaluation items across the six methods. The same test in-stances and embedding rate are used across methods. Each item presents an anonymized stegotext together with its se-mantic reference. The reference is used only to assess se-mantic consistency; fluency and coherence are judged from the stegotext alone. Method labels are removed, and item order is independently randomized for the ten evaluators us-ing NumPy’s PCG64 generator with seeds 43 through 52. All evaluators rate every item, yielding 9,000 ratings per criterion. 
+
+I.2 Five-Point Rubric 
+
+Table 24 presents the rating anchors provided to the evalua-tors. Fluency and coherence are judged from the stegotext alone, whereas semantic consistency is assessed against the semantic reference. 
+
+I.3 Evaluators 
+
+The evaluation involves ten researchers holding master’s or doctoral degrees in computer science, artificial intelligence, or software engineering. Each has prior experience in NLP, LLM security, or code evaluation, and none participated in method development. 
+
+I.4 Inter-Rater Reliability 
+
+Krippendorff’s alpha is computed separately for fluency, co-herence, and semantic consistency using ordinal distance. Because every item is rated by all ten evaluators, no missing-value adjustment is required. Table 23 reports the agreement values. 
+
+I.5 Human-Rating Results 
+
+Table 25 reports mean ratings with 95% confidence intervals. The intervals are obtained through paired bootstrap resam-pling over test instances. TI-StegoAlign receives the highest mean rating on all three criteria. Compared with the strongest baseline for each crite-rion, it improves fluency by 0.26 points over ADG, coherence by 0.54 points over ADG, and semantic consistency by 0.14 points over SegTrick. Ratings for each criterion are analyzed using a cumulative-logit mixed model with method as a fixed effect and evaluator and test instance as random intercepts. Pairwise comparisons between TI-StegoAlign and the five baselines are corrected within each criterion using Holm’s procedure. Table 26 re-ports comparisons with the strongest baseline for each crite-rion. After Holm correction, TI-StegoAlign retains statistically significant advantages over the strongest baseline on all three criteria. Compared with ADG, it has 3.35 times the odds of receiving a higher coherence rating, indicating substantially stronger logical continuity and discourse organization. Its odds of receiving a higher fluency rating are also 1.97 times those of ADG, reflecting more natural and readable stegotext. TI-StegoAlign further outperforms SegTrick, the strongest semantic-consistency baseline, with an odds ratio of 1.56. Together with the highest mean ratings, these results demon-strate that TI-StegoAlign improves linguistic naturalness and coherence without compromising the semantic fidelity of the transmitted content. Criterion Score 1 Score 3 Score 5 Fluency Severe grammatical or lexical problems make the text unnat-ural or difficult to understand. The text is understandable but contains noticeable grammati-cal, lexical, or stylistic prob-lems. The text is grammatical, natu-ral, and reads like fluent human-written text. Coherence The text is disjointed, self-contradictory, or lacks a com-prehensible progression. The overall progression is un-derstandable, but some transi-tions or relations are weak. The text is logically connected throughout, with a clear and consistent progression. Semantic consistency The stegotext conveys content that is unrelated to or conflicts with the semantic reference. The stegotext preserves the main intent but deviates in some salient details. The stegotext preserves the in-tent and key information con-veyed by the semantic reference. 
+
+Table 24: Five-point human-evaluation rubric. Scores 2 and 4 represent intermediate judgments between adjacent anchors. 
+
+Method Fluency Coherence Semantic consistency ADG 4.39 [4.25, 4.52] 4.13 [3.95, 4.30] 3.81 [3.61, 4.01] Discop 3.92 [3.74, 4.09] 3.86 [3.67, 4.05] 3.78 [3.58, 3.97] SegTrick 3.55 [3.36, 3.74] 4.01 [3.82, 4.20] 4.56 [4.43, 4.68] SyncPool 3.88 [3.69, 4.06] 3.88 [3.69, 4.06] 3.87 [3.68, 4.06] StepVerify 4.00 [3.84, 4.16] 3.89 [3.69, 4.08] 3.75 [3.55, 3.95] TI-StegoAlign 4.65 [4.55, 4.74] 4.67 [4.56, 4.77] 4.70 [4.59, 4.79] 
+
+Table 25: Mean human ratings with 95% instance-level bootstrap confidence intervals. Higher values indicate better performance. 
+
+Criterion Comparator Log-odds / OR SE OR 95% CI Adjusted p
+
+Fluency ADG 0.680 / 1.97 0.086 [1.67, 2.34] < 0.001 
+
+Coherence ADG 1.210 / 3.35 0.106 [2.72, 4.13] < 0.001 
+
+Semantic consistency SegTrick 0.443 / 1.56 0.078 [1.34, 1.81] < 0.001 
+
+Table 26: Cumulative-logit comparisons between TI-StegoAlign and the strongest baseline for each criterion. Odds ratios above one favor TI-StegoAlign.
