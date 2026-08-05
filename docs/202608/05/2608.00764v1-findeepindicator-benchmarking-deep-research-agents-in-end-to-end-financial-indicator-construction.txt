@@ -1,0 +1,378 @@
+Title: FinDeepIndicator: Benchmarking Deep Research Agents in End-to-End Financial Indicator Construction
+
+URL Source: https://arxiv.org/pdf/2608.00764v1
+
+Published Time: Tue, 04 Aug 2026 00:57:08 GMT
+
+Number of Pages: 11
+
+Markdown Content:
+# FinDeepIndicator: Benchmarking Deep Research Agents in End-to-End Financial Indicator Construction 
+
+Project Website | GitHub | Hugging Face 
+
+# Chaoqun Yang 1, Fengbin Zhu 1∗, Xinyu Lin 1∗, Long Bai 1,4,Xiaoluan Liu 2, Ke-Wei Huang 3, Roger Zimmermann 1, Tat-Seng Chua 1
+
+> 1
+
+School of Computing, National University of Singapore; 2China Economics and Management Academy, Central University of Finance and Economics; 3Asian Institute of Digital Finance, National University of Singapore; 4Institute of Computing Technology, Chinese Academy of Sciences chaoqun@yang.email.cn, fengbin@nus.edg.sg, xylin1028@gmail.com, bailong@ict.ac.cn, xiaoluanliu@email.cufe.edu.cn, dishkw@nus.edu.sg, dcsrz@nus.edu.sg, dcscts@nus.edu.sg 
+
+## Abstract 
+
+Financial indicators are essential tools for transforming raw finan-cial data into interpretable measures for various downstream tasks, such as valuation, risk assessment, and economic analysis. How-ever, existing financial benchmarks largely focus on answer-level accuracy and often assume that relevant data are already provided, leaving the assessment of the intermediate process of indicator con-struction underexplored. In this work, we propose FinDeepIndi-cator , the first benchmark dedicated to evaluating Deep Research (DR) agents in end-to-end financial indicator construction. Specifi-cally, FinDeepIndicator evaluates DR agents across four stages in indicator construction: formula specification, data collection, indi-cator calculation, and answer generation, and covers fundamental, technical, and macroeconomic indicators organized into 21 fine-grained sub-categories. It contains 3,350 curated question-answer (QA) pairs derived from both U.S. and Chinese markets, 10 years of historical financial data, and 800 listed companies. Extensive experiments on search-equipped Large Language Models (LLMs) and DR agents show that, while LLMs generally perform well in formula specification, their accuracy drops substantially during data retrieval and numerical execution. DR agents consistently outperform search-equipped LLMs, yet remain unreliable in realis-tic financial analysis settings. These findings provide insights for developing more capable and trustworthy DR agents in finance. 
+
+## CCS Concepts 
+
+• Computing methodologies → Natural language processing .
+
+## Keywords 
+
+Deep Research, Financial Analysis, Process-level Evaluation  
+
+> ∗Corresponding authors. Permission to make digital or hard copies of all or part of this work for personal or classroom use is granted without fee provided that copies are not made or distributed for profit or commercial advantage and that copies bear this notice and the full citation on the first page. Copyrights for components of this work owned by others than the author(s) must be honored. Abstracting with credit is permitted. To copy otherwise, or republish, to post on servers or to redistribute to lists, requires prior specific permission and/or a fee. Request permissions from permissions@acm.org.
+> XXX, XX, XX
+> ©2027 Copyright held by the owner/author(s). Publication rights licensed to ACM. ACM ISBN 978-1-4503-XXXX-X/2018/06 https://doi.org/XXXXXXX.XXXXXXX
+
+ACM Reference Format: 
+
+Chaoqun Yang 1, Fengbin Zhu 1∗, Xinyu Lin 1∗, Long Bai 1,4,, Xiaoluan Liu 2, Ke-Wei Huang 3, Roger Zimmermann 1, Tat-Seng Chua 1 . 2027. FinDeepIndicator: Benchmarking Deep Research Agents in End-to-End Financial Indicator Construction. In Proceedings of XXXXXX (XXX). ACM, New York, NY, USA, 11 pages. https://doi.org/XXXXXXX.XXXXXXX 
+
+## 1 Introduction 
+
+Financial indicators are structured quantitative summaries that bridge raw financial data and financial decision-making [ 25 , 26 , 28 ]. They transform heterogeneous financial signals ( e.g., financial state-ments, asset prices, and macroeconomic time series) into com-pact numerical measures for valuation, profitability analysis, and macroeconomic interpretation. Representative examples include price-to-earnings ratios, moving averages, volatility measures, in-flation rates, and interest-rate spreads. Because these indicators are widely used and frequently updated, they form a fundamental interface between financial knowledge and computational reason-ing. A financial agent should therefore not only interpret indicator semantics, but also construct indicators on demand: given a natural-language query, it should infer the precise underlying formula, ob-tain the requisite raw data from the web, execute the computation, and yield a verifiable result. However, existing benchmarks do not adequately evaluate this capability. First, there is no benchmark specifically designed for financial indicator construction; even when financial indicators appear in existing benchmarks, their coverage is limited and often incidental within broader financial question answering tasks [ 10 ,30 , 37 , 45 ]. Second, most benchmarks assume that relevant docu-ments, tables, or numerical inputs are already provided in context, thereby neglecting the data collection stage entirely, which fails to reflect real-world conditions [ 3 –7, 14 , 17 , 29 , 43 ]. Third, even in benchmarks involving search or tool use, evaluation is typically restricted to final-answer correctness, without assessing the inter-mediate process of indicator construction, which undermines the reliability of the generated results [1, 12, 31]. To bridge this gap, we aim to evaluate Deep Research (DR) agents in end-to-end financial indicator construction. Figure 1 illustrates a sample of end-to-end financial indicator construction. The query asks for the minimum Liability-to-Asset Ratio of IBM from 2019 to 2021. Solving this problem requires multiple interconnected steps: the agent must first correctly identify the target indicator and its underlying formula, i.e., Total Liabilities / Total Assets × 100% ; it arXiv:2608.00764v1 [cs.AI] 1 Aug 2026 XXX, XX, XX, XX, XX Chaoqun Yang et al. 
+
+Figure 1: An example of financial indicator construction. 
+
+must then retrieve the required financial statement values for each year, align the corresponding liability and asset items, compute the yearly indicator values, and finally perform the specified temporal aggregation to obtain the minimum value. Errors may arise at any stage of this process, including incorrect indicator interpretation, inaccurate data retrieval, numerical computation mistakes, or in-appropriate aggregation. Consequently, evaluating only the final answer provides an insufficient basis for assessing a model’s finan-cial reasoning capability and fails to reveal its specific limitations. To address these challenges, we propose a process-level evalua-tion framework for end-to-end financial indicator construction. The framework decomposes the indicator construction process into four stages: Formula Specification , Data Collection , Indicator Calculation 
+
+and Answer Generation . Formula Specification evaluates whether an agent correctly identifies the financial concept and mathematical definition. Data Collection measures whether the agent can retrieve relevant and accurate financial information. Indicator Calculation 
+
+evaluates numerical correctness under tolerance-aware matching to account for rounding and reporting variations. Answer Genera-tion assesses whether the agent correctly synthesizes intermediate results to infer the final answer. This process-level evaluation en-ables fine-grained analysis of agent capabilities and failure modes beyond conventional answer-only evaluation. To support systematic benchmark construction, we collect and organize 234 commonly used financial indicators into three major categories and 21 fine-grained sub-categories, as shown in Fig-ure 2. The categories include fundamental, technical, and macroeco-nomic indicators, covering financial concepts such as profitability, valuation, momentum, volatility, inflation, and labor. For each in-dicator, we curate its standardized name, mathematical formula, required raw data, and executable calculation program, providing a structured foundation for automatic question generation, answer 
+
+Figure 2: An overview of FinDeepIndicator. 
+
+verification, and process-level evaluation. Based on the proposed evaluation framework and collected indicators, we construct FinD-eepIndicator , the first benchmark specifically designed for assess-ing DR agents in end-to-end financial indicator construction. The benchmark spans the U.S. and Chinese markets and incorporates 10 years of historical data from 800 publicly listed companies. Overall, FinDeepIndicator contains 3,350 carefully curated question-answer pairs that require agents to complete the full construction workflow, including indicator understanding, raw data collection, intermedi-ate indicator calculation, and final answer generation. With FinDeepIndicator, we conduct extensive experiments to evaluate search-equipped LLMs and DR agents in end-to-end fi-nancial indicator construction. The key findings include: 1) Even the best-performing system achieves only approximately 40% final-answer accuracy, despite most models exceeding 70% in formula accuracy. This reveals a substantial gap between understanding financial indicators and executing their end-to-end construction, likely because models struggle with underlying raw data retrieval and precise data processing. 2) Two of the three strongest DR agents achieve higher final-answer accuracy in the U.S. market than in the Chinese market, by over 9.6% and 3.1%, respectively, while the remaining agent performs similarly across markets, indicating a modest but model-dependent cross-market gap that may arise from differences in data accessibility, source structure, and reporting con-ventions. 3) Macroeconomic indicators are the most challenging category, with final-answer accuracy below 30% for most models, particularly for external-trade, fiscal, labor, and productivity indica-tors, likely because they require integrating heterogeneous sources and aligning reporting frequencies, geographic definitions, and temporal conventions. In summary, this paper makes the following key contributions: 
+
+• To assess models’ fine-grained capabilities in end-to-end financial indicator construction, we propose a process-level evaluation framework that decomposes the construction process into four FinDeepIndicator: Benchmarking Deep Research Agents in End-to-End Financial Indicator Construction XXX, XX, XX, XX, XX 
+
+distinct stages: Formula Specification , Data Collection , Indicator Calculation , and Answer Generation .
+
+• To systematically capture the diversity and complexity of the financial indicator construction task, we design a comprehensive 
+
+financial indicator taxonomy comprising 3 major categories, 21 sub-categories, and 234 distinct financial indicators. 
+
+• Building upon the proposed evaluation framework and indicator taxonomy, we construct FinDeepIndicator , the first benchmark specifically designed to assess end-to-end financial indicator con-struction, comprising 3,350 QA pairs derived from two major financial markets and 10 years of historical financial data from 800 listed companies. 
+
+• We systematically evaluate state-of-the-art search-equipped LLMs and DR agents, revealing limited end-to-end performance, model-dependent gaps across markets, particular difficulty with macro indicators, and data collection as the primary bottleneck. 
+
+## 2 FinDeepIndicator Benchmark 2.1 Benchmark Construction 
+
+Figure 3 illustrates the construction pipeline of FinDeepIndicator. The pipeline comprises three stages: 1) Indicator Collection , gathers widely used derived financial indicators and organizes their names, formulas, required raw data, and calculation procedures. 2) Template Design , develops indicator-specific templates with configurable variables and three difficulty levels. 3) QA Generation , instantiates these templates through random variable sampling to produce QA pairs accompanied by detailed intermediate processes. 
+
+2.1.1 Indicator Collection. We first collect financial indicators widely used in practical financial analysis, then organize them into 3 major categories and 21 sub-categories, forming a comprehensive financial indicator taxonomy, as shown in Figure 2. In total, we obtain 234 distinct indicators, and the complete list of indicators is provided in Appendix A.1. For each indicator, we document its name, mathematical formula, raw data, and calculation program. This structured metadata serves two purposes. First, it ensures that all generated questions have well-defined ground-truth computa-tion procedures. Second, it supports process-level evaluation by making it possible to separately verify the formula, data, interme-diate calculation, and final answer. 
+
+2.1.2 Template Design. We design a set of broadly applicable and linguistically diverse templates to cover common analytical requests involving financial indicators. These templates support tasks such as computing an indicator for a company, comparing indicator values across years, and identifying the maximum or minimum value within a specified period. To construct the templates, we first group indicators by type and design shared templates for indicators within the same type. Each template is further associated with five surface variants that express the same underlying analytical intent in different natural-language forms, thereby increasing linguistic diversity while maintaining generation controllability. In addition, each template contains sev-eral placeholder variables, e.g., indicator, company, date, conditional logic, etc. During QA generation, these placeholders are instantiated with values sampled from predefined variable pools. 
+
+Figure 3: Construction pipeline of FinDeepIndicator. 
+
+When designing templates, we divide them into three difficulty levels: Easy , Medium and Hard . Easy questions require direct calcu-lation of the target indicator from the collected raw data. Medium 
+
+questions require one-hop analysis in addition to indicator compu-tation, such as selecting the maximum, minimum, or year-over-year change after computing a sequence of values. Hard questions re-quire multi-hop analysis, where the model must combine indicator computation with more complex comparison, aggregation, filtering, or temporal reasoning. In total, we retain 170 templates. 
+
+2.1.3 QA Generation. Given the indicator metadata and ques-tion templates, we instantiate benchmark examples by exhaustively covering template variants and applicable indicators, while ran-domly sampling the remaining placeholder variables. Specifically, for each template variant, we enumerate all indicators to which the template is applicable. We then randomly sample remaining placeholder variables from predefined variable pools, such as com-pany, date, and other task-specific variables. This design ensures systematic coverage over both linguistic variants and financial in-dicators, while maintaining diversity in entities, temporal settings, and task-specific conditions. Each generated instance contains a natural-language question, the reference formula, the required raw data, the intermediate in-dicator calculation, and the final numerical answer. Because each template variant can be paired with many applicable indicators and each indicator can be instantiated with many combinations of entities, dates, and reasoning operators, the resulting candidate pool contains billions of potential QA instances. From this pool, we generate 3,350 representative QA examples by enumerating all template variants and applicable indicators, and sampling valid combinations of the remaining variables. 
+
+2.1.4 Quality Control. We maintain the high quality of FinD-eepIndicator by implementing a rigorous quality-control process throughout its construction and generation stages, including, 
+
+• Comprehensive indicator taxonomy. We develop a compre-hensive taxonomy covering diverse financial indicators. For each indicator, we record its definition, required inputs, calculation procedure, and applicability conditions. For example, profit mar-gin requires revenue to be greater than zero, return on assets requires positive total assets, and return on equity requires avail-able and non-zero shareholder equity. 
+
+• Rigorous question design. We additionally impose question-level constraints during template construction and instantia-tion. These constraints regulate date ranges, entities, comparison groups, and other query parameters to ensure that each question is unambiguous, answerable, and supported by available data. XXX, XX, XX, XX, XX Chaoqun Yang et al. 
+
+Table 1: Inter-annotator agreement and expert validation results for response parsing and formula evaluation. For “Formula Evaluation”, the entry in the “Acceptance Rate” row reports (winning rate, advantage probability).           
+
+> Formula Parse Data Parse Indicator Parse Answer Parse Formula Evaluation Gwet’s AC1 0.86 0.92 0.83 0.91 0.71
+> Acceptance Rate 0.95 0.96 0.98 0.94 (1.0, 0.86)
+
+• Expert quality inspection. After QA generation, we conduct random-sampling inspections with human experts to further validate dataset quality. The sampled QA instances are reviewed for question clarity, data availability, formula correctness, and calculation correctness. Instances containing invalid parameter settings or inconsistent computations are regenerated. 
+
+## 2.2 Evaluation Protocol 
+
+2.2.1 Process-Level Answer Extraction . We evaluate model responses at multiple stages of the indicator construction process, including formula specification, raw data collection, indicator calcu-lation, and final answer generation. This process-based evaluation provides a fine-grained analysis of model capabilities. Model responses are typically free-form and exhibit substantial variation in format. We first use an LLM ( e.g., DeepSeek-V4-Flash) to parse each response into four structured components: the indicator formula, the raw data table, the indicator calculation table, and the final answer. The raw data and indicator calculation components are further normalized into CSV-style tables to enable consistent and fine-grained evaluation. To verify the reliability of the automatic parsing procedure, we conduct a criterion-based expert review following established eval-uation practices [ 9 , 35 ]. Specifically, we randomly sample 100 model responses and invite three domain experts with financial expertise to independently assess whether each parsed component is cor-rect and complete (See Appendix A.2 for expert review criteria). As reported in Table 1, the inter-annotator agreement for the four extracted components is consistently high, with all Gwet’s AC1 scores exceeding 0.6. Moreover, the expert acceptance rates are all above 0.9, indicating that the LLM-based parsing procedure reliably converts free-form model responses into structured representations suitable for subsequent evaluation. 
+
+2.2.2 Evaluation Metrics . We evaluate four stages of the indi-cator construction process: formula specification, data collection, indicator calculation, and final answer generation. 
+
+• Formula Specification Evaluation . We evaluate formula cor-rectness based on semantic and mathematical equivalence rather than exact string matching, since the same financial indicator may be expressed using different but equivalent formulations. Specifically, we adopt an LLM-as-a-Judge protocol that assigns each parsed formula a three-level score according to whether it preserves the intended financial meaning, required variables, mathematical operations, and relevant domain conventions. The detailed scoring criteria are provided in Appendix A.3. To assess the reliability of the LLM-based evaluator, we further conduct the Alt-test [ 2 ]. Three human experts independently evaluate the consistency between each parsed formula and the correct formula. As reported in Table 1, the Gwet’s AC1 scores exceed 0.6, indicating substantial agreement among the human annotators. Moreover, the winning rate surpasses 0.5, passing the statistical test. Additionally, with an advantage probability exceeding 0.8, our results provide strong evidence that LLM annotation serves as a viable substitute for human evaluator. 
+
+• Data Collection Evaluation . We evaluate the collected raw data by comparing the generated data table with the corresponding reference data table. Both tables are represented in CSV format, where rows denote entities and columns denote the required fields, such as year and company. After aligning the rows and columns, we perform a cell-level comparison. For numerical en-tries, a cell is considered correct when the difference between the generated value and the reference value falls within a predefined tolerance ( e.g., 0.01, 0.005, or 0.001). This tolerance-aware com-parison accommodates minor discrepancies caused by numerical precision, rounding, or unit conversion while still identifying missing or incorrect values. The data collection accuracy is then computed as the number of correctly matched cells divided by the total number of evaluated cells in the reference table. 
+
+• Indicator Calculation Evaluation . We evaluate the correct-ness of intermediate indicator calculations using the same table-based procedure. Specifically, the indicator calculation results are normalized into a CSV-style table and aligned with the corre-sponding reference table. Each numerical cell is evaluated using the predefined tolerance threshold, and the indicator calculation accuracy is calculated as the proportion of correctly matched cells among all evaluated cells. This metric measures whether the model correctly applies the indicator formula to the collected data and produces the expected intermediate indicator results. 
+
+• Answer Generation Evaluation . We evaluate the final answer using tolerance-aware numerical matching against the reference answer. A generated answer is considered correct if its numeri-cal difference from the reference value is within the predefined tolerance, in which case the answer accuracy is assigned a value of 1. Otherwise, it is considered incorrect and assigned a value of 0. This evaluation accommodates minor discrepancies caused by rounding, numerical precision, unit conversion, or output formatting while distinguishing substantively incorrect answers. 
+
+## 3 Experiments 
+
+In this section, we conduct extensive experiments to systematically evaluate the capability of current LLMs and DR agents on financial indicator construction. Specifically, we aim to answer the following research questions: 
+
+• RQ1 : How capable are current LLMs and agents in performing end-to-end financial indicator construction? 
+
+• RQ2 : How does the performance vary across different financial markets? 
+
+• RQ3 : How does task difficulty affect model performance in fi-nancial indicator construction? 
+
+• RQ4 : Which categories of financial indicators are more challeng-ing for current models? FinDeepIndicator: Benchmarking Deep Research Agents in End-to-End Financial Indicator Construction XXX, XX, XX, XX, XX 
+
+Figure 4: Overall performance of different models on FinD-eepIndicator. Due to budget constraints, we evaluate the agent setting only on the three models that achieve the best performance under the search setting. 
+
+• RQ5 : How does model performance change when the formula and raw data are provided? 
+
+• RQ6 : What are the common error patterns made by current models during financial indicator construction? 
+
+## 3.1 Evaluated Methods 
+
+We evaluate two representative settings on FinDeepIndicator: 
+
+• LLM with Search (Search). The LLM performs a single web search and then generates the final answer based on the retrieved information. 
+
+• Deep Research Agent (Agent). Since existing DR systems dif-fer substantially in implementation, making unified comparison difficult, we adopt a minimal DR agent based on the ReAct par-adigm [ 39 ]. The agent iteratively reasons, invokes tools, and observes the results, with access to search and Python tools. Evaluated LLMs include Qwen3.6-Max, Claude-Sonnet-4.6, Gemini-3-Flash, Deeepseek-V4-Flash, Grok-4.3, GPT-5, GPT-5-Mini. The equipped search API is Google Search. 
+
+## 3.2 Overall Results (RQ1) 
+
+Figure 4 presents the overall performance of different LLMs and agents across the four stages of financial indicator construction, from which we can observe the following: 
+
+• All methods show limited end-to-end construction ability. 
+
+Even the best-performing method achieves only around 40% accuracy on final answers. Performance decreases further under stricter numerical tolerances. These results indicate that reliable end-to-end financial indicator construction remains challenging for current methods. 
+
+• Agentic gains are substantial but model-dependent. Agent-based settings generally outperform their search-based counter-parts, particularly in data collection, indicator calculation, and final answer generation. However, the magnitude of improve-ment varies considerably across models. Gemini-3-Flash achieves the strongest performance in the search-only setting, but its agent-based variant provides a much smaller improvement than those of Qwen3.6-Max and Claude-Sonnet-4.6. This suggests that 
+
+Figure 5: Performance comparison on agent setting between U.S. and Chinese financial markets. 
+
+financial indicator construction depends not only on agents’ re-trieval capabilities but also on other agentic capabilities, such as planning and tool use. 
+
+• A substantial gap exists between financial knowledge un-derstanding and task execution. Most methods achieve rela-tively high accuracy in formula specification, generally exceeding 70%, which suggests that understanding financial concepts and identifying the corresponding formulas are not the main bot-tlenecks. In contrast, performance drops substantially in data collection and indicator calculation, revealing a clear gap be-tween understanding financial knowledge and translating it into executable actions. 
+
+• Data collection is the primary bottleneck. The most signifi-cant performance drop is observed after the data collection stage, where accuracy decreases by approximately 40% compared to formula specification. This indicates that data collection may be the most critical capability to improve in current models. 
+
+## 3.3 Cross-Market Analysis (RQ2) 
+
+Figure 5 compares the performance of the three strongest LLM agents on FinDeepIndicator tasks drawn from the Chinese and U.S. markets. We make the following observations: 
+
+• Chinese-market tasks are slightly more challenging in terms of end-to-end performance. In final answer generation, both Gemini-3-Flash and Qwen3.6-Max achieve higher accuracy on the U.S. market, while Claude-Sonnet-4.6 performs almost identically across the two markets. Overall, these results suggest that Chinese-market tasks are slightly more difficult at the end-to-end level. However, no consistent market-level advantage can be observed across all intermediate stages, as the relative performance varies by model and stage. 
+
+• Different agents exhibit distinct market preferences. Gemini-3-Flash performs substantially better on the U.S. market in indi-cator calculation and final answer generation, whereas Claude-Sonnet-4.6 achieves better performance on the Chinese market in data collection and indicator calculation. This suggests that cross-market performance depends on each agent’s retrieval and reasoning capabilities. Such stage-wise analysis can further iden-tify agent-specific strengths and weaknesses, enabling targeted improvements or specialized agent collaboration across different construction stages. XXX, XX, XX, XX, XX Chaoqun Yang et al. 
+
+Figure 6: Performance comparison on agent setting under different task difficulty levels. 
+
+## 3.4 Impact of Task Difficulty (RQ3) 
+
+Figure 6 compares the performance of the three strongest LLM agents across easy, medium, and hard instances in FinDeepIndicator. We make the following observations: 
+
+• End-to-end performance decreases as task difficulty in-creases. All three agents achieve their highest final-answer ac-curacy on easy instances, followed by a considerable decline on medium and hard instances. Claude-Sonnet-4.6, for example, drops from approximately 52% on easy tasks to below 30% on hard tasks. This result demonstrates that current agents remain sensitive to increases in construction difficulty. 
+
+• Task difficulty primarily affects data collection and indi-cator calculation. As task difficulty increases, performance de-clines in both stages, while formula specification remains com-paratively stable. This suggests that greater logical complexity mainly increases the amount and difficulty of required data, the computational burden of indicator construction, and the reason-ing needed for answer generation. The robustness of formula specification across difficulty levels further supports our ear-lier finding that financial knowledge understanding is not the primary challenge for current methods. 
+
+• Different agents exhibit different levels of robustness to increasing task difficulty. Claude-Sonnet-4.6 performs best on easy instances but experiences a continuous decline as the task difficulty increases. In contrast, Qwen3.6-Max maintains nearly unchanged final-answer accuracy from medium to hard instances and becomes the strongest model on the hard subset. Gemini-3-Flash performs consistently below the other two agents, although its indicator-calculation accuracy slightly recovers from medium to hard instances. This indicates that model rankings can change as tasks become more difficult. 
+
+## 3.5 Performance Across Financial Indicator Sub-Categories (RQ4) 
+
+Figure 7 presents a fine-grained comparison across indicator sub-categories, from which we make the following observations: 
+
+• Macro indicators show the weakest downstream perfor-mance. Although formula accuracy remains high, indicator-calculation and answer-generation accuracy are generally low for external-trade, fiscal, labor, and productivity indicators. This is because macro tasks often involve different reporting frequencies, geographic scopes, seasonal adjustments, and temporal aggrega-tion rules. 
+
+• Agent performance varies substantially across technical indicator sub-categories. Agents perform relatively well on channel, momentum, return, and trend indicators, but substan-tially worse on risk and risk-adjusted-return indicators. This gap likely arises because the latter require precise historical windows and statistical estimation. 
+
+• Sub-category differences primarily emerge in downstream execution rather than formula understanding. Formula ac-curacy remains consistently high across indicator sub-categories and models, indicating that current LLMs generally understand the definitions of diverse financial indicators. In contrast, data collection, indicator calculation, and answer generation accuracy vary substantially across sub-categories. This further confirms that the main difficulty lies in obtaining and processing the re-quired data rather than identifying the appropriate formula. 
+
+• No single agent dominates every indicator sub-category. 
+
+Claude-Sonnet-4.6, Qwen3.6-Max, and Gemini-3-Flash exhibit different strengths across indicator types. Qwen3.6-Max performs particularly well on several technical indicators, whereas Claude-Sonnet-4.6 is competitive across many fundamental and macroe-conomic tasks. This variation indicates that indicator-specific retrieval and reasoning capabilities play an important role in overall model performance. 
+
+## 3.6 Ablation Study on Data Collection (RQ5) 
+
+Figure 8 reports model performance when the required formula and raw data are directly provided, thereby removing the need for formula specification and data collection. We make the following observations: 
+
+• The ablation study further confirms that data collection is the primary bottleneck. Once the required raw data is provided, all three agents achieve substantially higher indicator-calculation and answer-generation accuracy than in the end-to-end setting. For fundamental and macroeconomic indicators, performance generally exceeds 80% and frequently approaches 100% across models and difficulty levels. This result reinforces our earlier finding that the main challenge lies in locating, extracting, align-ing, and normalizing the required financial data, rather than in formula understanding or numerical computation. 
+
+• Technical indicators remain challenging even when the data is provided. In contrast to fundamental and macroeco-nomic indicators, technical indicators show substantially lower accuracy, especially on medium and hard instances. While easy technical instances can be solved with moderate to high accuracy, performance drops sharply as difficulty increases. This indicates that technical indicators require more than correct data retrieval: they often involve complex temporal operations, rolling-window computation, sequential transformations, and precise handling of historical observations. 
+
+• Task difficulty remains associated with performance after removing data collection. For both fundamental and technical indicators, performance continues to decline as task difficulty FinDeepIndicator: Benchmarking Deep Research Agents in End-to-End Financial Indicator Construction XXX, XX, XX, XX, XX 
+
+Figure 7: Fine-grained performance analysis across different financial indicator sub-categories. 
+
+Figure 8: Performance comparison on agent setting when raw data is directly provided in context. 
+
+increases, with a substantially larger drop observed for technical indicators. In contrast, performance on macro indicators remains broadly stable across difficulty levels. Technical indicators typ-ically involve more complex calculations and therefore remain challenging even when the required data are provided. In con-trast, macro indicators generally involve simpler calculations, suggesting that their primary challenge lies in data collection rather than indicator calculation. 
+
+Table 2: Distribution of errors. Error Aspect Error Type Percentage Total 
+
+Formula Completely incorrect 3.8% 8.6% Partially incorrect 4.8% 
+
+Data 
+
+Incorrect data retrieval 50.1% 87.7% Missing critical fields 19.8% Incorrect time window 10.2% Incorrect unit conversion 7.6% 
+
+Calculation Numerical calculation error 2.7% 2.7% 
+
+Logic Incorrect answer target 1.0% 1.0% 
+
+## 3.7 Error Analysis (RQ6) 
+
+To better understand the limitations of current models, we ran-domly sample 100 failed cases from each of the three agent settings, resulting in 300 cases in total, and annotate the first error that oc-curs in each case. As summarized in Table 2, these errors fall into four categories: Formula , Data , Calculation , and Logic .XXX, XX, XX, XX, XX Chaoqun Yang et al. 
+
+• Formula errors. Formula errors account for 8.6% of all failures, including completely incorrect formulas (3.8%) and partially in-correct formulas (4.8%). The latter typically involves missing or substituted accounting items, or using an ending balance instead of the required average of beginning and ending balances. 
+
+• Data errors. Data errors dominate the failures, accounting for 87.7%. They include incorrect data extraction (50.1%), missing critical fields (19.8%), incorrect time windows (10.2%), and unit-conversion errors (7.6%). Common issues include selecting the wrong table entry and mixing reporting periods. 
+
+• Calculation errors. Calculation errors account for 2.6% of fail-ures. They mainly result from arithmetic mistakes, premature rounding, or accumulated precision errors. 
+
+• Logic errors. Logic errors account for 1.0% of failures. The model returns the wrong answer target, such as reporting an intermedi-ate indicator value instead of the requested count. 
+
+## 4 Related Work 4.1 Deep Research Agents 
+
+Deep Research (DR) agents extend retrieval-augmented language models from single-pass retrieval to long-horizon workflows that involve task decomposition, iterative search, tool use, and evidence-grounded synthesis [ 13 , 40 ]. This paradigm builds on agent frame-works such as ReAct [ 39 ]. Search-R1 [ 15 ] and R1-Searcher [ 32 ]further train models to determine when and how to retrieve in-formation during multi-step reasoning, although they mainly tar-get question answering. Recent systems, including OpenAI Deep Research [ 27 ], Gemini Deep Research [ 33 ], and Qwen Deep Re-search [ 34 ], integrate planning, iterative retrieval, evidence man-agement, and citation-grounded report generation. Accordingly, evaluation has expanded from retrieval and generation quality to the reliability of the overall research process. General agent benchmarks evaluate complementary capabilities. GAIA [ 24 ] cov-ers reasoning, browsing, multimodal understanding, and tool use; FRAMES [ 16 ] focuses on factuality and multi-source reasoning; and BrowseComp [ 36 ] evaluates persistent web search. DR-specific benchmarks assess long-form outputs, including DeepResearch Bench [ 8], ReportBench [ 20 ], and DEER [ 11 ]. However, most em-phasize general-domain research or final-report quality rather than domain-specific workflows involving formula identification, raw-data collection, numerical transformation, and aggregation. Financial indicator construction requires an agent to identify the correct formula, retrieve data for the relevant entities and periods, and perform the calculation. FinDeepIndicator therefore separately evaluates Formula Specification , Data Collection , Indicator Calcula-tion , and Answer Generation , enabling process-level diagnosis. 
+
+## 4.2 Financial Benchmarks 
+
+Financial benchmarks broadly cover domain understanding, evidence-grounded numerical reasoning, and agentic evaluation in open information environments. FLUE [ 30 ] and CFLUE [ 45 ] evaluate financial language tasks, while FinEval [ 10 ] and FinBen [ 37 ] assess broader financial knowledge, reasoning, forecasting, and decision-making. FinQA [ 4 ], ConvFinQA [ 5 ], and TAT-QA [ 43 ] focus on arithmetic reasoning over financial tables and text. Later bench-marks extend to long documents, open-book question answering, and retrieval-based settings, including FinanceBench [ 14 ], FinTex-tQA [ 3 ], DocFinQA [ 29 ], SEC-QA [ 17 ], LOFin [ 6], and FinAgent-Bench [ 7]. These benchmarks generally provide the relevant ev-idence or restrict retrieval to a predefined corpus. Recent bench-marks evaluate financial agents in open environments. Finance Agent Benchmark [ 1] studies tool-augmented research; FinSearch-Comp [ 12 ] and FinSearchBench-24 [ 31 ] evaluate open-domain, multi-step, and temporally aware search; and FinDeepForecast [ 21 ]considers live financial forecasting. FinDeepIndicator evaluates financial indicator construction as an end-to-end capability, requiring models to identify formulas, discover reliable sources, collect heterogeneous data, and perform calculations. Unlike existing knowledge, document-QA, and open-world agent benchmarks, it neither provides evidence nor restricts retrieval to a fixed corpus, but evaluates the correctness and com-pleteness of the entire indicator-construction pipeline. 
+
+## 4.3 Process-based Evaluation 
+
+Process-based evaluation provides finer-grained diagnostics than final-answer evaluation alone. In mathematical reasoning, process supervision assigns correctness labels to individual steps [ 22 ], while ProcessBench [ 41 ] evaluates whether models can identify the earli-est erroneous step. LLM-as-Judge methods, including G-Eval [ 23 ], [ 42 ], and [ 19 ], provide scalable evaluation for outputs that can-not be assessed reliably through exact matching. Applied at the step level, they can assess local correctness and localize errors. A broader review is provided by [ 18 ]. Process-oriented evaluation has also been applied to financial reasoning. FinChain [ 38 ] evaluates executable symbolic traces and intermediate consistency, while FinDeepResearch [ 44 ] evaluates data recognition, metric calcula-tion, and analytical interpretation. Our evaluation follows the indicator-construction pipeline of formula specification, data collection, and indicator calculation. We use an LLM-as-Judge for semantically equivalent formulas and tolerance-aware numerical comparison for raw data and computed values, allowing errors to be localized to specific stages. 
+
+## 5 Conclusion 
+
+In this work, we introduced FinDeepIndicator, the first benchmark for evaluating end-to-end financial indicator construction. Covering 234 indicators and 3,350 QA pairs across the U.S. and Chinese mar-kets. Experiments show that current search-equipped LLMs and DR agents still struggle with this task, particularly in macroeconomic indicators, with data collection emerging as the main bottleneck. We hope FinDeepIndicator will promote the development of more accurate, transparent, and reliable financial agents. 
+
+## 6 Limitations and Ethical Considerations 
+
+FinDeepIndicator is constructed from publicly available financial and macroeconomic data. We use these data solely for research purposes and avoid collecting sensitive personal information. 
+
+## 7 Generative AI Usage 
+
+Generative AI tools were used to assist with code development, language polishing, response parsing, and formula evaluation. FinDeepIndicator: Benchmarking Deep Research Agents in End-to-End Financial Indicator Construction XXX, XX, XX, XX, XX 
+
+## References 
+
+[1] Antoine Bigeard, Langston Nashold, Rayan Krishnan, and Shirley Wu. 2025. Finance agent benchmark: Benchmarking LLMs on real-world financial research tasks. arXiv preprint arXiv:2508.00828 (2025). [2] Nitay Calderon, Roi Reichart, and Rotem Dror. 2025. The Alternative Annotator Test for LLM-as-a-Judge: How to Statistically Justify Replacing Human Annota-tors with LLMs. In Proceedings of the 63rd Annual Meeting of the Association for Computational Linguistics (Volume 1: Long Papers) . Association for Computational Linguistics, Vienna, Austria, 16051–16081. doi:10.18653/v1/2025.acl-long.782 [3] Jian Chen, Peilin Zhou, Yining Hua, Loh Xin, Kehui Chen, Ziyuan Li, Bing Zhu, and Junwei Liang. 2024. FinTextQA: A dataset for long-form financial question answering. In Proceedings of the 62nd Annual Meeting of the Association for Computational Linguistics (Volume 1: Long Papers) . 6025–6047. [4] Zhiyu Chen, Wenhu Chen, Charese Smiley, Sameena Shah, Iana Borova, Dylan Langdon, Reema Moussa, Matt Beane, Ting-Hao Huang, Bryan R Routledge, et al . 2021. FinQA: A dataset of numerical reasoning over financial data. In 
+
+Proceedings of the 2021 Conference on Empirical Methods in Natural Language Processing . 3697–3711. [5] Zhiyu Chen, Shiyang Li, Charese Smiley, Zhiqiang Ma, Sameena Shah, and William Yang Wang. 2022. ConvFinQA: Exploring the chain of numerical rea-soning in conversational finance question answering. In Proceedings of the 2022 conference on empirical methods in natural language processing . 6279–6292. [6] Jaeyoung Choe, Jihoon Kim, and Woohwan Jung. 2025. Hierarchical retrieval with evidence curation for open-domain financial question answering on standardized documents. In Findings of the Association for Computational Linguistics: ACL 2025 .16663–16681. [7] Chanyeol Choi, Jihoon Kwon, Alejandro Lopez-Lira, Chaewoon Kim, Minjae Kim, Juneha Hwang, Jaeseon Ha, Hojun Choi, Suyeol Yun, Yongjin Kim, et al .2025. FinAgentBench: A benchmark dataset for agentic retrieval in financial question answering. In Proceedings of the 6th ACM International Conference on AI in Finance . 632–637. [8] Mingxuan Du, Benfeng Xu, Chiwei Zhu, Xiaorui Wang, and Zhendong Mao. 2025. DeepResearch Bench: A comprehensive benchmark for deep research agents. 
+
+arXiv preprint arXiv:2506.11763 (2025). [9] Aparna Elangovan, Ling Liu, Lei Xu, Sravan Babu Bodapati, and Dan Roth. 2024. Considers-the-human evaluation framework: Rethinking human evaluation for generative large language models. In Proceedings of the 62nd Annual Meeting of the Association for Computational Linguistics (Volume 1: Long Papers) . 1137–1160. [10] Xin Guo, Haotian Xia, Zhaowei Liu, Hanyang Cao, Zhi Yang, Zhiqiang Liu, Sizhe Wang, Jinyi Niu, Chuqi Wang, Yanhui Wang, et al . 2025. FinEval: A chinese financial domain knowledge evaluation benchmark for large language models. In Proceedings of the 2025 Conference of the Nations of the Americas Chapter of the Association for Computational Linguistics: Human Language Technologies (Volume 1: Long Papers) . 6258–6292. [11] Janghoon Han, Heegyu Kim, Changho Lee, Dahm Lee, Min Hyung Park, Hosung Song, Stanley Jungkyu Choi, Moontae Lee, and Honglak Lee. 2025. DEER: A comprehensive and reliable benchmark for deep-research expert reports. arXiv e-prints (2025), arXiv–2512. [12] LIANG HU, Jianpeng Jiao, Jiashuo Liu, Dongyuan Mutu, Yanle Ren, Zhoufutu Wen, Kaiyuan Zhang, Xuanliang Zhang, Xiang Gao, Tianci He, FEI HU, Yali Liao, Zaiyuan Wang, Jingkai Liu, Sun Daibin, Ziqing Zeng, Zhiyuan Zeng, Chenghao Yang, Qianyu Yang, Mingren Yin, Ge Zhang, Xinyi zhang, Xiying ZHAO, Zhu Zhenwei, Hongseok Namkoong, and Wenhao Huang. 2026. FinSearchComp: Towards a Realistic, Expert-Level Evaluation of Financial Search and Reasoning. In The Fourteenth International Conference on Learning Representations . https: //openreview.net/forum?id=8AJbbbe2ni [13] Yuxuan Huang, Yihang Chen, Haozheng Zhang, Kang Li, Huichi Zhou, Meng Fang, Linyi Yang, Xiaoguang Li, Lifeng Shang, Songcen Xu, et al . 2025. Deep research agents: A systematic examination and roadmap. arXiv preprint arXiv:2506.18096 (2025). [14] Pranab Islam, Anand Kannappan, Douwe Kiela, Rebecca Qian, Nino Scherrer, and Bertie Vidgen. 2023. FinanceBench: A new benchmark for financial question answering. arXiv preprint arXiv:2311.11944 (2023). [15] Bowen Jin, Hansi Zeng, Zhenrui Yue, Jinsung Yoon, Sercan Arik, Dong Wang, Hamed Zamani, and Jiawei Han. 2025. Search-R1: Training LLMs to rea-son and leverage search engines with reinforcement learning. arXiv preprint arXiv:2503.09516 (2025). [16] Satyapriya Krishna, Kalpesh Krishna, Anhad Mohananey, Steven Schwarcz, Adam Stambler, Shyam Upadhyay, and Manaal Faruqui. 2025. Fact, fetch, and reason: A unified evaluation of retrieval-augmented generation. In Proceedings of the 2025 Conference of the Nations of the Americas Chapter of the Association for Computational Linguistics: Human Language Technologies (Volume 1: Long Papers) .4745–4759. [17] Viet Lai, Michael Krumdick, Charles Lovering, Varshini Reddy, Craig Schmidt, and Chris Tanner. 2025. SEC-QA: A systematic evaluation corpus for financial QA. In Proceedings of The 10th Workshop on Financial Technology and Natural Language Processing . 221–236. [18] Jinu Lee and Julia Hockenmaier. 2025. Evaluating Step-by-step Reasoning Traces: A Survey. arXiv preprint arXiv:2502.12289 (2025). [19] Haitao Li, Qian Dong, Junjie Chen, Huixue Su, Yujia Zhou, Qingyao Ai, Ziyi Ye, and Yiqun Liu. 2024. LLMs-as-judges: a comprehensive survey on LLM-based evaluation methods. arXiv preprint arXiv:2412.05579 (2024). [20] Minghao Li, Ying Zeng, Zhihao Cheng, Cong Ma, and Kai Jia. 2025. Report-Bench: Evaluating deep research agents via academic survey tasks. arXiv preprint arXiv:2508.15804 (2025). [21] Xiangyu Li, Xuan Yao, Guohao Qi, Fengbin Zhu, Kelvin JL Koa, Xiang Yao Ng, Ziyang Liu, Xingyu Ni, Chang Liu, Yonghui Yang, et al . 2026. FinDeepForecast: A Live Multi-Agent System for Benchmarking Deep Research Agents in Financial Forecasting. arXiv preprint arXiv:2601.05039 (2026). [22] Hunter Lightman, Vineet Kosaraju, Yuri Burda, Harrison Edwards, Bowen Baker, Teddy Lee, Jan Leike, John Schulman, Ilya Sutskever, and Karl Cobbe. 2024. Let’s verify step by step. In International Conference on Learning Representations ,Vol. 2024. 39578–39601. [23] Yang Liu, Dan Iter, Yichong Xu, Shuohang Wang, Ruochen Xu, and Chenguang Zhu. 2023. G-Eval: NLG evaluation using GPT-4 with better human alignment. In Proceedings of the 2023 conference on empirical methods in natural language processing . 2511–2522. [24] Grégoire Mialon, Clémentine Fourrier, Thomas Wolf, Yann LeCun, and Thomas Scialom. 2024. GAIA: a benchmark for general AI assistants. In International Conference on Learning Representations , Vol. 2024. 9025–9049. [25] Frederic S Mishkin. 2007. The economics of money, banking, and financial markets .Pearson education. [26] John J Murphy. 1999. Technical analysis of the financial markets: A comprehensive guide to trading methods and applications . Penguin. [27] OpenAI. 2025. Introducing deep research . https://openai.com/index/introducing-deep-research/ [28] Stephen H Penman and Stephen H Penman. 2010. Financial statement analysis and security valuation . McGraw-Hill/Irwin New York. [29] Varshini Reddy, Rik Koncel-Kedziorski, Viet Dac Lai, Michael Krumdick, Charles Lovering, and Chris Tanner. 2024. DocFinQA: A long-context financial reason-ing dataset. In Proceedings of the 62nd Annual Meeting of the Association for Computational Linguistics (Volume 2: Short Papers) . 445–458. [30] Raj Shah, Kunal Chawla, Dheeraj Eidnani, Agam Shah, Wendi Du, Sudheer Chava, Natraj Raman, Charese Smiley, Jiaao Chen, and Diyi Yang. 2022. When FLUE meets FLANG: Benchmarks and large pretrained language model for financial domain. In Proceedings of the 2022 Conference on Empirical Methods in Natural Language Processing . 2322–2335. [31] Yiqing Shen, Jingshu Zhang, Feng Chen, Kaiyuan Yan, and Hongguang Li. 2025. FinSearch: A Temporal-Aware Search Agent Framework for Real-Time Financial Information Retrieval with Large Language Models. In Proceedings of the 6th ACM International Conference on AI in Finance . 10–17. [32] Huatong Song, Jinhao Jiang, Yingqian Min, Jie Chen, Zhipeng Chen, Wayne Xin Zhao, Lei Fang, and Ji-Rong Wen. 2025. R1-searcher: Incentivizing the search capability in LLMs via reinforcement learning. arXiv preprint arXiv:2503.05592 
+
+(2025). [33] Gemini Team. 2025. Deep Research is now available on Gemini 2.5 Pro Experi-mental. https://blog.google/products/gemini/deep-research-gemini-2-5-pro-experimental/ [34] Qwen Team. 2025. Deep research (Qwen-Deep-Research) . https://www. alibabacloud.com/help/en/model-studio/qwen-deep-research [35] Chris Van Der Lee, Albert Gatt, Emiel Van Miltenburg, Sander Wubben, and Emiel Krahmer. 2019. Best practices for the human evaluation of automatically generated text. In Proceedings of the 12th international conference on natural language generation . 355–368. [36] Jason Wei, Zhiqing Sun, Spencer Papay, Scott McKinney, Jeffrey Han, Isa Fulford, Hyung Won Chung, Alex Tachard Passos, William Fedus, and Amelia Glaese. 2025. Browsecomp: A simple yet challenging benchmark for browsing agents. 
+
+arXiv preprint arXiv:2504.12516 (2025). [37] Qianqian Xie, Weiguang Han, Zhengyu Chen, Ruoyu Xiang, Xiao Zhang, Yueru He, Mengxi Xiao, Dong Li, Yongfu Dai, Duanyu Feng, et al . 2024. FinBen: A holistic financial benchmark for large language models. Advances in neural information processing systems 37 (2024), 95716–95743. [38] Zhuohan Xie, Daniil Orel, Rushil Thareja, Dhruv Sahnan, Hachem Madmoun, Fan Zhang, Debopriyo Banerjee, Georgi Georgiev, Xueqing Peng, Lingfei Qian, et al . 2025. FinChain: A Symbolic Benchmark for Verifiable Chain-of-Thought Financial Reasoning. arXiv preprint arXiv:2506.02515 (2025). [39] Shunyu Yao, Jeffrey Zhao, Dian Yu, Nan Du, Izhak Shafran, Karthik R Narasimhan, and Yuan Cao. 2022. ReAct: Synergizing Reasoning and Acting in Language Models. In The eleventh international conference on learning representations .[40] Wenlin Zhang, Xiaopeng Li, Yingyi Zhang, Pengyue Jia, Yichao Wang, Huifeng Guo, Yong Liu, and Xiangyu Zhao. 2025. Deep research: A survey of autonomous research agents. arXiv preprint arXiv:2508.12752 (2025). [41] Chujie Zheng, Zhenru Zhang, Beichen Zhang, Runji Lin, Keming Lu, Bowen Yu, Dayiheng Liu, Jingren Zhou, and Junyang Lin. 2025. ProcessBench: Identifying process errors in mathematical reasoning. In Proceedings of the 63rd Annual XXX, XX, XX, XX, XX Chaoqun Yang et al.                                             
+
+> Meeting of the Association for Computational Linguistics (Volume 1: Long Papers) .1009–1024. [42] Lianmin Zheng, Wei-Lin Chiang, Ying Sheng, Siyuan Zhuang, Zhang-hao Wu, Yonghao Zhuang, Zi Lin, Zhuohan Li, Dacheng Li, Eric Xing, Hao Zhang, Joseph Gonzalez, and Ion Stoica. 2023. Judging LLM-as-a-Judge with MT-Bench and Chatbot Arena. In Advances in Neu-ral Information Processing Systems ,A. Oh, T. Naumann, A. Globerson, K. Saenko, M. Hardt, and S. Levine (Eds.), Vol. 36. Curran Associates, Inc., 46595–46623. https://proceedings.neurips.cc/paper_files/paper/2023/file/ 91f18a1287b398d378ef22505bf41832-Paper-Datasets_and_Benchmarks.pdf [43] Fengbin Zhu, Wenqiang Lei, Youcheng Huang, Chao Wang, Shuo Zhang, Jiancheng Lv, Fuli Feng, and Tat-Seng Chua. 2021. TAT-QA: A question an-swering benchmark on a hybrid of tabular and textual content in finance. In
+> Proceedings of the 59th annual meeting of the Association for Computational Lin-guistics and the 11th international joint conference on natural language processing (volume 1: long papers) . 3277–3287. [44] Fengbin Zhu, Xiang Yao Ng, Ziyang Liu, Chang Liu, Xianwei Zeng, Chao Wang, Tianhui Tan, Xuan Yao, Pengyang Shao, Min Xu, et al .2025. FinDeepResearch: Evaluating deep research agents in rigorous financial analysis. arXiv preprint arXiv:2510.13936 (2025). [45] Jie Zhu, Junhui Li, Yalong Wen, and Lifan Guo. 2024. Benchmarking large lan-guage models on CFLUE-a Chinese financial language understanding evaluation dataset. In Findings of the Association for Computational Linguistics: ACL 2024 .5673–5693.
+
+## A Appendix A.1 Indicator List 
+
+See Table 3. 
+
+## A.2 Expert Review Criteria 
+
+Human experts are instructed to evaluate whether the four com-ponents extracted by the LLM (the indicator formula, the raw data table, the indicator calculation table, and the final answer) faithfully and accurately reflect the information contained in the original model response. Each extracted component is assessed indepen-dently according to the following three-level scoring rubric: 
+
+• 2 (Correct). The extracted content is faithful, complete, and compliant with the specified format. It accurately reflects the information explicitly stated in the original response without introducing unsupported or hallucinated content. Numerical pre-cision is properly preserved, and the required unit-conversion rules are followed when applicable. The extraction contains no ad-ditional explanations, Markdown syntax, or irrelevant text. When the required information is absent from the original response, the extraction correctly returns NA or leaves the corresponding CSV cell empty, depending on the specification of the field. 
+
+• 1 (Partially Correct). The extracted content captures the main information in the original response but contains minor errors or formatting issues that do not render the extraction unusable. Typical cases include extracting the correct formula with a small amount of extraneous text, omitting a limited number of required CSV cells, or preserving the correct numerical value while retain-ing undesired formatting such as commas, units, or percentage signs. This category also includes minor errors in numerical preci-sion or unit conversion when the intended value remains clearly identifiable. This score is assigned when the extraction is largely faithful but does not fully satisfy the required format, precision, or completeness constraints. 
+
+• 0 (Incorrect). The extracted content is unfaithful, substantially incomplete, hallucinated, or severely non-compliant with the specified format. Typical cases include extracting a formula, data value, indicator value, or final answer that is not stated in the original response; returning NA when the relevant information is explicitly provided; selecting an intermediate result rather than the final answer; using an incorrect CSV header or column order; fabricating missing values; omitting most of the required content; or producing an output format that makes the extracted result unusable for subsequent evaluation. 
+
+## A.3 Expert Annotation Rubric for Formula Specification Evaluation 
+
+Human experts evaluate the correctness of the formula specified in each model response by comparing the extracted candidate for-mula with the corresponding reference formula. The resulting score measures whether the candidate formula accurately represents the intended mathematical definition of the target indicator. Experts are instructed to consider both mathematical equivalence and semantic consistency, allowing differences in notation, variable names, and equivalent algebraic forms. Each candidate formula is assigned one of the following scores: 
+
+• 2 (Fully Correct). The candidate formula is mathematically and semantically equivalent to the reference formula. It uses the same required inputs, allowing for synonymous variable names or equivalent notation, and would produce the same numerical result as the reference formula for any valid input. 
+
+• 1 (Partially Correct). The candidate formula captures the gen-eral computational structure or identifies the relevant inputs but contains a substantive error that prevents full equivalence with the reference formula. Typical cases include omitting a required term, using an incorrect constant, applying an incorrect aggre-gation operation such as a sum instead of an average, reversing the numerator and denominator, specifying an incorrect time window, or implementing only part of the required computation. 
+
+• 0 (Incorrect). The candidate formula is incorrect, unrelated to the target indicator, empty, or based on fundamentally different inputs or operations. Such a formula would not compute the intended quantity represented by the reference formula. FinDeepIndicator: Benchmarking Deep Research Agents in End-to-End Financial Indicator Construction XXX, XX, XX, XX, XX 
+
+Table 3: Categories, sub-categories, and indicators in FinDeepIndicator. 
+
+Category Sub-category Indicator 
+
+fundamental profitability Gross Margin, EBIT Margin, EBITDA Margin, Net Profit Margin, Return on Equity, Return on Assets, Return on Invested Capital. 毛利
+
+率，EBIT 利润率，EBITDA 利润率，净利率，净资产收益率，总资产收益率，投入资本回报率。
+
+fundamental operational efficiency Days Inventory Outstanding, Days Sales Outstanding, Days Payable Outstanding, Operating Cycle, Cash Conversion Cycle, Inventory Turnover, Receivables Turnover, Payables Turnover, Total Asset Turnover, Fixed Asset Turnover, Working Capital Turnover. 
+
+存货周转天数，应收账款周转天数，应付账款周转天数，营业周期，现金周转期，存货周转率，应收账款周转率，应付账款周转
+
+率，总资产周转率，固定资产周转率，营运资本周转率。
+
+fundamental solvency Current Ratio, Quick Ratio, Cash Ratio, Liability-to-Asset Ratio, Liability-to-Equity Ratio, Net Debt to Equity, Interest Coverage Ratio, Net Debt to EBITDA, Equity Multiplier. 
+
+流动比率，速动比率，资产负债率，产权比率，净债务权益比，利息保障倍数，净债务/EBITDA ，权益乘数。
+
+fundamental growth Revenue Growth, EBITDA Growth, Net Income Growth, EPS Growth. 
+
+营业收入增长率，EBITDA 增长率，净利润增长率，每股收益增长率。
+
+fundamental cash flow Free Cash Flow, Free Cash Flow to Firm, Free Cash Flow to Equity, Operating Cash Flow Margin, Capex Intensity, Cash Flow to Net Income, Cash Flow to Debt. 
+
+公司自由现金流，股权自由现金流，经营现金流利润率，资本支出占收入比，现金流量充裕率。
+
+fundamental per share Earnings Per Share Basic, Earnings Per Share Diluted, Operating Cash Flow Per Share. 
+
+每股净资产，每股资本公积金，每股未分配利润，每股经营现金流。
+
+fundamental valuation EBIT, EBITDA, NOPAT. 
+
+息税前利 润，息税折旧摊销前利 润，税后净营业利润。
+
+technical moving average Simple Moving Average, Weighted Moving Average, Exponential Moving Average, Double Exponential Moving Average, Triple Exponential Moving Average, Hull Moving Average, Kaufman Adaptive Moving Average. 
+
+简单移动平均，加权移动平均，指数移动平均，双指数移动平均，三指数移动平均，赫尔移动平均，考夫曼自适应移动平均。
+
+technical channel Bollinger Bands, Keltner Channel, Moving Average Envelope, Donchian Channel, SuperTrend. 
+
+布林带，肯特纳通道 ，包络线 ，唐安奇通道 ，超级趋势。
+
+technical trend Aroon Up, Aroon Down, Aroon Oscillator, MACD Line, MACD Signal, MACD Histogram, Parabolic SAR, Percentage Price Oscillator. Aroon 上升，Aroon 下降，Aroon 振荡，MACD 的DIF ，MACD 的DEA ，MACD ，抛物线SAR ，百分比价格振荡。
+
+technical momentum Relative Strength Index, Commodity Channel Index, Williams %R, Stochastic %K, Stochastic %D, Stochastic RSI. 
+
+相对强弱 指标，商品通道 指数，威廉%R ，KDJ 的K，KDJ 的D，KDJ 的J，随机RSI 。
+
+technical volatility Bollinger %B, Average True Range, True Range, Chaikin Volatility. 
+
+布林带%B ，平均真实波幅，真实波幅，蔡金波动率。
+
+technical volume Ease of Movement, Money Flow Index, On-Balance Volume, Force Index, Accumulation/Distribution Line, Chaikin Money Flow, Chaikin Oscillator. 
+
+易动指标，资金流量指数，成交量加权平均价，能量潮，力度指数，累积/派发线，蔡金资金流，蔡金振荡指标。
+
+technical return Annualized Return. 
+
+年化收益率。
+
+technical risk Annualized Volatility, Skewness, Excess Kurtosis, Downside Deviation, Maximum Drawdown, Tracking Error, Ulcer Index, Beta, VaR (Parametric), VaR (Historical Simulation), Expected Shortfall (Parametric), Expected Shortfall (Historical Simulation). 
+
+年化波动率，偏度，超额峰度，下行偏差，最大回撤，跟踪误差，溃疡指数，贝塔系数，VaR （参数法）， VaR （历史 模拟
+
+法）， CVaR （参数法）， CVaR （历史 模拟法）。
+
+technical risk-adjusted return Information Ratio, Sharpe Ratio, Sortino Ratio, Calmar Ratio, Treynor Ratio, Modigliani Ratio, Martin Ratio, Jensen’s Alpha. 
+
+信息比率，夏普比率，索提诺比率，卡玛比率，特雷诺比率，莫迪利安尼比率，马丁比率，詹森阿尔法。
+
+macro inflation Macro Real Rate, Household Real Rate, Corporate Real Rate. GDP 平减指数，企业贷款实际利率。
+
+macro productivity Incremental Capital Output Ratio, Total Factor Productivity Growth. 
+
+增量资本产出率，劳动 生产率，全要素生产率增长率。
+
+macro external trade Trade Openness. 
+
+贸易开放度。
+
+macro fiscal Federal Debt to GDP, Fiscal Deficit Ratio, Federal Tax Burden. 
+
+中央政府杠杆 率，财政赤字率，赤字依存度，宏观税负。
+
+macro labor Real Wage Growth Rate. 
+
+（城镇非私营单位）实际工资增长率，（ 城镇私营单位）实际工资增长率，就业弹性。

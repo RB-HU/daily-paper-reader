@@ -1,0 +1,565 @@
+Title: Robust Hedging Valuation Adjustment for Deep Hedging Policies under Market Frictions
+
+URL Source: https://arxiv.org/pdf/2607.25258v1
+
+Published Time: Wed, 29 Jul 2026 00:28:30 GMT
+
+Number of Pages: 16
+
+Markdown Content:
+# Robust Hedging Valuation Adjustment for Deep Hedging Policies under Market Frictions 
+
+Takayuki Sakuma ∗
+
+Faculty of Economics and Business Administration, Soka University July 29, 2026 
+
+Abstract 
+
+Hedging a derivative position under transaction costs and market frictions requires a trading rule that adapts to changing conditions. Deep hedging trains a neural policy for this task but policy training does not determine whether a trading desk can afford to run the policy. We apply robust hedging valuation adjustment (HVA) as a post-training valuation-adjustment layer that evaluates tracking-loss CVaR together with explicit funding and margin add-ons. The funding and margin add-ons share the same KL uncertainty set as HVA. For each policy, a single common-stress tilt computes HVA, funding and margin jointly and a trading desk can get one internally consistent reserve instead of the three separately. We compare classical hedge policies with learned hedge specifications across three market environments with different liquidity. No single specification dominates in every market. Under the strict tracking-risk budget, gamma-wide classical bands are selected in High and Middle Liquidity while sparse learned execution is selected in Low Liquidity. At looser validation budgets wider classical bands are generally selected. 
+
+Keywords: deep hedging, conditional value-at-risk, transaction costs, liquidity, HVA, FVA, MVA. 
+
+# 1 Introduction 
+
+A hedge that works well in one market condition can be too expensive or too risky in another because transaction costs, market impact, and liquidity vary with the trading environment. Instead of a closed-form rule such as a Black–Scholes delta hedge (Black and Scholes, 1973) or a Whalley–Wilmott no-transaction band (Whalley and Wilmott, 1997), deep hedging trains a policy on cost and risk objectives over simulated market paths (Buehler et al., 2019). A policy can reach a low training loss while trading too often and running up spread and impact costs. It can also trade too little and leave a large terminal hedge error. The literature on hedging under transaction costs begins with three classical results. Leland (1985) shows that proportional transaction costs change replication by altering the effective volatility. Whalley and Wilmott (1997) derive a no-transaction band around the Black–Scholes hedge. If the current position is within that band, rebalancing to close the small remaining gap would trim hedge-error variance but not enough to offset the transaction cost of trading. Almgren and Chriss (2001) develop an optimal-execution framework in which trading cost grows with the square of trade size. Jump risk also complicates hedge evaluation because a local delta hedge cannot eliminate it. Merton (1976) introduces discontinuous stock returns as the source of this risk. Kennedy et al. (2009) study dynamic hedging under jump diffusion with transaction costs and choose trades by balancing risk reduction against transaction-cost penalties. Sepp (2012) analyzes delta-hedging error distributions under discrete trading and transaction costs in diffusion and jump-diffusion models. Buehler et al. (2019) formulate the deep-hedging training problem and treat transaction costs, liquidity constraints, and risk limits as a neural stochastic-control problem. Murray et al. (2022) extend the approach with actor-critic learning across portfolios and risk aversions. Buehler et al. (2022) develop a Bellman version for arbitrary portfolios across market states. Imaki et al. (2023) impose an interpretable no-transaction-band 
+
+> ∗e-mail: tsakuma@soka.ac.jp.
+
+1arXiv:2607.25258v1 [q-fin.RM] 28 Jul 2026 architecture whose output is executed by nearest-boundary projection and Arzel and Lehdili (2026) add structural stochastic-control priors to learned bands. These methods enlarge or constrain the policy class but do not by themselves determine whether a learned rule is preferable once reserve cost and residual risk are measured. Other deep-hedging studies change the training methods. Cao et al. (2021) use reinforcement learning for derivatives hedging under transaction costs and Horvath et al. (2021) study deep hedging under rough volatility. Mueller et al. (2024) develop faster optimization for deep hedging and illustrate it on a path-dependent option. Godin (2016) minimizes CVaR in a global dynamic-hedging problem with transaction costs. L¨ utkebohmert et al. (2022) make deep-hedging training robust to parameter uncertainty. Neagu et al. (2024) embed convex and persistent market impact in a deep reinforcement-learning policy. Huang and Lawryshyn (2025) evaluate reinforcement-learning hedgers under market impact, slippage, and transaction costs. Shinozaki (2024) reviews deep hedging and deep calibration as practical deep-learning tools for finance. A learned hedge’s position can also function as a statistical-arbitrage trade. Horikawa and Nakagawa (2024) relate the difference between deep and delta hedging to statistical arbitrage in a complete-market setting. Fran¸ cois et al. (2025b) show in an incomplete-market experiment that the speculative position depends on how strongly the risk measure penalizes adverse outcomes. That risk is why we impose the explicit tracking-CVaR budget in this paper and a lower reserve counts as better hedging only if residual risk stays within that same constraint. Gong et al. (2021) use neural networks to trace an efficient hedging frontier. We add a valuation-adjustment layer for trained policies. It decomposes a policy-dependent reserve into transaction-cost HVA, a simplified funding add-on, and a simplified margin add-on, and evaluates their sum under one policy-specific KL stress. The valuation-adjustment layer also needs to calculate funding and margin because the hedge path itself creates a cash balance and short-horizon hedged losses. Piterbarg (2010) shows that collateral agreements and funding costs affect derivative valuation and Pallavicini et al. (2011) build a collateralized counterparty valuation framework with funding, collateral, netting, and rehypothecation. We use this idea at the policy level and the hedge path generates a funding cash deficit and a funding add-on. Green and Kenyon (2015) define MVA as the funding cost of initial margin and emphasize the expected margin profile. Similarly we apply an expected-shortfall margin rule from short-horizon hedged losses and compute a margin add-on. Burgard and Kjaer (2011) contribute to the broader semi-replication xVA literature that jointly treats counterparty risk and funding. Our reserve concept comes from the hedging valuation adjustment (HVA) literature, and Burnett (2021) formulates HVA as the value effect of transaction costs. Sakuma (2026) develops robust HVA under liquidity-demand stress. Relative to that paper, which compares classical no-transaction bands under fixed-radius and fixed benchmark-stress conventions, the present paper adds trained neural policies, policy-generated funding and margin costs, common-stress aggregation, and validation/test selection. This paper treats deep hedging as a policy generator and the robust reserve layer as the policy evaluator. In the present simulation framework, the non-robust transaction-cost HVA and the simplified funding and margin add-ons are expected path costs under the reference model, but their values depend on model and parameter choices. The robust layer instead evaluates the total reserve over a disclosed relative-entropy neighborhood. The fixed-radius convention supplies a common entropy budget across policies, although it does not preserve the benchmark-stress label across policy-specific cost distributions. The contribution is threefold. First, it replaces the single classical band with a policy set that includes deep hedging, a learned no-transaction band, and sparse-execution rules. Second, it adds robust funding and margin add-ons under the same KL stress as robust HVA, with the total adjustment evaluated under one common-stress path distribution. Third, it ranks policies under a tracking-risk budget. A policy that skips the hedge almost entirely can look best by cost alone but it leaves the desk exposed to large unhedged risk. 
+
+# 2 Framework 
+
+2.1 Price and liquidity processes 
+
+We consider the risk-neutral Merton jump-diffusion model 
+
+dS t
+
+St−
+
+= ( r − λJ κJ )dt + σdW t + ( J − 1) dN t, log J ∼ N (μJ , σ 2 
+
+> J
+
+), (1) 2where Nt is a Poisson process with intensity λJ and 
+
+κJ = E[J − 1] = exp( μJ + 12 σ2 
+
+> J
+
+) − 1. (2) We use the analytic Merton price and delta (Merton, 1976) and they reduce to the Black–Scholes quantities (Black and Scholes, 1973) if λJ = 0. We simulate the model on an equally spaced training or evaluation grid and, at each step, approximate jump occurrence by ∆Ni = 1{Ui < λ J ∆t}. (3) The stock is updated as log 
+
+ Si+1 
+
+Si
+
+
+
+=  r − λJ κJ − 12 σ2 ∆t + σ√∆t Z i + ∆ NiYi, Yi ∼ N (μJ , σ 2 
+
+> J
+
+), (4) where Ui ∼ U (0 , 1) and Zi ∼ N (0 , 1), so this Bernoulli discretization permits at most one jump per step. Liquidity follows a two-state Markov chain with normal and stressed multipliers Mi ∈ { 1, m s} with transition matrix 
+
+PM =
+
+ pN N 1 − pN N 
+
+1 − pSS pSS 
+
+
+
+. (5) This starts from its stationary distribution with stressed-state probability 
+
+πS = 1 − pN N 
+
+2 − pN N − pSS 
+
+(6) and is simulated independently of the Brownian and jumps. The neural policies do not observe Mi and the multiplier is applied only in post-training evaluation. 
+
+2.2 Trained deep-hedging policies 
+
+Deep hedging is a trained stochastic-control method. A market model generates price paths and at each date a neural network observes the current state and outputs a hedge position (Buehler et al., 2019). Stochastic gradient descent can train the policy by backpropagating through the trading path. At date ti, a neural policy observes 
+
+Zi = (log( Si/K ), √τi, τ i, q i−1), (7) where τi = T − ti and qi−1 is the executed position carried into the date. A feedforward network proposes 
+
+eqθi = Π θ (Zi) (8) and the policy executes qθi = eqθi .Let Di = e−rt i and eSi = DiSi. The discounted hedging gain and terminal hedge loss are 
+
+GθT = 
+
+> N−1
+
+X
+
+> i=0
+
+qθi ( eSi+1 − eSi), (9) 
+
+LΠθ 
+
+> T
+
+= DN (SN − K)+ − GθT (10) and the neural networks minimize 
+
+L(θ) = CVaR 95 (LΠθ 
+
+> T
+
+) + λsCΠθ 
+
+> s
+
++ λκCΠθ 
+
+> κ
+
++ λX XΠθ
+
++ λN N Πθ
+
+, (11) where the last four terms are batch-average spread cost, quadratic impact, dollar turnover, and a differentiable trade-count penalty. For a batch of size B, the implementation estimates CVaR 95 by averaging the largest 
+
+⌈0.05 B⌉ losses. The soft trade count replaces each trade indicator by sigmoid (( |∆qi|− 0.02) /0.01) and includes an analogous terminal-unwind term. The CVaR representation follows Rockafellar and Uryasev (2000). This objective adds explicit penalties on cost and turnover to the terminal-loss CVaR because LΠθ 
+
+> T
+
+carries no transaction costs, and different trading patterns that reach the same terminal loss can still differ sharply in turnover or trade count. 32.3 Classical and learned execution rules 
+
+This subsection introduces the no-transaction-band rules (Black–Scholes, Merton, and gamma-wide), the learned no-transaction-band (NTB) policy, and a post-training sparse-execution filter applied to the neural hedger defined above. All policies begin from q−1 = 0 and let di be a target delta and bi a half-width. The no-transaction-band rule is 
+
+qi = min {max( qi−1, d i − bi), d i + bi}, i = 0 , . . . , N − 1. (12) The opening position is the point in the initial band nearest to zero, and a later breach moves the hedge only to the nearest boundary. The Black–Scholes fixed-width rule sets di = ∆ BS i , while the separate Merton fixed-width family uses di = ∆ Mi in the jump environments. The gamma-wide family below is centered on ∆ BS i in all three environments. For both fixed-width rules, the base width b0 is selected from a grid of candidate values, given in Section 3. For the gamma-wide rule, we adapt the gamma-aware band construction of Sakuma (2026). To widen the no-transaction band in states where the target delta is expected to move quickly, we set 
+
+bi = min {3b0, b 0(1 + eGi)}, eGi = min 
+
+(
+
+|Γi|Siσ√∆tQ90 
+
+, 5
+
+)
+
+, (13) with b0 selected from the same candidate grid. Γ i is the Black–Scholes gamma of the option at date ti. The scalar Q90 is the 90th percentile of gamma intensity on an independent 20,000-path sample and is fixed across validation and test seeds. Third, we follow Imaki et al. (2023) for the learned no-transaction-band policy in which the network outputs a band instead of a hedge position. Its network input is 
+
+ZNTB  
+
+> i
+
+= (log( Si/K ), τ i, √τi, ∆BS i ). (14) The network outputs a center shift aθi and non-negative half-width wθi around the Black–Scholes delta, so 
+
+zθi = ∆ BS i + aθi and 
+
+qNTB  
+
+> i
+
+= min {max( qNTB  
+
+> i−1
+
+, z θi − wθi ), z θi + wθi }. (15) In implementation, aθi = 0 .50 tanh (·), wθi = 0 .005 + 0 .50 sigmoid (·), and the center is clipped to [ −2, 2] before projection. The carried position does not enter the NTB network input. Fourth, the neural hedge can also be made sparse after training. Without a threshold, the raw policy trades on nearly every rebalancing date. The deep-hedging literature has also introduced explicit no-transaction filters. Fran¸ cois et al. (2025a) jointly optimize a rebalancing threshold with the neural policy, whereas Gong et al. (2021) filter trading dates using a pre-specified threshold on daily price changes. Here, by contrast, the network weights remain fixed and the execution threshold is selected afterward on a separate validation sample. Here we apply a calibrated threshold to the output of a trained neural hedger. At each date the proposal is computed using the previously executed sparse position, 
+
+Zhi = (log( Si/K ), τ i, √τi, q θ,h i−1), eqθ,h i = Π θ (Zhi ). (16) For i = 0 , . . . , N − 1, with qθ,h  
+
+> −1
+
+= 0, 
+
+qθ,h i =
+
+(eqθ,h i , |eqθ,h i − qθ,h i−1| > h, qθ,h i−1, |eqθ,h i − qθ,h i−1| ≤ h. (17) The threshold is applied from inception and only proposed changes above it are executed. Appendix E separately compares nearest-boundary projection with trigger-to-target execution for the classical bands. 42.4 Tracking risk and robust HVA 
+
+With the policy defined, this and the following subsections construct the post-training evaluation applied to each policy. Given policy π, let P0 be the option price. The terminal tracking error and tracking risk are 
+
+EπT = P0 + GπT − DN (SN − K)+, (18) 
+
+Rπ = CVaR 95 [−EπT ]. (19) Define ∆ qπi = qπi − qπi−1 and 
+
+Xπi = Si|∆qπi |, i = 0 , . . . , N − 1, XπN = SN |qπN −1|. (20) The pathwise hedging-friction cost is 
+
+Cπ =
+
+> N
+
+X
+
+> i=0
+
+DiMi
+
+ sX πi + κ(Xπi )2 . (21) Here Di is the discount factor, s is the half-spread, κ is the impact coefficient, and Mi is the liquidity multiplier of Section 2.1. The sum includes the opening trade and Appendix F reports the continuation-cost convention which excludes the opening trade. The relative-entropy (KL) upper expectation is a robust risk-measurement device for model misspecification (Glasserman and Xu, 2014). For each simulation path block S = {ωn}Nsim  
+
+> n=1
+
+, define the uniform empirical path law 
+
+bPS = 1
+
+Nsim 
+
+> Nsim
+
+X
+
+> n=1
+
+δωn , (22) where δω denotes the Dirac measure at ω and bPS places equal mass 1 /N sim on each simulated path. Following the robust-HVA construction of Sakuma (2026) RHVA π (ε) = sup   
+
+> Q:DKL (Q∥bPS)≤ε
+
+EQ[Cπ ] = inf 
+
+> η> 0
+
+(
+
+ηε + η log 1
+
+Nsim 
+
+> Nsim
+
+X
+
+> n=1
+
+eCπn /η 
+
+!) 
+
+. (23) The hedge path also creates two balance-sheet costs in the spirit of FVA and MVA: a funding charge on negative hedge cash balances and a margin charge on short-horizon hedged losses. 
+
+2.5 Robust funding add-on 
+
+Following the funding and collateral valuation logic in Piterbarg (2010) and Pallavicini et al. (2011), negative hedge cash balances require funding. The post-trade hedge cash balance is 
+
+F π 
+
+> 0
+
+= P0 − qπ 
+
+> 0
+
+S0 − M0
+
+ sX π 
+
+> 0
+
++ κ(Xπ 
+
+> 0
+
+)2 , (24) and, for i = 1 , . . . , N − 1, 
+
+F πi = F πi−1 − ∆qπi Si − Mi
+
+ sX πi + κ(Xπi )2 . (25) Cash does not accrue at the risk-free rate and positive balances receive no credit. Only negative balances incur the annualized funding spread sf and the pathwise funding cost is 
+
+Cπ 
+
+> fund
+
+= 
+
+> N−1
+
+X
+
+> i=0
+
+Disf (F πi )−∆t, (26) which represents a simplified policy-dependent funding add-on. The robust funding add-on is RFA π (ε) = sup   
+
+> Q:DKL (Q∥bPS)≤ε
+
+EQ[Cπ
+
+> fund
+
+]. (27) 52.6 Robust margin add-on 
+
+We follow Green and Kenyon (2015), in which initial margin creates a funding cost that depends on the expected margin profile. Let H be the margin look-ahead horizon and Vi a Black–Scholes option mark. For evaluation path n and date i, the hedged mark-to-market loss over the horizon H discounted to time 0 is 
+
+ℓπn,i :H = ( Di+H Vn,i +H − DiVn,i ) − qπn,i (Di+H Sn,i +H − DiSn,i ). (28) Let α ∈ (0 , 1) be the margin confidence level. With k = ⌈(1 − α)Nsim ⌉ and Iπi denoting the k paths with the largest values of ℓπn,i :H , the time-i margin profile is 
+
+dIM πi = 1
+
+k
+
+X
+
+> n∈I πi
+
+(ℓπn,i :H )+. (29) But dIM πi is already an average over paths and cannot be reweighted. Instead we need a pathwise allocation whose empirical average reproduces this margin profile. We therefore define 
+
+Cπ 
+
+> margin ,n
+
+= 
+
+> N−H
+
+X
+
+> i=0
+
+sm
+
+Nsim 
+
+k (ℓπn,i :H )+1{n ∈ I πi }∆t, (30) where sm is the margin funding spread and the indicator 1{n ∈ I πi } assigns the cost only to the k paths that define the margin profile at date i. Averaging over all Nsim paths recovers the margin profile exactly, 
+
+N −1sim 
+
+P 
+
+> n
+
+Cπ 
+
+> margin ,n
+
+= PN −Hi=0 sm dIM πi ∆t. The sets Iπi are formed under the reference empirical distribution and held fixed when Q reweights the paths. With Cπ 
+
+> margin
+
+denoting the resulting pathwise random variable, the robust margin add-on is RMA π (ε) = sup   
+
+> Q:DKL (Q∥bPS)≤ε
+
+EQ[Cπ
+
+> margin
+
+]. (31) 
+
+2.7 Risk-constrained ranking 
+
+The ranking rule below evaluates HVA, funding, and margin costs under a single common-stress distribution. Define the total path cost 
+
+Aπ = Cπ + Cπ 
+
+> fund
+
++ Cπ 
+
+> margin
+
+(32) and the robust total adjustment RAdj π (ε) = sup   
+
+> Q:DKL (Q∥bPS)≤ε
+
+EQ[Aπ ]. (33) If Q⋆,π solves (33), we have RAdj π = EQ⋆,π [Cπ ] + EQ⋆,π [Cπ
+
+> fund
+
+] + EQ⋆,π [Cπ
+
+> margin
+
+]. (34) These common-stress components are distinct from the separately optimized robust quantities in equations (23) ,(27) , and (31) because each standalone supremum may imply a different worst-case path distribution. All policy rankings and reported reserve decompositions in this paper use the single optimizer Q⋆,π of the total adjustment. Its empirical weights are 
+
+w⋆,π n = exp( Aπn/η ⋆,π )
+
+PNsim  
+
+> m=1
+
+exp( Aπm/η ⋆,π ) , (35) where η⋆,π solves the dual problem for Aπ . We minimize the robust total adjustment subject to a tracking-risk budget: min  
+
+> π
+
+RAdj π subject to Rπ ≤ c R ref , (36) where Rπ = CVaR 95 [−EπT ] and the multiplier c is the trading desk’s tracking-risk budget relative to a reference policy. The sum RHVA π + RFA π + RMA π weakly exceeds RAdj π and can overstate joint risk because the componentwise worst cases need not occur under the same path distribution. RAdj π instead stresses the combined cost Aπ under one shared worst-case measure, and the same policy-specific tilt applies to the total and all three components. These are path-block-level empirical quantities and the KL reweighting is applied separately within each simulated path block. 63 Numerical design 
+
+We use an at-the-money European call with S0 = K = 1, maturity T = 1, and r = 0 .02. Table 1 gives the three market environments. Middle and Low Liquidity add jump risk, higher volatility, more persistent stressed liquidity, wider spreads, and quadratic impact. For both fixed-width and gamma-wide rules, the base width b0 is selected from 
+
+b0 ∈ { 0.05 , 0.075 , 0.10 , 0.125 , 0.15 , 0.175 , 0.20 }. (37) The sparse-execution threshold h of (17) is selected from 
+
+h ∈ { 0.05 , 0.075 , 0.10 , 0.125 }. (38) Applying these grids to the admissible policy families, together with the policy and learned NTB, yields 20 candidate specifications in High Liquidity and 27 in each jump environment. A classical specification contains one trading rule. A learned specification contains the three pre-specified independently trained checkpoints and is evaluated by averaging their metrics within each market-path seed. Table 1: Market and liquidity parameters. Jump sizes satisfy log J ∼ N (μJ , σ 2 
+
+> J
+
+).                                       
+
+> Environment σλJμJσJHalf-spread sImpact κmspN N pSS
+> High Liquidity 0.20 0.0 -0.05 0.10 0.0001 0.0000 50.985 0.75 Middle Liquidity 0.25 0.5 -0.06 0.12 0.0005 0.0015 10 0.975 0.90 Low Liquidity 0.30 2.0 -0.10 0.18 0.0025 0.0080 20 0.960 0.95
+
+The learned policies are implemented in PyTorch. They follow Imaki et al. (2023) but do not implement their PFHedge package (Imaki and Hirano, 2024). The direct and NTB networks have three hidden layers with 64 SiLU units per layer. The direct network bounds its proposed hedge at |eqi| ≤ 2. The NTB network clips its center to [ −2, 2]. Each network was trained for 250 epochs with 16,384 paths per epoch and 64 trading dates. Optimization uses AdamW with learning rate 10 −3, weight decay 10 −5, and gradient clipping at 10. The coefficients on spread, impact, turnover, and soft trade count in (11) are 1, 1, 0.01, and 10 −5.The corresponding candidate specifications compete within each market and risk budget. Selecting the best candidate on the same simulated paths could overstate the performance and reward whichever candidate best fits the particular sample instead of the candidate which performs best in general. We avoid this by splitting the simulated paths into two disjoint sets. A validation set is used to pick a specification and a test set is used to report that specification’s performance. The frozen policies are evaluated at 252 dates and each market has five validation path blocks V and 20 out-of-validation test path blocks T with 5,000 paths per path block. The three training seeds are disjoint from these evaluation seeds. For candidate specification g, let Jg = 1 for a classical rule and Jg = 3 for a learned rule, and define its path-block-level metrics by RAdj g 
+
+> S
+
+= 1
+
+JgJg
+
+X
+
+> j=1
+
+RAdj πg,j  
+
+> S
+
+, Rg 
+
+> S
+
+= 1
+
+JgJg
+
+X
+
+> j=1
+
+Rπg,j  
+
+> S
+
+. (39) Let am denote the reference policy, defined market by market as the Black–Scholes b = 0 .10 band when m is High Liquidity and the Merton b = 0 .10 band when m is Middle or Low Liquidity. For budget multiple c, the five validation path blocks V select 
+
+bgc = arg min 
+
+> g
+
+\RAdj  
+
+> g
+> V
+
+subject to bRg 
+
+> V
+
+≤ c bRam 
+
+> V
+
+. (40) We evaluate the selected specification bgc on the 20 disjoint test path blocks T . A reported selection passes only if the same mean tracking-CVaR inequality also holds on T . For a learned specification, this estimates average performance across the three fixed training runs. 7P0 is the analytic Merton value and is constant across seeds. The funding spread is sf = 1% per year. The margin add-on calculation uses sm = 0 .5%, α = 99%, and a ten-step horizon. The numerical KL radii are the b = 0 .10 entries of the fixed benchmark-stress map at ρG 
+
+> 0
+
+= 0 .4 in Sakuma (2026), where ρG 
+
+> 0
+
+is a Gaussian rank-correlation parameter for demand and liquidity. They are treated as external market-level stress inputs and held fixed across all candidate specifications. We calculate gamma intensity on an independent sample as in Table 2. Table 2: Fixed evaluation inputs. Q90 is estimated on 20,000 paths from an independent calibration sample.               
+
+> Environment P0KL radius εGamma scale Q90
+> High Liquidity 0.089 0.006 0.041 Middle Liquidity 0.115 0.005 0.040 Low Liquidity 0.168 0.006 0.037
+
+# 4 Results 
+
+Section 4.1 compares total adjustment and tracking-loss CVaR across the full classical-width grids and the reported learned specifications on the 20 test seeds. Section 4.2 reports which candidate specification the validation sample selects and whether that selection still meets the risk budget on the test seeds. Section 4.3 computes a confidence interval for the Low Liquidity reserve reduction from sparse execution and checks whether the reduction is stable across different training and validation seeds, with details in the appendix. 
+
+4.1 Cost versus risk across all policies 
+
+This section reports the cost–risk frontier on the 20 test path blocks T (Section 3) for the candidate policy families before a risk-budget constraint is applied. Consider first the extreme case of no hedging. The no-hedge rule has little transaction-related reserve, but its tracking-loss CVaR is approximately 10.6, 8.5, and 7.0 times the reference policy’s tracking-loss CVaR in High, Middle, and Low Liquidity. Ranking policies by reserve cost alone would favor this rule, even though it leaves the desk almost entirely exposed to price risk. Considering a tracking-risk constraint is necessary as discussed in Section 4.2. Table 3 reports test results for the candidate families. The three markets tell different stories. In High Liquidity, tuning the classical band already captures most of the achievable reserve reduction. The Black– Scholes b = 0 .10 reference policy has total adjustment 0.005243 and tracking CVaR 0.0392, and gamma-wide 
+
+b0 = 0 .075 only changes these by -0.1% and -3.0%; the evaluated sparse and NTB rules do not improve on this tuned classical frontier. Middle Liquidity looks similar. The Merton b = 0 .10 reference policy has total adjustment 0.01204 and tracking CVaR 0.0680. Gamma-wide b0 = 0 .075 changes these by -1.6% and -2.9%. The evaluated sparse policy is not the frontier choice once the classical width is tuned. Low Liquidity is the exception. The Merton b = 0 .10 reference policy has total adjustment 0.1473 and tracking CVaR 0.1336. Sparse 0.075 lowers total adjustment to 0.1411, a 4.2% reduction, with a mean tracking-CVaR change of -2.2%. The paired total difference is negative in all 20 test seeds, with a 95% interval of [ −0.007066 , −0.005290]. Wider classical bands produce larger reserve reductions as the risk budget is relaxed. 8Table 3: Out-of-validation test comparison. Learned-specification entries average evaluation metrics across three independently trained networks within each market-path seed.                                                                                                                     
+
+> Environment Policy Robust total Track CVaR ∆ total High Liquidity Black–Scholes band b= 0 .10.005243 0.0392 0.0% High Liquidity Gamma-wide b0= 0 .075 0.005235 0.0380 -0.1% High Liquidity Gamma-wide b0= 0 .10.005095 0.0510 -2.8% High Liquidity Sparse 0.075 0.005529 0.0374 5.5% High Liquidity Learned NTB 0.005524 0.0152 5.4% Middle Liquidity Merton band b= 0 .10.01204 0.0680 0.0% Middle Liquidity Gamma-wide b0= 0 .075 0.01186 0.0661 -1.6% Middle Liquidity Gamma-wide b0= 0 .10.01114 0.0775 -7.5% Middle Liquidity Gamma-wide b0= 0 .125 0.01049 0.0924 -12.9% Middle Liquidity Merton band b= 0 .15 0.01087 0.0900 -9.7% Middle Liquidity Merton band b= 0 .175 0.01036 0.1034 -14.0% Middle Liquidity Sparse 0.125 0.01138 0.0814 -5.5% Middle Liquidity Learned NTB 0.01296 0.0544 7.6% Low Liquidity Merton band b= 0 .10.1473 0.1336 0.0% Low Liquidity Sparse 0.075 0.1411 0.1306 -4.2% Low Liquidity Sparse 0.125 0.1342 0.1449 -8.9% Low Liquidity Gamma-wide b0= 0 .125 0.1253 0.1597 -14.9% Low Liquidity Merton band b= 0 .15 0.1286 0.1559 -12.7% Low Liquidity Gamma-wide b0= 0 .175 0.1086 0.2009 -26.3% Low Liquidity Merton band b= 0 .20.1130 0.1937 -23.3% Low Liquidity Learned NTB 0.1521 0.1170 3.3%
+
+Figure 1 plots the classical-width curves and the learned-specification points. The figure highlights that sparse learned execution improves the strict Low Liquidity comparison, but once the classical width is tuned, a classical policy achieves the best relaxed-budget cost-risk trade-off in Low Liquidity. 
+
+Figure 1: Out-of-validation full-lifecycle robust total adjustment against tracking-loss CVaR. Classical lines trace the fixed seven-point base-width grid. 
+
+4.2 Specifications selected under the validation rule 
+
+This section applies the validation-based selection rule of Section 3 at three risk budgets ( c = 1, 1 .2, 1 .5). For each budget, Table 4 shows which candidate the validation rule selects and whether the choice still holds up on test data. At c = 1, High and Middle Liquidity select gamma-wide b0 = 0 .075, while Low Liquidity selects sparse 0.075. All three selections satisfy the same mean tracking-CVaR budget on the test seeds. The learned-policy gain is confined to Low Liquidity, where total adjustment falls by 4.2% relative to the Merton reference policy. At c = 1 .2, the selected specifications are gamma-wide b0 = 0 .075, 0 .10, and 0 .125 in High, Middle, and Low Liquidity; all pass the test-sample budget. At c = 1 .5, High Liquidity selects gamma-wide 
+
+b0 = 0 .10 and passes, whereas the Middle Merton b = 0 .175 and Low gamma-wide b0 = 0 .175 selections exceed the test-sample budget slightly. 9Table 4: Validation-selected candidate specifications and out-of-validation test performance. Pass means the selected specification satisfies the same mean tracking-CVaR budget on the test seeds. 
+
+Environment c Selected specification Test total CVaR ratio ∆ total Pass High Liquidity 1.0 Gamma-wide b0 = 0 .075 0.005235 0.970 -0.1% Yes High Liquidity 1.2 Gamma-wide b0 = 0 .075 0.005235 0.970 -0.1% Yes High Liquidity 1.5 Gamma-wide b0 = 0 .1 0.005095 1.300 -2.8% Yes Middle Liquidity 1.0 Gamma-wide b0 = 0 .075 0.01186 0.971 -1.6% Yes Middle Liquidity 1.2 Gamma-wide b0 = 0 .1 0.01114 1.139 -7.5% Yes Middle Liquidity 1.5 Merton band b = 0 .175 0.01036 1.519 -14.0% No Low Liquidity 1.0 Sparse 0.075 0.1411 0.978 -4.2% Yes Low Liquidity 1.2 Gamma-wide b0 = 0 .125 0.1253 1.195 -14.9% Yes Low Liquidity 1.5 Gamma-wide b0 = 0 .175 0.1086 1.504 -26.3% No 
+
+Figure 2 plots, for each validation-selected specification, the resulting percentage change in total adjustment on the test seeds relative to the reference policy. A cross marks a specification whose test-sample risk exceeds the same risk budget it was selected under. Appendix A shows how each classical width in the grid performs at relaxed budgets. 
+
+Figure 2: Out-of-validation total-adjustment change for each specification selected under the validation rule. 
+
+4.3 Uncertainty and stability relative to the reference policy 
+
+Section 4.1 found that sparse execution lowers Low Liquidity cost by an average of 4.2% across 20 test seeds, but an average alone could hide a difference that is smaller, zero, or reversed depending on the market-path seeds, trained network, or validation sample. Table 5 pairs each candidate outcome with the reference policy’s outcome on the same simulated paths, removing path-to-path noise. The strict High and Middle gamma-wide comparisons have narrow intervals because only the band rule changes. In Low Liquidity, the sparse 0.075 total difference is negative in all 20 paired test seeds, and its tracking-CVaR difference is also negative in every seed, with a 95% interval of [ −0.00497 , −0.00101]. These intervals measure Monte Carlo variation conditional on the fixed model, cost parameters, and trained checkpoints. Appendix B checks its stability across seeds and networks. Table 5: Paired out-of-validation test differences relative to the reference policy. Intervals are two-sided 95% Student-t intervals across common market-path seeds.                                                       
+
+> Environment Policy Mean ∆ total 95% CI Mean ∆ CVaR 95% CI Total <0High Liquidity Gamma-wide b0= 0 .075 -0.000007 [-0.000008, -0.000007] -0.00118 [-0.00139, -0.00098] 20/20 Middle Liquidity Gamma-wide b0= 0 .075 -0.000188 [-0.000195, -0.000182] -0.00195 [-0.00231, -0.00159] 20/20 Low Liquidity Sparse 0.075 -0.006178 [-0.007066, -0.005290] -0.00299 [-0.00497, -0.00101] 20/20 Middle Liquidity Gamma-wide b0= 0 .125 -0.001550 [-0.001557, -0.001542] 0.02434 [0.02373, 0.02494] 20/20 Low Liquidity Merton band b= 0 .15 -0.01874 [-0.01892, -0.01856] 0.02234 [0.02126, 0.02343] 20/20 Low Liquidity Merton band b= 0 .2-0.03430 [-0.03465, -0.03395] 0.06013 [0.05789, 0.06238] 20/20
+
+The stability checks in Appendix B separate the fifteen seeds added after the earlier five-seed evaluation. 10 On these newly added seeds sparse 0.075 reduces Low Liquidity total adjustment by 4.27% and all fifteen differences are negative. Each of the three trained networks also lowers mean total adjustment relative to the reference policy with reductions from 3.50% to 5.17%. Finally, leaving out one validation seed at a time preserves the strict-budget selection in all five omissions for each environment. Appendix C decomposes the reserve change. In Low Liquidity, sparse 0.075 changes stressed HVA, funding, and margin by -0.006180, -0.000022, and 0.000024. The reserve reduction therefore comes from transaction-cost HVA instead of a shift of cost across components that leaves the total unchanged. 
+
+# 5 Discussion 
+
+This paper evaluates deep-hedging policies with a valuation-adjustment layer and compares classical and learned candidate specifications under the same tracking-risk budget. Classical widths and learned sparse-execution thresholds are selected on the same validation sample, while neural weights and training hyperpa-rameters remain fixed. The best policy depends on the market environment, and no single rule dominates across all three environments. In High and Middle Liquidity, a gamma-wide classical band remains competitive with the learned alternatives. In Low Liquidity, sparse learned execution still improves on the tuned classical band under a strict risk budget, though wider classical bands close most of that gap once the budget is relaxed. Deep hedging and the valuation-adjustment layer play complementary roles. Deep hedging searches for state-dependent trading rules and no-transaction structure is added either inside the policy or at execution. A learned hedge is worth using only when it improves the cost-risk frontier after the tracking-risk constraint is imposed. The classical rule remains the better choice otherwise. This High and Middle Liquidity result depends on tuning the classical band on the same footing as the learned methods. Sparse execution appeared to beat a fixed-width classical band at relaxed risk budgets in Low Liquidity. However, when we let the classical band’s width be tuned on the same sample as the learned threshold, most of the advantage disappeared. The learned NTB is consistently risk-conservative but its moving center produces frequent trades. In Low Liquidity, sparse execution keeps a modest advantage. But the Markov liquidity state never enters its training or its policy input and the gain more plausibly reflects a favorable interaction between the trained target and post-training filtering under severe frictions. Several limitations remain. The policies neither observe the Markov liquidity state nor train against its multiplier. The learned comparisons average three fixed checkpoints trained at 64 dates and transferred to 252-date evaluation; they do not identify a best usable checkpoint or the attainable frontier under fresh 252-date retraining. The training penalties also exclude the opening charge and Markov multiplier used in evaluation. The tracking-risk constraint is evaluated under the reference risk-neutral law; it is neither robustified over the KL neighborhood nor calibrated under a physical measure. The liquidity chain is simulated independently of the Brownian and jump innovations, so the experiment does not capture endogenous wrong-way dependence in which severe market moves and liquidity deterioration arrive together. The funding and margin add-ons are simplified. The KL radii are external fixed stress inputs taken from the prior b = 0 .10, ρG 
+
+> 0
+
+= 0 .4 map and are not recalibrated for the expanded total-cost definition or policy set. Our framework can extend to a balance-sheet treatment. Our funding add-on can be tied to a treasury funding curve and a netting agreement. Our margin add-on can be tied to a desk IM model, for example a SIMM-style or ES-based rule. Collateral, netting, counterparty default, close-out, CVA capital, and KVA can be added as separate layers and the hedge policy changes exposure, collateral demand, CVA hedges, or capital usage. As an alternative to computing these layers separately, neural BSDE xVA solvers such as the deep xVA solver of Gnoatto et al. (2023) can compute the coupled system jointly. But such a solver remains subject to model risk (B´ en´ ezet and Cr´ epey, 2024). 
+
+# 6 Conclusion 
+
+A valuation-adjustment layer changes the comparison of deep and classical hedging policies because transaction cost and tracking risk must be assessed jointly. By evaluating hedging valuation adjustment, funding, and margin together under one common worst-case stress, this framework gives a desk a single, internally 11 consistent reserve for ranking classical and learned policies, rather than three reserves computed under different assumptions. Classical widths and sparse-execution thresholds are selected on the same validation sample, while neural weights and training hyperparameters remain fixed. No single candidate specification dominates across the three market environments. Classical bands are selected in the High- and Middle-Liquidity environments. Under the strict Low-Liquidity budget, the sparse learned specification reduces the reserve by a few percent beyond the best tuned classical band. Its reported value averages three fixed 64-date training runs transferred to 252-date evaluation. 
+
+# Declaration of generative AI and AI-assisted technologies 
+
+During the preparation of this manuscript, the author used generative AI and AI-assisted tools to assist with manuscript drafting, language refinement, code drafting and debugging, and discussion of the research. The author directed the project, revised and verified the manuscript and code, and takes full responsibility for the final manuscript. 
+
+# References 
+
+Almgren, R. and Chriss, N. (2001). Optimal execution of portfolio transactions. Journal of Risk , 3:5–39. Arzel, J. and Lehdili, N. (2026). Bridging stochastic control and deep hedging: Structural priors for no-transaction band networks. arXiv:2603.29994. B´ en´ ezet, C. and Cr´ epey, S. (2024). Handling model risk with XVAs. Frontiers of Mathematical Finance ,3(4):490–519. doi:10.3934/fmf.2024016. Black, F. and Scholes, M. (1973). The pricing of options and corporate liabilities. Journal of Political Economy , 81(3):637–654. Buehler, H., Gonon, L., Teichmann, J., and Wood, B. (2019). Deep hedging. Quantitative Finance ,19(8):1271–1291. Buehler, H., Murray, P., and Wood, B. (2022). Deep Bellman hedging. arXiv:2207.00932. Burgard, C. and Kjaer, M. (2011). Partial differential equation representations of derivatives with bilateral counterparty risk and funding costs. The Journal of Credit Risk , 7(3):75–93. Burnett, B. (2021). Hedging valuation adjustment: Fact and friction. Risk , 1 February 2021. Cao, J., Chen, J., Hull, J., and Poulos, Z. (2021). Deep hedging of derivatives using reinforcement learning. 
+
+The Journal of Financial Data Science , 3(1):10–27. Fran¸ cois, P., Gauthier, G., Godin, F., and P´ erez-Mendoza, C. O. (2025). Deep hedging with options using the implied volatility surface. arXiv:2504.06208. Fran¸ cois, P., Gauthier, G., Godin, F., and P´ erez Mendoza, C. O. (2025). Is the difference between deep hedging and delta hedging a statistical arbitrage? Finance Research Letters , 73:106590. Glasserman, P. and Xu, X. (2014). Robust risk measurement and model risk. Quantitative Finance ,14(1):29–58. Gnoatto, A., Picarelli, A., and Reisinger, C. (2023). Deep xVA solver: A neural network-based counterparty credit risk management framework. SIAM Journal on Financial Mathematics , 14(1):314–352. Godin, F. (2016). Minimizing CVaR in global dynamic hedging with transaction costs. Quantitative Finance ,16(3):461–475. Gong, Z., Ventre, C., and O’Hara, J. (2021). The efficient hedging frontier with deep neural networks. arXiv:2104.05280. 12 Green, A. and Kenyon, C. (2015). MVA: Initial margin valuation adjustment by replication and regression. arXiv:1405.0508. Horikawa, H. and Nakagawa, K. (2024). Relationship between deep hedging and delta hedging: Leveraging a statistical arbitrage strategy. Finance Research Letters , 62:105101. Horvath, B., Teichmann, J., and Zuric, Z. (2021). Deep hedging under rough volatility. Risks , 9(7):138. Huang, E. and Lawryshyn, Y. (2025). Deep hedging under market frictions: A comparison of DRL models for options hedging with impact and transaction costs. Journal of Risk and Financial Management , 18(9):497. Imaki, S., Imajo, K., Ito, K., Minami, K., and Nakagawa, K. (2023). No-transaction band network: A neural network architecture for efficient deep hedging. The Journal of Financial Data Science , 5(2):84–99. Imaki, S. and Hirano, M. (2024). PFHedge: Deep hedging in PyTorch. Python package, version 0.23.0, MIT license. Kennedy, J. S., Forsyth, P. A., and Vetzal, K. R. (2009). Dynamic hedging under jump diffusion with transaction costs. Operations Research , 57(3):541–559. Leland, H. E. (1985). Option pricing and replication with transactions costs. Journal of Finance , 40(5):1283– 1301. L¨ utkebohmert, E., Schmidt, T., and Sester, J. (2022). Robust deep hedging. Quantitative Finance , 22(8):1465– 1480. Merton, R. C. (1976). Option pricing when underlying stock returns are discontinuous. Journal of Financial Economics , 3(1–2):125–144. Mueller, K., Akkari, A., Gonon, L., and Wood, B. (2024). Fast deep hedging with second-order optimization. arXiv:2410.22568. Murray, P., Wood, B., Buehler, H., Wiese, M., and Pakkanen, M. S. (2022). Deep hedging: Continuous reinforcement learning for hedging of general portfolios across multiple risk aversions. In Proceedings of the Third ACM International Conference on AI in Finance (ICAIF ’22) , pages 361–368. arXiv:2207.07467. Neagu, A., Godin, F., Simard, C., and Kosseim, L. (2024). Deep hedging with market impact. arXiv:2402.13326. Pallavicini, A., Perini, D., and Brigo, D. (2011). Funding valuation adjustment: A consistent framework including CVA, DVA, collateral, netting rules and re-hypothecation. arXiv:1112.1521. Piterbarg, V. (2010). Funding beyond discounting: collateral agreements and derivatives pricing. Risk ,23(2):97–102. Rockafellar, R. T. and Uryasev, S. (2000). Optimization of conditional value-at-risk. Journal of Risk ,2(3):21–41. Sakuma, T. (2026). Robust hedging valuation adjustment under liquidity–demand stress. arXiv:2606.26731. Sepp, A. (2012). An approximate distribution of delta-hedging errors in a jump-diffusion model with discrete trading and transaction costs. Quantitative Finance , 12(7):1119–1141. Shinozaki, Y. (2024). A review of new developments in finance with deep learning: Deep hedging and deep calibration. IMES Discussion Paper Series , 2024-E-02, Institute for Monetary and Economic Studies, Bank of Japan. Whalley, A. E. and Wilmott, P. (1997). An asymptotic analysis of an optimal hedging model for option pricing with transaction costs. Mathematical Finance , 7(3):307–324. 13 A Relaxed-budget descriptive grid points 
+
+Section 4.1 notes that wider classical bands reduce the reserve further once the risk budget is relaxed. Table 6 shows three classical grid points that illustrate the size of this effect. Each width belongs to the fixed seven-point candidate grid and passed the validation-sample budget. Table 6: Post-selection descriptive classical grid points at relaxed budgets.                                           
+
+> Environment cPolicy Val. ratio Val. total Test ratio Test total ∆ total Val. pass Test pass Middle Liquidity 1.5 Gamma-wide b0= 0 .125 1.331 0.01040 1.358 0.01049 -12.9% Yes Yes Low Liquidity 1.2 Merton band b= 0 .15 1.159 0.1288 1.167 0.1286 -12.7% Yes Yes Low Liquidity 1.5 Merton band b= 0 .21.443 0.1132 1.450 0.1130 -23.3% Yes Yes
+
+# B Test-seed and training stability 
+
+The Low Liquidity result in Section 4.1 may depend on the test seeds, trained network, and validation sample. Table 7 separates the earlier five test seeds, the fifteen newly added seeds, and the combined twenty. Table 8 reports the Low Liquidity sparse result for each trained network. Table 9 records leave-one-validation-seed-out selection stability. Table 7: Low Liquidity sensitivity to test-seed expansion for Sparse 0.075 relative to the Merton b = 0 .10 reference policy. The fifteen seeds 1011–1025 were added after the earlier five-seed evaluation.                               
+
+> Test-seed subset nAnchor total Sparse total ∆ total Mean paired ∆ 95% CI ∆<0Earlier five (1006–1010) 50.1494 0.1435 -3.97% -0.005938 [-0.008428, -0.003449] 5/5 Newly added fifteen (1011–1025) 15 0.1466 0.1403 -4.27% -0.006258 [-0.007325, -0.005191] 15/15 Combined twenty (1006–1025) 20 0.1473 0.1411 -4.19% -0.006178 [-0.007066, -0.005290] 20/20
+
+Table 8: Low Liquidity Sparse 0.075 by trained network on the twenty out-of-validation test seeds. Rows are separate trained networks used on their own; the main text averages their evaluation metrics and does not form a combined position across networks. 
+
+Training seed Robust total ∆ total Track CVaR ∆ CVaR Total < 020260619 0.1416 -3.91% 0.1303 -2.45% 20/20 20260620 0.1421 -3.50% 0.1302 -2.51% 19/20 20260621 0.1397 -5.17% 0.1312 -1.76% 20/20 
+
+Table 9: Leave-one-validation-seed-out stability of the strict-budget specification selection. 
+
+Environment Full validation selection Same selection High Liquidity Gamma-wide b0 = 0 .075 5/5 Middle Liquidity Gamma-wide b0 = 0 .075 5/5 Low Liquidity Sparse 0.075 5/5 
+
+# C Reserve component decomposition 
+
+Section 4.3 attributes the Low Liquidity reserve gain to transaction-cost HVA. Table 10 supports this by decomposing each policy’s robust total under its own common worst-case path tilt. 14 Table 10: Out-of-validation test component changes relative to the reference policy. Components use the common policy-specific KL tilt underlying each total. 
+
+Environment Policy ∆HVA ∆Funding ∆Margin ∆Total ∆Total (%) ∆CVaR (%) High Liquidity Gamma-wide b0 = 0 .075 -0.000021 0.000005 0.000009 -0.000007 -0.1% -3.0% High Liquidity Gamma-wide b0 = 0 .1 -0.000041 -0.000131 0.000024 -0.000148 -2.8% 30.0% High Liquidity Sparse 0.075 0.000013 0.000266 0.000008 0.000286 5.5% -4.7% Middle Liquidity Gamma-wide b0 = 0 .075 -0.000182 -0.000013 0.000007 -0.000188 -1.6% -2.9% Middle Liquidity Gamma-wide b0 = 0 .1 -0.000781 -0.000144 0.000021 -0.000905 -7.5% 13.9% Middle Liquidity Gamma-wide b0 = 0 .125 -0.001274 -0.000313 0.000038 -0.001550 -12.9% 35.8% Low Liquidity Sparse 0.075 -0.006180 -0.000022 0.000024 -0.006178 -4.2% -2.2% Low Liquidity Merton band b = 0 .15 -0.01846 -0.000288 0.000008 -0.01874 -12.7% 16.7% Low Liquidity Merton band b = 0 .2 -0.03372 -0.000608 0.000030 -0.03430 -23.3% 45.0% 
+
+# D Initial-position sensitivity 
+
+The main classical rule begins at q−1 = 0 and projects a zero starting position to the nearest point of the initial band. This sensitivity check instead establishes the center target at inception and applies the same projected rule, as reported in Table 11. The base width is held fixed at the inherited b0 = 0 .10, so the comparison isolates initialization rather than width selection. Starting from the center target raises total adjustment in every environment. Table 11: Initial-position sensitivity. The main rule projects q−1 = 0 to the nearest band boundary; the sensitivity establishes the center target at inception.                                                              
+
+> Environment Band Zero-start total Target-start total ∆ total Zero-start CVaR Target-start CVaR Opening cost: zero / target High Liquidity Black–Scholes band b= 0 .10.005243 0.005304 1.2% 0.0392 0.0378 0.000059 / 0.000071 High Liquidity Gamma-wide b0= 0 .10.005095 0.005289 3.8% 0.0510 0.0463 0.000051 / 0.000071 Middle Liquidity Merton band b= 0 .10.01204 0.01265 5.0% 0.0680 0.0670 0.001673 / 0.002263 Middle Liquidity Gamma-wide b0= 0 .10.01114 0.01215 9.1% 0.0775 0.0729 0.001326 / 0.002232 Low Liquidity Merton band b= 0 .10.1473 0.1574 6.9% 0.1336 0.1320 0.03228 / 0.04320 Low Liquidity Gamma-wide b0= 0 .10.1354 0.1502 11.0% 0.1476 0.1397 0.02326 / 0.03979
+
+# E Execution-rule sensitivity 
+
+The main results use nearest-boundary projection; this appendix examines how much that choice matters. Holding target initialization fixed, Table 12 compares nearest-boundary projection with trigger-to-target execution. The trigger rule trades to the center rather than the nearest boundary, and this increases turnover and reserve cost. Table 12: Interior execution-rule sensitivity under target initialization. A projected rule trades to the nearest boundary and trigger-to-target jumps to the center. 
+
+Environment Target Projected total Trigger total ∆ total Projected CVaR Trigger CVaR High Liquidity Black–Scholes 0.005304 0.005467 3.1% 0.0378 0.0238 Middle Liquidity Black–Scholes 0.01267 0.01501 18.5% 0.0659 0.0600 Middle Liquidity Merton 0.01265 0.01487 17.5% 0.0670 0.0598 Low Liquidity Black–Scholes 0.1596 0.2005 25.6% 0.1376 0.1475 Low Liquidity Merton 0.1574 0.1908 21.2% 0.1320 0.1350 
+
+# F Continuation execution cost 
+
+The main results count the opening trade’s execution cost together with every rebalance and the terminal unwind. The continuation rule instead assumes the desk already holds the position it needs at date 0. Table 13 shows that the difference is small in High Liquidity and material when spread and impact are large. 15 Table 13: Full-lifecycle versus continuation execution cost. Continuation excludes the opening execution charge and its funding-account effect; other inputs are unchanged.                                                                                     
+
+> Environment Policy Full-lifecycle total Continuation total Full-lifecycle increment Increment (%) Mean opening cost High Liquidity Black–Scholes band b= 0 .10.005243 0.005183 0.000059 1.1% 0.000059 High Liquidity Gamma-wide b0= 0 .075 0.005235 0.005179 0.000057 1.1% 0.000056 High Liquidity Gamma-wide b0= 0 .10.005095 0.005043 0.000052 1.0% 0.000051 Middle Liquidity Merton band b= 0 .10.01204 0.01033 0.001717 16.6% 0.001673 Middle Liquidity Gamma-wide b0= 0 .075 0.01186 0.01029 0.001569 15.3% 0.001531 Middle Liquidity Gamma-wide b0= 0 .125 0.01049 0.009336 0.001158 12.4% 0.001133 Low Liquidity Merton band b= 0 .10.1473 0.1143 0.03299 28.9% 0.03228 Low Liquidity Sparse 0.075 0.1411 0.1070 0.03410 31.9% 0.03344 Low Liquidity Merton band b= 0 .15 0.1286 0.1006 0.02797 27.8% 0.02739 Low Liquidity Merton band b= 0 .20.1130 0.08966 0.02335 26.0% 0.02288
+
+# G Learned-band trading behavior 
+
+The learned NTB trades whenever the carried position falls outside its updated state-dependent band. The band is reasonably wide, with a mean total width between 0.073 and 0.099 across the three markets. Yet because the band’s center shifts at every date, a breach can occur without a large price move. Each breach needs a small trade to correct it, but these frequent small trades accumulate into higher turnover. Table 14 reports band width, center movement, and the fraction of dates the previous hedge falls outside the band. Its moving center explains the low tracking risk and higher reserve cost. The post-training sparse-execution threshold and the NTB band both convert a neural hedge output into a sparse trading rule. However, sparse execution is the stronger cost-saving policy in Low Liquidity while the NTB band lowers tracking risk in Middle and Low Liquidity at the cost of trading more often. Table 14: Learned no-transaction-band policy. 
+
+Environment Mean total width Center move Previous hedge outside Turnover Trades High Liquidity 0.073 0.019 35.2% 2.864 89.8 Middle Liquidity 0.099 0.018 27.4% 2.328 70.1 Low Liquidity 0.081 0.014 25.3% 2.065 64.9 
+
+# H Monte Carlo variation 
+
+Table 15 reports means and standard deviations across the 20 out-of-validation test seeds. Learned-specification values are averaged across the three fixed training seeds within each market-path seed. Because all policies are evaluated on common market-path seeds, Table 5 assesses policy differences using paired differences instead of marginal standard deviations. Table 15: Variation across the 20 out-of-validation test market-path seeds. 
+
+Environment Policy Robust total Track CVaR Opening cost High Liquidity Black–Scholes band b = 0 .1 0.005243 (0.000021) 0.0392 (0.0011) 0.000059 (0.000001) High Liquidity Gamma-wide b0 = 0 .075 0.005235 (0.000022) 0.0380 (0.0009) 0.000056 (0.000001) High Liquidity Gamma-wide b0 = 0 .1 0.005095 (0.000020) 0.0510 (0.0012) 0.000051 (0.000001) Middle Liquidity Merton band b = 0 .1 0.01204 (0.000119) 0.0680 (0.0019) 0.001673 (0.000037) Middle Liquidity Gamma-wide b0 = 0 .075 0.01186 (0.000129) 0.0661 (0.0021) 0.001531 (0.000034) Middle Liquidity Gamma-wide b0 = 0 .125 0.01049 (0.000116) 0.0924 (0.0020) 0.001133 (0.000025) Low Liquidity Merton band b = 0 .1 0.1473 (0.003554) 0.1336 (0.0036) 0.03228 (0.000599) Low Liquidity Sparse 0.075 0.1411 (0.004167) 0.1306 (0.0029) 0.03344 (0.000621) Low Liquidity Merton band b = 0 .15 0.1286 (0.003179) 0.1559 (0.0043) 0.02739 (0.000509) Low Liquidity Merton band b = 0 .2 0.1130 (0.002821) 0.1937 (0.0058) 0.02288 (0.000425) 
+
+16

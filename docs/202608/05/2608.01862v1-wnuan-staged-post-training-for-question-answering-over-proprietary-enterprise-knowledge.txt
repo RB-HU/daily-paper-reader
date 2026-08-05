@@ -1,0 +1,563 @@
+Title: Wnuan: Staged Post-Training for Question Answering over Proprietary Enterprise Knowledge
+
+URL Source: https://arxiv.org/pdf/2608.01862v1
+
+Published Time: Tue, 04 Aug 2026 02:00:53 GMT
+
+Number of Pages: 22
+
+Markdown Content:
+# Wnuan: Staged Post-Training for Question Answering over Proprietary Enterprise Knowledge 
+
+## Xiaofeng Shi 1∗† , Xiaosong Qiu 1∗, Wenxin Ma 2, Qian Kou 1,Yiming Pan 3‡, Longbin Yu 1, Ying Liu 1, Haiping Wang 1, Hua Zhou 1§
+
+> 1
+
+Beijing Academy of Artificial Intelligence (BAAI) 
+
+> 2
+
+Beijing District Heating Group Co., Ltd. (BDHG) 
+
+> 3
+
+Beijing University of Posts and Telecommunications (BUPT) 
+
+Abstract 
+
+Enterprise question answering requires models to acquire pro-prietary knowledge without discarding general capabilities. We present Wnuan, a three-stage pipeline that constructs task-oriented supervision from documents, performs supervised fine-tuning with general-data replay, and applies reinforce-ment learning to residual errors. On the 707-question Wnuan-Bench, the primary 32B route raises acceptable-answer rate (AAR) from 52.76% before adaptation to 80.06% after SFT and 91.51% after RL. Under a matched 100-update proto-col, residual-error sampling outperforms full-pool and size-matched random sampling by 3.11 and 2.97 points, respec-tively. Source-cluster bootstrap intervals remain above zero for both contrasts, and a same-domain validation set preserves the ordering. The general-benchmark average decreases by 5.17 points across the route, concentrated in instruction following. The automatic evaluation ensemble agrees with an authori-tative domain expert on 90.5% of a stratified Wnuan-Inst re-sponse sample. These results characterize both the gains and the general-capability cost of staged enterprise adaptation. 
+
+## 1 Introduction 
+
+Enterprise question answering depends on internal policies, technical standards, and operating procedures that are of-ten absent from public pretraining data. Adapting a general-purpose language model to this setting requires the model to learn proprietary knowledge, retain general instruction-following ability, and use a limited post-training budget effi-ciently. Prior work addresses these requirements separately. Task-oriented corpus adaptation converts documents into learn-able supervision (Cheng, Huang, and Wei 2024). Post-training may change generalization and instruction following (Kirk et al. 2024; Lin et al. 2024), while mixing pretraining-data updates into RLHF has reduced public-benchmark re-gressions (Ouyang et al. 2022). Retrieval-augmented genera-
+
+> ∗
+
+These authors contributed equally. 
+
+> †
+
+Corresponding author: Xiaofeng Shi, xfshi@baai.ac.cn. 
+
+> ‡
+
+Work completed during an internship at Beijing Academy of Artificial Intelligence (BAAI). 
+
+> §
+
+Project leader. 
+
+tion (RAG) supplies evidence at inference time (Lewis et al. 2020; Zhang et al. 2024). Data-selection methods choose influential examples before instruction tuning or filter unin-formative groups during RL (Xia et al. 2024; Yu et al. 2025). Less is known about how these choices interact in a sin-gle enterprise QA pipeline, especially after SFT has already corrected most easy examples. We train Wnuan in three stages (Figure 1). Stage I converts enterprise documents into self-contained question–answer supervision and rewrites eligible answers in a form aligned with the target model. Stage II performs full-parameter SFT with general-data replay. Stage III identifies examples that Wnuan-Inst still answers incorrectly and applies semantic-reward GRPO to those residual errors. We evaluate retrieval separately rather than training a retrieval-aware generator. The paper centers on the complete enterprise-model train-ing pipeline and the resulting WnuanBench evaluation. Stage-wise studies measure the contribution of SFT, the domain–general trade-off induced by replay, and the gains and instruction-following cost of residual-error RL. A fixed-budget experiment compares residual-error, full-pool, and size-matched random sampling. Public general benchmarks, a same-domain validation set, and the training-side valida-tion signal support development. We contribute an end-to-end post-training pipeline that converts proprietary documents into a closed-book enter-prise QA model, selects a general-data replay operating point, and applies residual-error RL. We also introduce Wnuan-Bench and use it to evaluate the primary 32B training tra-jectory under an automatic correctness ensemble calibrated on 147 Wnuan-Inst responses labeled by one domain ex-pert. Configuration studies, a controlled three-arm GRPO experiment, source-cluster sensitivity analysis, and general-capability measurements identify where the pipeline gains accuracy and where it loses instruction-following perfor-mance. 
+
+## 2 Related Work 
+
+Domain adaptation and task-oriented supervision. 
+
+Domain QA synthesis spans AdaptLLM’s reading-comprehension reformulation, pre-instruction tuning, and arXiv:2608.01862v1 [cs.AI] 3 Aug 2026 (a) Wnuan training pipeline           
+
+> 1Document-to-QA 2SFT with replay 3Residual-error GRPO
+> Proprietary
+> documents Constructed QA
+> Wnuan-Base
+> Domain QA
+> General replay
+> SFT update Wnuan-Inst
+> select errors
+> Model answers Residual-error pool GRPO update Wnuan-RL
+
+(b) Accuracy-reliability landscape           
+
+> External references Wnuan 32B Wnuan-Plus 671B Bubble area = correctness
+> 40 60 80
+> 40 50 60 70 80 90
+> 30
+> 40
+> 50
+> 60
+> 70
+> 80
+> 90
+> WnuanBench AAR (%)
+> Non-hallucination rate (%)
+> Highest external AAR: 67.75
+> GLM-5.1
+> MiniMax-M3
+> Kimi K2.6
+> DeepSeek-V4-Pro
+> MiMo-V2-Pro
+> GPT-5.4
+> Wnuan-Base
+> Wnuan-Inst
+> Wnuan-RL
+> Plus-Base
+> Plus-Inst
+
+(c) Stage-wise quality gains              
+
+> SFT gain additional RL gain
+> 020 40
+> AAR +27.30 +11.45
+> Correctness +22.56 +15.56
+> Completeness +20.93 +9.83
+> Faithfulness +33.10 +8.84
+> Non-
+> hallucination +32.25 +17.96
+> percentage-point gain
+> SFT drives most gains; RL contributes most to non-hallucination.
+
+(d) WnuanBench composition and curation   
+
+> Task categories 8 business domains Curation
+> General enterprise knowledge
+> 160
+> Operational scenarios
+> 370
+> Standards and specifications
+> 177
+> Production technology
+> 120
+> Policy and management
+> 119
+> Departmental responsibilities
+> 78
+> Sales and operations
+> 48
+> Customer service
+> 120
+> Engineering management
+> 118
+> Safety supervision
+> 64
+> Party and community affairs
+> 40
+> Candidate
+> questions
+> Automated
+> screening
+> Expert
+> review
+> Quality
+> assurance
+> 707 questions
+> WnuanBench
+> (final)
+
+Figure 1: Wnuan training path, primary 32B results, contextual systems, and WnuanBench construction. (a) Enterprise documents are converted into task-oriented QA supervision, used for SFT with general-data replay, and then revisited through residual-error RL. (b) Horizontal position is WnuanBench AAR, vertical position is non-hallucination rate, and bubble area encodes correctness. Gray API points and the dashed 671B connector provide context. The solid 32B route is the primary trajectory. (c) Stacked bars decompose the Base-to-RL endpoint differences into Base-to-Inst and Inst-to-RL increments. (d) WnuanBench follows a benchmark-specific screening, expert-review, and quality-assurance path distinct from training-QA construction. knowledge- or coverage-aware generation in KEFT and DS2-Instruct (Cheng, Huang, and Wei 2024; Jiang et al. 2024; Li et al. 2025; Xu, Samia, and Liu 2026). Wnuan assembles these precedents as a recipe, not a new synthesis method. 
+
+Retention during specialization. Specialization can change generalization and instruction following (Kirk et al. 2024; Lin et al. 2024). Replay is a documented mitigation in RLHF, and domain-knowledge injection work likewise mixes general QA examples during fine-tuning (Ouyang et al. 2022; Bhushan et al. 2025). We measure an SFT replay grid and se-lect an observed domain–general operating point rather than propose a new retention objective. 
+
+RL and data selection. PPO and GRPO provide the op-timization basis for modern language-model post-training (Schulman et al. 2017; Ouyang et al. 2022; Shao et al. 2024; Guo et al. 2025). LESS selects influential instruction ex-amples, while DAPO filters zero-advantage prompt groups online (Xia et al. 2024; Yu et al. 2025). Difficulty-aware alignment shows that examples can exceed model capacity, whereas fixed-budget GRPO studies also report benefits from prioritizing hard prompts (Gao et al. 2025; Pikus, Tiwari, and Ye 2025). Wnuan makes a simpler recipe choice: it selects examples still judged incorrect after SFT and compares that offline pool with full-pool and size-matched random sam-pling in enterprise QA. It does not propose a general data-selection algorithm. 
+
+Retrieval and model-based evaluation. RAG augments generation with non-parametric memory (Lewis et al. 2020). RAFT trains models to use relevant evidence while ignor-ing distractors (Zhang et al. 2024). Wnuan is not retrieval-aware, so we compare its checkpoints with a fixed retrieval-concatenation baseline. Because open-form enterprise an-swers cannot be scored reliably by exact match, we use a multi-model judging procedure and calibrate its final binary decision against a domain expert, following the broader liter-ature on LLM-based evaluation (Zheng et al. 2023; Liu et al. 2023; Zhu, Wang, and Wang 2025). 
+
+## 3 Method 
+
+3.1 Problem Setting and Metric 
+
+Let D be a collection of proprietary enterprise documents and let T = {(xi, y i)} be a QA pool derived from those documents. The goal is to produce a closed-book instruction model that answers questions from the represented knowl-edge base while retaining useful general behavior. Our primary outcome is the acceptable-answer rate 
+
+(AAR): 
+
+AAR = Ncorrect + Npartially correct 
+
+N . (1) Equation 1 merges full and partial credit. AAR is not a strict fully-correct rate. We use AAR throughout the paper even though the stored evaluation field is named Accuracy .Here, N is the number of evaluated questions, while Ncorrect 
+
+and Npartially correct count the questions assigned the corre-sponding final ensemble labels. 
+
+3.2 Stage I: Document-to-QA Data Construction 
+
+The available pre-rewriting QA inventory contains 231,662 rows, 221,825 unique questions, 5,648 source paths, and 38,467 source-chunk identifiers. The reference implemen-tation first segments OCR-normalized documents at seman-tic and paragraph boundaries. It then extracts a named an-chor, generates a self-contained question from one of six task forms, produces an answer from the supporting chunk, and filters candidates using rule, referent, answerability, faithful-ness, and quality checks. Eligible answers are subsequently rewritten by the tar-get model. A rewritten answer replaces the original only when the two answers pass a semantic-similarity gate and the candidate passes format filtering. The resulting SFT do-main set contains 221,294 examples. We call this operation 
+
+target-aligned answer rewriting . The Stage-I experiments do not show an independent domain-AAR gain from rewriting. The construction thresholds, model roles, retained counts, and provenance boundary are detailed in Supplementary Ap-pendix C. The historical files do not preserve row-level gen-erator lineage. Among the final SFT examples, 164,793 candidate gen-erations pass the similarity gate. Format filtering removes 49 candidates containing the literal token <think> , leav-ing 164,744 rewritten targets and 56,550 retained original targets. 
+
+3.3 Stage II: SFT with General-Data Replay 
+
+The main 32B route starts from Qwen3-32B, which we de-note Wnuan-Base (Yang et al. 2025). Wnuan-Inst is trained on the 221,294 domain examples, 106,950 public general examples (Soren 2025), and smaller auxiliary instruction, train-out, and identity sets. We measure nominal replay lev-els of 0%, 5%, 25%, 50%, and 100%. These are display labels relative to the number of domain examples. The se-lected 50% setting contains 106,950 general examples, or an actual ratio of 48.3%. We select the replay setting with the highest unweighted average of MMLU, IFEval, and C-Eval in the measured grid (Hendrycks et al. 2021; Zhou et al. 2023; Huang et al. 2023). The same-domain validation result is a secondary devel-opment check. This rule selects the nominal 50% setting and defines Wnuan-Inst, the common initialization for Stage III. The complete replay grid and its component benchmark scores are provided in Supplementary Appendix E. 
+
+3.4 Stage III: Residual-Error RL 
+
+Residual selection uses a 230,183-row QA pool with stored original targets. Let P denote this selection pool, finst denote Wnuan-Inst, and Jsel denote the recorded residual-selection judge. We construct 
+
+Perr = {(xi, y i) ∈ P : Jsel (finst (xi), y i) = incorrect },
+
+(2) Equation 2 selects 56,147 examples. The main RL run applies GRPO with five rollouts per prompt. Its semantic reward is 
+
+r = 0 .6racc + 0 .3rquality + 0 .1rformat ,rquality = ( rlogic + rprof + rconcise )/3. (3) We adapt the semantic reward in Equation 3 from MechVQA to text-only enterprise QA (Kou et al. 2026). Each compo-nent is normalized to [0 , 1] . The terms score answer correct-ness ( racc ), logical soundness ( rlogic ), professional expres-sion ( rprof ), concision ( rconcise ), and compliance with the required answer tags ( rformat ). A locally deployed Qwen3.5-35B judge (Qwen Team 2026) scores the semantic compo-nents, while normalized exact matches take a deterministic unit-score fast path. For each five-response group, GRPO standardizes rewards within the group and optimizes a token-level PPO-style objective with clipping ϵ = 0 .2, dual-clip coefficient C = 3 , and reference-policy penalty β = 10 −2.The complete objective, reward definitions, and run config-urations are specified in Supplementary Appendix D. We compare data selection in a separate direct-answer experiment. The residual-error, full-pool, and size-matched random arms share the Wnuan-Inst initialization, prompt, scoring procedure, rollout count, optimizer settings, and 100-update schedule. The direct-answer prompt omits the tags checked by the format scorer, so rformat = 0 for every arm. The comparison uses the common 0.6racc + 0 .3rquality sig-nal. Each arm follows two 50-update segments, with model weights retained and the optimizer restarted at the midpoint. The complete schedule and controlled-arm endpoint analysis appear in Supplementary Appendix F. 
+
+## 4 Experimental Setup 
+
+4.1 Development Validation, WnuanBench, and Evaluation 
+
+Development uses a validation set sampled from the same enterprise-domain distribution as the training data. Wnu-anBench contains 707 questions grounded in formal enter-prise documents: 160 general-knowledge, 370 operational-scenario, and 177 standards/specification questions across eight business domains. Internal personnel curate its ques-tions and references independently of the automated training-QA pipeline. Each record includes a question, reference an-swer, source, and domain label. No QA record from the validation set or WnuanBench enters training or residual selection. The validation set supports domain-side develop-ment, whereas WnuanBench is reserved for final evaluation after the recipe and endpoint are frozen. Because both sets draw on the represented enterprise knowledge base, this is an in-domain evaluation rather than a test of source-held-out or cross-enterprise generalization. For formal evaluation, two primary judges, gpt-oss-120b (OpenAI 2025) and MiniMax-M2.5 (MiniMax 2026a), as-sign ordered correctness labels on {0, 0.5, 1}. DeepSeek-V3.2 (DeepSeek-AI 2025b) supplies a third vote on disagree-ment, and the ordered median is retained. One domain ex-pert labels a stratified sample of Wnuan-Inst responses. On the 147 valid labels, the final binary decision agrees with the expert on 90.5% of responses (95% CI: 85.7–94.6%; 
+
+κ = 0 .796 ); the post-stratified estimate is 90.4%. The three-class decision matches exactly on 103 responses. Of the re-maining decisions, 31 automatic labels are more generous and 13 are stricter. Only two disagreements cross directly between correct and incorrect. The evaluation rubric, adjudi-cation procedure, and expert-calibration study are described in Supplementary Appendices A–B. The expert was selected for authority over the governing documents and access to the relevant enterprise context. Hal-lucination detection has precision 0.868, recall 0.657, and F1 0.748 on the same sample. The calibration supports the bi-nary AAR decision more directly than the auxiliary labels. Primary paired confidence intervals use 2,000 question-level bootstrap resamples. A sensitivity analysis additionally resamples the 217 source documents with replacement while retaining all questions from each sampled source. Paired bi-nary comparisons use McNemar tests, with Holm adjustment for the three planned residual/full/random contrasts. All con-trolled Stage-III configurations use one fixed training proto-col, and the random arm uses a size-matched subset drawn with seed 42. The estimand is the paired difference between the completed endpoints under that protocol. 
+
+4.2 Training and Comparison Conditions 
+
+The final SFT run uses full-parameter bf16 training with DeepSpeed ZeRO-3 on 32 accelerators, a global batch of 32, a peak learning rate of 10 −5, a 1,024-token cutoff with packing, three epochs, and 11,976 optimizer updates. The main GRPO run uses 2 nodes × 8 H100-80GB accelerators, global batch 128, learning rate 10 −6, and three epochs. Each controlled data-selection arm starts from Wnuan-Inst and follows the shared schedule described above. The full arm samples from all 230,183 selection-pool rows. The residual and random arms each contain 56,147 rows. Resid-ual versus random controls pool size. Residual versus full instead tests sampling efficiency under a common update budget, not equal per-example exposure. These three arms form the matched comparison in the paper. The API systems in Table 1, identified by their official releases (Z.ai 2026; MiniMax 2026b; Moonshot AI 2026; DeepSeek-AI 2026; Xiaomi MiMo Team 2026; OpenAI 2026), and the 671B LoRA-SFT route provide context only. The GRPO configu-rations and controlled-arm diagnostics appear in Supplemen-tary Appendices D and F, while Appendices I and J document the retrieval analysis and 671B route. 
+
+## 5 Results 
+
+5.1 Enterprise Leaderboard and End-to-End Adaptation 
+
+Table 1 provides the WnuanBench leaderboard, while Fig-ures 2(a) and 1(b–c) summarize the primary 32B training tra-jectory. Wnuan-Base reaches 52.76% AAR (95% CI: 48.9– 56.4). SFT raises AAR to 80.06% (76.9–82.9), a paired gain of 27.30 points (95% CI: 23.20–31.54; p < 0.001 ). RL raises it further to 91.51% (89.5–93.5), a gain of 11.45 points over Wnuan-Inst (95% CI: 8.49–14.43; p < 0.001 ). Source-cluster bootstrap intervals are 19.71–34.21 points for the SFT gain and 8.52–15.05 for the RL gain. On the separate validation set, the same Inst-to-RL transition increases AAR from 76.89% to 89.00% ( +12 .11 points), closely matching the final WnuanBench gain. Across the ensemble endpoints, completeness increases from 36.00% to 66.76%, faithfulness from 30.20% to 72.14%, and hallucination decreases from 65.91% to 15.70%. The final column summarizes general retention. The general average changes from 88.61% for Wnuan-Base to 84.64% for Wnuan-Inst and 83.44% for Wnuan-RL. The component trajectories in Supplementary Appendix G show that SFT decreases all three scores, whereas from Wnuan-Inst to Wnuan-RL, MMLU increases by 0.61 points and C-Eval by 2.29 points while IFEval decreases by 6.52 points. The do-main gains accompany a concentrated instruction-following cost rather than a uniform decline. 
+
+5.2 Residual-Error Sampling 
+
+Figure 2(b) reports the controlled experiment under this com-mon direct-answer GRPO protocol. Residual-error sampling reaches 89.39% AAR, compared with 86.28% when prompts are sampled from the full pool and 86.42% for a size-matched random subset. Relative to random sampling, residual-error sampling gains 2.97 points (95% question-level CI: 0.85– 5.09; Holm-adjusted p = 0 .035 ). Relative to full-pool sam-pling, it gains 3.11 points (0.71–5.66; adjusted p = 0 .035 ). The corresponding source-cluster intervals are 0.81–5.08 and 0.83–5.70 points. Full-pool and random sampling are statis-tically indistinguishable ( −0.14 points; adjusted p = 1 ). The source-cluster analysis resamples all questions associ-ated with each sampled source document and preserves both controlled residual contrasts above zero. Residual selection uses stored original targets, whereas SFT may use rewritten targets. A fixed-prediction audit remaps targets without new model answers: 91.69% of examples whose mapped rewrit-ten target differs from the original retain the same automated incorrect/acceptable membership. The incorrect rate changes by only −0.86 points, although 4,928 examples leave and 4,001 enter the residual set. This supports stability of the aggregate policy, not exact row-level invariance. The full migration table and sensitivity protocol appear in Supple-mentary Appendix F. We also evaluate the same frozen endpoints on the same-domain validation set. The ordering is unchanged: residual-error, size-matched random, and full-pool sampling ob-tain 81.33%, 78.67%, and 77.78% AAR. Residual versus full gains 3.56 points (95% CI: 1.33–5.78; Holm-adjusted 
+
+p = 0 .008 ). Residual versus random gains 2.67 points (0.22– 5.00), with Holm-adjusted p = 0 .068 after correcting the three contrasts. The residual-versus-random contrast controls pool size because both pools contain 56,147 examples. The residual-versus-full contrast evaluates whether concentrating a fixed update budget on current errors is more effective than draw-ing from the complete pool. Aggregate logs over updates 51– Checkpoint Backbone / adaptation AAR Correct. Complete. Faithful. Halluc. ↓ General avg.                                                                              
+
+> External API references (descriptive)
+> GLM-5.1 API reference 42.86 30.76 29.28 39.04 34.94 –MiniMax-M3 API reference 52.48 40.03 36.78 39.04 35.64 –Kimi K2.6 API reference 55.45 42.64 40.38 44.55 34.37 –DeepSeek-V4-Pro API reference 59.41 46.11 42.36 42.50 42.72 –MiMo-V2-Pro API reference 62.94 49.15 44.63 45.90 37.34 –GPT-5.4 API reference 67.75 53.61 44.77 52.05 33.95 –
+> Wnuan checkpoints
+> Wnuan-Base Qwen3-32B 52.76 40.31 36.00 30.20 65.91 88.61 Wnuan-Inst 32B, full SFT 80.06 62.87 56.93 63.30 33.66 84.64 Wnuan-RL 32B, SFT + GRPO 91.51 78.43 66.76 72.14 15.70 83.44 Wnuan-Plus-Base DeepSeek-V3.1-Terminus 60.40 46.53 45.54 44.63 40.59 90.38
+> Wnuan-Plus-Inst 671B, LoRA-SFT 81.19 65.28 55.73 69.45 26.87 84.34
+
+Table 1: Closed-book WnuanBench results (%). AAR is the primary outcome. General avg. is the unweighted mean of MMLU, IFEval, and C-Eval, whose components are listed in Supplementary Appendix G. API systems and the 671B LoRA-SFT route provide contextual endpoints because their decoding, compute, backbone, and adaptation conditions are not matched to the primary 32B route. 
+
+Figure 2: Core evidence. (a) Closed-book AAR rises from Wnuan-Base to Wnuan-Inst to Wnuan-RL. Intervals resample benchmark questions. (b) Under a common 100-update protocol, residual-error sampling outperforms full-pool and size-matched random sampling. (c) From Wnuan-Inst to Wnuan-RL, 101 initially unacceptable answers become acceptable and 20 initially acceptable answers regress. 100 show lower on-policy accuracy reward but larger mean absolute PPO-KL and gradient-norm statistics for the resid-ual arm, a pattern consistent with harder sampled prompts. The endpoint contrasts support residual-error sampling as the Stage-III data policy. The update-level statistics describe the associated training dynamics. Both question sets, training-signal diagnostics, endpoint intervals, source-cluster sensitivity, and auxiliary answer-quality dimensions are reported in Supplementary Appendix F. 
+
+5.3 Training Dynamics and Stopping 
+
+Figure 3 shows that the main run’s validation accuracy re-ward rises from 58.36% at initialization to 75.39% at update 100, 77.40% at update 200, and 78.00% at update 327. The diminishing increments and compute budget determine the practical stop. Across the four controlled arms, the mean absolute gap between the update-100 validation reward and final WnuanBench correctness is 1.19 points, and validation gains preserve the observed ordering of final AAR gains. A comparison of the four-arm monitoring trajectories with their completed endpoints appears in Supplementary Appendix F; the correlations are descriptive rather than estimates over retraining variability. The main run’s overall validation reward rises from 0.5952 to 0.8332. Decomposition of that 0.2380 increase attributes 
+
+0.1179 to accuracy, 0.0415 to mean semantic quality, and 
+
+0.0787 to format compliance after applying the reward weights. Format reward reaches 1.0, so the aggregate reward gain is not interchangeable with correctness. This decom-position applies to the tagged-answer main run; the direct-answer controlled arms have zero format reward and compare Figure 3: Online validation accuracy-reward trajectory for the main Wnuan-RL run. After the preliminary 100-update experiment selected residual-error sampling, the full run gains 17.03 points through update 100, 2.01 more through update 200, and 0.60 more through update 327. The reported endpoint lies in the shaded late-stage region. data selection under their shared accuracy-and-quality sig-nal. The reward components and distinct response formats used by the two experiments are reported in Supplementary Appendix D. 
+
+5.4 Stage-I and Stage-II Design Studies 
+
+Figure 4(a) shows that Document-to-QA training improves AAR from 52.33% to 83.45% relative to fixed-window training, a 31.12-point gain obtained with 27.8% more estimated FLOPs. Target-aligned answer rewriting retains 82.04% AAR while restoring the general-benchmark aver-age from 79.21% to 82.15%. These unequal-budget runs provide configuration-level evidence rather than an isolated causal estimate of QA organization. The complete outcome, budget, runtime, and uncertainty breakdown appears in Sup-plementary Appendix E. Figure 4(b) summarizes the Stage-II replay trade-off. Rela-tive to no replay, the selected 48.3% operating point sacrifices 1.98 AAR points while gaining 2.49 points on the general-benchmark average. It was selected for the highest measured general average, not the highest domain AAR. The complete grid and component benchmarks appear in Supplementary Appendix E. 
+
+5.5 What Stage III Changes 
+
+Figure 2(c) gives a question-level view: Wnuan-RL repairs 101 Wnuan-Inst errors and regresses on 20 previously ac-ceptable answers, for a net reduction of 81 errors. The re-maining failures often involve exact numbers, dates, respon-sible departments, document names, closed lists, and omitted conditions. These categories are qualitative because Wnu-anBench does not contain mutually exclusive expert error labels. The full transition accounting appears in Supplemen-tary Appendix G, and descriptive within-enterprise domain slices appear in Appendix H. All eight business-domain slices improve numerically from Wnuan-Inst to Wnuan-RL, but only engineering man-agement and departmental responsibilities remain signifi-cant after Holm correction. No controlled residual-versus-full or residual-versus-random domain contrast is significant. The domain analysis is descriptive, and the aggregate paired comparison remains primary. Domain sample sizes, adjusted tests, and controlled contrasts are reported in Supplementary Appendix H. 
+
+5.6 Train-Free Retrieval Diagnostic 
+
+For train-free context, we apply one fixed BM25+BGE-M3 top-5 retrieval-concatenation pipeline to all three check-points (Robertson and Zaragoza 2009; Chen et al. 2024). RAG changes AAR from 52.76% to 72.98% for Wnuan-Base, from 80.06% to 76.24% for Wnuan-Inst, and from 91.51% to 81.75% for Wnuan-RL. Thus retrieval helps the unadapted model but is non-additive after SFT and RL under this pipeline. On the 433-question proxy slice with at least one same-domain retrieved chunk, retrieval improves Base and Inst but slightly reduces RL; on the remaining 274 ques-tions, it reduces all three, most sharply after specialization. Domain match is not a gold relevance label, but the sepa-ration motivates confidence gating rather than unconditional concatenation. Because the diagnostic uses one retriever and historical no-RAG generations, it does not establish a general training–retrieval interaction. The paired RAG results, sup-porting quality dimensions, and retrieval-trace proxy slices are reported in Supplementary Appendix I. 
+
+## 6 Discussion 
+
+The Wnuan pipeline assigns a distinct operational role to each stage. Document-to-QA supervision organizes enter-prise knowledge for closed-book learning, general-data re-play selects a retention operating point, and residual-error GRPO concentrates the final update budget on remaining mistakes. The evidence has a corresponding hierarchy: Stage I is an unequal-compute configuration study, Stage II is a finite operating-point search, and Stage III contains the matched data-selection experiment. The paper therefore sup-ports an end-to-end recipe and a controlled claim about residual-error sampling, not a compute-matched additive de-composition of all three stages. The negative results also matter. RL reduces domain er-rors but lowers IFEval. A second regression-aware continu-Figure 4: Design studies preceding Stage III. (a) Task-oriented Document-to-QA training substantially outperforms fixed-window training while using 27.8% more estimated FLOPs. Target-aligned answer rewriting approximately preserves domain AAR while recovering part of the general-benchmark loss. (b) The replay grid exposes a domain–general trade-off, with the selected setting determined by the measured general-benchmark average. ation does not recover that loss: relative to Wnuan-RL, AAR changes from 91.51% to 91.37%, hallucination rises from 15.70% to 20.93%, and IFEval falls from 80.00% to 76.00%. Without an otherwise identical unbucketed control, this ex-periment does not isolate the regression-aware partition rule. It nevertheless shows that another residual-focused continu-ation is not automatically beneficial and favors explicit in-struction replay or a revised factual-consistency reward. The RL-2 configuration and endpoint comparison appear in Sup-plementary Appendix K. Retrieval remains an inference-time intervention whose value depends on the checkpoint and retrieved context. It should be gated independently of the training recipe rather than treated as an automatically additive fourth stage. 
+
+## 7 Limitations and Responsible Use 
+
+Evaluation scope. The study covers one enterprise and in-domain validation and benchmark sets. WnuanBench is QA-record-disjoint from training and residual selection but shares the authorized source corpus; no source-, time-, enterprise-, or open-world split is available. Its benchmark-specific cu-ration path is separate from automated training-QA genera-tion. Question-level bootstrap intervals quantify uncertainty within this fixed benchmark, not over new documents or or-ganizations. 
+
+Training evidence. Stage I is an unequal-budget configu-ration study, whereas the residual/full/random arms share a common 100-update protocol. The 91.51% main endpoint and 89.39% controlled residual endpoint differ in response format, batch size, sequence length, hardware, and sched-ule. Attribution is restricted to the three completed sam-pling arms; uncertainty-, loss-, influence-, and online zero-advantage selectors were not tested. Source-cluster intervals provide a sensitivity analysis, and evaluation calibration re-lies on Wnuan-Inst responses labeled by one domain expert. 
+
+Retrieval and reproducibility. The RAG diagnostic uses one retrieval pipeline, no gold Recall@5 labels, and un-matched generation seeds. Private documents and the com-plete benchmark cannot be released. The evaluation flow is documented in Supplementary Appendix L. The Code and Data Supplement provides the correctness prompt, a syn-thetic fixture, and reference statistics. Data construction and training used locally deployed models inside the controlled environment. The intended use is internal knowledge assistance with human verification, not automated personnel, compliance, safety, or other high-impact decisions. 
+
+AI assistance disclosure. Generative AI tools supported language editing and consistency checks. The authors ver-ified the text, references, figures, and conclusions and take responsibility for the submitted material. 
+
+## 8 Conclusion 
+
+Wnuan combines document-to-QA supervision, general-data replay, and residual-error RL for closed-book enterprise QA. On WnuanBench, the primary 32B route raises AAR from 52.76% to 80.06% after SFT and 91.51% after RL. Under the matched 100-update protocol, residual-error sam-pling outperforms full-pool and size-matched random sam-pling, with both source-cluster intervals above zero. These results indicate that, after SFT resolves many easy examples, concentrating a fixed update budget on remaining errors is an effective policy under the tested protocol. The gains come with clear boundaries. General-data replay trades some domain accuracy for broader capability reten-tion, while RL reduces IFEval performance. WnuanBench measures mastery of the represented enterprise knowledge base rather than source-held-out or cross-enterprise transfer. Future work should improve instruction-following retention and test the pipeline under transfer-oriented and retrieval-aware settings. References 
+
+Bhushan, K.; Nandwani, Y.; Khandelwal, D.; Gupta, S.; Pandey, G.; Raghu, D.; and Joshi, S. 2025. Systematic Knowledge Injection into Large Language Models via Di-verse Augmentation for Domain-Specific RAG. In Findings of the Association for Computational Linguistics: NAACL 2025 , 5937–5958. Chen, J.; Xiao, S.; Zhang, P.; Luo, K.; Lian, D.; and Liu, Z. 2024. M3-Embedding: Multi-Linguality, Multi-Functionality, Multi-Granularity Text Embeddings Through Self-Knowledge Distillation. arXiv preprint arXiv:2402.03216 .Cheng, D.; Huang, S.; and Wei, F. 2024. Adapting Large Language Models via Reading Comprehension. In Interna-tional Conference on Learning Representations .DeepSeek-AI. 2025a. DeepSeek-V3.1-Terminus. https://api-docs.deepseek.com/news/news250922. DeepSeek model re-lease; accessed July 27, 2026. DeepSeek-AI. 2025b. DeepSeek-V3.2: Pushing the Fron-tier of Open Large Language Models. arXiv preprint arXiv:2512.02556 .DeepSeek-AI. 2026. DeepSeek-V4 Preview Release. https: //api-docs.deepseek.com/news/news260424/. DeepSeek model release; accessed July 27, 2026. Gao, C.; Li, H.; Liu, L.; Xie, Z.; Zhao, P.; and Xu, Z. 2025. Principled Data Selection for Alignment: The Hidden Risks of Difficult Examples. In Proceedings of the 42nd Inter-national Conference on Machine Learning , volume 267 of 
+
+Proceedings of Machine Learning Research , 18386–18409. Guo, D.; et al. 2025. DeepSeek-R1 Incentivizes Reasoning in LLMs through Reinforcement Learning. Nature , 645: 633–638. Hendrycks, D.; Burns, C.; Basart, S.; Zou, A.; Mazeika, M.; Song, D.; and Steinhardt, J. 2021. Measuring Massive Mul-titask Language Understanding. In International Conference on Learning Representations .Huang, Y.; Bai, Y.; Zhu, Z.; Zhang, J.; Zhang, J.; Su, T.; Liu, J.; Lv, C.; Zhang, Y.; Lei, J.; Fu, Y.; Sun, M.; and He, J. 2023. C-Eval: A Multi-Level Multi-Discipline Chinese Evaluation Suite for Foundation Models. In Advances in Neural Information Processing Systems , volume 36, 62991– 63010. Jiang, Z.; Sun, Z.; Shi, W.; Rodriguez, P.; Zhou, C.; Neubig, G.; Lin, X. V.; Yih, W.-t.; and Iyer, S. 2024. Instruction-Tuned Language Models Are Better Knowledge Learners. In 
+
+Proceedings of the 62nd Annual Meeting of the Association for Computational Linguistics , 5421–5434. Kirk, R.; Mediratta, I.; Nalmpantis, C.; Luketina, J.; Hambro, E.; Grefenstette, E.; and Raileanu, R. 2024. Understanding the Effects of RLHF on LLM Generalisation and Diversity. In International Conference on Learning Representations .Kou, Q.; Shi, X.; Li, Y.; Qiu, X.; Wang, X.; Zhou, H.; and Cao, D. 2026. MechVQA: Benchmarking and Enhancing Multimodal LLMs on Comprehensive Mechanical Drawing Understanding. arXiv preprint arXiv:2605.30794 .Lewis, P.; Perez, E.; Piktus, A.; Petroni, F.; Karpukhin, V.; Goyal, N.; Küttler, H.; Lewis, M.; Yih, W.-t.; Rocktäschel, T.; Riedel, S.; and Kiela, D. 2020. Retrieval-Augmented Gen-eration for Knowledge-Intensive NLP Tasks. In Advances in Neural Information Processing Systems , volume 33, 9459– 9474. Li, H.; Zhang, J.; Shen, H.; Cheng, K.; and Huang, X. 2025. KEFT: Knowledge-Enhanced Fine-Tuning for Large Language Models in Domain-Specific Question Answering. 
+
+Transactions of the Association for Computational Linguis-tics , 13: 1056–1067. Lin, Y.; Lin, H.; Xiong, W.; Diao, S.; Liu, J.; Zhang, J.; Pan, R.; Wang, H.; Hu, W.; Zhang, H.; Dong, H.; Pi, R.; Zhao, H.; Jiang, N.; Ji, H.; Yao, Y.; and Zhang, T. 2024. Mitigating the Alignment Tax of RLHF. In Proceedings of the 2024 Conference on Empirical Methods in Natural Language Processing , 580–606. Liu, Y.; Iter, D.; Xu, Y.; Wang, S.; Xu, R.; and Zhu, C. 2023. G-Eval: NLG Evaluation Using GPT-4 with Better Human Alignment. In Proceedings of the 2023 Conference on Empir-ical Methods in Natural Language Processing , 2511–2522. MiniMax. 2026a. The MiniMax-M2 Series: Mini Acti-vations Unleashing Max Real-World Intelligence. arXiv preprint arXiv:2605.26494 .MiniMax. 2026b. MiniMax M3: Frontier Coding, 1M Context, Native Multimodality—All in One Model. https: //www.minimax.io/blog/minimax-m3. MiniMax model re-lease; accessed July 27, 2026. Moonshot AI. 2026. Kimi K2.6. https://platform.kimi.com/ docs/guide/kimi-k2-6-quickstart. Kimi API documentation; accessed July 27, 2026. OpenAI. 2025. gpt-oss-120b & gpt-oss-20b Model Card. 
+
+arXiv preprint arXiv:2508.10925 .OpenAI. 2026. Introducing GPT-5.4. https://openai.com/ index/introducing-gpt-5-4/. OpenAI model release; ac-cessed July 27, 2026. Ouyang, L.; Wu, J.; Jiang, X.; Almeida, D.; Wainwright, C. L.; Mishkin, P.; Zhang, C.; Agarwal, S.; Slama, K.; Ray, A.; Schulman, J.; Hilton, J.; Kelton, F.; Miller, L.; Simens, M.; Askell, A.; Welinder, P.; Christiano, P. F.; Leike, J.; and Lowe, R. 2022. Training Language Models to Follow Instructions with Human Feedback. In Advances in Neural Information Processing Systems , volume 35, 27730–27744. Pikus, B.; Tiwari, P. R.; and Ye, B. 2025. Hard Examples Are All You Need: Maximizing GRPO Post-Training under Annotation Budgets. arXiv preprint arXiv:2508.14094 .Qwen Team. 2026. Qwen3.5: Towards Native Multimodal Agents. https://qwen.ai/blog?id=qwen3.5. Qwen3.5 model release; accessed July 27, 2026. Robertson, S. E.; and Zaragoza, H. 2009. The Probabilistic Relevance Framework: BM25 and Beyond. Foundations and Trends in Information Retrieval , 4(1–2): 1–174. Schulman, J.; Wolski, F.; Dhariwal, P.; Radford, A.; and Klimov, O. 2017. Proximal Policy Optimization Algorithms. 
+
+arXiv preprint arXiv:1707.06347 .Shao, Z.; Wang, P.; Zhu, Q.; Xu, R.; Song, J.; Bi, X.; Zhang, H.; Zhang, M.; Li, Y. K.; Wu, Y.; and Guo, D. 2024. DeepSeekMath: Pushing the Limits of Mathemati-cal Reasoning in Open Language Models. arXiv preprint arXiv:2402.03300 .Shi, X.; Zhou, H.; and Zhao, L. 2026. IndustryCor-pus2_DataRater (Revision d67fd69). Soren. 2025. Chinese-Qwen3-235B-Thinking-2507-Distill-100k. https://huggingface.co/datasets/Jackrong/Chinese-Qwen3-235B-Thinking-2507-Distill-100k. Hugging Face dataset; Apache-2.0 license. Xia, M.; Malladi, S.; Gururangan, S.; Arora, S.; and Chen, D. 2024. LESS: Selecting Influential Data for Targeted In-struction Tuning. In Proceedings of the 41st International Conference on Machine Learning , volume 235 of Proceed-ings of Machine Learning Research , 54104–54132. Xiaomi MiMo Team. 2026. Xiaomi MiMo-V2-Pro: Flag-ship Foundation Model towards Agent Era. https://mimo.mi. com/docs/en-US/news/previous-news/v2-pro-release. Xi-aomi MiMo model release; accessed July 27, 2026. Xu, R.; Samia, N. I.; and Liu, H. 2026. DS2-Instruct: Domain-Specific Data Synthesis for Large Language Mod-els Instruction Tuning. In Findings of the Association for Computational Linguistics: EACL 2026 , 3368–3384. Yang, A.; Li, A.; Yang, B.; Zhang, B.; Hui, B.; Zheng, B.; Yu, B.; Gao, C.; Huang, C.; Lv, C.; Zheng, C.; Liu, D.; Zhou, F.; Huang, F.; Hu, F.; Ge, H.; Wei, H.; Lin, H.; Tang, J.; Yang, J.; Tu, J.; Zhang, J.; Yang, J.; Yang, J.; Zhou, J.; Zhou, J.; Lin, J.; Dang, K.; Bao, K.; Yang, K.; Yu, L.; Deng, L.; Li, M.; Xue, M.; Li, M.; Zhang, P.; Wang, P.; Zhu, Q.; Men, R.; Gao, R.; Liu, S.; Luo, S.; Li, T.; Tang, T.; Yin, W.; Ren, X.; Wang, X.; Zhang, X.; Ren, X.; Fan, Y.; Su, Y.; Zhang, Y.; Zhang, Y.; Wan, Y.; Liu, Y.; Wang, Z.; Cui, Z.; Zhang, Z.; Zhou, Z.; and Qiu, Z. 2025. Qwen3 Technical Report. arXiv preprint arXiv:2505.09388 .Ye, D.; Liu, Z.; Sun, M.; Shi, B.; Zhao, P.; Wu, H.; Yu, H.; Yang, S.; Wu, X.; Guo, Q.; Chen, Q.; Yin, Y.; Zhang, H.; Shi, T.; Wang, L.; Fu, Q.; Yang, W.; and Huang, L. 2020. Mastering Complex Control in MOBA Games with Deep Reinforcement Learning. In Proceedings of the AAAI Conference on Artificial Intelligence , volume 34, 6672–6679. Yu, Q.; Zhang, Z.; Zhu, R.; Yuan, Y.; Zuo, X.; Yue, Y.; Dai, W.; Fan, T.; Liu, G.; Liu, J.; Liu, L.; Liu, X.; Lin, H.; Lin, Z.; Ma, B.; Sheng, G.; Tong, Y.; Zhang, C.; Zhang, M.; Zhang, R.; Zhang, W.; Zhu, H.; Zhu, J.; Chen, J.; Chen, J.; Wang, C.; Yu, H.; Song, Y.; Wei, X.; Zhou, H.; Liu, J.; Ma, W.-Y.; Zhang, Y.-Q.; Yan, L.; Wu, Y.; and Wang, M. 2025. DAPO: An Open-Source LLM Reinforcement Learning System at Scale. In Advances in Neural Information Processing Systems , volume 38, 113222–113244. Z.ai. 2026. GLM-5.1. https://docs.z.ai/guides/llm/glm-5.1. Z.ai developer documentation; accessed July 27, 2026. Zhang, T.; Patil, S. G.; Jain, N.; Shen, S.; Zaharia, M.; Stoica, I.; and Gonzalez, J. E. 2024. RAFT: Adapting Language Model to Domain Specific RAG. In First Conference on Language Modeling .Zheng, L.; Chiang, W.-L.; Sheng, Y.; Zhuang, S.; Wu, Z.; Zhuang, Y.; Lin, Z.; Li, Z.; Li, D.; Xing, E. P.; Zhang, H.; Gonzalez, J. E.; and Stoica, I. 2023. Judging LLM-as-a-Judge with MT-Bench and Chatbot Arena. In Advances in Neural Information Processing Systems , volume 36, 46595–46623. Zhou, J.; Lu, T.; Mishra, S.; Brahma, S.; Basu, S.; Luan, Y.; Zhou, D.; and Hou, L. 2023. Instruction-Following Evaluation for Large Language Models. arXiv preprint arXiv:2311.07911 .Zhu, L.; Wang, X.; and Wang, X. 2025. JudgeLM: Fine-Tuned Large Language Models Are Scalable Judges. In In-ternational Conference on Learning Representations .Appendix Overview 
+
+The appendices provide the implementation details and anal-yses supporting the main paper. Appendices A–B describe WnuanBench and judge calibration. Appendices C–F cover data construction, training, and stage-wise experiments. Ap-pendices G–I analyze capability retention, business domains, and retrieval. Appendices J–L record the Wnuan-Plus con-figuration, the unsuccessful RL-2 extension, reproducibility, and responsible use. The primary metric is the acceptable-answer rate (AAR), the fraction labeled correct or partially correct. Evaluation exports name this field Accuracy . The paper uses AAR to distinguish it from strict full correctness. 
+
+## A Development Validation, WnuanBench, and Statistical Protocol 
+
+A.1 Benchmark Composition 
+
+WnuanBench contains 707 questions grounded in autho-rized enterprise documents. The task partition contains 160 general-knowledge, 370 operational-scenario, and 177 stan-dards/specification questions. A separate taxonomy assigns the same questions to eight business domains. Each record includes a question, reference answer, source identifier, and domain label. 
+
+A.2 Construction and Data Roles 
+
+Internal personnel constructed WnuanBench independently of the automated training-QA pipeline. Candidate questions were checked against authorized enterprise documents for relevance, determinate answers, self-contained wording, and operational usefulness before expert review and quality as-surance. Questions, answers, sources, domains, and available evidence excerpts were locked before final comparison. The fitting pipeline removes exact matches against the validation and benchmark QA snapshots before Stage-I/II training and Stage-III residual selection. Shared sources, enterprise facts, and semantically related questions remain because Wnuan-Bench measures mastery of the represented knowledge base, not unseen-document transfer. A validation set sampled from the training-domain distri-bution supports offline development. Public MMLU, IFEval, and C-Eval scores select the Stage-II replay setting, and the training-side validation signal supports Stage-III monitoring. WnuanBench is QA-record-disjoint from fitting and devel-opment data and is reserved for final evaluation. Table 2 lists these roles. Exact matching finds no shared question between the validation set and WnuanBench. The overlap analysis uses a portable pre-filter candidate-pool snapshot. Normalized exact matching removes 1,479 rows covering 698 of the 707 WnuanBench questions. After removal, BGE-M3 nearest-neighbor cosine similarity has a median of 0.9295, and 458 benchmark questions have a near-est retained training question at or above 0.90. This semantic proximity is consistent with the in-corpus evaluation setting. On the validation set, Wnuan-Inst and Wnuan-RL obtain 76.89% and 89.00% AAR, respectively. Table 3 shows that the 12.11-point gain is accompanied by improvements in every supporting dimension and is close to the 11.45-point WnuanBench gain. AAR improves on 131 questions and regresses on 22 (exact McNemar p = 4 .42 × 10 −20 ). All nine validation domains have non-negative AAR changes. 
+
+A.3 Evaluation Dimensions 
+
+Acceptable-answer rate. AAR maps correct and partially correct responses to acceptable and incorrect responses to unacceptable. It is the primary outcome. 
+
+Supporting dimensions. Correctness is the mean ordered score on {0, 0.5, 1}. Completeness measures key-point cov-erage. Faithfulness measures support from the stored evi-dence field. Hallucination is the fraction of responses con-taining unsupported facts and is lower-is-better. The gen-eral benchmarks are MMLU, IFEval, and C-Eval. Their un-weighted mean is used only for replay selection and summary analysis. Mean ordered correctness on {0, 0.5, 1} is reported along-side AAR for every principal endpoint, so the supporting score retains the distinction between full and partial credit even though AAR is the primary operational decision rate. 
+
+A.4 Aggregation and Statistical Tests 
+
+Raw votes and the supporting dimensions are stored, but the main inference uses AAR. Primary paired confidence intervals use 2,000 question-level bootstrap resamples with seed 20260708. The source-cluster sensitivity analysis uses 10,000 resamples with the same seed, samples 217 source documents with replacement, and retains every question attached to each sampled source. McNemar tests use continuity correction when there are at least 25 discordant pairs and the exact binomial test other-wise. The RAG/no-RAG tests are exact. Holm adjustment is applied within planned comparison families. Figure 5 summarizes the benchmark partitions and the scope of the available judge calibration. 
+
+## B Calibration of Automatic Judging 
+
+B.1 Sampling and Binary Agreement 
+
+The calibration sample contains 50 automatically correct, 50 automatically partial, and 50 automatically incorrect Wnuan-Inst responses from the formal evaluation results. One inde-pendent authoritative domain expert assigned final labels. Three missing overall labels leave n = 147 . Because the sample is balanced by the automatic label, unweighted agree-ment is the primary summary. Post-stratification is reported as a sensitivity check. The expert was selected for domain authority, access to re-stricted enterprise context, and responsibility for interpreting the governing documents. The expert’s final labels provide the human reference for calibration. The automatic acceptable/unacceptable decision agrees with the expert on 133 of 147 responses, or 90.5% (95% CI: 85.7–94.6%). Cohen’s κ is 0.796. The post-stratified agree-ment estimate is 90.4%. These values quantify agreement with the authoritative expert labels. Artifact Questions Fitting Dev. / selection Final SHA-256 prefix / identity Stage-specific fitting pools Varies Yes No No Evaluation QA excluded pre-fitting Same-domain validation 900 No Yes No f33f650f1f37           
+
+> WnuanBench 707 No No Yes ceeb79b0cc02
+> MMLU / IFEval / C-Eval Published sets No Stage-II replay No Released versions
+
+Table 2: Data-role audit. Counts and digest prefixes identify the two frozen private evaluation snapshots. The validation and WnuanBench snapshots have zero exact-question overlap.                            
+
+> Metric Wnuan-Inst Wnuan-RL Difference 95% CI AAR 76.89 89.00 +12.11 +9.56 to +14.67 Correctness 57.33 73.17 +15.83 +13.56 to +18.17 Completeness 51.78 60.94 +9.17 +7.06 to +11.39 Faithfulness 56.22 73.50 +17.28 +15.00 to +19.78 Hallucination ↓37.89 17.00 −20 .89 −24 .11 to −17 .78
+
+Table 3: Paired Wnuan-Inst-to-Wnuan-RL changes on the separate validation set (%). Intervals use the same question-level bootstrap protocol as the final benchmark. 
+
+Figure 5: Benchmark coverage and judge calibration. (a) Task-category and business-domain counts. (b) Binary confusion matrix between the automatic ensemble and one authoritative domain expert on 147 valid labels from the stratified evaluation sample. (c) Agreement percentages and kappa coefficients are shown in separate facets. 
+
+B.2 Ordinal and Auxiliary Agreement 
+
+For the three-class overall label, 103 decisions match ex-actly, 31 automatic decisions are more generous, and 13 are stricter. Only two disagreements cross directly between cor-rect and incorrect. Most occur at the correct/partial or par-tial/incorrect boundaries. Hallucination detection has preci-Configuration item Value Minimum file length 50 characters Semantic chunk length 1,000–4,000 char-acters Adjacent-chunk overlap 400 characters File quality threshold 2.0 / 5 Chunk quality threshold 2.0 / 5 Minimum question score 3.0 / 5 Minimum answer score 3.0 / 5 Answer-rewriting gate cosine ≥ 0.8
+
+Table 4: Recorded configuration of the reference data-construction implementation. The composite QA score as-signs quality buckets and is not an additional 0.6 discard threshold. sion 0.868, recall 0.657, and F1 0.748 against the expert’s positive labels. 
+
+B.3 Selection, Training, and Evaluation Judge Roles 
+
+The residual-selection judge Jsel and formal evaluation use the same adaptive three-model correctness protocol. Locally deployed gpt-oss-120b and MiniMax-M2.5 provide primary labels on {0, 0.5, 1} (OpenAI 2025; MiniMax 2026a); on disagreement, DeepSeek-V3.2 supplies a third vote and the ordered median of valid scores is retained (DeepSeek-AI 2025b). Stage III selects aggregate 0, corresponding to in-correct. A separate locally deployed Qwen3.5-35B judge pro-duces GRPO semantic rewards (Qwen Team 2026). The re-ward judge is therefore disjoint, whereas selection and formal evaluation share the full ensemble. 
+
+## C Stage I: Data Construction and Target-Aligned Answer Rewriting 
+
+C.1 Data Inventory and Provenance 
+
+The pre-rewriting file contains 231,662 rows, 221,825 unique questions, 5,648 source paths, and 38,467 source-chunk iden-tifiers. The final SFT-domain file contains 221,294 rows, 220,915 unique questions, 5,536 source paths, and 38,359 source-chunk identifiers. The 10,368-row reduction reflects consolidation of repeated question instances and exact-match filtering. The final rows do not retain anchor, task-form, generator-version, or complete run-lineage fields. Tables 4 and 5 report the configuration and functional assignments available from the reference implementation. 
+
+C.2 Reference Implementation 
+
+File- and chunk-quality scores are produced by an exter-nal scorer. The reference code is fail-open when that end-point errors or returns no score. The 2.0 thresholds apply to successful responses and do not prove that every stored row received a valid external score. Endpoint-failure counts, stage-by-stage retention, exact endpoint versions, configura-tion hashes, and row-level provenance were not retained. The generator supports six task forms: fact extraction, mechanism explanation, design rationale, conditional con-straint, limitation or trade-off, and comparison. Questions must name the anchor explicitly, avoid local references such as “the above,” and remain answerable without the source document. Candidate pairs are removed when rule or ref-erent checks fail, the question is judged unanswerable, the answer is judged unfaithful, or question/answer quality falls below 3 on a five-point scale. 
+
+C.3 Answer Rewriting 
+
+The target model receives the question and original answer and generates a candidate answer. The candidate replaces the original only when MiniLM cosine similarity is at least 0.8 and format filtering passes. Generation uses Qwen3-32B with temperature 0.7, top-p 0.8, top-k 20, and a 4,096-token output limit. Of 221,294 rows, 164,793 candidate generations (74.47%) pass the similarity gate. Format filtering removes 49 oth-erwise eligible candidates containing the literal token 
+
+<think> . The final artifact contains 164,744 rewritten tar-gets (74.45%) and 56,550 retained original targets. We use 
+
+target-aligned answer rewriting rather than knowledge in-duction for this operation because the controlled evidence does not show an independent domain-AAR gain. 
+
+## D Training, GRPO, and Retrieval Configurations 
+
+D.1 Supervised Fine-Tuning 
+
+Table 6 records the Wnuan-Inst configuration. The general-replay data are the complete 106,950-example train split of Jackrong/Chinese-Qwen3-235B-Thinking-2507-Distill-100k , released under Apache-2.0. 
+
+D.2 Main and Controlled GRPO Runs 
+
+Both RL experiments initialize from Wnuan-Inst and sample five responses per prompt. Table 7 separates the reported main run from the controlled data-selection experiment. For each prompt x, GRPO samples responses yi ∼
+
+πθold (· | x) and sets Ri = r(x, y i). With five responses per group, let ¯R and sR denote the mean and standard deviation of the five rewards. The normalized advantage is 
+
+bAi = Ri − ¯RsR + 10 −6 , ¯R = 15
+
+> 5
+
+X
+
+> j=1
+
+Rj . (4) Let ρi,t = πθ (yi,t | x, y i,<t )/π θold (yi,t | x, y i,<t ). The im-plementation maximizes 
+
+J (θ) = 
+
+P 
+
+> i,t
+
+mi,t 
+
+h
+
+ψ(ρi,t , bAi) − βd LV 
+
+> i,t
+
+iP 
+
+> i,t
+
+mi,t 
+
+, (5) In Equation 5, mi,t masks valid response tokens and 
+
+ψ(ρ, A ) = 
+
+min( ρA, ¯ρA ), A ≥ 0,
+
+max {min( ρA, ¯ρA ), CA }, A < 0, (6) The surrogate in Equation 6 uses ¯ρ = clip( ρ, 1 − ϵ, 1 + ϵ).The reference-policy term is dLV = e∆ − ∆ − 1, where Pipeline role Model or rule Recorded behavior File and chunk screening IndustryCorpus2 DataRater (Shi, Zhou, and Zhao 2026) Regression score with the thresholds in Table 4 Semantic chunking Qwen3-14B Semantic and paragraph-boundary segmentation Question generation and validation Qwen3-32B Anchor-aware generation followed by self-containedness checks Answer generation DeepSeek-V3.2 Single-model generation; optional voting disabled Referent check and QA evaluation Qwen3-32B Rule, referent, answerability, faithfulness, and quality checks 
+
+Table 5: Functional assignments in the reference implementation. They document the available code, not row-level lineage for the final training file.             
+
+> Component Configuration Initialization Qwen3-32B; full-parameter SFT in bf16 Domain data 221,294 Document-to-QA examples after answer rewriting and exact-question exclusion General replay 106,950 examples from Chinese-Qwen3-235B-Thinking-2507-Distill-100k Other data 9,747 instruction + 2,387 train-out + 1,042 identity examples; 341,420 examples in total Sequence construction 1,024-token cutoff; packing enabled; 127,722 packed sequences Optimization AdamW; weight decay 0; max gradient norm 1; 3 epochs; 11,976 updates; global batch 32; peak LR
+> 10 −5; cosine decay; warmup ratio 0.05 Randomness Training seed 42 Parallelism DeepSpeed ZeRO-3; 4 nodes ×8 accelerators Software Transformers 4.53.0; PyTorch 2.6.0+cu124; Datasets 3.6.0; Tokenizers 0.21.4
+
+Table 6: Configuration of the final Wnuan-Inst run. The SFT log does not record the accelerator model. 
+
+∆ = log πref − log πθ , with numerical clipping. We use 
+
+ϵ = 0 .2, C = 3 , and β = 10 −2 (Shao et al. 2024; Schulman et al. 2017; Ye et al. 2020). The shared semantic reward is 
+
+r = 0 .6racc + 0 .3( rlogic + rprof + rconcise )/3 + 0 .1rformat .
+
+(7) A locally deployed Qwen3.5-35B judge scores the semantic components, while normalized exact matches take a deter-ministic unit-score fast path. Table 8 defines each compo-nent. The direct-answer template in the controlled experi-ment does not request the tags expected by the format regex. The selected endpoint logs record zero format reward for all three controlled arms, leaving a common accuracy-and-quality comparison. Each controlled arm runs updates 1–50 and then retains model weights while restarting the optimizer for updates 51– 100. Residual-error sampling has the highest training-side validation accuracy reward at update 100 and is used for the main Wnuan-RL configuration. The main run and con-trolled experiment differ in response format, batch size, se-quence length, hardware, and total schedule. Only the three controlled arms isolate data selection. The full-run online validation trajectory and stopping evidence are reported sep-arately from the controlled comparison. 
+
+D.3 Retrieval-Augmented Inference 
+
+The RAG corpus contains 8,573 unique source files and 597,574 indexed chunks. Retrieval draws 30 candidates from BM25 (Robertson and Zaragoza 2009) and 30 from BGE-M3 (Chen et al. 2024), fuses them with weighted reciprocal-rank fusion, and retains five chunks. These corpus counts are dis-tinct from the Stage-I training-data provenance counts. Generation disables explicit thinking and uses tempera-ture 0.7, top-p 0.95, repetition penalty 1.1, at most 1,024 new tokens, and a 16,384-token maximum context. Retrieval traces are saved independently so that Base, Inst, and RL re-ceive identical contexts. The no-RAG responses are historical generations rather than same-seed paired samples. No gold retrieval relevance labels or Recall@5 values are available. 
+
+## E Stages I–II: Configuration Evidence 
+
+E.1 Stage-I Configurations 
+
+Tables 9 and 10 provide the complete outcome and budget breakdown underlying the Stage-I summary. The Document-to-QA gain over fixed-window training has a 95% CI of 27.30–34.94 points (McNemar p < 0.001 ). Answer rewrit-ing changes AAR by −1.41 points (95% CI: −4.53 –1.56; 
+
+p = 0 .423 ) and the general-benchmark average by +2.94 points. These are unequal-budget configuration studies: the logged runtimes differ more than the update and FLOP esti-mates. 
+
+E.2 Stage-II Replay Grid 
+
+Tables 11 and 12 give the complete replay grid behind the selected 48.3% operating point. Selection uses the public-general average, with the validation result as a secondary de-velopment measure. The validation and later WnuanBench rankings differ across the five candidates (Pearson r = 0 .12 ,Spearman ρ = −0.05 ). For budget context, a six-epoch domain-only reference obtains 85.86% AAR and an 80.37% Item Main Wnuan-RL Controlled data-selection experiment Prompt / response limit 2,048 / 4,096 tokens 2,048 / 2,048 tokens Response form Reasoning plus tagged answer Direct answer; reasoning disabled Training pool 56,147 Wnuan-Inst errors Error, full, or size-matched random pool Update budget 3 epochs; reported update 327 100 updates for every arm Global / rollout batch 128 / 512 80 / 480 Rollouts per prompt 5 5Learning rate / temperature 10 −6 / 1.0 10 −6 / 1.0 Clip ratio / KL coefficient 0.2 / 10 −2 0.2 / 10 −2        
+
+> Tensor parallelism 44Hardware allocation 2 nodes ×8 H100-80GB 5 nodes ×8 A100-SXM4-40GB
+
+Table 7: Configurations of the main GRPO run and the controlled data-selection experiment.                  
+
+> Component Range Operational meaning
+> racc [0 ,1] Factual correctness against the reference answer; normalized exact matches receive 1
+> rlogic [0 ,1] Logical soundness and consistency of the response
+> rprof [0 ,1] Professional, domain-appropriate expression
+> rconcise [0 ,1] Absence of irrelevant or redundant content
+> rformat {0,1}Presence of the answer tags required by the main-run response template
+
+Table 8: Reward components used in Equations 4 and 7. The three semantic quality scores are averaged before receiving total weight 0.3. general average with 8,868 updates and 1.18 × 10 15 FLOPs. The 96.7% replay run obtains 80.34% and 83.31% with 11,976 updates and 1.59 × 10 15 FLOPs, so the 35% FLOP difference precludes a compute-matched interpretation. 
+
+## F Stage III: Controlled Residual-Error Sampling 
+
+F.1 Data Arms and Endpoints 
+
+Residual selection uses a 230,183-row QA pool with origi-nal targets. The recorded adaptive three-model protocol la-bels 56,147 Wnuan-Inst responses incorrect after conditional disagreement adjudication and ordered-median aggregation. The residual arm uses those rows. The full arm samples from all 230,183 rows, and the random arm uses seed 42 to draw 56,147 rows from the same pool. A fourth reward-sensitivity arm keeps the residual pool but changes the accuracy/quality weights from 0.6/0.3 to 0.7/0.2. It is not a data-selection control. Table 13 reports the update-100 WnuanBench endpoints. After fixing those checkpoints and the evaluation recipe, we evaluate the same endpoints on the same-domain valida-tion set. Generation settings and formal scoring are common across arms: gpt-oss-120b and MiniMax-M2.5 provide the primary correctness votes, DeepSeek-V3.2 adjudicates dis-agreements, and gpt-oss-120b scores the auxiliary dimen-sions. Tables 14 and 15 report this retrospective comparison. It tests consistency within the same enterprise distribution, not source-held-out evidence. 
+
+F.2 Reference-Target Sensitivity Diagnostic 
+
+Residual selection uses the original targets in the 230,183-row selection pool. To assess whether automated incorrect la-bels are sensitive to that reference choice, we use an archived rewrite-output artifact, prior to final exact-question exclu-sion, to map a unique alternative target to 231,512 of the 231,662 inventory rows. Of these comparable rows, 107,432 have a changed target and 124,080 are identical exactly or after normalization; 150 rows without a unique alternative target are excluded. We hold each archived Wnuan-Inst pre-diction fixed and re-judge all 107,432 changed-target rows against the rewritten target using the formal three-judge cor-rectness ensemble. The rescan contains 107,432 valid results, with no missing rows, judge errors, or invalid or duplicate sample identifiers. Table 16 shows that changed-target membership is sta-ble for 91.69% of rows and that the incorrect rate changes by −0.86 percentage points, from 25.15% to 24.28%. The nonzero migration is bidirectional: 4,928 rows leave and 4,001 enter the automated incorrect set. Across all compara-ble rows, membership agreement is 96.14%, but this aggre-gate includes the 124,080 rows whose targets did not change. As a separate provenance check on the pre-exclusion archive, accepted-rewrite rows have a 23.75% historical residual rate, compared with 25.77% for retained-target rows; this associ-ation does not support systematic over-selection of accepted rewrites and is not interpreted causally. This fixed-prediction audit measures reference-target sen-sitivity under the shared three-judge aggregation policy. Re-judging only the rewritten-target side leaves judge rerun vari-ability in the observed migrations, so the audit cannot isolate a causal effect of rewriting. It also does not replace human semantic-equivalence validation or a comparison of models trained on original and rewritten targets. SFT data AAR Correct. Complete. Faithful. Halluc. ↓ General avg. Fixed-window text 52.33 33.73 22.70 43.21 57.14 82.13 Document-to-QA 83.45 68.81 61.88 67.96 29.56 79.21 Document-to-QA + answer rewriting 82.04 64.71 56.01 63.44 32.11 82.15 
+
+Table 9: End-to-end Stage-I configuration results (%). Document-to-QA uses 27.8% more estimated FLOPs than fixed-window training.             
+
+> SFT data Updates FLOPs Runtime (s) Fixed-window 3,974 5.29 ×10 14 10,765 Document-to-QA 5,082 6.76 ×10 14 26,764 + answer rewriting 4,434 5.90 ×10 14 23,437
+
+Table 10: Training budgets for the Stage-I configurations. All runs use three epochs. FLOPs use a common per-update estimate, while wall-clock runtimes are logged separately. 
+
+F.3 Source-Cluster Bootstrap Sensitivity 
+
+Table 17 accounts for correlation among questions grounded in the same source document. Both pipeline-stage gains and both residual-versus-control contrasts remain above zero un-der source-cluster resampling. The full-versus-random inter-val spans zero under both resampling schemes. Under the prespecified ensemble, the complete arm order-ing matches WnuanBench: residual first, random second, and full third. Across only three fixed arms, Pearson r = 0 .98 
+
+and Spearman ρ = 1 .00 are descriptive consistency checks, not population-level correlation evidence. Residual selection ranks first in five of nine validation domains and five of eight WnuanBench domains. The taxonomies differ, so we do not align domains across sets. The residual–full contrast survives multiplicity correction on both sets. The residual– random validation interval excludes zero before correction, but its Holm-adjusted p = 0 .0685 does not. We treat this result as directionally consistent rather than a second signif-icant replication. 
+
+F.4 Aggregate GRPO Signal Diagnostics 
+
+The W&B histories contain update-level scalar aggregates for the main run and all three controlled arms, without prompt or response text. Table 18 applies Equation 7 to the main-run validation changes from update 0 to update 327. The accuracy, mean-quality, and format components change by 0.1964, 0.1384, and 0.7866. After weighting, they contribute 0.1179, 0.0415, and 0.0787 to the 0.2380 overall-reward gain. Figure 6 summarizes the main-run and controlled-arm sig-nals. Under the matched protocol, the residual arm receives lower mean on-policy accuracy reward over updates 51–100 (0.498 versus 0.730 for full-pool and 0.734 for random sam-pling), indicating harder sampled prompts. It also records higher entropy, mean absolute PPO-KL, gradient norm, and upper-clipping fraction (Table 19). These update-level statis-tics describe training dynamics, not causal mediation. Figure 7 compares the online validation trace with the final WnuanBench endpoint. The validation signal is logged every five updates after update 50. Panel (a) subtracts each arm’s update-50 value, and the exponential moving average (α = 0 .5) is used only for visualization. All calculations use unsmoothed records. At update 50, the residual, full, and random arms obtain 83.73%, 86.99%, and 85.29% AAR. By update 100, their AAR changes by +5.66, −0.71 , and +1.13 points, respec-tively. These changes cover the common second segment after the optimizer restart. The online monitor is a continuous reward-judge average, whereas formal correctness is ordinal and AAR thresholds the final ensemble label. Their mean endpoint discrepancy is 1.19 points at update 100, and relative monitor changes preserve the observed ordering of AAR gains. The four com-pleted arms are insufficient to estimate a general correlation or reconstruct a pointwise AAR training curve. Table 20 gives the planned WnuanBench contrasts. The update-100 AAR intervals are 87.1–91.5 for residual, 83.7– 88.8 for full, and 84.0–88.8 for random. Residual versus random controls pool size, while residual versus full holds updates fixed but not per-example exposure. Full and random are statistically indistinguishable on both question sets. The 0.14-point gap between the default and 0.7/0.2 reward arms does not establish robustness to reward weights. 
+
+## G Capability Retention and Residual Errors 
+
+Figure 8(a) provides the full 32B public-benchmark trajec-tory behind the aggregate retention result, and Table 21 re-ports the endpoint components for both routes. Within the 32B route, the Inst-to-RL average decline is concentrated in IFEval rather than shared uniformly across MMLU, IFE-val, and C-Eval. Within the separate Wnuan-Plus route, all three components decrease after LoRA-SFT: MMLU by 5.29 points, IFEval by 5.00 points, and C-Eval by 7.82 points. Panel (b) gives the complete acceptable/unacceptable tran-sition accounting for Wnuan-Inst to Wnuan-RL. Qualita-tive review localizes recurrent failures to atomic numbers and dates, departmental ownership, exact document names, closed-set enumerations, and conditions that delimit other-wise correct rules. Judge rationales also suggest factual sub-stitution, missing required points, and unsupported answer expansion. These categories are not reported as frequencies Replay label General examples Actual ratio Val. AAR WnuanBench AAR Correct. Halluc. ↓ General avg. 0% 0 0.0% 76.78 82.04 64.71 32.11 82.15 5% 10,000 4.5% 76.56 80.62 65.42 31.54 83.27 25% 50,000 22.6% 76.56 81.05 63.93 31.97 83.65 50% 106,950 48.3% 76.89 80.06 62.87 33.66 84.64        
+
+> 100% 213,900 96.7% 76.44 80.34 63.51 31.12 83.31
+
+Table 11: General-data replay grid (%). Replay labels are nominal display labels relative to 221,294 domain examples. The 48.3% setting maximizes the public-general average and is selected before WnuanBench evaluation.                   
+
+> Actual replay ratio MMLU IFEval C-Eval 0.0% 85.58 79.00 81.87 4.5% 85.02 83.15 81.65 22.6% 86.32 82.02 82.62 48.3% 85.53 86.52 81.88 96.7% 86.65 80.00 83.28
+
+Table 12: Components of the general-benchmark average in Table 11. 
+
+Figure 6: Aggregate GRPO diagnostics. (a) Main-run validation reward components. (b) Main-run entropy and absolute PPO-KL, shown as centered 15-update moving averages for readability. (c) Raw controlled-arm means over updates 51–100. The residual arm combines lower on-policy accuracy reward with larger aggregate update statistics under the matched protocol. because WnuanBench lacks mutually exclusive expert error labels. 
+
+## H Within-Enterprise Domain Analysis 
+
+Figure 9 provides the complete descriptive domain break-down. Six raw checkpoint-trajectory McNemar tests are be-low 0.05, but only engineering management and departmen-tal responsibilities remain significant after Holm correction. In the controlled experiment, production technology and sales are the two numerical exceptions relative to full-pool sampling, and none of the domain-level controlled contrasts is significant. Small slices and ceiling effects make the ag-gregate comparisons primary. Arm Pool size AAR Correct. Complete. Faithful. Halluc. ↓                        
+
+> Residual errors 56,147 89.39 74.05 63.37 71.71 20.37 Full pool 230,183 86.28 72.14 64.00 68.95 24.61 Size-matched random 56,147 86.42 72.56 66.55 68.10 23.20 Reward 0.7/0.2 56,147 89.25 74.12 62.38 71.29 20.08
+
+Table 13: Controlled answer-only GRPO endpoints at update 100 (%).                          
+
+> Arm AAR 95% CI Correct. Complete. Faithful. Halluc. ↓
+> Residual errors 81.33 78.78–83.78 63.89 44.56 41.39 24.67
+> Full pool 77.78 75.11–80.56 62.67 49.00 37.78 31.56 Size-matched random 78.67 76.00–81.33 62.83 48.89 37.44 33.00
+
+Table 14: Retrospective Stage-III endpoints on the validation set (%). Intervals resample questions from each fixed endpoint and do not capture retraining variance. 
+
+Figure 7: Post hoc agreement between the Stage-III training monitor and final evaluation. (a) Change in the raw validation accuracy reward from update 50, with an EMA overlay for readability. (b) Raw update-100 validation accuracy reward versus final formal correctness on the same 707 WnuanBench questions. The dashed line denotes equality, and error bars are 95% question-level bootstrap intervals from 2,000 resamples. The mean absolute discrepancy is 1.19 percentage points. (c) Update-50-to-100 change in the validation signal versus the paired change in formal AAR. Error bars are paired 95% question-level bootstrap intervals. Pearson r = 0 .94 and Spearman ρ = 1 .00 are descriptive across four fixed arms, not estimates of retraining variability. Comparison Difference 95% CI Discordant pairs Raw p Holm p                      
+
+> Residual −full +3.56 +1.33 to +5.78 69 / 37 0.0026 0.0078 Residual −random +2.67 +0.22 to +5.00 71 / 47 0.0342 0.0685 Full −random −0.89 −3.22 to +1.33 53 / 61 0.5121 0.5121
+
+Table 15: Paired validation-set comparisons. Differences are AAR percentage points. Discordant pairs list improve-ments/regressions for the first-named arm. Holm adjustment covers all three contrasts.                     
+
+> Statistic Changed targets All comparable targets Rows 107,432 231,512 Incorrect under both targets 22,086 51,207 Original-only incorrect 4,928 4,928 Rewritten-only incorrect 4,001 4,001 Neither incorrect 76,417 171,376 Membership unchanged (%) 91.69 96.14 Original-target incorrect rate (%) 25.15 24.25 Rewritten-target incorrect rate (%) 24.28 23.85 Incorrect-set Jaccard overlap 0.712 0.852
+
+Table 16: Fixed-prediction reference-target sensitivity. The changed-target column is the primary diagnostic. The all-comparable column additionally reuses the original label for 124,080 unchanged targets and therefore mechanically has higher agreement. Rows without a unique rewritten target ( n = 150 ) are excluded. 
+
+Figure 8: Capability retention and question-level transitions. (a) MMLU, IFEval, C-Eval, and their unweighted average across Base, Inst, and RL. The unsuccessful RL-2 extension is de-emphasized in gray. The Inst-to-RL average changes by −1.20 points, while IFEval changes by −6.52 points. (b) Wnuan-Inst-to-Wnuan-RL transitions on the same 707 questions: 101 repairs, 20 regressions, 546 retained acceptable answers, and 40 persistent failures. 
+
+## I Extended RAG Results 
+
+I.1 Same-Question Comparisons 
+
+RAG changes Wnuan-Base from 52.76% to 72.98% AAR, Wnuan-Inst from 80.06% to 76.24%, and Wnuan-RL from 91.51% to 81.75%. Improved/regressed item counts are 198/55, 76/103, and 29/98. The exact McNemar p-values are < 0.0001 , 0.0517, and < 0.0001 . Under the common retrieval traces, the SFT and RL stage gains remain +3.25 and +5.52 points, smaller than their no-RAG counterparts. The no-RAG generations were not regenerated with the same decoding seeds. The results show a stage-dependent end-to-end pattern under one retrieval system, not a random-ized retrieval-by-training interaction. Paired contrast Difference Question-level 95% CI Source-cluster 95% CI Wnuan-Inst − Wnuan-Base +27.30 +23.20 to +31.54 +19.71 to +34.21 Wnuan-RL − Wnuan-Inst +11.45 +8.49 to +14.43 +8.52 to +15.05 Residual − full +3.11 +0.71 to +5.66 +0.83 to +5.70 Residual − random +2.97 +0.85 to +5.09 +0.81 to +5.08 Full − random −0.14 −2.55 to +2.12 −2.64 to +2.04 
+
+Table 17: Question- and source-cluster bootstrap sensitivity on WnuanBench (AAR percentage points). Primary question-level intervals use 2,000 resamples. Source-cluster intervals use 10,000 resamples over 217 source documents, retaining all questions from each sampled document.                          
+
+> Reward component Coefficient Update 0 Update 327 Raw change Weighted contribution Accuracy 0.6 0.5836 0.7800 +0.1964 +0.1179 Mean of logic, professionalism, and conciseness 0.3 0.7457 0.8840 +0.1384 +0.0415 Format 0.1 0.2134 1.0000 +0.7866 +0.0787 Overall reward –0.5952 0.8332 +0.2380 +0.2380
+
+Table 18: Main-run validation-reward decomposition from update 0 to update 327. Weighted contribution is the coefficient multiplied by the raw component change. The three component contributions sum to the observed overall-reward change. 
+
+I.2 Quality Dimensions 
+
+Figure 10(b) reports the changes in correctness, complete-ness, and hallucination under RAG. Panel (c) compares the stored no-RAG and reported RAG faithfulness aggregates under the common evaluation protocol. 
+
+I.3 Post Hoc Retrieval-Trace Slices 
+
+At least one retrieved chunk shares the question’s business domain for 433 questions. No top-five chunk shares the do-main for 274. In the same-domain slice, RAG changes Base, Inst, and RL by +35.80, +6.47, and −2.54 points. In the proxy-negative slice, the changes are −4.38 , −20 .07 , and 
+
+−21 .17 points. A domain match need not contain the answer and may correlate with question difficulty. The association motivates retrieval confidence gating but does not establish retrieval mismatch as the cause. 
+
+## J API Context and Wnuan-Plus Configuration 
+
+Table 1 of the main paper reports six API endpoints and the Wnuan-Plus route. The API systems are identified by their official provider releases (Z.ai 2026; MiniMax 2026b; Moon-shot AI 2026; DeepSeek-AI 2026; Xiaomi MiMo Team 2026; OpenAI 2026). Their decoding, serving configuration, and compute are not matched, so they provide same-question con-text rather than a controlled model comparison. Wnuan-Plus starts from DeepSeek-V3.1-Terminus (DeepSeek-AI 2025a), receives LoRA-SFT but no RL, and records the SFT route at a distinct scale. It does not isolate model size, data, or adaptation method. Supplementary Appendix G reports the corresponding general-capability components. Table 22 records the available Wnuan-Plus configuration. 
+
+## K Unsuccessful Extension Beyond Stage III 
+
+Wnuan-RL-2 starts from Wnuan-RL and partitions the 231,662 pre-rewriting-inventory examples according to Wnuan-Inst and Wnuan-RL correctness: persistent errors (A), regressions (B), learned cases (C), and consistently cor-rect cases (D). It retains all 19,401 A and 9,951 B examples, 3,675 of 36,746 C examples (10%), and 4,967 of 165,564 D examples (3%), for 37,994 examples in total. The endpoint changes AAR from 91.51% to 91.37%, cor-rectness from 78.43% to 79.70%, completeness from 66.76% to 69.73%, faithfulness from 72.14% to 69.66%, hallucina-tion from 15.70% to 20.93%, and IFEval from 80.00% to 76.00%. AAR is statistically unchanged ( −0.14 points, Mc-Nemar p = 1 ), while hallucination and instruction following worsen. Without an otherwise identical unbucketed control, this experiment does not isolate the partition rule. It shows only that the evaluated continuation is not a successful ex-tension. 
+
+## L Reproducibility and Responsible Use 
+
+L.1 Releaseable Evaluation Capsule 
+
+The separately uploaded Code and Data Supplement includes a non-proprietary evaluation capsule under 
+
+reproducibility/ . The file correctness_judge_ prompt.txt gives the complete correctness prompt used for the primary outcome, including the 0/0.5/1 rubric and JSON output contract. The definitions for completeness, faithfulness, and hallucination appear in Supplementary Ap-pendix A. These are supporting dimensions rather than the primary inference. The evaluation flow is: 1. generate one answer per frozen question and checkpoint under the recorded decoding condition; 2. score correctness independently with gpt-oss-120b and MiniMax-M2.5 using the released template; 3. if the two ordered labels disagree, obtain a DeepSeek-V3.2 vote and retain the median of the three labels; Training arm Accuracy reward Entropy |PPO KL | × 10 4 Gradient norm Upper clip (%) Residual errors 0.4983 0.3863 2.724 1.432 0.958 Full pool 0.7299 0.3394 0.992 0.819 0.718 Size-matched random 0.7341 0.3619 1.049 0.827 0.721 
+
+Table 19: Mean W&B scalars over controlled updates 51–100. The three runs match on seed, rollouts per prompt, batch sizes, learning rate, PPO epochs, response limit, validation frequency, GRPO estimator, and KL coefficient.                              
+
+> Comparison Difference 95% CI Discordant pairs Raw pHolm p
+> Residual −full +3.11 +0.71 to +5.66 50 / 28 0.017 0.035 Residual −random +2.97 +0.85 to +5.09 42 / 21 0.012 0.035 Full −random −0.14 −2.55 to +2.12 35 / 36 1.000 1.000
+
+Table 20: Planned paired comparisons at update 100. Differences and intervals are percentage points. Discordant pairs list improvements/regressions for the first-named arm. 
+
+Figure 9: Business-domain results. (a) Base, Inst, and RL AAR and the RL-minus-Inst change. All eight changes are positive. Asterisks mark the two domains with Holm-adjusted p < 0.05 . (b) Controlled residual, full, and random endpoints with residual-minus-control differences. No controlled domain contrast is significant, so these slices are descriptive. 4. map scores 1, 0.5, and 0 to correct, partially correct, and incorrect, and compute AAR by the definition in the main paper; 5. compare aligned questions with paired bootstrap intervals Route Checkpoint MMLU IFEval C-Eval General avg. 32B Wnuan-Base 89.19 88.76 87.89 88.61 32B Wnuan-Inst 85.53 86.52 81.88 84.64 32B Wnuan-RL 86.14 80.00 84.17 83.44 671B Wnuan-Plus-Base 91.82 88.00 91.31 90.38 671B Wnuan-Plus-Inst 86.53 83.00 83.49 84.34 
+
+Table 21: Public-benchmark components for the two Wnuan routes (%). General avg. is the unweighted mean of MMLU, IFEval, and C-Eval. Cross-route values are descriptive because the routes use different backbones and adaptation procedures. 
+
+Figure 10: RAG diagnostics. (a) AAR before and after applying the saved BM25+BGE-M3 top-5 traces. (b) Signed changes in AAR, correctness, completeness, and hallucination. Hallucination is sign-inverted so positive means improvement. (c) Stored no-RAG and reported RAG faithfulness under the common aggregation protocol. (d) RAG-minus-no-RAG AAR in post hoc retrieval-trace slices. Same-domain matching is a proxy, not gold Recall@5. and McNemar tests, applying Holm correction within the planned three-arm family. 
+
+synthetic_evaluation_fixture.jsonl pro-vides four explicitly fictional question–reference–prediction pairs with paired endpoint labels. It contains no en-terprise document, question, answer, evidence, path, or identifier. The standard-library script reference_ statistics.py validates the schema and reproduces AAR, mean ordered correctness, a 2,000-resample paired bootstrap interval with seed 20260708, and an exact Mc-Nemar test. The bundled script reproducibility/ analyze_stage3_validation.py regenerates the reported cross-set endpoint tables. reproducibility/ analyze_source_cluster_bootstrap.py regen-erates the question- and source-cluster sensitivity ta-ble, while reproducibility/analyze_training_ benchmark_overlap.py removes exact question matches before computing text-free, hash-indexed BGE-M3 nearest-neighbor statistics. With authorized read access to the recorded runs, reproducibility/analyze_wandb_ grpo_signals.py requests scalar keys only and regener-ates the aggregate GRPO trajectories, reward decomposition, controlled-arm summary, and configuration summary. Their private inputs are described by the command-line interfaces Component Recorded configuration Model and adaptation Wnuan-Plus-Inst; initialized from DeepSeek-V3.1-Terminus; LoRA-SFT only; no RL Budget and precision 3 epochs; 30,540 updates; bf16; maximum sequence length 700 Batching Global batch 3; microbatch 1; gradient accumulation 1 Optimization HybridAdam; peak LR 10 −5; warmup 0.05; weight decay 0.1; gradient clipping at 1.0 LoRA Rank 16; alpha 32 Parallelism 3 nodes × 8 accelerators; tensor parallel 1; pipeline parallel 3; expert parallel 8 Memory and kernels ZeRO-2 with CPU offload; gradient checkpointing; FlashAttention 
+
+Table 22: Recorded configuration of the 671B Wnuan-Plus route. The available run metadata do not identify the accelerator model. and are not included in the release. 
+
+L.2 Data Availability 
+
+The private source documents and complete WnuanBench cannot be distributed because they are governed enterprise materials. The released materials expose the primary eval-uation prompt, label aggregation, result schema, statistical transformations, training configurations, data roles, endpoint counts, paired tests, and snapshot digest prefixes. Row-level enterprise provenance and several historical environment fields remain inside the controlled archive. 
+
+L.3 Local Processing and Data Governance 
+
+The study uses authorized internal policy, standard, and process documents under data-minimization and de-identification procedures. Document processing, QA con-struction, filtering, target rewriting, SFT, residual selection, and GRPO ran on locally deployed models inside the con-trolled environment. No external provider API was used for data construction or training, and no source document or evidence excerpt was transmitted outside that environment. The six API systems in Supplementary Appendix J received benchmark question text only, without source documents, evidence excerpts, or reference answers. 
+
+L.4 Intended Use 
+
+Wnuan is intended as an internal knowledge assistant whose outputs require human verification. It is not intended to make automated personnel, compliance, safety, or other high-impact decisions. The evidence is limited to one enterprise, one same-domain validation set, one final in-domain bench-mark, one completed run per configuration, and the reported retrieval and optimization budgets.
