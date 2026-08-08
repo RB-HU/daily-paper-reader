@@ -1,0 +1,471 @@
+Title: Simulation-Based Neural Policies for Portfolio Choice: Architecture, Training, and Interpretability
+
+URL Source: https://arxiv.org/pdf/2608.03933v1
+
+Published Time: Wed, 05 Aug 2026 01:22:26 GMT
+
+Number of Pages: 9
+
+Markdown Content:
+# Simulation-Based Neural Policies for Portfolio Choice: Architecture, Training, and Interpretability 
+
+# Jules Viard ✉∗
+
+Imperial College London United Kingdom viard.jules@live.fr 
+
+# Alexander Michaelides 
+
+Imperial College London United Kingdom a.michaelides@imperial.ac.uk 
+
+# Panos Parpas 
+
+Imperial College London United Kingdom p.parpas@imperial.ac.uk 
+
+## Abstract 
+
+Many economic decision problems, lifecycle consumption–saving and dynamic portfolio choice, are finite-horizon stochastic control problems with continuous states and actions. When the state is low-dimensional these problems are solved by dynamic program-ming on a grid. The grid cost grows exponentially in the state dimension, known as the curse of dimensionality, which motivates replacing the value-function grid with a neural policy optimized directly through simulation. Such policies are usually studied in the high-dimensional settings that motivate them, precisely where no reference solution exists. So the contribution of any single ar-chitectural or training choice cannot be isolated and diagnosed. We therefore take a step back and treat both the architecture and the solution method as the objects of study. To this end, we consider a lifecycle problem with a sufficiently low-dimensional normalized state space to admit an accurate dynamic programming solution, which is used for evaluation. We compare four architectures. The simplest consists of a single time-conditioned network. We then consider two networks concatenated across the regime switch, fol-lowed by one network per date trained backward against frozen downstream policies. Finally, we evaluate a constrained variant of the per-date architecture. Decoupling the policy across time gives each date a short, well-posed objective, which we pair with direction-dominant optimization that normalizes away gradient magnitude. Architectures that lead to similar realized utility objec-tive can nevertheless differ in whether they respect the underlying problem’s economics. We therefore evaluate each design jointly based on welfare, a solution-free Bellman residual, shape restric-tions, and the resulting policy functions. 
+
+ACM Reference Format: 
+
+Jules Viard, Alexander Michaelides, and Panos Parpas. 2026. Simulation-Based Neural Policies for Portfolio Choice: Architecture, Training, and Interpretability. In Proceedings of ACM INTERNATIONAL CONFERENCE ON AI IN FINANCE (ICAIF). ACM, New York, NY, USA, 9 pages. https: //doi.org/XXXXXXX.XXXXXXX 
+
+> Permission to make digital or hard copies of all or part of this work for personal or classroom use is granted without fee provided that copies are not made or distributed for profit or commercial advantage and that copies bear this notice and the full citation on the first page. Copyrights for components of this work owned by others than the author(s) must be honored. Abstracting with credit is permitted. To copy otherwise, or republish, to post on servers or to redistribute to lists, requires prior specific permission and/or a fee. Request permissions from permissions@acm.org.
+> ICAIF, Milan, Italy
+> © 2026 Copyright held by the owner/author(s). Publication rights licensed to ACM. ACM ISBN 978-x-xxxx-xxxx-x/YYYY/MM https://doi.org/XXXXXXX.XXXXXXX
+
+## 1 Introduction 
+
+Economic decision-making is, fundamentally, dynamic optimization under uncertainty: an agent chooses actions over time to maximize an expected discounted payoff subject to a stochastic law of motion using control variables [22, 26]. A standard benchmark in dynamic economics is the stationary, infinite-horizon control problem: when preferences, constraints, and shocks are time-invariant, a single value function solves a Bell-man equation and the optimal rule is stationary. However, lifecycle problems are time-dependent and may involve regime switches, which break the stationarity assumption. The economic environ-ment changes over the life cycle, so the value function and the optimal policy must depend explicitly on age. The lifecycle portfo-lio problem we study is non-stationary: it has a hard terminal date, age-dependent income, and an abrupt structural break at retirement, so no time-invariant rule exists. Using Bellman’s principle of optimality [2], the problem can be solved recursively. The terminal period admits a closed-form solution, after which the optimal decision at each preceding date is obtained by solving a one-period optimization problem conditional on the already-characterized continuation value (value function at time 𝑡 + 1). 
+
+𝑉 𝑡 (𝑥 𝑡 ) = max  
+
+> 𝑎 𝑡 ∈ A
+
+{𝑢 (𝑥 𝑡 , 𝑎 𝑡 ) + 𝛽 E[𝑉 𝑡 +1 (𝑥 𝑡 +1) | 𝑥 𝑡 , 𝑎 𝑡 ]} (1) When the state is low-dimensional this recursion is solved on a grid with an interpolated value function. The grid cost grows expo-nentially in the number of state variables, so problems with several decision or state variables quickly become intractable. This curse of dimensionality is the central obstacle that motivates replacing the value-function grid with function approximation, and neural networks in particular. We study the canonical normalized lifecycle consumption model [5]. A household chooses how much to consume and what share of its savings to hold in a risky asset. The problem’s defining feature is a change in the data-generating process partway through the horizon: at retirement, stochastic permanent-income growth and labor income give way to a deterministic pension. This break motivates our central architectural question: should a single policy network represent both regimes simultaneously, or should the solution be constructed by concatenating separately trained sub-policies, each specialized to one regime? In the limit, should one use a neural network to approximate each conditional distribution at every time 𝑡 ? Because the normalized state is low-dimensional, a dynamic programming approach remains compu-tationally feasible. We consider this solution to be the reference benchmark (degree of approximation determined by the resolution of the grid). arXiv:2608.03933v1 [math.OC] 4 Aug 2026 ICAIF, 2026, Milan, Italy Viard et al. 
+
+Our economic model is known, smooth, and continuous-action. Using the problem’s structure, we optimize a deterministic policy by differentiating the realized utility along each simulated path. Given that the problem consists of a 46 period working life followed by a 35 period retirement phase, the model involves a total of 81 wealth transitions. Backpropagating the objective through the 80 transitions preceding the terminal condition weakens the direct, age-specific learning signal available for decisions made later in life. Therefore, we study different decoupling architectures, paired with training techniques for variance reduction and exploration. 
+
+• A — single time-conditioned network : parameters shared across all dates, with age supplied as a feature. 
+
+• B — two-regime concatenation : a working-life network plus a separately trained, then frozen, retirement network that serves as its continuation. 
+
+• C — full backward per-date networks : one neural net-work per date, trained backward, whose continuation is the realized utility of rolling out the frozen downstream policy networks. 
+
+• D — shape-constrained backward networks : architec-ture C augmented with an economically motivated penalty that keeps the marginal propensity to consume positive and below one. 
+
+Contributions. 
+
+• A regime-decoupled neural policy : separate networks for working life and retirement, with the retirement policy trained first and frozen to provide the continuation value across the regime change. 
+
+• A backward-induction architecture : one network per date trained backward against frozen downstream policies, reducing each long-horizon optimization to a one-step prob-lem. 
+
+• Economically motivated constraints : a shape penalty enforcing the theoretically implied marginal propensity to consume, adding structure information to the neural network solution. 
+
+• A scalable training recipe : payoff normalization, direction-dominant optimizers, antithetic sampling, and feasibility-preserving policy maps for high-dimensional settings. 
+
+Findings. Welfare loss, policy accuracy, and the Bellman residual improve as backward-induction structure is added from A to B to C. The single network already performs well, but it tends to over-save on average during the retirement phase. Full backward induction lands within 0 .13% of the certainty-equivalent reference, cuts con-sumption share error, and significantly reduces the fraction of paths below DP realized utility. However, the decoupling produces states in which the marginal propensity to consume become negative. The shape-constrained architecture removes them entirely, by im-posing the positivity of the marginal propensity to consume that the economics of the problem dictates. For small training samples, the shape constraint also improves sample efficiency. It keeps MPC violations near zero and modestly reduces excess dispersion in realized utility. 
+
+## 2 Relevant Literature 
+
+The theoretical foundations of portfolio choice rest on two classi-cal benchmarks. Markowitz’s mean-variance analysis formulates a single-period allocation problem as a trade-off between expected return and return variance, yielding the static efficient frontier but abstracting from dynamic rebalancing [17]. Merton recast portfo-lio choice as a continuous-time stochastic-control problem. Under CRRA preferences, constant investment opportunities, and risky returns following geometric Brownian motion, the optimal risky portfolio share is constant [18]. In a finite horizon setting, the con-sumption policy is generally time dependent. We adopt the lifecycle portfolio optimization formulation of Cocco, Gomes & Maenhout [5] (surveyed in [7]): a household that chooses consumption and a risky share over a finite horizon, facing permanent and transitory labor-income shocks in working life and a deterministic pension in retirement. We use the normalization trick: CRRA homogeneity divides permanent income out of the level problem, collapsing the state to normalized cash-on-hand and lowering its dimension [3]. The dynamic-programming solution on a grid can be used because the normalized state is low-dimensional. We retain this solution as a reference against which every neural policy is measured. Duarte et al. bring simulation-trained neural networks to high-dimensional lifecycle allocation problems [6], showing that a di-rectly parameterized policy can approximate optimal behaviour where grid-based dynamic programming is infeasible. Their set-ting also exposes the central methodological difficulty: once the state space is large, no reference solution exists, the policy depends on many interacting hyperparameters, and the complexity of the problem makes it hard to attribute performance to any single archi-tectural choice or training recipe. With this controlled environment, we aim to characterize the accuracy of the neural network policy. The move to neural approximation is motivated by the curse of dimensionality [2, 13]: the grid cost of dynamic programming grows exponentially in the state dimension. Neural networks are flexible, scalable approximators (universal in the limit) [8, 10]. A growing literature applies deep learning directly to economic dy-namic models. Maliar & Winant cast lifetime-reward, Bellman, and Euler-equation objects as regression problems solved by stochastic gradient descent on simulated paths [16]. In the stochastic-control tradition, Han & E approximate the control at each date by a feed-forward network and optimize the policy through Monte-Carlo simulation of the known dynamics [9]. The same problem is studied under the reinforcement-learning lens, which formalizes sequential decision-making as a Markov decision process [22, 26]. Deep reinforcement learning replaces the value or policy functions with a network, an approach behind land-mark results in games [19, 24]. Two axes of this literature directly in-form on our design. Along the model-free/model-based axis, model-free algorithms learn from sampled reward alone. In our setting, where the model is known and smooth, we can use the pathwise gradient of the realized utility. Policy-gradient methods directly optimize a parameterized policy, ranging from the REINFORCE al-gorithm [28] to deterministic policy gradients for continuous action spaces [25] and their deep, off-policy implementation in DDPG [15]. Simulation-Based Neural Policies for Portfolio Choice: Architecture, Training, and Interpretability ICAIF, 2026, Milan, Italy 
+
+Reinforcement learning has been applied widely across finance, eco-nomics, portfolio management and trading [1, 12, 14, 20, 27]. It has also been explored in a consumption-saving setting [23]. Our contributions lie at the intersection of dynamic portfolio choice and reinforcement learning using function approximation. We study the same class of simulation-trained neural policies as Duarte et al. [6], but push the construction to a more granular, per-date full-backward architecture. This class of neural network policies is evaluated in a controlled, low-dimensional lifecycle prob-lem. The controlled setting allows us to vary one architectural or training choice at a time, including regime decoupling, per-date backward induction, shape constraints, and training techniques. Each architectural choice can then be assessed against the reference solution obtained through dynamic programming. 
+
+## 3 Problem Formulation 3.1 Finite-horizon stochastic control 
+
+The lifecycle problem belongs to the class of finite-horizon stochas-tic control problems [11, 21] max  
+
+> 𝜋
+
+E0
+
+" 𝑇 ∑︁ 
+
+> 𝑡 =0
+
+𝑢 (𝑠 𝑡 , 𝑎 𝑡 )
+
+#
+
+(2) 
+
+𝑎 𝑡 = 𝜋 (𝑠 𝑡 ), 𝑠 𝑡 +1 = 𝑚 (𝑠 𝑡 , 𝑎 𝑡 , 𝜖 𝑡 +1), 𝑠 0 ∼ 𝐹, 
+
+with a Markov state 𝑠 𝑡 , a continuous control 𝑎 𝑡 , a known, forward-simulable transition 𝑚 driven by exogenous shocks 𝜖 𝑡 +1, and an initial-state distribution 𝐹 . The recursive (Bellman) view of this problem is what dynamic programming solves. The equivalent trajectory form above is what the simulation-based method of the next section optimizes directly. 
+
+## 3.2 The normalized lifecycle consumption–portfolio problem 
+
+A household lives from age 𝑡 𝑏 to 𝑡 𝑑 , indexing time by 𝑡 = 0, . . . ,𝑇 
+
+with 𝑇 = 𝑡 𝑑 −𝑡 𝑏 . Each period it chooses consumption 𝑐 𝑡 and the share 
+
+𝛼 𝑡 of its savings held in a risky asset. Permanent income 𝑃 𝑡 is divided out of the level problem by CRRA homogeneity (Section 3.3), leaving a single continuous state: normalized cash-on-hand 𝑥 𝑡 = 𝑋 𝑡 /𝑃 𝑡 . The decision state and controls are 
+
+𝑠 𝑡 = (𝑡, 𝑥 𝑡 ), 𝑎 𝑡 = (𝑐 𝑡 , 𝛼 𝑡 ), 0 ≤ 𝑐 𝑡 ≤ 𝑥 𝑡 , 0 ≤ 𝛼 𝑡 ≤ 1.
+
+(3) Writing savings as 𝑥 𝑡 −𝑐 𝑡 , the gross return on savings is R𝑡 +1 (𝛼 𝑡 ) =
+
+(1 − 𝛼 𝑡 ) 𝑟 + 𝛼 𝑡 𝑅 𝑡 +1, where the risky gross return is 𝑅 𝑡 +1 = 𝑟 + 𝜇 +
+
+𝜎 𝑟 𝜉 𝑡 +1 with 𝜉 𝑡 +1 ∼ N ( 0, 1).The problem’s defining feature is a change in the data-generating process at the retirement date 𝑡 𝑅 . In working life ( 𝑡 < 𝑡 𝑅 ) permanent-income growth 𝐺 𝑡 +1 and transitory income 𝑌 𝑡 +1 are stochastic. At retirement ( 𝑡 ≥ 𝑡 𝑅 ) growth is shut off, 𝐺 𝑡 +1 = 1, and labor income is replaced by a fixed pension ¯ 𝑦 𝑅 . The normalized state therefore evolves as 
+
+𝑥 𝑡 +1 =
+
+
+
+R𝑡 +1 (𝛼 𝑡 ) ( 𝑥 𝑡 − 𝑐 𝑡 )
+
+𝐺 𝑡 +1
+
++ 𝑌 𝑡 +1, 𝑡 < 𝑡 𝑅 (working) ,
+
+R𝑡 +1 (𝛼 𝑡 ) ( 𝑥 𝑡 − 𝑐 𝑡 ) + ¯𝑦 𝑅 , 𝑡 ≥ 𝑡 𝑅 (retirement) .
+
+(4) 
+
+Table 1: Model calibration. 
+
+Component Symbol Value Relative risk aversion 𝜌 5.0Discount factor 𝛿 0.97 Gross risk-free return 𝑟 1.015 Mean excess return 𝜇 0.04 Return volatility 𝜎 𝑟 0.20 Shock correlations corr (𝜀, 𝜈 ) = corr (· , 𝜉 ) = 0Retirement income ¯𝑦 𝑅 0.68212 Initial normalized cash 𝑥 0 𝑌 0 (no initial wealth) State Cash grid 𝑥 [0.25 , 115 ]
+
+## 3.3 Normalization and the payoff weight 
+
+Period utility is constant relative risk aversion, 𝑢 (𝑐 ) = 𝑐 1−𝜌 /( 1 − 𝜌 )
+
+with 𝜌 ≠ 1. Its homogeneity of degree 1 − 𝜌 lets permanent income be divided out [3], collapsing the problem to the one-dimensional state 𝑥 𝑡 but leaving a residual continuation factor 𝐺 1−𝜌 𝑡 +1 in working life. The normalized Bellman equation then reads 
+
+𝑣 𝑡 (𝑥 ) = max   
+
+> 0≤𝑐 ≤𝑥
+> 0≤𝛼 ≤1
+
+n 𝑐 1−𝜌  
+
+> 1−𝜌
+
++ 𝛿 E𝑡 
+
+𝜅 𝑡 +1 𝑣 𝑡 +1 (𝑥 𝑡 +1) o
+
+(5) 
+
+𝜅 𝑡 +1 =
+
+(𝐺 1−𝜌 𝑡 +1 , 𝑡 < 𝑡 𝑅 ,
+
+1, 𝑡 ≥ 𝑡 𝑅 ,
+
+with 𝑥 𝑡 +1 given by the regime-appropriate transition and the termi-nal condition 𝑣 𝑇 (𝑥 ) = 𝑥 1−𝜌 /( 1 − 𝜌 ) (e.g. full consumption). Along a simulated path it is accumulated into a payoff weight 𝑑 𝑡 ,with 𝑑 0 = 1 and 𝑑 𝑡 +1 = 𝑑 𝑡 𝛿 𝜅 𝑡 +1, so that maximizing the normalized lifetime objective 
+
+E
+
+" 𝑇 ∑︁  
+
+> 𝑡 =0
+
+𝑑 𝑡 
+
+𝑐 1−𝜌 𝑡 
+
+1 − 𝜌 
+
+#
+
+(6) is equivalent to solving the Bellman equation above. Table 1 collects the economic calibration used throughout the benchmark and neural-policy experiments. 
+
+## 4 Simulation-Based Neural Policy Optimization 4.1 Differentiable direct policy optimization 
+
+We parameterize the policy as a deterministic neural network 
+
+𝑎 𝑡 = 𝜋 𝜃 (𝑡, 𝑥 𝑡 ) and optimize it by forward simulation, as in [6]. The simulated objective is a deterministic, differentiable function of 𝜃 ,
+
+b𝐽 (𝜃 ) = 1
+
+𝑁 
+
+> 𝑁
+
+∑︁ 
+
+> 𝑖 =1
+> 𝑇
+
+∑︁  
+
+> 𝑡 =0
+
+𝑑 (𝑖 )
+
+> 𝑡
+
+ 𝑐 (𝑖 ) 
+
+> 𝑡
+
+(𝜃 )1−𝜌 
+
+1 − 𝜌 , (7) the sample analogue of the normalized objective in Eq. (6). Each path is rolled forward under 𝜋 𝜃 through the working/retirement transition introduced above, and 𝜃 is updated by stochastic gradient ascent on b𝐽 over minibatches of paths. The gradient is the pathwise estimator, obtained by automatic differentiation of the rollout, 
+
+∇𝜃 b𝐽 (𝜃 ) = 1
+
+𝑁 
+
+> 𝑁
+
+∑︁ 
+
+> 𝑖 =1
+> 𝑇
+
+∑︁ 
+
+> 𝑡 =0
+
+𝑑 (𝑖 )
+
+> 𝑡
+
+ 𝑐 (𝑖 )
+
+> 𝑡
+
+ −𝜌 d𝑐 (𝑖 )
+
+> 𝑡
+
+d𝜃 . (8) ICAIF, 2026, Milan, Italy Viard et al. 
+
+The realized cash 𝑥 (𝑖 ) 
+
+> 𝑡
+
+(𝜃 ) is itself a function of 𝜃 through every earlier decision, so the date-𝑡 term propagates through the entire trajectory. 
+
+## 4.2 Feasibility by construction 
+
+The constraints 0 ≤ 𝑐 𝑡 ≤ 𝑥 𝑡 and 0 ≤ 𝛼 𝑡 ≤ 1 are enforced by the policy map. In our trained models the consumption share is 
+
+𝑐 𝑡 =  𝜙 + ( 1 − 𝜙 ) 𝜎 (𝑧 1) 𝑥 𝑡 for a small floor 𝜙 and logistic 𝜎 , and the risky share is 𝛼 𝑡 = 𝜎 (𝑧 2). The terminal rule 𝑐 𝑇 = 𝑥 𝑇 , 𝛼 𝑇 = 0is imposed. Consequently the optimizer faces an unconstrained problem in 𝜃 .
+
+## 4.3 Variance reduction and direction-dominant updates 
+
+Two main tricks stabilize the pathwise gradient. First, the exoge-nous shocks are drawn once as antithetic pairs: every base path is mirrored by negating its Gaussian innovations and the pair is averaged, which lowers gradient variance. Second, the per-date ob-jectives of the decoupled architectures differ by orders of magnitude in scale. Late-life payoff weights 𝑑 𝑡 are tiny relative to early-life ones. We therefore adopt a direction-dominant update strategy. The stage update is normalized prior to the optimizer step, preserving its direction while allowing the learning rate, rather than the payoff scale, to determine the effective step size. The normalized update is then applied using AdamW. The single and two regime networks, whose objective uses multiple dates (full horizon or regime horizon), use Adamax directly. 
+
+## 5 Policy Architectures 5.1 Architecture A — single time-conditioned network 
+
+Construction. A single multilayer perceptron 𝜋 𝜃 : (𝑡, 𝑥 ) ↦ → ( 𝑐, 𝛼 )
+
+represents the policy at every date. One parameter vector 𝜃 is shared across the whole horizon and age enters as a feature. The network maps a compact three-feature encoding of the decision state, 
+
+𝜁 (𝑡, 𝑥 ) =
+
+
+
+𝑡 /𝑇 , log (1+𝑥 )   
+
+> log (1+¯𝑥 )
+
+, 1[𝑡 ≥ 𝑡 𝑅 ]
+
+
+
+, ¯𝑥 = 115 , (9) through two hidden layers of 128 tanh units to two raw outputs, which the feasibility map (floor 𝜙 = 0.005) turns into (𝑐, 𝛼 ). It has 17 ,282 trainable parameters. 
+
+Training objective and algorithm. The parameters 𝜃 are trained to maximize the full-horizon simulated objective b𝐽 (𝜃 ) of Eq. (7) directly. A fixed set of antithetic shock paths is drawn once; each is rolled forward under 𝜋 𝜃 across the working/retirement transition. The payoff-weighted lifetime utility is averaged, and 𝜃 is updated by stochastic gradient ascent on minibatches using the pathwise gradient of Eq. (8). The reported model uses 100 ,000 base paths (doubled by antithetic mirroring), minibatches of 2 ,048, 2 ,000 epochs, and the Adamax optimizer at learning rate 5 × 10 −3.
+
+Deployment. At any decision date the action is one forward pass 𝜋 𝜃 (𝑡, 𝑥 𝑡 ). The same network serves both accumulation and decumulation of the wealth. The regime indicator being its only explicit signal of the retirement break. 
+
+## 5.2 Architecture B — two-regime concatenation 
+
+Construction. The change in the underlying law of motion at retirement motivates representing the two regimes by two networks rather than one smooth function of age. A working-life network 
+
+𝜋 𝜃 𝑊 governs the dates 𝑡 < 𝑡 𝑅 and a retirement network 𝜋 𝜃 𝑅 governs 
+
+𝑡 ≥ 𝑡 𝑅 . Each uses the same three-feature encoding 𝜁 and the same depth as Architecture A but with 64-unit hidden layers, giving 4 ,546 parameters per network (9 ,092 in total). 
+
+Training objective and algorithm. Training is backward in two blocks: (i) Retirement . 𝜋 𝜃 𝑅 is trained on retirement only paths that begin from a sampled retirement-entry cash 𝑥 𝑡 𝑅 . This policy should maximize the retirement-block objective 
+
+b𝐽 𝑅 (𝜃 𝑅 ) = 1
+
+𝑁 
+
+> 𝑁
+
+∑︁ 
+
+> 𝑖 =1
+> 𝑇
+
+∑︁ 
+
+> 𝑡 =𝑡 𝑅
+
+˜𝑑 (𝑖 )
+
+> 𝑡
+
+ 𝑐 (𝑖 )
+
+> 𝑡
+
+1−𝜌 
+
+1 − 𝜌 , (10) The reported model draws 𝑥 𝑡 𝑅 entirely from a broad log-uniform distribution over the cash grid, so the retirement network sees no DP information. (ii) Working life. 𝜃 𝑅 is then frozen and 𝜋 𝜃 𝑊 
+
+is trained on full lifecycle paths in which every action from 𝑡 𝑅 
+
+onward is produced by the frozen 𝜋 𝜃 𝑅 . Thus, 𝜃 𝑊 maximizes the full objective b𝐽 (𝜃 ) of Eq. (7) against a fixed continuation environment. Both networks are optimized with Adamax at learning rate 5 × 10 −3
+
+for 4 ,000 epochs over 100 ,000 base paths (antithetic-mirrored) and a batch size of 2 ,048. 
+
+Deployment. The combined policy dispatches by age, 𝜋 (𝑡, 𝑥 ) =
+
+𝜋 𝜃 𝑊 (𝑡, 𝑥 ) for 𝑡 < 𝑡 𝑅 and 𝜋 𝜃 𝑅 (𝑡, 𝑥 ) for 𝑡 ≥ 𝑡 𝑅 (here 𝑡 𝑅 is date 46). It represents the two-block analogue of backward induction. 
+
+## 5.3 Architecture C — full backward per-date neural networks 
+
+Construction. Backward-induction structure is carried to every date. Each date 𝑡 owns its own policy network 𝜋 𝜃 𝑡 . The param-eter vectors 𝜃 0, . . . , 𝜃 𝑇 are disjoint, so time is represented by the network index. Each neural network maps the single cash feature log (1 + 𝑥 )/ log (1 + ¯𝑥 ) through two hidden layers of 32 tanh units to the feasibility map (floor 𝜙 = 0.005). Each neural network has 1,186 parameters. The terminal network is determined by the final condition: 𝜋 𝜃 𝑇 (𝑥 ) = (𝑥, 0).
+
+Training objective and algorithm. The neural networks are trained following a backward methodology: 𝑡 = 𝑇 − 1, . . . , 0. At stage 𝑡 all downstream networks are frozen and the continuation is the real-ized utility of rolling those frozen networks forward to 𝑇 
+
+b𝐽 𝑡 (𝜃 𝑡 ) = 1
+
+𝑁 
+
+> 𝑁
+
+∑︁ 
+
+> 𝑖 =1
+> 𝑇
+
+∑︁ 
+
+> 𝑠 =𝑡
+
+˜𝑑 (𝑖 )
+
+> 𝑠
+
+ 𝑐 (𝑖 )
+
+> 𝑠
+
+1−𝜌 
+
+1 − 𝜌 , (11) in which the date-𝑡 action comes from the trainable neural network and all later actions from the frozen policy networks. The start cash 𝑥 (𝑖 ) 
+
+> 𝑡
+
+is drawn from a broad log-uniform distribution over the cash grid. Once converged, 𝜃 𝑡 is frozen and the training moves to 𝑡 − 1. Each neural network is trained for 3 ,500 epochs over 200 ,000 base paths (antithetic-mirrored) in minibatches of 512, using the direction-dominant update of Section 4.3 (the stage gradient normalized to unit norm, then an AdamW step at learning rate 10 −3). Simulation-Based Neural Policies for Portfolio Choice: Architecture, Training, and Interpretability ICAIF, 2026, Milan, Italy 
+
+Deployment. The trained policy is the frozen sequence {𝜋 𝜃 𝑡 }𝑇 𝑡 =0.At a decision date it dispatches to the policy network whose index matches the integer model time, with the analytic network at 𝑇 
+
+(terminal condition). 
+
+## 5.4 Architecture D — shape-constrained backward neural networks 
+
+Motivation. Economic theory pins down the shape of the con-sumption rule even where no reference solution is available: con-sumption is nondecreasing in cash-on-hand and rises by at most one unit per unit of cash. The marginal propensity to consume (MPC) satisfies 0 ≤ 𝜕𝑐 /𝜕𝑥 ≤ 1 [3, 4]. Because each per-date objec-tive is nearly flat in the local curvature of the consumption rule, many nearby rules deliver almost the same one-step value. The unconstrained policy networks leave the MPC weakly identified and, as Section 6 reports, generate the largest number of states with a negative MPC among all four designs. 
+
+Construction and training. Architecture D follows the same struc-ture and parameterization as Architecture C. It adds, to each stage objective, a penalty for MPC violations. At stage 𝑡 the MPC 𝜕𝑐 /𝜕𝑥 is obtained by automatic differentiation of the network’s consumption at the sampled cash points. The stage loss becomes 
+
+− b𝐽 𝑡 (𝜃 𝑡 ) + 𝜆 E relu (− 𝜕𝑐 /𝜕𝑥 )2 + relu (𝜕𝑐 /𝜕𝑥 − 1)2 , (12) with a weight 𝜆 that makes positivity and the upper bound effec-tively binding. Enforcing the constraint by a penalty rather than by construction keeps the network, feasibility map, sampler, and optimizer identical to Architecture C. 
+
+Deployment. Deployment is identical to Architecture C. 
+
+## 5.5 Architecture comparison 
+
+Table 2 summarizes the four designs. They differ in how time is represented. Age is an input feature in A, a dispatch between two networks in B, and the policy network index in C and D. Decou-pling trades parameter sharing for well-posed per-date objectives. Architectures C and D differ because of the MPC penalty. That isolates the effect of the shape constraint. The different architectures represent distinct model types and solution methods and require independent optimization and hy-perparameter tuning. Each architecture was tuned separately, and the reported results correspond to the best configuration we found for that architecture under a comparable computational budget. The comparison therefore evaluates well-tuned representatives of each design, allowing us to distinguish the benefits of the different solution methods. Since Architectures C and D belong to the same class of model and use the same solution method, they share the same hyperparameter settings. This allows us to isolate the impact of the MPC constraint. The replication code will be made available on GitHub, including the full calibration, grid, training, and evaluation parameters used for each reported architecture. 
+
+## 6 Results 6.1 Welfare and pathwise accuracy 
+
+Welfare is reported in Table 3. All four policies are near-optimal and dominate naive rules by two orders of magnitude (consume-all loses 12 .7% of CE consumption, equal-allocation 44 .9%). Certainty-equivalent loss falls monotonically as backward-induction structure is added: the two-regime split closes about 40% of the single net-work’s CE loss. The full backward induction closes just over half, landing within 0 .13% CE consumption of the reference solution. The shape penalty of D does not measurably change it. Under A and B roughly four paths in five fall below the DP solution. The full-backward models cut this to 58% (C) and 54% (D) and shrink the median path gap. The deepest-loss paths (fifth-percentile gap) are comparable across designs, mildest for the two-regime net. 
+
+## 6.2 Policy Accuracy 
+
+Pointwise policy error against DP, on the shared cash grid, shows the share mean absolute error (MAE, Table 4). Consumption share error decreases from A to the full-backward models (0 .055 →
+
+0.018 → 0.013). The remaining dimensions are noisier and non-monotone. The objective is nearly flat in the portfolio share, B and C attain the lowest risky-share MAE ( ≈ 0.037) while D is slightly higher. The simulated mean profiles (Fig. 1) provide an overall view of the accuracy at each date 𝑡 . Mean normalized wealth is hump-shaped and peaks at retirement. The mean consumption share is U-shaped over the life cycle. For every architecture, the poli-cies during the working life are well aligned with the DP solution. The different architectures affect the risky asset share during the wealth decumulation phase. The single network (A) matches DP through accumulation but drifts upward in late retirement, over-weighting the risky asset. Full backward induction (C) removes this divergence and follows the DP decline across retirement. The shape-constrained model (D) preserves that fit. The close overlap of the shaded percentile bands shows the agreement holds across the cross-sectional distribution of households. 
+
+## 6.3 Solution-free diagnostics 
+
+The Bellman residual (optimality). Our primary solution-free instrument is the one-step Bellman improvement gap [26]. For a policy 𝜋 with value 𝑣 𝜋 , the date-𝑡 action value is: 𝑄 𝑡 (𝑥, 𝑎 ) =
+
+𝑢 (𝑥, 𝑎 ) + 𝛿 E𝑡 [𝜅 𝑡 +1 𝑣 𝜋 (𝑥 ′) | 𝑥, 𝑎 ]. Therefore, the residual is 
+
+Δ𝑡 (𝑥 ) = max  
+
+> 𝑎
+
+𝑄 𝑡 (𝑥, 𝑎 ) − 𝑄 𝑡 
+
+ 𝑥, 𝜋 𝑡 (𝑥 ) ≥ 0, (13) This represents the welfare an agent would gain by deviating op-timally for one period and then reverting to 𝜋 . It is nonnegative by construction and zero everywhere if and only if 𝜋 is optimal. We compute it from the trained policy alone. The continuation 𝑣 𝜋 
+
+is estimated by Monte-Carlo simulation: from each grid state we roll the frozen policy network forward to the terminal date on the common shock paths and average the realized normalized utility of Eq. (6). Then, that value is interpolated with a cubic spline. The maximization uses the known one-period model (Gaussian quadra-ture over the shocks) with a grid search over (𝑐, 𝛼 ). We report the gap in certainty-equivalent consumption units, (𝑄 ★/𝑄 𝜋 )1/( 1−𝜌 ) − 1. ICAIF, 2026, Milan, Italy Viard et al. 
+
+Table 2: Policy architectures. All four are trained without reference to the DP solution.                                                               
+
+> A — Single B — Two-regime C — Full backward D — Shape-constrained
+> Policy objects 1 network 2 networks 81 networks (80 +term.) 81 networks (80 +term.) Parameters 17 ,282 9,092 (2 ×4,546) 94 ,880 (80 ×1,186) 94 ,880 (80 ×1,186) Hidden layers 2×128 2×64 2×32 2×32 Input features 331 (cash only) 1 (cash only) Time representation network feature regime dispatch network index network index Continuation implicit rollout frozen retirement net frozen downstream networks frozen downstream networks Active optimizer Adamax Adamax norm. update →AdamW norm. update →AdamW Entry-cash sampling endogenous broad (retirement) broad (all stages) broad (all stages) Shape constraint none none none MPC ∈ [ 0,1]penalty
+
+Table 3: Welfare and pathwise accuracy versus the DP refer-ence. CE loss is in certainty-equivalent consumption units; gaps are NN −DP. Bold marks the best of the four.                           
+
+> ABCD
+> Single Two-reg. Full bw. Shape CE loss vs. DP −0.269% −0.167% −0.127 %−0.127% Objective gap vs. DP −0.0278 −0.0173 −0.0130 −0.0131 Paths below DP 79 .7% 79 .1% 58 .4% 53 .8%Median path gap −0.019 −0.009 −0.004 −0.002
+> 5th-pct. path gap −0.110 −0.069 −0.090 −0.095
+
+Table 4: Mean absolute policy error versus DP on the shared 
+
+(age × cash ) grid, over nonterminal states.                     
+
+> MAE vs. DP ASingle BTwo-reg. CFull bw. DShape Consumption share 0.055 0.018 0.013 0.013
+> Risky share 0.069 0.037 0.037 0.047 Risky savings 2.28 1.22 1.30 1.73
+
+Because a uniform average over the cash grid can be dominated by rarely-visited corners, we also report a visitation-weighted version. On the uniform grid, adding backward structure reduces the CE residual: mean 2 .9% (A) and 2 .4% (B) down to 0 .54% (for C, D). The worst-case gap went from over 400% to about 120%. Under visita-tion weighting the full-backward models are the best performing architectures (mean 0 .004% CE). A (0 .20%) and especially B (0 .57%) carry a heavier tail. Per-date backward induction replaces a sin-gle long-horizon objective with a sequence of short, well-posed one-step problems. It eliminates the decumulation suboptimality. The shape penalty in D leaves both the visited and uniform mean residuals essentially unchanged (0 .0042 vs 0 .0045, 0 .544 vs 0 .544). Its effect appears in the shape diagnostics rather than in the residual level. 
+
+Economic shape (MPC and monotonicity). Feasibility (0 ≤ 𝑐 ≤ 𝑥 ,0 ≤ 𝛼 ≤ 1) holds with zero violations for all four, confirming the by-construction policy map. Economic shape degrades as time is decoupled and each per-date objective becomes locally flat in the consumption level (Table 5). The single and two-regime nets carry a modest number of negative MPC (A: 32 cells, 0 .98%; B: 34 cells, 
+
+Table 5: Solution-free diagnostics: Bellman residuals in certainty-equivalent consumption units (percent). Under the same diagnostic the exact DP policy scores 0.00004 (visited median), 0.0002 (visited mean), 0.005 (uniform mean), and 0.10 
+
+(uniform max). Bold marks the best of the four per row.                         
+
+> Bellman resid. (CE %) ABCD
+> visited mean 0.202 0.569 0.0042 0.0045 uniform mean 2.89 2.38 0.544 0.544
+> uniform max 412 608 122 117
+> Negative-MPC cells 32 34 109 0
+> Non-monotone steps 26 25 97 0
+
+1.04%). The unconstrained full-backward model C has 109 negative-MPC cells (3 .32%) and 97 non-monotone steps spread across the horizon (worst −0.34), because per-date decoupling removes the cross-age smoothing. Architecture D targets this issue using a soft constraint. The penalty drives negative-MPC and non-monotone cells to zero (0%). 
+
+## 6.4 Sample efficiency and the shape constraint 
+
+We retrain Architectures C and D identically, using only 100 base paths per policy network instead of 200 ,000. Both deteriorate com-parably in welfare, from 0 .13% to about 1 .0% certainty-equivalent loss. Its effect is on the shape of the policy and on the dispersion of realized outcomes: the mean Bellman residual on the uniform grid is slightly lower for D (0 .34% vs 0 .39% CE), and the cross-sectional standard deviation of realized lifetime utility falls from 2 .305 ( +7.0% excess dispersion relative to DP) to 2 .286 ( +6.1%). With data withdrawn, the unconstrained model also deterio-rates in terms of negative MPC cells: from 109 (3 .32%) to 151 (4 .60%) negative-MPC cells and from 97 (2 .96%) to 143 (4 .36%) non-monotone steps (worst MPC −0.73). Architecture D limits this to 4 negative-MPC cells (0 .12%) and a single non-monotone step ((0 .03%)). The shape penalty allows one to incorporate structural information directly into the policy network, thereby improving sample efficiency. Such constraint integration may be especially important in high-dimensional settings, where generating a suffi-ciently comprehensive training sample is substantially more com-putationally intensive. Simulation-Based Neural Policies for Portfolio Choice: Architecture, Training, and Interpretability ICAIF, 2026, Milan, Italy 
+
+(a) Policy function Architecture A 
+
+(b) Policy function Architecture B 
+
+(c) Policy function Architecture C 
+
+(d) Policy function Architecture D 
+
+Figure 1: Policy panels across architectures with mean and standard deviation across 20,000 simulations. 
+
+## 6.5 Cross-architecture synthesis 
+
+The complete backward training configuration performs better than the single-network and two-regime configurations in welfare, cen-tral pathwise accuracy, and consumption-share accuracy. It reduces the fraction of paths that fall below DP, removing the over-saving bias. Introducing a two-regime split recovers roughly 40% of the wel-fare loss at low computational cost, but its single frozen retirement ICAIF, 2026, Milan, Italy Viard et al. 
+
+block leaves the decumulation tail unresolved. This issue is elimi-nated only by full backward induction, which trains each retirement date separately. Decoupling the problem comes at the expense of economic structure: the unconstrained full-backward model (C) exhibits the largest number of negative-MPC regions. However, the shape-constrained Architecture D removes these violations. This constraint becomes more valuable under a scarce training sample, and potentially for future high dimensional application. All four architectures are trained without access to the dynamic programming solution. Taken together, realized welfare, the Bell-man residual, and economic-shape diagnostics provide complemen-tary perspectives. Welfare measures realized lifecycle outcomes, the residual identifies local gains from deviation, and shape diagnostics reveal economically wrong behavior that similar objective values can conceal. All results are based on a single training run per architecture and evaluated on a common set of shock paths. The use of common random numbers substantially reduces Monte Carlo error in cross-architecture comparisons. A systematic assessment of training-run dispersion is left to future work, focused on individual model type (solving method). 
+
+## 7 Conclusion 
+
+We studied how neural-policy architecture and the associated so-lution method affect lifecycle consumption and portfolio choice. Although neural methods target high-dimensional problems where grid-based DP is infeasible, we use a controlled benchmark solely for evaluation and policy-function inspection. The main methodological gain comes from adding backward induction structure. A single time conditioned network solves one long horizon problem. A two regime design freezes the retirement policy and uses it as the continuation for working life. A full back-ward design trains one neural network per date against frozen downstream networks. This progression improves certainty equiv-alent loss from 0 .269% to 0 .167% and then to 0 .127%. It also reduces consumption share error from 0 .055 to 0 .018 and then to 0 .013. The fraction of paths below the dynamic programming benchmark falls most clearly once full backward induction is used. Temporal decoupling can weaken the economic shape. Although the unconstrained and shape-constrained full-backward policies have similar certainty-equivalent losses, the unconstrained policy produces the highest number of negative MPC cells. Architecture D adds a penalty for violations of 0 ≤ 𝜕𝑐 /𝜕𝑥 ≤ 1. This removes nega-tive MPC and non monotone cells in the full sample. Architecture D also records the lowest fraction of paths below the reference, show-ing that full backward induction and the economic shape constraint improve solution reliability. Realized utility alone is insufficient to validate a policy, as economically important local behavior can remain weakly identified by the aggregate objective. The shape constraint is also useful when training paths are scarce. The con-strained policy keeps MPC violations near zero and reduces excess dispersion in realized utility. The Bellman residual provides a solution-free measure of local suboptimality, while economic-shape diagnostics and policy func-tion plots reveal behavior that aggregate welfare can conceal. Taken together, the results support full-backward training with explicit economic constraints. More broadly, they demonstrate the value of evaluating architectures and solution methods in a controlled setting. 
+
+## References 
+
+[1] Fernando Acero, Parisa Zehtabi, Nicolas Marchesotti, Michael Cashmore, Daniele Magazzeni, and Manuela Veloso. 2024. Deep Reinforcement Learn-ing and Mean-Variance Strategies for Responsible Portfolio Optimization. arXiv:2403.16667 [cs.AI] [2] Richard Bellman. 1957. Dynamic Programming . Princeton University Press, Princeton, NJ. [3] Christopher D. Carroll. 2022. Solution Methods for Microeconomic Dynamic Sto-chastic Optimization Problems . Lecture notes. Johns Hopkins University. Version 2.0.0. https://llorracc.github.io/SolvingMicroDSOPs/ [4] Christopher D. Carroll and Miles S. Kimball. 1996. On the Concavity of the Consumption Function. Econometrica 64, 4 (1996), 981–992. doi:10.2307/2171853 [5] João F. Cocco, Francisco J. Gomes, and Pascal J. Maenhout. 2005. Consumption and Portfolio Choice over the Life Cycle. The Review of Financial Studies 18, 2 (2005), 491–533. doi:10.1093/rfs/hhi017 [6] Victor Duarte, Julia Fonseca, Aaron S. Goodman, and Jonathan A. Parker. 2021. 
+
+Simple Allocation Rules and Optimal Portfolio Choice over the Lifecycle . Working Paper 29559. National Bureau of Economic Research. doi:10.3386/w29559 [7] Francisco Gomes. 2020. Portfolio Choice over the Life Cycle: A Survey. An-nual Review of Financial Economics 12, 1 (2020), 277–304. doi:10.1146/annurev-financial-012820-113815 [8] Ian Goodfellow, Yoshua Bengio, and Aaron Courville. 2016. Deep Learning . MIT Press, Cambridge, MA. http://www.deeplearningbook.org. [9] Jiequn Han and Weinan E. 2016. Deep Learning Approximation for Stochastic Control Problems. Deep Reinforcement Learning Workshop, NeurIPS 2016. arXiv:1611.07422 [cs.LG] [10] Kurt Hornik, Maxwell Stinchcombe, and Halbert White. 1989. Multilayer Feed-forward Networks Are Universal Approximators. Neural Networks 2, 5 (1989), 359–366. doi:10.1016/0893-6080(89)90020-8 [11] Côme Huré, Huyên Pham, Achref Bachouch, and Nicolas Langrené. 2021. Deep Neural Networks Algorithms for Stochastic Control Problems on Finite Horizon: Convergence Analysis. SIAM J. Numer. Anal. 59, 1 (2021), 525–557. doi:10.1137/ 20M1316640 [12] Zhengyao Jiang, Dixing Xu, and Jinjun Liang. 2017. A Deep Reinforce-ment Learning Framework for the Financial Portfolio Management Problem. arXiv:1706.10059 [q-fin.CP] [13] Eamonn Keogh and Abdullah Mueen. 2017. Curse of Dimensionality. In Encyclo-pedia of Machine Learning and Data Mining , Claude Sammut and Geoffrey I. Webb (Eds.). Springer US, Boston, MA, 314–315. doi:10.1007/978-1-4899-7687-1_192 [14] Xinyi Li, Yinchuan Li, Yuancheng Zhan, and Xiao-Yang Liu. 2019. Optimistic Bull or Pessimistic Bear: Adaptive Deep Reinforcement Learning for Stock Portfolio Allocation. arXiv:1907.01503 [q-fin.ST] [15] Timothy P. Lillicrap, Jonathan J. Hunt, Alexander Pritzel, Nicolas Heess, Tom Erez, Yuval Tassa, David Silver, and Daan Wierstra. 2016. Continuous Control with Deep Reinforcement Learning. In International Conference on Learning Representations (ICLR) . arXiv:1509.02971. [16] Lilia Maliar, Serguei Maliar, and Pablo Winant. 2021. Deep Learning for Solving Dynamic Economic Models. Journal of Monetary Economics 122 (2021), 76–101. doi:10.1016/j.jmoneco.2021.07.004 [17] Harry Markowitz. 1952. Portfolio Selection. The Journal of Finance 7, 1 (1952), 77–91. doi:10.1111/j.1540-6261.1952.tb01525.x [18] Robert C. Merton. 1969. Lifetime Portfolio Selection under Uncertainty: The Continuous-Time Case. The Review of Economics and Statistics 51, 3 (1969), 247–257. doi:10.2307/1926560 [19] Volodymyr Mnih, Koray Kavukcuoglu, David Silver, Alex Graves, Ioannis Antonoglou, Daan Wierstra, and Martin Riedmiller. 2013. Playing Atari with Deep Reinforcement Learning. arXiv:1312.5602 [cs.LG] [20] John Moody and Matthew Saffell. 2001. Learning to Trade via Direct Re-inforcement. IEEE Transactions on Neural Networks 12, 4 (2001), 875–889. doi:10.1109/72.935097 [21] Xianhua Peng, Steven Kou, and Lekang Zhang. 2024. A Machine Learn-ing Algorithm for Finite-Horizon Stochastic Control Problems in Economics. arXiv:2411.08668 [econ.GN] [22] Ashwin Rao and Tikhon Jelvis. 2023. Foundations of Reinforcement Learning with Applications in Finance . CRC Press, Boca Raton, FL. [23] Aruhan Rui Shi. 2021. Learning from Zero: How to Make Consumption-Saving Decisions in a Stochastic Environment with an AI Algorithm. arXiv:2105.10099 [econ.TH] [24] David Silver, Aja Huang, Chris J. Maddison, Arthur Guez, Laurent Sifre, George van den Driessche, Julian Schrittwieser, Ioannis Antonoglou, Veda Panneershel-vam, Marc Lanctot, Sander Dieleman, Dominik Grewe, John Nham, Nal Kalch-brenner, Ilya Sutskever, Timothy Lillicrap, Madeleine Leach, Koray Kavukcuoglu, Simulation-Based Neural Policies for Portfolio Choice: Architecture, Training, and Interpretability ICAIF, 2026, Milan, Italy 
+
+Thore Graepel, and Demis Hassabis. 2016. Mastering the Game of Go with Deep Neural Networks and Tree Search. Nature 529, 7587 (2016), 484–489. doi:10.1038/nature16961 [25] David Silver, Guy Lever, Nicolas Heess, Thomas Degris, Daan Wierstra, and Martin Riedmiller. 2014. Deterministic Policy Gradient Algorithms. In Proceedings of the 31st International Conference on Machine Learning (ICML) (Proceedings of Machine Learning Research, Vol. 32) . 387–395. [26] Richard S. Sutton and Andrew G. Barto. 2018. Reinforcement Learning: An Intro-duction (2nd ed.). The MIT Press, Cambridge, MA. [27] Ka Ho Tsang and Hoi Ying Wong. 2020. Deep-Learning Solution to Portfolio Se-lection with Serially Dependent Returns. SIAM Journal on Financial Mathematics 
+
+11, 2 (2020), 593–619. doi:10.1137/19M1274924 [28] Ronald J. Williams. 1992. Simple Statistical Gradient-Following Algorithms for Connectionist Reinforcement Learning. Machine Learning 8, 3–4 (1992), 229–256. doi:10.1007/BF00992696

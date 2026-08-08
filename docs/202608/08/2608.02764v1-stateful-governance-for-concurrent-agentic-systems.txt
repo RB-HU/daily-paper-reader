@@ -1,0 +1,799 @@
+Title: Stateful Governance for Concurrent Agentic Systems
+
+URL Source: https://arxiv.org/pdf/2608.02764v1
+
+Published Time: Wed, 05 Aug 2026 00:06:03 GMT
+
+Number of Pages: 18
+
+Markdown Content:
+# Stateful Governance for Concurrent Agentic Systems 
+
+## Yuxiang Peng 
+
+Purdue University West Lafayette, Indiana, USA 
+
+## Xiaodi Wu 
+
+University of Maryland, College Park College Park, Maryland, USA 
+
+## Abstract 
+
+AI agents are moving from advisory interfaces into systems that execute consequential operations: issuing refunds, re-serving scarce inventory, provisioning cloud resources, and initiating financial transfers. These workflows require gov-ernance over effects, not only over model outputs. Existing safeguards often decide whether an action is allowed from the information available when the action is requested. For stateful policies, that request-time view may be incomplete: budgets, inventory, approval status, and risk signals can change before the effect occurs, making an earlier authoriza-tion or approval stale. This paper studies stateful governance for concurrent agentic systems. We identify stale authorization as the core failure mode and define policy-state serializability , a correct-ness condition requiring committed effects to be explainable as authorized against the policy state immediately before they occur. We present Provenact, a runtime architecture that keeps policies as reviewable programs while coordinating the state and effects needed to preserve their decisions. In ex-periments with a PostgreSQL-backed prototype of Provenact, the system prevents stale authorizations missed by baselines that pass policy state as ordinary request context, preserves delayed approvals while unrelated work proceeds, keeps policy evolution mostly in policy text rather than trusted provider code, and avoids policy violations in a scripted, LLM-free procurement workflow where agent-governance baselines produce stale authorizations over shared budgets and inventory. More broadly, Provenact suggests a path for integrating stateful governance boundaries into agent frame-works and provider-backed domains where agents act on shared resources. 
+
+## 1 Introduction 
+
+AI agents are moving from advisory chat interfaces into sys-tems that execute operations [2, 21, 30]. Customer-support agents issue refunds, travel agents reserve seats and rooms, infrastructure agents provision cloud resources, and finance agents initiate transfers. These workflows invoke tools that mutate databases, send messages, and trigger durable effects that are difficult to undo. As agent frameworks make such operations easier to compose, the safety problem shifts from filtering text to governing effects. AI governance techniques span many layers. Deployments use prompt instructions, safety evaluations, monitoring, au-dit logs, sandboxing, and human review to shape or inspect agent behavior [21, 22, 31]. These mechanisms are valuable, Agent  
+
+> Agent
+> Agentic
+> framework
+> Application
+> tools
+> Governance
+> runtime
+> request
+> decision
+> Policy
+> authors
+> Policy
+> programs
+> Agent
+> Agentic
+> framework
+> Application
+> tools
+> Governance
+> runtime
+> requests
+> decisions
+> Policy
+> authors
+> Policy
+> programs
+> Agent
+> Policy state
+> Providers Provider
+> contracts
+
+Request-local governance  (existing) 
+
+Stateful governance  (ours) 
+
+> Trust boundary
+> Trust boundary
+
+Figure 1. Request-local and stateful governance. In the request-local configuration studied here, a policy engine returns a decision before the provider applies the later effect. Provenact adds provider contracts and certified policy state inside the trusted boundary so the runtime can protect the decision and governed effect together. but much of their assurance is empirical or procedural: eval-uations may reveal failures, monitors may flag them, and reviewers may catch them, but the mechanism does not itself define the state and effect invariant that must hold when an operation commits. Prompt engineering is the simplest example. A prompt can ask an agent to respect a budget or wait for approval, but it does not create an enforcement boundary around the effect or the state that justifies it. Policy-based governance is the stronger abstraction. A policy engine evaluates explicit rules and returns a struc-tured decision, giving a request-level decision according to the policy and the information available at that boundary. Systems such as Cedar [8], Microsoft’s Agent Governance Toolkit (AGT) [16], and Omnigent [18] illustrate this direc-tion: they move governance out of prompts and ordinary application code into reviewable policy artifacts. As Figure 1 shows, a common policy-engine integration evaluates sup-plied request context at the request boundary and returns a decision to the agentic framework. We use this request-local pattern as a comparison point; Section 5 describes the ex-act version-pinned baseline configurations. This separation makes policies easier to inspect, deploy, and revise, and it is the abstraction we want to preserve. The limitation is that this request-local boundary works best when policies check the current request: the principal, 
+
+> 1arXiv:2608.02764v1 [cs.MA] 3 Aug 2026 Yuxiang Peng and Xiaodi Wu
+
+action, resource, and arguments. This works well for access-control-like checks, but it leaves many agentic safeguards outside the policy abstraction. Refund governance, for ex-ample, must account for a customer’s recent refund history and whether an order has already been reimbursed; travel and scheduling governance must account for current inven-tory, existing holds, and trip budget before a seat, room, or appointment slot is reserved. Other domains impose simi-lar stateful conditions, including live cloud quotas, security-access risk signals, and rolling financial limits. These policies are not simply richer checks over a single request: they re-quire mutable governance facts maintained by the systems whose effects the agent invokes. Statefulness is therefore necessary for expressive agent governance, not merely an implementation detail. A stateful governance system must first satisfy two core requirements: 1. Correctness. It should prevent policy-violating commits: a governed action must not commit unless its policy decision remains justified under the policy semantics. 2. Efficiency. It should allow governed actions to proceed concurrently whenever possible. It should also preserve two practical design goals: a. Human review. It should keep an approval meaningful while a person is deciding. b. Modularity. It should let policy authors change gover-nance rules without rewriting each tool implementation. The difficulty is that these goals interact. A policy decision may be correct when it is made, but unsafe by the time the governed effect occurs. This failure appears in minimal form with two agents transferring from different accounts in the same team. Both transfers may be individually allowed when the team has spent 9 budget credits under a 10-credit daily limit; if both 1-credit effects commit, the team has spent 11 credits. The account writes are disjoint, but the operations conflict through policy state, the mutable state that policy evaluation depends on. We call this failure stale authorization :the system acts on an allow decision after the state that justified it has changed. Human approval stretches the same problem over time: an approval may be correct when requested but invalid by resolution time after other operations consume the relevant budget, inventory, quota, or risk allowance. The result is a 
+
+stale approval , where the human decision no longer autho-rizes the effect unless the system preserves or revalidates the state that justified it. Existing approaches satisfy these goals only partially. Request-local policy engines preserve modularity but leave the caller to protect the state behind an allow decision; global locks preserve correctness but sacrifice concurrent progress and delayed review; and hand-written transactions enforce one fixed policy but bury it in trusted tool code. Provenact com-bines these elements in a reusable stateful governance bound-ary between policy-engine decisions and governed effects. We present Provenact, a stateful governed-action run-time architecture built around an explicit provider contract. 1
+
+As shown in Figure 1, Provenact shifts from a standalone request-local decision to a stateful boundary: policy authors write bounded stateful policies over certified policy-state views, providers declare the governed effects and mecha-nisms that maintain the relevant state, and the coordinator connects the two before an effect commits. Thus, transac-tions and reservations remain mechanisms underneath the abstraction, while policies remain first-class governance ar-tifacts. With this boundary in place, we can state the desired cor-rectness property. We define policy-state serializability (PSS), a correctness property for concurrent governed operations. Informally, every execution should have the same policy meaning as some serial execution in which each allowed ef-fect is authorized against the policy state immediately before it is applied. This property captures the intended decision, effect, and audit semantics for stateful governance; Proven-act is designed to enforce it under the contract assumptions stated later. We evaluate a PostgreSQL-backed research prototype of Provenact against the desiderata above. The experiments test whether Provenact prevents stale authorization when base-lines lack state and effect coupling (correctness), and measure the cost of preserving that guarantee while allowing concur-rent progress (efficiency). They also study delayed approval and approval invalidation (human review), evaluate whether policy evolution remains mostly outside trusted provider code (modularity), and run a scripted, LLM-free agentic pro-curement benchmark against AGT and Omnigent. Together, these controlled workloads exercise the requirements that motivate the system. This paper makes the following contributions: 
+
+• It formalizes stale authorization caused by concurrent mutation of policy state between decision and effect, with stale approval as its long-running human-review form, and distinguishes stateless policies from policies over mutable policy state. 
+
+• It defines PSS and the contract soundness obligation needed to enforce it. 
+
+• It presents Provenact, a runtime architecture that turns policy-view and effect contracts into scoped enforcement while keeping policy programs separate from trusted provider code. 
+
+• It implements a Python prototype of Provenact with Post-greSQL and SQLite backends plus a benchmark harness.   
+
+> 1We use contract in the systems sense: a provider-supplied specification that tells the runtime which certified policy-state views and governed effects an operation may use, and which logical scopes must be protected. 2Stateful Governance for Concurrent Agentic Systems
+
+• It evaluates Provenact against correctness, efficiency, hu-man review, and modularity desiderata, including a multi-policy agentic procurement workflow benchmark. 
+
+Positioning. Provenact does not introduce a new concurrency-control primitive. Its contribution is to make existing mech-anisms usable at the governance boundary: policy authors write reviewable stateful policies, providers declare the policy-state dependencies those policies and effects touch, and the runtime protects the decision-effect interval before a gov-erned effect commits. The same boundary suggests a deploy-ment path for agentic frameworks such as Microsoft Agent Framework (MAF) [15] and LangGraph [13], where gov-erned operations in refunds, reservations, cloud provision-ing, access control, and financial transfers can pass through Provenact without replacing the surrounding orchestration. Section 7 discusses related work in more detail. 
+
+Organization. The rest of the paper develops the problem (Section 2), model (Section 3), design (Section 4), evaluation (Section 5), limitations (Section 6), related work (Section 7), and conclusion (Section 8). 
+
+## 2 Stateful Governance 
+
+This section motivates stateful governance from the policy-as-program abstraction used by modern authorization sys-tems. It distinguishes stateless policies from policies over mutable policy state, then uses the running budget example, request-context enforcement, and two correctness-preserving baselines to isolate stale authorization as the central consis-tency problem. 
+
+2.1 Stateless and Stateful Policy as Programs 
+
+Modern authorization systems often represent policy as a separately authored program evaluated over an authoriza-tion request [20]. Systems such as Cedar [8] let policy au-thors specify predicates over principals, actions, resources, and attributes, while application code implements the effects performed after an allow decision. This separation between policies and effects supports independent policy review and evolution, and it is the abstraction boundary that Provenact preserves. In many deployments, these policies are stateless policy. A stateless policy depends only on information supplied with the request, such as the principal, action, resource, and attributes. The first policy in Figure 2 has this form: it denies a transfer whose requested amount exceeds a 10-credit per-transfer cap. Because the rule reads only args.amount , the runtime can evaluate it without consulting policy state such as prior transfers or shared budget usage. Agentic workflows put pressure on this request-local model. Agents call tools that create durable effects, and their safe-guards often depend on what has already happened. A state-less policy can cap the current transfer, but it cannot itself     
+
+> Stateless policy
+> deny transfer when
+> args.amount > 10;
+> Stateful policy
+> deny transfer when
+> budget.spent(principal.team, 24h) + args.amount > budget.limit(principal.team);
+
+Figure 2. Both policies govern the same transfer action. The stateless policy enforces a per-transfer cap using request-local arguments, while the stateful policy reads mutable budget state through certified policy-state views. ask how much the team has spent so far unless the appli-cation supplies that fact as context. When mutable state is supplied as request context, the policy engine sees a value but does not necessarily control the underlying state or the updates that may invalidate it. The need for stateful inputs is already visible in deployed agent tooling: AGT provides a native per-agent CostGuard , and Omnigent ships native cost-budget policies that read cumulative session or per-user daily spend and return ASK or DENY at request or tool-call phases [16, 18]. They both provide native stateful cost-governance mechanisms; maintaining the validity of decisions over other provider state through effect commit depends on how those mechanisms are integrated with the provider’s concurrency and transaction mechanisms. We therefore use stateful policy for a policy program that reads mutable policy state maintained by the governed sys-tem. The second policy in Figure 2 is stateful: it calls certi-fied policy-state views for the team’s accumulated spend-ing and limit. Those views are read-only from the policy program’s perspective, but their values are maintained as governed effects commit. We call the trusted component that exposes such views and realizes the corresponding governed effects a policy-state provider . From a systems perspective, the provider defines the boundary between policy evaluation and effect execution: policies read provider-certified state views, while the provider commits the corresponding state transitions with governed effects. The budget policy is only one instance of this pattern. Similar state appears in refund and payment governance, where policies depend on refund history, order status, cumu-lative spend, vendor status, or duplicate-payment checks; in travel, scheduling, and inventory governance, where poli-cies depend on availability, holds, scarce inventory, and trip budget; and in cloud, security, approval, and compliance workflows, where policies depend on quotas, incident state, privileged-session state, approval basis, risk signals, or ag-gregate usage [2, 9, 21, 27, 32]. Across these domains, state can encode consumable capacity, history-dependent limits, pending approvals, exclusive claims, or newly added risk 
+
+> 3Yuxiang Peng and Xiaodi Wu
+
+signals. The cases differ in storage and enforcement mech-anism, but they share the same contract requirement: the provider must expose the policy-visible fact as a certified read-only view, map it to logical scopes, and update, validate, or reserve those scopes consistently with governed effects. This extra expressiveness creates the core systems prob-lem in concurrent agentic systems. Agents may issue opera-tions at the same time. The research challenge is to preserve the meaning of a stateful decision from policy evaluation through effect commit. If another operation changes the rel-evant policy state in between, the system can produce stale authorization. 
+
+2.2 Stale Authorization 
+
+The transfer example below is the minimal form of the agen-tic workflow problem: two operations have disjoint applica-tion effects but conflict through shared policy state. Given a stateful rule such as the budget policy above, a natural workaround is to keep the policy engine stateless and com-pute the stateful input outside it. The application can attach the current aggregate to the request, and the policy can compare that supplied value with the requested action. This preserves the surface form of a policy check, but it does not tell the runtime how the supplied value is coupled to the effect that may update it. A minimal request-context implementation has exactly this gap:  
+
+> spent = budget.spent(team, window) decision = policy_engine.check(req, {"spent_24h": spent})
+> if decision == "allow": db.commit_transfer(sender, receiver, amount) budget.add_spend(team, amount)
+
+The anomaly that remains is stale authorization, a check-then-act anomaly over policy state [4]. Figure 3 shows three schedules for the running budget policy: valid serial autho-rization, stale authorization during concurrent execution, and stale approval during delayed human review. Each check in the stale authorization schedule may be correct against the state it observes. The violation arises because the allow decisions are not coupled to the policy-state updates performed by the effects. In a request-context implementation, both requests may carry the same computed 
+
+spent_24h value, and the policy engine cannot see that the first committed transfer invalidates the second request’s context. The application-level writes are disjoint: one operation debits Alice and the other debits Bob. The conflict is therefore invisible if the system considers only application write sets. Both operations consume the same logical governance state, the team’s rolling spending window, so correctness requires the check and effect windows to have the serial meaning shown in the top panel of Figure 3, or an equivalent execution that validates, consumes, or reserves the relevant policy state before commit. Deny A   
+
+> spent 10
+> Commit B
+> spent 11
+> Stale authorization
+> time
+> Agent A
+> Agent B
+> Operation A
+> spend 1
+> Check A
+> spent 9
+> Commit A
+> spent 10
+> Operation B
+> spend 1
+> Valid serial authorization
+> Agent A
+> Agent B
+> Operation A
+> spend 1
+> Check A
+> spent 9
+> Commit A
+> spent 10
+> Operation B
+> spend 1
+> Check B
+> spent 9
+> Check B
+> spent 10
+> Deny B
+> spent 10
+> time
+> Stale approval
+> time
+> Agent A
+> Agent B
+> Operation A
+> spend 1
+> Operation B
+> spend 1
+> Check B
+> spent 9
+> Commit B
+> spent 10
+> Escalate A
+> spent 9
+> Human
+> approval
+> Recheck A
+> spent 10
+
+Figure 3. Running budget example. Top: valid serial autho-rization checks B after A commits, so B is denied at 10 spent credits. Middle: stale authorization lets both checks use the same 9-credit state, so both commit and spending reaches 11. Bottom: stale approval is the delayed form: A escalates at 9 spent credits, B commits while review is pending, and A’s resolution-time revalidation sees B in the current rolling window and denies A rather than committing from the old approval. Human intervention stretches the same gap over a longer interval, as shown in the stale-approval panel. A policy may escalate an operation for approval, wait while other opera-tions commit, and then resume. If no reservation preserves the policy-state basis of that approval, the operation must be rechecked at resolution and may be denied when the state has changed; otherwise, a once-correct approval can authorize an effect after other operations have consumed the relevant budget. 
+
+2.3 Correctness Baselines and Abstraction Limits 
+
+Two baselines are correct under strong assumptions, but nei-ther provides the abstraction boundary required for stateful governance. 
+
+Global serialization. A single global lock can serialize every governed operation from policy read through effect commit. This is correct but overbroad: operations with dis-joint policy-state dependencies wait behind one another, and a pending approval either blocks unrelated work or must re-lease the lock and revalidate later. Correctness should there-fore be scoped to the policy state an operation depends on, rather than to the entire system. 
+
+> 4Stateful Governance for Concurrent Agentic Systems
+
+Hand-written transactions. If policy state and effects live behind one transactional provider, the provider can en-force a fixed policy inside a serializable transaction [23, 24]. This is an important database baseline, but it moves policy logic into trusted provider code. Policy evolution may then require changes to the transaction implementation, increas-ing the review burden on policy changes and raising the expertise required of policy authors. It also weakens pol-icy modularity: the runtime cannot directly inspect which policy-state facts a policy reads, which policy version autho-rized an effect, or whether a policy change can be deployed without rewriting provider code. The goal is therefore a middle ground: recover the correct-ness of serial governed execution while allowing operations whose stateful policies and effects do not conflict to proceed concurrently. 
+
+## 3 Policy-State Model and Correctness 
+
+This section defines the policy-state model and policy-state serializability (PSS), the correctness property that Proven-act targets. The model captures the correctness obligation introduced in Section 2: policies read mutable policy state, effects change it, and audit records must justify delayed or concurrent commits. 
+
+3.1 Policy State 
+
+The policy state S is the logical state needed to decide all deployed stateful policies. It is not necessarily the entire ap-plication state or database state. Rather, S records exactly the governance facts that policies may consult, such as con-sumable capacity, histories, and approvals. This abstraction separates policy semantics from concrete storage. One deployment may implement S as SQL tables, another as counters, and another as service-owned logs. The model only requires that the policy state contains the in-formation needed for policy decisions and that governed effects update the relevant parts of that state consistently with their visible outcomes. Time-based policies are evalu-ated using a provider-certified evaluation time rather than a caller-supplied clock. The initial evaluation uses the op-eration’s admission time, while revalidation after a delay uses a fresh provider-certified time at resolution. A rolling-window view includes provider-committed effects that oc-curred strictly after the beginning of the window and no later than the evaluation time. Consequently, an effect committed while an operation is pending is visible if it remains within the rolling window when the operation is revalidated. 
+
+3.2 Governed Operations 
+
+A request is a tuple: 
+
+req = (principal , action , args )
+
+where principal is the authenticated principal, action is the governed action, and args are action arguments. A governed operation extends a request with the policy evaluation, effect outcome, and audit outcome. For a policy and request, the certified policy-state view vector ®Q is a trusted, read-only projection of policy state: 
+
+®Q (S, req ) → ® 𝑣 
+
+The vector ®𝑣 contains the values returned by the registered view calls used by the policy. The dependency information needed for enforcement is a property of the policy expression and the certified policy-state view and effect contracts; it is not part of the value vector returned to the policy program. A policy is a pure function over the request and this value vector. For the formal model, a terminal policy decision is either allow or deny: 
+
+P(req , ®𝑣 ) → { allow , deny }
+
+Policies do not execute effects or mutate policy state. They may call only registered views with declared types and bound-edness. Implementations may also support escalation for human or external review. Escalation is an intermediate runtime outcome that later resolves, after reservation consumption or revalidation, to the terminal allow or deny decision modeled here. An effect is a trusted operation supplied by a policy-state provider and associated with an allowed request. For the model, we write the effect as the transition it induces on policy state: 
+
+E(S, req ) → S′
+
+The provider may update additional application state, call ser-vices, or produce external outcomes. For policy correctness, the relevant requirement is that the policy-state transition observed by future policy decisions matches the governed effect that became visible. 
+
+3.3 Policy-State Serializability 
+
+A history H records terminal governed operations and the externally visible ordering constraints among them. Con-cretely, each operation has a begin event and a terminal event; the history can be viewed as a partial order over these events, together with the operation’s request, decision, and policy-relevant effect. For the purposes of PSS, an operation is terminal when it reaches allow or deny. An allowed oper-ation contributes its governed effect to the history, while a denied operation contributes no effect. A pending operation created by escalation is not ordered as a completed governed operation until it resolves to allow or deny through revalida-tion or reservation consumption. The real-time order induced by H orders operation 𝑖 before operation 𝑗 when 𝑖 ’s terminal event precedes 𝑗 ’s begin event in the partial order. Thus, PSS is strict-serializability-like over policy state: it requires serial explainability plus real-time order, but not global serialization of the application database. Real-time order matters for governance and audit because 
+
+> 5Yuxiang Peng and Xiaodi Wu
+
+once a governed effect is visible, later decisions should be explainable as having seen that effect; overlapping opera-tions are instead ordered by the serialization points chosen by the enforcement mechanism. A serial history is a history whose terminal operations do not overlap. The target cor-rectness condition requires concurrent histories to have the same policy meaning as some legal serial history, following the serial-history view of concurrency correctness [11, 23]. Intuitively, the serial history is an explanation of what the concurrent execution meant. The runtime need not execute operations one at a time, but after the fact each terminal de-cision should fit into an order where the policy was checked against the state that made the effect valid. The definition below makes this requirement precise. 
+
+Definition 1 (Policy-State Serializability) . A concurrent his-tory H of terminal governed operations satisfies PSS if there exists a serial history serial (H) such that: 1) serial (H) respects the real-time order of H; 2) every terminal decision in serial (H)
+
+matches all applicable policies evaluated immediately before the operation’s serial position; 3) every allowed operation ap-plies its governed effect at that position; 4) every denied oper-ation produces no effect; and 5) serial (H) produces the same governed effects as H and leaves the same final policy state. 
+
+Equivalently, for each terminal operation 𝑖 in the serial or-der, let S𝑖 be the policy state before operation 𝑖 . The decision is: 
+
+d𝑖 = P𝑖 (req 𝑖 , ®Q𝑖 (S𝑖 , req 𝑖 )) 
+
+The next policy state is: 
+
+S𝑖 +1 =
+
+(
+
+E𝑖 (S𝑖 , req 𝑖 ), d𝑖 = allow S𝑖 , d𝑖 = deny 
+
+Thus, PSS couples each terminal decision to its position in the serial explanation. An allowed operation applies its governed effect after the policy is evaluated on the preced-ing policy state; a denied operation leaves the policy state unchanged and produces no governed effect. PSS is intentionally a property of terminal histories, not a promise that every pending approval will eventually com-mit. Revalidation at resolution is a fresh policy evaluation over the state and time certified by the provider at resolu-tion. An intervening effect is therefore considered whenever it remains visible in the current rolling-window view, and the operation may be denied even after human approval. Reservations and holds provide a stronger operational prop-erty by preserving the relevant capacity while an operation waits. A deployment may also expire old pending requests and require fresh admission; such a request-age rule is or-thogonal to PSS. Section 5.4 evaluates approval preservation separately from terminal-history correctness. 
+
+3.4 Policy-Induced Conflicts and Sound Provider Contracts 
+
+For operation 𝑖 , let 𝑅 𝑃 𝑖 be the canonical logical scopes read by its policy evaluation, and let 𝑅 𝐸 𝑖 and 𝑊 𝐸 𝑖 be the scopes read and written by its effect. Conventional conflict reason-ing compares the footprints of effects. Stateful governance adds another dependency: an effect can change policy state that a concurrent authorization decision has already read. Operations 𝑖 and 𝑗 therefore have a policy-induced conflict when 𝑊 𝐸 𝑖 overlaps 𝑅 𝑃 𝑗 . This conflict can arise even when their application writes are independent, so ordinary application-level conflict control may have no reason to order them. A runtime that ignores this dependency can produce stale au-thorization: a policy decision may be based on a policy-state fact that a concurrent effect changes before the decided effect becomes visible. Sound provider contracts are the link between these con-flicts and the mechanisms in Section 4. For each governed operation 𝑖 , the selected mechanism acquires, validates, or re-serves a set of logical scopes scopes 𝑖 . Provider contracts are sound when those scopes cover all policy-state dependencies of the operation: the policy read set 𝑅 𝑃 𝑖 , the effect read set 𝑅 𝐸 𝑖 ,and the effect write set 𝑊 𝐸 𝑖 . Equivalently, 𝑅 𝑃 𝑖 ∪ 𝑅 𝐸 𝑖 ∪ 𝑊 𝐸 𝑖 ⊆
+
+scopes 𝑖 . Thus, every policy-state conflict maps to at least one shared scope; extra scopes are safe but may reduce con-currency. Validation means that before a terminal decision is recorded, and before an allowed effect commits, the mecha-nism verifies that the relevant scoped policy and effect state is unchanged from the state used for evaluation, has been re-served for the operation, or has been continuously protected by scoped enforcement. If validation fails, the operation must re-evaluate, deny, or remain pending rather than commit on the stale basis. 
+
+Theorem 1 (Policy-State Serializability by Scoped Enforce-ment) . If deployed policies are well typed and bounded, provider contracts are sound, and the selected enforcement mechanisms serialize, reserve, or validate overlapping logical scopes be-fore recording a terminal decision and before committing any allowed effect, then every terminal history produced by the runtime satisfies PSS. 
+
+Theorem 1 states the obligation that the design must real-ize: identify the policy-state dependencies induced by certi-fied policy-state views and provider effects, then protect over-lapping scopes before a terminal decision and any allowed effect become visible. The proof appears in Appendix A. 
+
+## 4 Provenact Design 
+
+Section 3 states the obligation that an enforcing runtime must realize: identify the policy-state dependencies used by a decision, protect the corresponding logical scopes, and com-mit the policy-state effect only when that decision remains valid. Provenact implements this obligation as a governance 
+
+> 6Stateful Governance for Concurrent Agentic Systems Scoped enforcement
+
+Provenact Runtime  
+
+> Request normalization
+> Policy evaluation
+> Dependency & scope resolution
+> Policy-state
+> effect commit
+> allow
+> Governance record update
+> Agent action requests
+> Governance decisions
+> Escalation
+> handling
+> deny escalate
+> Policy programs Provider contracts
+
+Figure 4. Provenact runtime path for a governed action request, including escalation handling before a terminal de-cision. layer between policy authors, policy-state providers, and concurrent agentic frameworks. It does not attempt to own the entire agent workflow. Instead, it owns the governance path: request normalization, dependency and scope reso-lution, scoped enforcement, policy evaluation, policy-state commit, and governance records. 
+
+4.1 Runtime Boundary and Roles 
+
+Figure 4 focuses on the runtime path for a single governed operation. The broader deployment boundary is the one in-troduced in Figure 1: policy authors supply policy programs, policy-state providers supply contracts for certified policy-state views and governed effects, and concurrent agentic frameworks submit action requests and receive governed results. Applications and external services remain outside the Provenact runtime boundary. Within that boundary, an action request is first normalized into a principal, action, arguments, and idempotency key. The runtime then combines the compiled policy program with provider contracts to resolve dependencies and logical scopes. Scoped enforcement begins after scope resolution and remains active while the policy is evaluated and, for an allowed operation, while the policy-state effect is committed. Denied operations produce governance records without com-mitting the effect. Escalated operations enter the escalation-handling path shown in Figure 4; after waiting, reservation consumption, or revalidation, they resolve to a terminal deci-sion. Allowed operations commit the policy-state effect and then record the terminal result. This separation is the main abstraction boundary. Pol-icy authors can change policy programs without rewriting provider-owned effect implementations. Policy-state providers expose certified policy-state view and effect contracts with-out exposing arbitrary storage internals to policy authors. The agentic framework sees a governed result, but it does not receive a reusable allow token detached from the policy-state commit. This boundary also defines the threat model: agents and agent frameworks are untrusted callers, while the Provenact runtime and policy-state providers are trusted to implement certified views, scopes, effects, reservations, and idempotency. The PSS guarantee requires complete me-diation: every governed effect and every mutation of policy state visible to certified views must pass through a Provenact-mediated provider path. Direct database writes, administra-tive scripts, or alternate tools that mutate the same policy state are outside the guarantee unless the provider synchro-nizes them with the same contracts. 
+
+4.2 Policy Programs and Provider Contracts 
+
+Provenact relies on contracts rather than arbitrary policy callbacks. A certified policy-state view contract declares a typed view interface, a trusted resolver that returns the view value, and a scope resolver that maps view arguments to a finite set of logical policy-state scopes. An effect contract de-clares the action schema, the required consistency guarantee, a policy-state footprint resolver, and the trusted executor for the governed policy-state effect. For reservation-based enforcement, view contracts also identify whether a view represents available capacity, consumed capacity, or state that is guarded again at commit. These definitions match the prototype interface: views and effects are registered in a con-tract registry, and the coordinator uses those registrations to evaluate policies and commit effects. Certification is operational rather than magical: the provider declares the view’s type, boundedness, resolver, scope-set mapping, and reservation role, and the runtime admits only policy calls to registered certified views. The compiler can check that policies are well typed and bounded over those declarations, and the coordinator can check that every se-lected view and effect has a scope resolver. The runtime still trusts the provider implementation to return the promised value and to name scopes soundly; that trusted boundary is the price of exposing useful state without letting policies call arbitrary storage code. Logical scopes are synchronization names over policy state. They need not be physical database rows or locks. For example, a budget view may map a team and time win-dow to one or more scopes, often a single scope such as 
+
+team-budget:research , while the transfer effect declares that committing a transfer writes the same budget scope.             
+
+> 7Yuxiang Peng and Xiaodi Wu
+> view budget.spent(team, window)
+> scopes { team-budget:{team} }
+> role consumed_capacity
+> view budget.limit(team)
+> scopes { team-budget:{team} }
+> role capacity_limit
+> effect transfer(sender, receiver, amount, team)
+> reads team-budget:{team}
+> writes team-budget:{team}
+> idempotency request_id
+> enforcement transaction |reservation
+
+Figure 5. Example provider contract for the running budget-transfer policy. The runtime uses scopes to decide which operations must be coordinated; the provider code decides how view values and effect footprints are computed. Figure 5 sketches the contract shape for the running trans-fer policy. The key point is that the budget views and the transfer effect declare a shared logical budget scope, so the runtime can coordinate the policy read with the effect com-mit. The provider also declares idempotency and the sup-ported enforcement mode; these are trusted provider obliga-tions, not policy-program logic. The trusted obligations break down into view soundness, scope soundness, effect soundness, reservation soundness, and idempotency and recovery soundness. The view must return the promised policy-state fact, the scope resolvers must name every logical dependency, the effect must update policy state consistently with the visible outcome, reserva-tions must prevent double consumption, and retries must not duplicate effects. Reservation soundness is escrow-style [19]: creating a reservation atomically removes capacity from the amount available to other operations, consuming it applies the reserved effect at most once, and canceling it returns the capacity. Intuitively, a provider contract is sound when it gives Provenact every scope name needed to protect the relevant policy state. If a policy may read a policy-state fact, or an effect may read or update that fact, the corresponding view or effect contract must map the request to a set of scopes that covers it. Extra scopes are safe but may reduce concurrency. If a required resolver is absent, Provenact rejects the binding during admission; if a resolver is present but omits a needed scope, the runtime can protect only the declared scopes, so the deployment violates the contract and the guarantee in Theorem 1 no longer applies. 
+
+4.3 Dependency and Scope Resolution 
+
+Dependency resolution has both compile-time and request-time parts. At compile time, the policy compiler validates the policy and records the finite set of certified policy-state view                                    
+
+> 𝑝 :: =policy 𝑛 on 𝑎 {𝑟 𝑑 }
+> 𝑑 :: =allow otherwise
+> 𝑟 :: =deny 𝜌 when 𝑒 |escalate 𝜌 when 𝑒 𝑒 :: =𝑐 |args .𝑥 |principal .𝑥 |𝑄 (𝑒 1, . . . , 𝑒 𝑘 )|𝑒 1op 𝑒 2| ¬ 𝑒 𝑄 ∈Vcert
+
+Figure 6. Core policy-language fragment. Certified view symbols 𝑄 ∈ V cert are registered by provider contracts with type and scope resolvers; all expressions are bounded and side-effect free. calls that may be evaluated. At request time, Provenact evalu-ates request-dependent arguments, such as principal.team ,and invokes the corresponding provider scope resolvers. The result is a concrete set of policy-read scopes for this opera-tion. The effect contract supplies the other half of the depen-dency set. For the requested action, its footprint resolver maps the action request to the policy-state scopes that the effect may read or write. The runtime combines policy-read scopes, effect scopes, and an idempotency scope into the op-eration’s coordination set. The current prototype implements this flow directly: the policy runtime computes dependency scopes from compiled host calls, the effect contract computes a policy-state footprint, and the coordinator protects their union. The policy interface is intentionally restricted to make this extraction possible. Policies are pure, bounded programs over the request, principal attributes, action arguments, and registered certified policy-state views. They cannot call arbi-trary provider code, mutate state, or loop over unbounded data. Figure 6 gives the core policy-language fragment; Ap-pendix B gives the full DSL syntax and static checks used by the prototype. 
+
+4.4 Scoped Enforcement 
+
+Scoped enforcement is the protected interval in Figure 4. After resolving scopes, Provenact enters an enforcement context for those scopes. Within that context, it evaluates the policy over certified policy-state views and then handles the resulting decision. A denied operation records a denial and produces no policy-state effect. An escalated operation enters the pending path, optionally with a reservation, and later re-enters enforcement at resolution. An allowed operation invokes the trusted effect executor and commits the policy-state effect before returning the allowed result to the agentic framework. The prototype realizes scoped enforcement with two lay-ers. The coordinator first acquires local keyed locks over the resolved scopes to serialize in-process conflicts. For back-ends that expose database-level scoped locks, such as the PostgreSQL ledger, the coordinator also asks the resource to acquire scoped locks inside the resource session. The same 
+
+> 8Stateful Governance for Concurrent Agentic Systems
+
+session is used for policy evaluation, effect execution, reser-vation updates, idempotency checks, and governance record writes. Provenact supports different enforcement modes behind the same contract. Transaction mode evaluates the policy and commits the allowed effect inside one provider-owned transaction protected by the resolved scopes. Reservation mode creates or consumes durable capacity records for long-running approvals or contended resources; startup admission rejects bindings whose policies do not use provider-declared reservation-safe view patterns. Both modes use scoped lock-ing for overlapping logical scopes and durable idempotency records for retries. 
+
+4.5 Governance Records, Escalation, and Evolution 
+
+Governance records are durable runtime state written by the enforcement protocol. They link the request, policy and rule identifiers, certified policy-state view reads, decision, and policy-state effect that the runtime enforced. Together, these records are the audit counterpart of scoped enforcement: they describe the same operation whose scopes and effect were protected. Escalation is treated as a split-phase governed operation. The initial policy evaluation records a pending operation rather than a terminal allow. In reservation mode, Provenact also reserves the relevant capacity; in transaction mode, the pending operation must revalidate policy state before com-mitting. At resolution, the operation consumes the reserva-tion or revalidates policy state before committing the effect, and only then becomes terminal in the history used by PSS. The same boundary supports policy evolution. Adding a new guard should usually require changing a policy and, when necessary, registering a new certified policy-state view, not rewriting every provider-owned effect. Because gover-nance records preserve structured decision evidence, Prove-nact can keep policies first class while still producing audit records for review. 
+
+4.6 Prototype Realization 
+
+We implemented Provenact as a Python prototype with a bounded policy frontend, a contract registry, a policy run-time, and a governed-operation coordinator. The PostgreSQL backend stores policy state, pending operations, reservations, idempotency records, and audit records in tables, and pro-tects logical scopes with transactions and transaction-scoped advisory locks [25]. A SQLite backend supports local smoke tests, and a thin MAF-shaped adapter [15] maps framework function calls into Provenact action requests. Section 5 eval-uates the PostgreSQL-backed prototype. 
+
+## 5 Evaluation 
+
+The evaluation is intentionally controlled: each workload isolates one part of the correctness obligation rather than attempting to mimic an entire deployment trace. The five research questions should be read in that order. RQ1 tests the core safety failure, stale authorization. RQ2 measures the cost of preserving that safety for synchronous opera-tions. RQ3 separates terminal-history correctness from the stronger need to preserve a delayed approval’s policy-state basis. RQ4 tests whether the boundary keeps policy changes mostly outside trusted provider code. RQ5 checks whether the same properties hold in a multi-policy agentic workflow. We study these questions with PostgreSQL-backed controlled workloads and a scripted, LLM-free agentic procurement benchmark. 
+
+5.1 Common Experimental Setup Backend and run configuration. The reported results use the PostgreSQL backend of the Provenact research proto-type described in Section 4.6. It stores policy state in scope-indexed tables and enforces logical scopes with PostgreSQL transactions and transaction-scoped advisory locks [24, 25]. Unless otherwise stated, numeric aggregates are means over five random seeds; stale-allow columns report the maximum over seeds, and PSS columns require all seeds to satisfy PSS. The machine has an Intel Core Ultra 7 155H CPU with 22 logical CPUs and runs under WSL2. The external baseline en-vironment uses Cedar CLI 4.11.1, Agent Governance Toolkit 4.1.0, and Omnigent 0.4.0 [8, 16, 18]. 
+
+Baselines and modes. We group baselines by role. Request-local baselines test policy-engine integrations in which mu-table policy state is supplied by the caller and the database effect follows the returned decision. Naive check-then-act (Naive) evaluates the stateful policy directly without coordi-nation, while RQ1 uses Cedar as a representative external policy engine in this configuration. RQ5 separately evalu-ates AGT and Omnigent using their native cost-governance mechanisms. Correctness-preserving baselines test the cost of safe enforcement. Global serialization (Global) protects the check-effect window with one coarse critical section. Manual application transactions (Manual tx) embed one fixed policy check inside trusted provider code using the same logical scopes as the governed effect. Provenact modes keep policies first-class and rely on certified policy-state views and provider-declared effect footprints. Provenact-Tx enforces the check-effect window with scoped transac-tional coordination. Provenact-Res adds provider-defined reservations for consumable policy state. For long-running approval, Provenact-Hold creates durable holds on affected logical scopes while approval is outstanding. 
+
+Metrics. Correctness metrics track stale allows, terminal outcomes, and PSS compatibility. Performance metrics track throughput, latency, retries, and coordination wait. Pending-operation metrics track approval invalidation, unrelated progress, scope-hold waits, and reservation behavior. Policy-evolution metrics track trusted provider-code edits and audit-read 
+
+> 9Yuxiang Peng and Xiaodi Wu
+
+Table 1. Correctness under minimal and full-conflict policy-state races. C/D is committed/denied operations; full-conflict C/D values are means over five random seeds, and Stale is the maximum stale-allow count over seeds.                                            
+
+> Minimal conflict Full conflict Mode C/D Stale PSS C/D Stale PSS Naive 2/0 1×79.4/176.6 30 ×
+> Cedar [8] 2/0 1×80.8/175.2 31 ×
+> Global 1/1 0√50/206 0√
+> Manual tx 1/1 0√50/206 0√
+> Provenact-Tx 1/1 0√50/206 0√
+> Provenact-Res 1/1 0√50/206 0√
+
+coverage. Agentic-workflow metrics track valid committed workflows, stale allows, stale approvals, final policy-state violations, and throughput. 
+
+5.2 RQ1: Does Provenact Prevent Stale Authorization? Design. The minimal-conflict workload is the smallest stale-authorization anomaly. It initializes a team close to its daily budget and runs two concurrent transfers that are each in-dividually allowed if checked before either effect commits, but only one transfer can be valid in any serial policy-state history. The two transfers debit different accounts, so their application writes are disjoint; they conflict only because both consume the same team-budget policy-state scope. A correct mode should commit one transfer, deny one transfer, report no stale allows, and satisfy PSS. We also run a many-client full-conflict workload in which 256 operations share the same policy-state scope; a correct mode should admit only the operations that fit within the budget. 
+
+Results. Table 1 reports the minimal-conflict and full-conflict checks. In the minimal conflict, Naive and Cedar commit both racing transfers, while every correctness-preserving mode commits one transfer and denies the other. In the full-conflict workload, Naive and Cedar produce 30–31 stale allows and commit 79.4–80.8 transfers although the bud-get admits only 50. Global serialization, manual fixed-policy transactions, and both Provenact modes commit exactly 50 transfers, deny the rest, report zero stale allows, and satisfy PSS. Thus RQ1 answers yes for Provenact: scoped policy-state coordination removes stale authorization in both the minimal race and the multiprocess full-conflict workload. 
+
+5.3 RQ2: What Is the Cost of First-Class Governance? Design. RQ2 isolates synchronous governed operations, with no human approval and no policy exhaustion. Each cell runs 512 transfers with 32 clients over 16 logical scopes, so two random operations are disjoint with probability 0.9375. We vary governed-operation service time from 0 to 10 ms         
+
+> 00.5 12510
+> 60 80 100
+> Service time (ms) Throughput (ops/s) Manual tx Global Provenact-Tx Provenact-Res
+
+Figure 7. RQ2 service-time sweep at 32 clients and 16 logical scopes. Values are means over five random seeds; error bars show one standard deviation. Every row commits all 512 operations with zero violations. to model work that must occur inside the protected check-effect window. All compared modes are correctness preserv-ing: Manual tx is the specialized fixed-policy transaction baseline, Global is the generic serialization baseline, and Provenact-Tx is the main policy-first Provenact path. We also include Provenact-Res to measure the cost of reserva-tion bookkeeping when no pending window needs it. 
+
+Results. All compared modes commit all 512 operations and report zero violations, denies, pending operations, or aborts. Figure 7 shows the throughput sweep. At 0 ms service time, Provenact-Tx reaches 88.9 ops/s, matching Manual tx at 88.8 ops/s and reaching 0.87x Global. As service time grows, global serialization pays for the protected delay directly: at 10 ms, Global falls to 52.7 ops/s. Because Manual tx and Provenact-Tx protect only the operation’s declared scopes, much of the added service time can proceed in parallel across the 16 logical scopes. At 10 ms, Provenact-Tx reaches 86.4 ops/s, or 0.93x Manual tx and 1.64x Global. The latency and wait columns in the artifact remain useful diagnostics, but we do not use p95 latency as an RQ2 headline: in repeated artifact runs, per-seed tail values were sensitive to seed-local benchmark-runner stalls that moved between modes, while completion counts, violation counts, and throughput were stable. The absolute throughput reflects prototype overheads common to these paths, including Python request orchestra-tion, PostgreSQL session work, scoped lock acquisition, and governance-record writes. Provenact-Res is slower than Provenact-Tx throughout this synchronous workload be-cause it pays reservation bookkeeping without a pending approval to preserve, but at 10 ms it still reaches 1.21x global throughput. 
+
+> 10 Stateful Governance for Concurrent Agentic Systems
+
+The overall result is that Provenact pays measurable over-head when work is very short, but scoped policy-first en-forcement avoids the coarse serialization cost that dominates global locking as governed service time increases. 
+
+5.4 RQ3: Does Provenact Support Long-Running Governance? Design. The pending-approval experiments test whether a runtime can preserve an approval’s policy-state basis while still making progress on independent work. The failure mode is stale approval, the split-phase version of stale authoriza-tion. In a procurement workflow, for example, a human man-ager may approve a purchase based on capacity available when the request enters review, but another workflow may consume that capacity before the approved effect commits. Treating the approval as a timeless token can therefore pro-duce a policy-violating commit; pure revalidation avoids that commit, but can reject an already approved operation and create manual follow-up work. The workloads below isolate this tradeoff. The single-approval workload has one trans-fer pause for approval, 16 unrelated transfers on disjoint policy-state scopes, and one same-scope competitor. The scope-scaling workload runs 64 clients across 1 to 64 teams, marks 10% of transfers as pending, and uses a 1s approval delay. The desired behavior is concrete: unrelated transfers should make progress during the approval wait, same-scope competitors should not invalidate pending approvals, and approved transfers should commit once approval arrives. The modes form a coordination ladder. Global hold keeps one global critical section across the approval wait; global revalidation releases it and checks again at approval reso-lution. Provenact-Tx revalidates pending approvals using provider-certified state and time at resolution. Provenact-Hold creates durable holds on the pending transfer’s logical scopes, allowing disjoint scopes to proceed while same-scope competitors wait. Provenact-Res uses provider-defined reservations, so a same-scope competitor can be denied im-mediately when it conflicts with reserved capacity. 
+
+Results. Figure 8 illustrates the single-approval benchmark. Global hold preserves the approval, but no unrelated transfer commits before approval resolution and unrelated p95 la-tency rises to 1080.8 ms. Global revalidation and Provenact-Tx allow all 16 unrelated transfers to commit before the ap-proval resolves, but the same-scope competitor commits first and invalidates the pending approval. Provenact-Hold and Provenact-Res both preserve the approval while allowing all 16 unrelated transfers to commit before resolution. The difference is the same-scope path: Provenact-Hold makes the competitor wait for the approval and then denies it, with 1021.8 ms p95 scope-hold wait, while Provenact-Res denies the competitor before resolution using the reservation. Global  
+
+> hold
+> approval
+> commits
+> competitor waits
+> then is denied
+> request resolution
+> Global
+> revalidate
+> competitor commits
+
+✓
+
+> approval
+> invalidated
+
+× 
+
+> pending approval
+> Provenact
+> tx competitor commits
+> approval
+> invalidated
+
+×
+
+> Provenact
+> res
+> approval
+> commits
+> competitor is denied by reservation
+
+✓  
+
+> long-pending unrelated competitor
+> Provenact
+> hold
+> approval
+> commits
+
+✓
+
+> competitor waits
+> then is denied
+
+Figure 8. Pending-approval benchmark. One transfer waits for approval while unrelated transfers and a same-scope competitor run. Table 2 separates the two properties the scope-scaling workload is meant to test. The first numeric column re-ports approval invalidation rate: the fraction of pending approvals whose policy-state basis is lost before resolution. Pending-commit rate is omitted because the two rates sum to 100% in this workload. The remaining columns report fixed-window unrelated progress: unrelated transfers com-mitted during the configured 1s approval window divided by unrelated transfers submitted, across all nontrivial team counts in the 2-to-64-team sweep. This avoids crediting a mode for unrelated work that commits only because ap-proval resolution itself was delayed behind runtime coordi-nation. Global hold preserves approvals but makes no un-related progress during the wait. Global revalidation and Provenact-Tx permit same-scope competitors to commit before approval resolution, so every pending approval loses its basis; their higher fixed-window progress is therefore not approval-preserving progress. Provenact-Hold and Provenact-Res are the only modes that preserve every pending approval, but this guarantee has an engineering cost 
+
+> 11 Yuxiang Peng and Xiaodi Wu
+
+Table 2. Scope-scaling pending workload. Entries are per-centages averaged over five random seeds. Progress is unre-lated work committed during the fixed 1s approval window divided by unrelated work submitted. Bold nonzero inval-idation entries mark modes that fail to preserve pending approvals.                      
+
+> Mode Approval invalidation rate Unrelated progress by team count 24816 32 64 Global hold 0% 0% 0% 0% 0% 0% 0% Global reval. 100% 100% 100% 100% 89.5% 42.7% 13.9% Provenact-Tx 100% 100% 100% 100% 75.0% 36.1% 18.0% Provenact-Hold 0% 100% 100% 100% 39.1% 15.5% 7.5% Provenact-Res 0% 100% 100% 100% 56.2% 26.8% 12.4%
+
+under high contention. Their lower fixed-window progress reflects prototype queueing and PostgreSQL coordination overhead while many approval-bearing and same-scope com-peting operations are outstanding. Reservations reduce this cost for consumable state by denying reserved-capacity con-flicts immediately: at 64 teams, Provenact-Res preserves approvals with 12.4% fixed-window progress, compared with 7.5% for Provenact-Hold. The takeaway is that pending approval needs more than transaction-mode correctness. Revalidation can avoid stale commits and therefore preserve PSS, but it may invalidate the human approval because the policy-state basis has changed. Scoped hold is a correct fallback, but its wait-based treat-ment of same-scope competitors can reduce short-window progress at scale. Reservations are preferable for consum-able state: they preserve the pending approval while denying conflicting same-scope work without a long wait. 
+
+5.5 RQ4: Does Provenact Preserve Policy Modularity? Design. The policy-evolution workload tests whether the Provenact boundary keeps policy changes out of trusted provider code while preserving executable policy behavior. Starting from the team-budget policy, we apply five represen-tative changes: a per-agent rolling limit, an approval-state guard, a risk-score guard, a 24-hour to 7-day window change, and a second governed action. For each variant, the har-ness parses and compiles the Provenact policy, runs targeted policy tests over controlled certified-view fixtures, records audit-read capture, and counts changed lines in policy code and trusted provider code. The comparison point is manual fixed-policy enforcement, where the policy logic is embed-ded in trusted provider code. This is a source-evolution and testability experiment rather than a randomized runtime benchmark. Appendix C lists the policy programs and expert baseline programs used to compute these source deltas. 
+
+Results. All six Provenact variants compile, all 23 policy tests pass, and audit reads are captured automatically for every variant. Across the five evolution tasks, Provenact 
+
+Table 3. Policy-code and trusted-code changes under policy evolution. Contracts added are provider-facing certified-view or action contracts; Δ columns report changed source lines relative to the base team-budget fixture.                            
+
+> Change Contracts added Provenact policy Δ
+> Provenact trusted Δ
+> Manual trusted Δ
+> Per-agent limit 1213Approval guard 1213Risk guard 12137-day window 0404Second action 0819Total 318 422
+
+changes 18 policy lines but only 4 trusted provider-code lines, while manual fixed-policy enforcement changes 22 trusted provider-code lines. Table 3 puts provider-contract additions, policy-text churn, and trusted-code churn side by side. In the table, Δ denotes changed source lines relative to the base team-budget fixture; the main signal is that policy changes remain mostly outside trusted provider code. The line counts are a proxy for boundary movement, not a uni-versal productivity metric: the stronger evidence is that each new policy-state input is introduced as a certified view and then appears automatically in the policy’s audit-read trace. For example, the risk-score variant adds a risk.score view contract and a policy rule, while the transfer effect executor remains unchanged and the resulting audit trace records the risk read alongside the budget reads. Adding new policy-state inputs, such as per-agent history, approval count, or risk score, requires Provenact to register a small provider contract while leaving the transfer effect executor unchanged. For the first four variants, the trusted ef-fect path is stable; the changes are policy text, certified-view registrations, or fixture metadata. Changing the time win-dow is a pure policy edit in Provenact but a trusted-code edit in the manual baseline, because the latter embeds the policy predicate inside the provider implementation. The second action is the largest semantic change because it adds a new governed action and rules; in Provenact most of that change remains policy text, while the trusted provider change is one line. Thus RQ4 does not claim policy evolution is free; it shows that Provenact makes the evolution testable and auditable while sharply reducing trusted-code churn. 
+
+5.6 RQ5: Does Provenact Preserve Governance in Agentic Workflows? Design. RQ5 moves from single-policy microbenchmarks to a scripted, LLM-free procurement workflow inspired by tool-agent evaluation settings [9, 27, 32]. Each workflow carries task metadata through an explore, refine, govern, and commit shape: it chooses a preferred item, may fall back when inventory is unavailable, checks daily agent-cost, team-budget, inventory, and approval policies, waits for simulated reasoning or human review, and then commits cost, order, 
+
+> 12 Stateful Governance for Concurrent Agentic Systems
+
+budget, and inventory effects. The workload is still controlled rather than a live LLM deployment, which lets us fix the conflict rate and directly measure stale authorization. The reported run uses 256 workflows, 32 clients, 8 teams, 16 items, five seeds, 50% hot teams and items, 20% approval-triggering workflows, a 50 ms reasoning delay, and a 1 s approval delay. Each workflow costs $0.10 against a $1.00 per-agent daily limit. The hot user begins at $0.80, leaving capacity for two additional workflows, while the hot team begins at 9,000 of its 10,000-unit budget, leaving capacity for one order. The unequal remaining capacities prevent enforcement of daily cost from masking stale team-budget decisions. The comparison focuses on agent-governance baselines. AGT uses the AGT policy engine for team-budget and in-ventory decisions and its native CostGuard for per-agent daily cost. One shared CostGuard instance per run atomi-cally checks and charges its in-process budget state before the reasoning or approval delay; the admitted workflow later applies its PostgreSQL effects. Omnigent uses its native per-user daily-cost policy [18] together with Omnigent-style ALLOW, DENY, and ASK verdicts. In both configurations, team-budget, inventory, and approval decisions precede the corresponding PostgreSQL effects. Provenact-Tx rechecks and commits inside scoped PostgreSQL coordination, while Provenact-Res reserves daily cost, team budget, and inven-tory capacity before the delayed work or approval. 
+
+Results. Table 4 reports the aggregate result. AGT commits 71.6 workflows on average, of which 59.0 are valid. Its native 
+
+CostGuard eliminates daily-cost violations in all five seeds, but stale policy-engine decisions leave one team and one in-ventory item invalid in every run. Omnigent commits 107.6 workflows, of which 66.2 are valid, and produces final daily-cost, team-budget, and inventory violations. Omnigent’s na-tive cost policy therefore improves the policy vocabulary, but the run still exposes the missing decision-effect binding. Provenact-Tx and Provenact-Res each commit 70.6 valid workflows with no stale decisions or final policy-state vi-olations. The approval columns show that AGT preserves 11.6 approval bases on average, Omnigent preserves 1.6, and both Provenact modes lose none of the approvals they create; Provenact-Res preserves 13.8 through reservations. RQ5 shows that native cost controls can protect their own state while external team-budget and inventory decisions remain stale. Provenact preserves all three invariants by extending protection through effect commit. 
+
+## 6 Discussion and Limitations 
+
+Evaluation Scope. The workloads are controlled bench-marks rather than deployment traces. This choice isolates stale authorization, policy-state sharing, approval delay, and provider-code changes; the RQ5 procurement benchmark adds multi-step task traces, policy branches, approval delays, AGT and Omnigent baselines, and shared policy state, but 
+
+Table 4. Agentic procurement workflow benchmark. Values are means over five seeds except Viol., which reports maxima. Stale auth. counts committed workflows whose policy-state basis became invalid; Appr., Stale appr., and Appr. pres. count approval-created workflows, lost approval bases, and pre-served approval bases. Viol. reports final invalid daily-cost users, teams, and inventory items.                                      
+
+> Mode Commit Valid commit Stale auth. Appr. Stale appr. Appr. pres. Viol. PSS AGT [16] 71.6 59.0 12.6 14.2 2.6 11.6 0/1/1 ×
+> Omnigent [18] 107.6 66.2 41.4 20.8 19.2 1.6 8/8/1 ×
+> Provenact-Tx 70.6 70.6 04.4 04.4 0/0/0 √
+> Provenact-Res 70.6 70.6 013.8 013.8 0/0/0 √
+
+remains simulated rather than an open-ended agent deploy-ment. The prototype evaluates one concrete policy-state provider and source-level policy-evolution fixtures. Other consumable or history-dependent policies should fit the same contract model, but production use would need additional certified views, provider adapters, and deployment hardening. The artifact emits raw events, per-run summaries, paper-facing tables, and run metadata for reproducibility. 
+
+Provider Support. Provenact cannot create consistency guarantees that the policy-state provider cannot enforce. The provider must implement certified policy-state views, governed effects, and any reservation or hold mechanism needed by the selected enforcement strategy. If a policy re-quires PSS but the provider offers only best-effort reads or unvalidated external effects, deployment should fail or the guarantee must be explicitly weakened. This is the main trusted boundary in Provenact. Policies remain first-class and auditable, but provider contracts and implementations are trusted code. The benefit is that this trusted code is shared across policies and evolves less often than policy text; the cost is that new kinds of policy-visible state require provider support. 
+
+Integration with Agent Frameworks. Provenact is in-tended to sit beside, rather than replace, an agent orchestra-tion framework. Frameworks such as MAF [15] and Lang-Graph [13] can continue to provide graph execution, task state, checkpointing, durable resumption, human review, middleware, and tool routing, while selected tool calls cross a Provenact boundary before their governed effects commit. These native mechanisms preserve workflow execution state but do not by themselves ensure that external mutable policy-state facts remain valid through effect commit, which is sup-ported by Provenact through an additional boundary. The integration burden falls on provider adapters: they must nor-malize framework calls into governed requests, register the policy-state views and effect contracts for the underlying re-source, and return allow, deny, or escalation outcomes to the 
+
+> 13 Yuxiang Peng and Xiaodi Wu
+
+framework. This boundary is most useful in domains where agents act on shared resources, such as refunds, reservations, cloud capacity, access privileges, and financial transfers. 
+
+External Effects. Many external APIs cannot participate in a database transaction, and holding a database transaction open across network I/O is often undesirable. In such cases, a better choice is a durable protected-execution protocol: pro-tect or reserve the relevant policy state before dispatch, bind the authorization to a durable intent and external-operation identity, invoke the external operation with idempotency and recovery support, and consume, release, or quarantine the protected policy state according to the reconciled outcome. Designing and evaluating such a protocol for Provenact is left to future work. 
+
+Policy Language and Prototype Scope. Provenact de-liberately restricts policy programs to bounded expressions over registered certified policy-state views. This excludes arbitrary callbacks and unbounded computation in the au-thorization path. The restriction is necessary so the runtime can know which policy state a decision may depend on and which coordination strategy can preserve that state. The prototype implements the central execution paths, PostgreSQL-backed policy state, pending approval, reserva-tions, scoped holds, and evaluation harnesses. It does not in-clude production deployment tooling, policy-bundle signing, or a concrete dependency on a particular agent framework API. These omissions do not affect the PSS argument, but a production system would need deployment hardening and external-effect recovery. 
+
+## 7 Related Work 
+
+Authorization and access control. Authorization policy languages and policy-as-code systems separate policy logic from application code [20]. Cedar [8], Microsoft’s Agent Gov-ernance Toolkit (AGT) [16], and Omnigent [18] move gover-nance into explicit artifacts around requests or agent actions. AGT and Omnigent also provide stateful-policy, runtime, and workflow-oriented mechanisms beyond request evaluation. Our evaluation isolates Cedar’s request-local policy-engine integration in RQ1 and AGT’s native CostGuard and Om-nigent’s native daily-cost policy in RQ5. Provenact differs not by merely accepting stateful inputs, but by requiring provider-certified policy-state views and effect contracts and enforcing their decision-effect semantics under PSS. Data-base access-control work, including fine-grained authoriza-tion and predicate rewriting [26], similarly protects what data a request may read or observe; Provenact instead cou-ples a policy decision to a later effect that may update the same logical policy state. 
+
+Transactions and coordination. Serializable transac-tions provide a direct way to couple policy reads and effects when both live behind one transactional provider [23], and PostgreSQL’s serializable snapshot isolation is one practical mechanism [24]. Coordination-avoidance work asks when applications can avoid coordination while preserving in-variants [3]; Blazes identifies where distributed programs require coordination [1]; and transaction chopping decom-poses transactions to improve concurrency while preserv-ing correctness [29]. Provenact reuses this systems lineage, but changes the abstraction boundary: the invariants are authored as governance policies over certified policy-state views, while concrete effects and coordination mechanisms remain owned by providers. Recent agent runtimes apply transaction and concurrency-control ideas to tool-using workflows. Atomix records reads and effects and settles them through progress-aware trans-actions [17]; CoAgent coordinates concurrent agents using footprint-declared, undoable tools [14]; and Cordon stages and validates tool effects using shadow state, an effect out-box, and recovery metadata [6]. CommitGuard validates the freshness and binding of authority at the commit bound-ary [28]. Provenact is complementary: it derives coordina-tion requirements from policy-authored dependencies over provider-certified state, defines PSS as the governance cor-rectness property, and preserves delayed approvals through scoped holds and reservations. 
+
+Reservations and long-running workflows. Escrow transactions reserve or allocate portions of shared capac-ity so concurrent transactions can proceed without violating aggregate invariants [19]. Provenact uses reservations for the analogous governance problem: preserving consumable policy state, such as budget or inventory capacity, while an operation waits for approval or external review. Sagas decompose long-running transactions into steps with com-pensating actions [10]; Provenact is complementary, treating escalation as a split-phase governed operation whose termi-nal commit must either consume a reservation or revalidate policy state. Stateful serverless systems such as Beldi [33] similarly show that stateless function execution needs trans-actional and logging mechanisms; Provenact applies that lesson to governance decisions over mutable policy state. 
+
+Audit, agent coordination, and evaluation. Database provenance explains why query results arise from under-lying data [5, 7]. Provenact has a narrower audit goal: for each terminal governed operation, it records the policy ver-sion, policy-state reads, decision, and effect outcome for the same logical operation. Recent agent systems study con-currency over shared state; S-Bus is close because it recon-structs agent read sets and applies optimistic concurrency control [12], while Provenact focuses on policy-authored invariants and decision-effect atomicity. Benchmarks such as 𝜏 -bench, AgentDojo, and ToolEmu evaluate tool-using agents and risky tool behavior [9, 27, 32]; our evaluation remains controlled so concurrency, conflict rate, approval delay, and PSS violations can be isolated directly. 
+
+> 14
+
+Stateful Governance for Concurrent Agentic Systems 
+
+## 8 Conclusion 
+
+Stateful governance turns authorization into a consistency problem. When policies depend on mutable shared policy state, an allow decision is not a timeless capability. It is valid only for the policy state on which it was evaluated and for the effect it authorizes. The Provenact runtime addresses this problem by keep-ing policies first-class while coordinating the policy-state facts that make their decisions sound. Policy authors write bounded policies over certified policy-state views. Policy-state providers expose the corresponding trusted effects and enforcement mechanisms. The Provenact coordinator maps the resulting dependencies to a suitable enforcement mecha-nism and records an audit trail for the same logical operation. The broader point is that concurrent agentic systems need governance abstractions that are both programmable and consistency-aware. Hand-written transactions can enforce fixed policies, and global serialization can provide correct-ness, but neither is a satisfactory abstraction for evolving, concurrent governance. Together, PSS and the Provenact runtime architecture are a step toward treating stateful gov-ernance as a systems problem with an explicit correctness condition and implementation boundary. 
+
+## Acknowledgments 
+
+We thank Chunwei Liu, Hanshen Xiao, and Jianguo Wang for helpful discussions. 
+
+## References 
+
+[1] Peter Alvaro, Neil Conway, Joseph M. Hellerstein, and David Maier. 2014. Blazes: Coordination Analysis for Distributed Programs. In 2014 IEEE 30th International Conference on Data Engineering (ICDE) . 52–63. doi: 10.1109/ICDE.2014.6816639 
+
+[2] Amazon Web Services. 2026. Automate tasks in your application using AI agents. https://docs.aws.amazon.com/bedrock/latest/userguide/ agents.html . Accessed 2026-07-04. [3] Peter Bailis, Alan Fekete, Michael J. Franklin, Ali Ghodsi, Joseph M. Hellerstein, and Ion Stoica. 2014. Coordination Avoidance in Database Systems. Proceedings of the VLDB Endowment 8, 3 (2014), 185–196. doi: 10.14778/2735508.2735509 
+
+[4] Matt Bishop and Michael Dilger. 1996. Checking for Race Conditions in File Accesses. Computing Systems 9, 2 (1996), 131–152. [5] Peter Buneman, Sanjeev Khanna, and Wang-Chiew Tan. 2001. Why and Where: A Characterization of Data Provenance. In Proceedings of the 8th International Conference on Database Theory . 316–330. [6] Zheng Chen, Hanqing Liu, Duling Xu, Dong Dong, Jialin Li, Bangzheng Pu, and Jidong Zhai. 2026. Cordon: Semantic Transactions for Tool-Using LLM Agents. arXiv preprint arXiv:2606.17573 (2026). arXiv:2606.17573 https://arxiv.org/abs/2606.17573 
+
+[7] James Cheney, Laura Chiticariu, and Wang-Chiew Tan. 2009. Prove-nance in Databases: Why, How, and Where. Foundations and Trends in Databases 1, 4 (2009), 379–474. [8] Joseph W. Cutler, Craig Disselkoen, Aaron Eline, Shaobo He, Kyle Headley, Michael Hicks, Kesha Hietala, Eleftherios Ioannidis, John Kastner, Anwar Mamat, Darin McAdams, Matt McCutchen, Neha Rungta, Emina Torlak, and Andrew Wells. 2024. Cedar: A New Lan-guage for Expressive, Fast, Safe, and Analyzable Authorization. Pro-ceedings of the ACM on Programming Languages 8, OOPSLA1, Article 118 (2024), 670–697 pages. doi: 10.1145/3649835 
+
+[9] Edoardo Debenedetti, Jie Zhang, Mislav Balunović, Luca Beurer-Kellner, Marc Fischer, and Florian Tramèr. 2024. AgentDojo: A Dy-namic Environment to Evaluate Prompt Injection Attacks and De-fenses for LLM Agents. In Advances in Neural Information Processing Systems , Vol. 37. 82895–82920. doi: 10.52202/079017-2636 
+
+[10] Hector Garcia-Molina and Kenneth Salem. 1987. Sagas. ACM SIGMOD Record 16, 3 (1987), 249–259. [11] Maurice P. Herlihy and Jeannette M. Wing. 1990. Linearizability: A Correctness Condition for Concurrent Objects. ACM Transactions on Programming Languages and Systems 12, 3 (1990), 463–492. [12] Sajjad Khan. 2026. S-Bus: Automatic Read-Set Reconstruction for Multi-Agent LLM State Coordination. arXiv preprint arXiv:2605.17076 
+
+(2026). arXiv:2605.17076 https://arxiv.org/abs/2605.17076 
+
+[13] LangChain. 2026. LangGraph Overview. https://docs.langchain.com/ oss/python/langgraph/overview . Accessed 2026-07-04. [14] Hongtao Lyu, Dingyan Zhang, Mingyu Wu, Xingda Wei, and Haibo Chen. 2026. CoAgent: Concurrency Control for Multi-Agent Systems. 
+
+arXiv preprint arXiv:2606.15376 (2026). arXiv:2606.15376 https://arxiv. org/abs/2606.15376 
+
+[15] Microsoft. 2026. Agent Framework Documentation. https://learn. microsoft.com/en-us/agent-framework/ . Accessed 2026-07-04. [16] Microsoft. 2026. Agent Governance Toolkit. https://github.com/ microsoft/agent-governance-toolkit . Version 4.1.0. Accessed 2026-07-04. [17] Bardia Mohammadi, Nearchos Potamitis, Lars Klein, Akhil Arora, and Laurent Bindschaedler. 2026. Atomix: Timely, Transactional Tool Use for Reliable Agentic Workflows. arXiv preprint arXiv:2602.14849 (2026). arXiv:2602.14849 https://arxiv.org/abs/2602.14849 
+
+[18] Omnigent AI. 2026. Omnigent. https://omnigent.ai/ . Accessed 2026-06-24. [19] Patrick E. O’Neil. 1986. The Escrow Transactional Method. ACM Transactions on Database Systems 11, 4 (1986), 405–430. [20] Open Policy Agent Authors. 2026. Open Policy Agent Documentation. 
+
+https://www.openpolicyagent.org/docs . Accessed 2026-07-04. [21] OpenAI. 2025. Introducing Operator. https://openai.com/index/ introducing-operator/ . Accessed 2026-07-04. [22] OpenAI. 2026. Safety at every step. https://openai.com/safety/ . Ac-cessed 2026-07-04. [23] Christos H. Papadimitriou. 1979. The Serializability of Concurrent Database Updates. J. ACM 26, 4 (1979), 631–653. [24] Dan R. K. Ports and Kevin Grittner. 2012. Serializable Snapshot Isola-tion in PostgreSQL. Proceedings of the VLDB Endowment 5, 12 (2012), 1850–1861. doi: 10.14778/2367502.2367523 
+
+[25] PostgreSQL Global Development Group. 2026. PostgreSQL 18 Manual: Explicit Locking. https://www.postgresql.org/docs/current/explicit-locking.html . Accessed 2026-07-04. [26] Shariq Rizvi, Alberto O. Mendelzon, S. Sudarshan, and Prasan Roy. 2004. Extending Query Rewriting Techniques for Fine-Grained Ac-cess Control. In Proceedings of the 2004 ACM SIGMOD International Conference on Management of Data . 551–562. [27] Yangjun Ruan, Honghua Dong, Andrew Wang, Silviu Pitis, Yongchao Zhou, Jimmy Ba, Yann Dubois, Chris J. Maddison, and Tatsunori Hashimoto. 2024. Identifying the Risks of LM Agents with an LM-Emulated Sandbox. In International Conference on Learning Represen-tations . https://openreview.net/forum?id=GEcwtMk1uA 
+
+[28] Igor Santos-Grueiro. 2026. Temporary Authority, Permanent Ef-fects: Commit-Time Authorization for LLM Agents. arXiv preprint arXiv:2607.10487 (2026). arXiv:2607.10487 https://arxiv.org/abs/2607. 10487 
+
+[29] Dennis Shasha, François Llirbat, Eric Simon, and Patrick Valduriez. 1995. Transaction Chopping: Algorithms and Performance Studies. 
+
+ACM Transactions on Database Systems 20, 3 (1995), 325–363. doi: 10. 1145/211414.211427 
+
+15 Yuxiang Peng and Xiaodi Wu             
+
+> [30] Jared Spataro. 2024. New autonomous agents scale your team like never before. https://blogs.microsoft.com/blog/2024/10/21/new-autonomous-agents-scale-your-team-like-never-before/ . Accessed 2026-07-04. [31] Elham Tabassi. 2023. Artificial Intelligence Risk Management Frame-work (AI RMF 1.0) . Technical Report NIST AI 100-1. National Institute of Standards and Technology. doi: 10.6028/NIST.AI.100-1
+> [32] Shunyu Yao, Noah Shinn, Pedram Razavi, and Karthik Narasimhan. 2025. 𝜏 -bench: A Benchmark for Tool-Agent-User Interaction in Real-World Domains. In International Conference on Learning Representa-tions .https://openreview.net/forum?id=roNSXZpUDN
+> [33] Haoran Zhang, Adney Cardoza, Peter Baile Chen, Sebastian Angel, and Vincent Liu. 2020. Fault-Tolerant and Transactional Stateful Serverless Workflows. In 14th USENIX Symposium on Operating Systems Design and Implementation (OSDI 20) . USENIX Association, 1187–1204. https: //www.usenix.org/conference/osdi20/presentation/zhang-haoran
+
+## A Correctness Proof 
+
+Proof of Theorem 1. Fix a terminal history H produced by a runtime satisfying the theorem assumptions. For each terminal operation 𝑖 , choose a serialization point inside its execution interval: for an allowed operation, the point at which the selected enforcement mechanism commits the governed effect; for a denied operation, the point at which the runtime records the denial. Let serial (H) be the total order induced by these serialization points, with any exact ties broken by the runtime’s fixed tie breaker. Because each serialization point lies between the operation’s begin and terminal events, this order respects the real-time order of H.We next show that each terminal decision is legal at its position in this serial order. Consider a terminal operation 
+
+𝑖 and the policy state immediately before 𝑖 in serial (H). By contract soundness, every policy-state fact read by 𝑖 ’s policy evaluation is covered by 𝑖 ’s logical scopes, and every policy-state fact read or written by any effect is covered by that effect’s scopes. Thus, any concurrent effect that could change a fact read by 𝑖 ’s policy has an overlapping logical scope with 𝑖 . The enforcement assumption says that overlapping scopes are serialized, reserved, or validated before a terminal decision is recorded and before any allowed effect commits. Validation checks that the relevant scoped state is unchanged, reserved for the operation, or continuously protected by scoped enforcement. Therefore, at 𝑖 ’s serialization point, no unvalidated concurrent effect has changed a policy-state fact on which 𝑖 ’s decision depends. The certified policy-state view used by 𝑖 is consequently the same view that would be obtained from the policy state immediately before 𝑖 in 
+
+serial (H). Since policies are well typed, bounded, and pure over the request and certified view values, the recorded allow or deny decision for 𝑖 is exactly the decision produced by evaluating the applicable policies at that serial position. If the decision is allow, the governed effect commits at that position; if the decision is deny, the operation produces no governed effect. Pending operations do not enter H while pending. When such an operation later becomes terminal, it does so only af-ter the runtime either revalidates the relevant policy state or consumes a reservation whose protected scope set was estab-lished by the same sound-contract discipline. For reservation mode, the proof relies on the escrow invariant stated by the provider contract: outstanding reservations are excluded from capacity available to other operations, and consuming a reservation retires that reserved capacity exactly once. Thus two pending operations cannot both consume the same bud-get or inventory capacity. It can therefore be treated as an allowed or denied terminal operation at its resolution point. Finally, serial (H) contains exactly the same terminal op-erations as H. Allowed operations apply the same governed effects at their serialization points, and denied operations apply none. Because the serial order follows the points at which these effects commit or denials are recorded, apply-ing the effects in serial (H) yields the same visible governed effects and the same final policy state as the runtime history. All five clauses of Definition 1 hold, so H satisfies PSS. 
+
+## B Policy Language Details 
+
+The main text relies only on two properties of the policy interface: policy programs are bounded and every certified policy-state view call can be mapped to logical scopes. The prototype realizes this interface with a small DSL. 
+
+Policy form. A policy names the governed action, con-tains ordered deny or escalate rules, and ends with a default allow rule:        
+
+> policy team_transfer_guard on transfer {
+> deny insufficient_funds when
+> accounts.balance(principal.id) < args.amount;
+> deny daily_team_budget when
+> budget.spent(principal.team, 24h) + args.amount > budget.limit(principal.team);
+> allow otherwise ;}
+
+The expression language is first-order and side-effect free. It supports typed request and principal paths, simple arith-metic and Boolean expressions, and calls to registered certi-fied policy-state views. 
+
+Static checks. Action arguments and principal attributes are typed by the effect contract, and policy-state views have registered function types. The compiler rejects unregistered views, nested view calls, missing default rules, ill-typed ex-pressions, mutation, loops, and arbitrary callbacks. The im-plementation also caps the number of view calls per policy. 
+
+Operational semantics. Rules are evaluated in order. The first rule whose condition evaluates to true determines the decision. If no deny or escalate rule fires, the trailing allow otherwise rule produces an allow decision. Each view call 
+
+> 16
+
+Stateful Governance for Concurrent Agentic Systems 
+
+Table 5. Policy DSL static checks and dependency contribu-tions. Form Static rule Dependency con-tribution 
+
+args.x x in effect argu-ments none 
+
+principal.x x in principal schema none 
+
+e1 + e2 both operands 
+
+Int 
+
+union of operands 
+
+e1 and e2 both operands 
+
+Bool 
+
+union of operands 
+
+Q(e1,...,en) registered bounded view one or more log-ical scopes from 
+
+Q’s resolver rule condition expression has type Bool 
+
+scopes of the con-dition is evaluated through the registered resolver in a provider-owned session and records the returned value plus audit metadata. Policy evaluation therefore produces both a deci-sion and the dependency trace used by the runtime. 
+
+## C Policy-Evolution Fixtures 
+
+RQ4 measures source changes over a small family of policy-evolution fixtures. The Provenact side changes policy pro-grams and, when a new certified policy-state view is needed, a provider contract. The expert baseline embeds the same pol-icy logic inside trusted provider code. Listings 1 and 2 show the policy and expert programs used for the RQ4 source-delta counts; filename comments are added only to identify the fixture variants. 
+
+Listing 1. Provenact policy programs used in RQ4. 
+
+# base/provenact_policy.pvl 
+
+policy team_transfer_guard on transfer { 
+
+deny insufficient_funds when 
+
+accounts.balance(principal.id) < args.amount_cents; 
+
+deny daily_team_budget when 
+
+ledger.sum_sent_by_team(principal.team, 24h) + args. amount_cents > 100000; 
+
+allow otherwise ;}# per_agent/provenact_policy.pvl 
+
+policy team_transfer_guard on transfer { 
+
+deny insufficient_funds when 
+
+accounts.balance(principal.id) < args.amount_cents; 
+
+deny daily_team_budget when 
+
+ledger.sum_sent_by_team(principal.team, 24h) + args. amount_cents > 100000; 
+
+deny per_agent_limit when 
+
+ledger.sum_sent_by_agent(principal.id, 24h) + args.amount_cents > 25000; 
+
+allow otherwise ;}# approval/provenact_policy.pvl 
+
+policy team_transfer_guard on transfer { 
+
+deny insufficient_funds when 
+
+accounts.balance(principal.id) < args.amount_cents; 
+
+deny daily_team_budget when 
+
+ledger.sum_sent_by_team(principal.team, 24h) + args. amount_cents > 100000; 
+
+deny missing_approval when 
+
+approvals.count(args.request_id) < 2; 
+
+allow otherwise ;}# risk/provenact_policy.pvl 
+
+policy team_transfer_guard on transfer { 
+
+deny insufficient_funds when 
+
+accounts.balance(principal.id) < args.amount_cents; 
+
+deny daily_team_budget when 
+
+ledger.sum_sent_by_team(principal.team, 24h) + args. amount_cents > 100000; 
+
+deny risky_principal when 
+
+risk.score(principal.id) > 80; 
+
+allow otherwise ;}# window_7d/provenact_policy.pvl 
+
+policy team_transfer_guard on transfer { 
+
+deny insufficient_funds when 
+
+accounts.balance(principal.id) < args.amount_cents; 
+
+deny weekly_team_budget when 
+
+ledger.sum_sent_by_team(principal.team, 7d) + args.amount_cents > 100000; 
+
+allow otherwise ;}# second_action/provenact_policy.pvl 
+
+policy team_transfer_guard on transfer { 
+
+deny insufficient_funds when 
+
+accounts.balance(principal.id) < args.amount_cents; 
+
+deny daily_team_budget when 
+
+ledger.sum_sent_by_team(principal.team, 24h) + args. amount_cents > 100000; 
+
+allow otherwise ;}
+
+policy team_withdraw_guard on withdraw { 
+
+deny insufficient_funds when 
+
+accounts.balance(principal.id) < args.amount_cents; 
+
+deny daily_team_budget when 
+
+ledger.sum_sent_by_team(principal.team, 24h) + args. amount_cents > 100000; 
+
+allow otherwise ;}
+
+Listing 2. Expert baseline programs used in RQ4. 
+
+# base/expert_resource.py 
+
+def transfer_with_policy(tx, request): sender = tx.account(request.principal. id )spent = tx.sum_sent_by_team(request.principal.team, hours=24) 
+
+if sender.balance_cents < request.amount_cents: 
+
+return deny("insufficient_funds") 
+
+if spent + request.amount_cents > 100000: 
+
+return deny("daily_team_budget") 
+
+return tx.transfer(request) # per_agent/expert_resource.py 
+
+def transfer_with_policy(tx, request): sender = tx.account(request.principal. id )spent = tx.sum_sent_by_team(request.principal.team, hours=24) agent_spent = tx.sum_sent_by_agent(request.principal. id , hours =24) 
+
+if sender.balance_cents < request.amount_cents: 
+
+return deny("insufficient_funds") 
+
+if spent + request.amount_cents > 100000: 
+
+return deny("daily_team_budget") 
+
+if agent_spent + request.amount_cents > 25000: 
+
+return deny("per_agent_limit") 
+
+return tx.transfer(request) # approval/expert_resource.py 
+
+def transfer_with_policy(tx, request): sender = tx.account(request.principal. id )
+
+17 Yuxiang Peng and Xiaodi Wu 
+
+spent = tx.sum_sent_by_team(request.principal.team, hours=24) approvals = tx.approval_count(request.request_id) 
+
+if sender.balance_cents < request.amount_cents: 
+
+return deny("insufficient_funds") 
+
+if spent + request.amount_cents > 100000: 
+
+return deny("daily_team_budget") 
+
+if approvals < 2: 
+
+return deny("missing_approval") 
+
+return tx.transfer(request) # risk/expert_resource.py 
+
+def transfer_with_policy(tx, request): sender = tx.account(request.principal. id )spent = tx.sum_sent_by_team(request.principal.team, hours=24) risk = tx.risk_score(request.principal. id )
+
+if sender.balance_cents < request.amount_cents: 
+
+return deny("insufficient_funds") 
+
+if spent + request.amount_cents > 100000: 
+
+return deny("daily_team_budget") 
+
+if risk > 80: 
+
+return deny("risky_principal") 
+
+return tx.transfer(request) # window_7d/expert_resource.py 
+
+def transfer_with_policy(tx, request): sender = tx.account(request.principal. id )spent = tx.sum_sent_by_team(request.principal.team, days=7) 
+
+if sender.balance_cents < request.amount_cents: 
+
+return deny("insufficient_funds") 
+
+if spent + request.amount_cents > 100000: 
+
+return deny("weekly_team_budget") 
+
+return tx.transfer(request) # second_action/expert_resource.py 
+
+def transfer_with_policy(tx, request): sender = tx.account(request.principal. id )spent = tx.sum_sent_by_team(request.principal.team, hours=24) 
+
+if sender.balance_cents < request.amount_cents: 
+
+return deny("insufficient_funds") 
+
+if spent + request.amount_cents > 100000: 
+
+return deny("daily_team_budget") 
+
+return tx.transfer(request) 
+
+def withdraw_with_policy(tx, request): sender = tx.account(request.principal. id )spent = tx.sum_sent_by_team(request.principal.team, hours=24) 
+
+if sender.balance_cents < request.amount_cents: 
+
+return deny("insufficient_funds") 
+
+if spent + request.amount_cents > 100000: 
+
+return deny("daily_team_budget") 
+
+return tx.withdraw(request) 
+
+18
