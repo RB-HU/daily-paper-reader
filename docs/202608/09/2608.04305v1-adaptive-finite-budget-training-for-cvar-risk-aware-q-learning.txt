@@ -1,0 +1,642 @@
+Title: Adaptive Finite-Budget Training for CVaR Risk-Aware Q-Learning
+
+URL Source: https://arxiv.org/pdf/2608.04305v1
+
+Published Time: Thu, 06 Aug 2026 00:23:29 GMT
+
+Number of Pages: 8
+
+Markdown Content:
+# Adaptive Finite-Budget Training for CVaR Risk-Aware Q-Learning 
+
+# Yifan Wu 
+
+wuyifan0648@163.com Department of Data and Systems Engineering The University of Hong Kong Hong Kong, Hong Kong SAR 
+
+# Junjie Lei ∗
+
+junjie01@connect.hku.hk Department of Data and Systems Engineering The University of Hong Kong Hong Kong, Hong Kong SAR 
+
+# Wenjie Huang 
+
+huangwj@hku.hk Department of Data and Systems Engineering & Musketeers Foundation Institute of Data Science The University of Hong Kong Hong Kong, Hong Kong SAR 
+
+## Abstract 
+
+Risk-aware Q-learning (RaQL) provides a model-free, two-timescale estimator for dynamic risk objectives, but its finite-budget behavior remains fragile: fixed inner-loop hyperparameters can produce un-stable value estimates, persistent Bellman residuals, and inefficient sample reuse. This paper proposes an adaptive training controller for Conditional Value-at-Risk (CVaR) RaQL and evaluates it on a daily Bitcoin trading task. The controller preserves the origi-nal CVaR estimator and Bellman fixed point; instead, it redesigns the training procedure through six coordinated mechanisms: per-cell inner-step sizing, outer-rate-matched decay synchronization, a short early correction for the VaR-like inner variable, a coverage-first-then-greedy sample allocation rule, progressive suffix aggre-gation of mature inner estimates, and data-driven calibration of key scales from online-observable quantities. Across 20 random seeds and 856,000 inner-transition samples, the controller reduces the mean empirical CVaR Bellman residual by approximately 85% relative to the fixed-parameter baseline (MeanBEQ: 1.2202 to 0.1854; MeanBEV: 1.1624 to 0.0535) and maintains stability across CVaR levels, discount factors, and training budgets. On the chronological out-of-sample test set, the learned policy attains a Sharpe ratio of 0.9281 with a maximum drawdown of 6.46% after transaction costs. Although buy-and-hold yields a higher cumulative return (35.43% vs. 23.61%), the adaptive policy achieves far lower volatility (9.57% vs. 47.93%), drawdown, and CVaR loss. These results demon-strate that adaptive finite-budget training design, applied solely to the training procedure without altering the risk objective, can materially improve the reliability and risk-adjusted performance of risk-aware Q-learning in financial applications. 
+
+## Keywords 
+
+risk-aware reinforcement learning, CVaR, Q-learning, cryptocur-rency trading, finite-budget training 
+
+## 1 Introduction 1.1 Risk-Sensitive Reinforcement Learning in Finance and RaQL 
+
+Financial systems are often evaluated by downside exposure and tail losses rather than mean return alone. This has motivated risk-sensitive reinforcement-learning (RL) applications in algorithmic trading, foreign exchange, hedging, and portfolio allocation. Shen et al. [31] study risk-averse algorithmic trading using high-frequency NASDAQ data, while Bisi et al. [9] combine fitted Q-iteration with a 
+
+> ∗Primary contact.
+
+risk–return objective for foreign-exchange trading. Vittori et al. [35] consider option hedging under transaction costs, and Vadori et al. [33], Coache et al. [13], and Enkhsaikhan and Jo [17] develop risk-aware formulations for portfolio optimization and statistical arbitrage. These studies introduce risk sensitivity through the re-ward objective, constraints, uncertainty representation, or policy architecture. Among the available risk measures, Conditional Value-at-Risk (CVaR) is particularly relevant because it averages losses in the worst 1 −𝛼 tail beyond the Value-at-Risk threshold. CVaR is coherent [1, 5] and admits a tractable variational representation [28]. In financial RL, CVaR has been incorporated into direct and deep trading methods [3, 14], while policy-gradient and actor–critic methods have incorporated CVaR as an objective or constraint [12, 27]. Distributional RL instead estimates return quantiles and extracts risk-sensitive policies from the learned return distribution [11, 15, 25]. Our starting point is the work Huang and Haskell [21], which de-velops risk-aware Q-learning (RaQL) under dynamic coherent risk measures. RaQL replaces the conditional expectation in the Bellman recursion with a risk functional, estimates that functional through a stochastic approximation inner loop, and updates Q-values in an outer loop. For CVaR, the inner recursion tracks a VaR-like min-imizer. As summarized by Wang and Chapman [36], Huang and Haskell [21] are the first to establish almost-sure convergence and an explicit non-asymptotic rate for this model-free two-loop algo-rithm, building on classical Q-learning and two-timescale stochastic approximation [10, 23, 37]. The theory specifies schedules under which the coupled recur-sions converge, but it does not prescribe how to allocate a fixed sampling budget among inner risk estimation, outer Q-updates, and state–action cells. The allocation will affect the risk estimation error and Q-updates error, and the two errors will be coupled dur-ing training. Section 1.2 and 1.3 make this mechanism precise and motivate changing the training controller without changing the CVaR estimator or Bellman fixed point. 
+
+Adaptive training has been studied extensively for risk-neutral and single-timescale learning agents. It means that some part of the learning procedure is adjusted using the explored state–action pairs rather than fixed once before training. Existing work illustrates several forms of adaptation. Learning-rate and sample-efficiency analyses characterize how update schedules and exploration gov-ern Q-learning efficiency [18, 22]. Adaptive subgradient methods rescale coordinate-wise updates using accumulated gradient in-formation [16], while adaptive value- and return-normalization 
+
+> 1arXiv:2608.04305v1 [cs.LG] 5 Aug 2026 Wu, Lei, and Huang
+
+methods update the scale of learning targets from running statis-tics [29, 34]. In exploration, count-based methods reward rarely visited states through visitation-based bonuses [6], whereas value-driven methods adjust the exploration probability according to observed value differences [32]. Prioritized computation focuses updates on states expected to change most or on transitions with large temporal-difference errors [26, 30]. Iterate averaging com-bines successive Q-updates to reduce stochastic variance [24], and nested-simulation theory allocates a finite simulation budget be-tween outer scenarios and inner estimation [19]. These mechanisms explain concretely what may be adapted: the step-size, target scale, exploration rule, update priority, estimator aggregation, or sam-ple allocation. However, none directly resolves the two-timescale coupling in CVaR RaQL under a fixed budget. We therefore adapt the RaQL training controller while retaining its estimator and fixed point. 
+
+## 1.2 CVaR Recursion and the RaQL Baseline 
+
+This section represents the definition of CVaR and structure of RaQL Let S and A be the finite state and action sets, with 𝑆 := |S| 
+
+and 𝐴 := |A| , and let 𝑄 : S × A → R be the cost-valued action-value table. Let 𝑋 denote a random future loss. The upper-tail CVaR at level 𝛼 ∈ ( 0, 1) can be written in optimized-certainty-equivalent form as [7, 28] 
+
+𝜌 𝛼 (𝑋 ) = min  
+
+> 𝑦 ∈R
+
+
+
+𝑦 + 11 − 𝛼 E [( 𝑋 − 𝑦 )+]
+
+
+
+, (1) where (𝑢 )+ := max {𝑢, 0}. For CVaR, the optimizer 𝑦 ★ is a Value-at-Risk threshold. For a state–action pair (𝑠, 𝑎 ) and sampled next state 
+
+𝑠 ′, define the state–action-dependent one-step loss target 
+
+𝑥 𝑠𝑎 (𝑠 ′; 𝑄 ) = ℓ (𝑠, 𝑎, 𝑠 ′) + 𝛾𝑉 𝑄 (𝑠 ′), 𝑉 𝑄 (𝑠 ) = min  
+
+> 𝑎 ∈ A
+
+𝑄 (𝑠, 𝑎 ), (2) where ℓ (𝑠, 𝑎, 𝑠 ′) is the immediate loss, 𝛾 is the discount factor, and 
+
+𝑠 ′ is sampled from the unknown transition kernel. The algorithms abbreviate the realized 𝑥 𝑠𝑎 (𝑠 ′; 𝑄 ) as 𝑥 and write the cell-specific threshold estimate as 𝑦 (𝑠, 𝑎 ). For generic scalar arguments 𝑥 and 𝑦 ,the sample-level CVaR target and its subgradient are 
+
+𝐺 𝛼 (𝑥, 𝑦 ) = 𝑦 + 11 − 𝛼 (𝑥 − 𝑦 )+, (3) 
+
+𝑔 𝑦 (𝑥, 𝑦 ) = 1 − 11 − 𝛼 1{𝑥 > 𝑦 }. (4) Accordingly, 𝑥 𝑠𝑎 (𝑠 ′; 𝑄 ) and 𝑦 (𝑠, 𝑎 ) are explicitly state–action depen-dent. The shorter symbols 𝑥 and 𝑦 are used only inside a sampled update. Algorithm 1 gives the fixed-parameter RaQL implementa-tion used as the reference baseline. The total sampling budget 𝐵 is the number of inner-loop transition samples available for training: each sampled transition in the inner loop consumes one unit of 𝐵 .The inner-loop depth 𝐿 is the maximum number of such transitions processed before the next outer Q-update. At the start of each outer iteration, 𝑄 − ← 𝑄 creates a frozen copy of the current Q-table, and 
+
+𝑉 − (𝑠 ) := min 𝑎 𝑄 − (𝑠, 𝑎 ) is the next-state value computed from that copy. Both are held fixed during the inner loop. In addition to this within-iteration freezing, the inner-loop depth 𝐿 and the inner risk scale ℎ𝑦 are both fixed throughout training, applies the within-loop decay factor 𝑗 −𝑝 , and retains only the final CVaR target for each visited cell. The counter 𝑛 𝑠𝑎 records the number of earlier outer 
+
+Algorithm 1 Fixed-parameter CVaR RaQL baseline 
+
+Require: Total inner-transition sample budget 𝐵 ; inner-loop depth 
+
+𝐿 ; base scale ℎ𝑦 ; CVaR level 𝛼 ; discount 𝛾 ; inner and outer exponents 𝑝, 𝜂 ; admissible interval Y for 𝑦  
+
+> 1:
+
+Initialize 𝑄 (𝑠, 𝑎 ) ← 0, 𝑦 (𝑠, 𝑎 ) ← 0, 𝑛 𝑠𝑎 ← 1, and consumed-sample count 𝑏 ← 0 
+
+> 2:
+
+while 𝑏 < 𝐵 do  
+
+> 3:
+
+Freeze 𝑄 − ← 𝑄 and set 𝑉 − (𝑠 ) ← min 𝑎 𝑄 − (𝑠, 𝑎 ) 
+
+> 4:
+
+Observe 𝑠 and choose action 𝑎 by exploration  
+
+> 5:
+
+Reset per-cell queues Y𝑠𝑎 and retained targets b𝑞 𝑠𝑎  
+
+> 6:
+
+for 𝑗 = 1, . . . , min {𝐿, 𝐵 − 𝑏 } do  
+
+> 7:
+
+Observe loss ℓ and next state 𝑠 ′; set 𝑏 ← 𝑏 + 1 
+
+> 8:
+
+Append 𝑦 (𝑠, 𝑎 ) to Y𝑠𝑎 and set ¯𝑦 𝑠𝑎 ←
+
+HalfWindowMean (Y 𝑠𝑎 ) 
+
+> 9:
+
+𝑥 ← ℓ + 𝛾𝑉 − (𝑠 ′), 𝑞 ← 𝐺 𝛼 (𝑥, ¯𝑦 𝑠𝑎 ), and b𝑞 𝑠𝑎 ← 𝑞  
+
+> 10:
+
+𝑦 (𝑠, 𝑎 ) ← ΠY [𝑦 (𝑠, 𝑎 ) − 𝑗 −𝑝 ℎ𝑦 𝑔 𝑦 (𝑥, ¯𝑦 𝑠𝑎 )]  
+
+> 11:
+
+𝑠 ← 𝑠 ′ 
+
+> 12:
+
+end for  
+
+> 13:
+
+for all (𝑠, 𝑎 ) visited in this outer iteration do  
+
+> 14:
+
+𝑄 (𝑠, 𝑎 ) ← ( 1 − 𝑛 −𝜂 𝑠𝑎 )𝑄 − (𝑠, 𝑎 ) + 𝑛 −𝜂 𝑠𝑎 b𝑞 𝑠𝑎  
+
+> 15:
+
+𝑛 𝑠𝑎 ← 𝑛 𝑠𝑎 + 1 
+
+> 16:
+
+end for  
+
+> 17:
+
+end while  
+
+> 18:
+
+return 𝑄 and its greedy policy Q-updates to cell (𝑠, 𝑎 ). Within an inner loop, Y𝑠𝑎 stores the iterates of 𝑦 (𝑠, 𝑎 ), ¯ 𝑦 𝑠𝑎 is the mean of the latter half of that queue, and b𝑞 𝑠𝑎 is the most recently retained CVaR target. The map ΠY denotes pro-jection onto the admissible interval Y. These fixed choices define the reference baseline, but they cannot adjust as training progresses. The next subsection explains why this can be problematic under a finite sampling budget. 
+
+## 1.3 Finite-Budget Failure Mechanism and Research Gap 
+
+The convergence guarantee of RaQL specifies conditions under which the risk estimates and Q-values approach the optimal solu-tions as the sampling continues, but it does not give a practical rule for allocating a fixed number of samples. The allocation may need to change across training and across state–action cells. This issue is especially important for CVaR RaQL because, when 𝑦 < 𝑥 ,
+
+𝐺 𝛼 (𝑥, 𝑦 ) = 𝑥 
+
+1 − 𝛼 − 𝛼𝑦 
+
+1 − 𝛼 . (5) At 𝛼 = 0.8, for example, 𝐺 𝛼 (𝑥, 𝑦 ) = 5𝑥 − 4𝑦 . Thus, if 𝑦 remains below the relevant VaR threshold, its error is amplified in the target passed to the outer Q-update rather than remaining confined to the inner recursion. For a frozen table 𝑄 − , define 𝑋 𝑠𝑎 (𝑄 − ) = ℓ (𝑠, 𝑎, 𝑆 ′) + 𝛾𝑉 𝑄 − (𝑆 ′),where 𝑆 ′ is the next random state, and the corresponding CVaR optimizer 
+
+𝑦 ★ 
+
+> 𝑠𝑎
+
+(𝑄 − ) ∈ arg min  
+
+> 𝑦
+
+E
+
+
+
+𝑦 + (𝑋 𝑠𝑎 (𝑄 − ) − 𝑦 )+
+
+1 − 𝛼 | 𝑠, 𝑎 
+
+
+
+.
+
+This optimizer is a conditional 𝛼 -VaR threshold. A lagging inner variable means that 𝑦 (𝑠, 𝑎 ) remains materially below the current 
+
+> 2Adaptive Finite-Budget Training for CVaR Risk-Aware Q-Learning
+
+optimizer 𝑦 ★ 
+
+> 𝑠𝑎
+
+(𝑄 − ); it does not mean that 𝑦 (𝑠, 𝑎 ) should match an individual sampled target. With a finite budget, the baseline fixes the inner-loop length and update scale before training. Inner estimation error then affects the outer update, while changes in the Q-table alter the target that the inner loop must subsequently estimate. A single fixed setting may therefore be unstable early in training or leave persistent resid-ual error later. Existing RaQL theory characterizes the asymptotic requirements and links inner accuracy to outer convergence [21, Theorem 4.7 and Remark 4.8], but it does not prescribe an online finite-budget strategy for coordinating the two recursions. This paper asks: how can CVaR RaQL use a fixed transition-sample budget to reduce empirical Bellman residuals and mitigate the insta-bility caused by fixed inner-loop settings. We address this question with an adaptive training controller built around the original CVaR risk objective. The controller uses observed training quantities to adjust the inner step sizes, allocate transition samples across state– action cells, aggregate the sampled CVaR targets, and calibrate the outer learning-rate exponent, inner risk scale, and inner-loop depth. Our contributions are: 
+
+• We identify a CVaR-specific error-amplification mechanism: inaccurate tracking of the moving VaR estimate can magnify errors in the target used by the outer Q-update. 
+
+• We develop a three-module adaptive training controller that stabilizes inner risk estimation, reallocates samples as training progresses, and calibrates key training parameters during training process. 
+
+• We use cumulative ablations to measure the effect of each controller mechanism to assess sensitivity to the CVaR level, discount factor, and sampling budget. The adaptive controller substantially reduces empirical Bellman residuals relative to the fixed-parameter baseline. 
+
+• We demonstrate the adaptive controller in a chronological Bitcoin trading study using market and sentiment states and accounting for turnover costs, showing better risk-adjusted performance and lower downside-risk measures than the fixed-parameter baseline. 
+
+## 2 Adaptive Finite-Budget Controller 
+
+We keep the CVaR RaQL estimator fixed and modify only the train-ing controller. The controller is organized into three modules and evaluated through six schemes. 
+
+## 2.1 Adaptive CVaR RaQL 
+
+The procedure of our final adaptive CVaR RaQL algorithm is pre-sented in Algorithm 2. Its main mechanisms are described in detail later. In Algorithm 2, 𝐵 denotes the training budget, 𝑏 is the number of training samples already used, and 𝑇 = 𝑏 /𝐵 ∈ [ 0, 1] denotes the current training progress. The parameters 𝑘 𝑤 , 𝜅 ℎ , and 𝑘 𝑇 are calibration hyperparameters introduced in Section 2.4. The param-eters 𝑝 and 𝜂 are two decay exponents. The parameter ℎ𝑦 denotes the inner risk scale. It converts the inner subgradient 𝑔 𝑦 into an appropriate step size for the 𝑦 -update. The parameter 𝐿 denotes the inner-loop depth, while 𝑗 denotes the number of inner updates in the current outer iteration. For each state–action cell (𝑠, 𝑎 ), 𝜆 𝑠𝑎 
+
+Algorithm 2 Adaptive finite-budget CVaR RaQL 
+
+Require: Training samples D; 𝐵 ; 𝛼, 𝛾 ; 𝑘 𝑤 , 𝜅 ℎ, 𝑘 𝑇 , 𝑝  
+
+> 1:
+
+Set 𝑄 (𝑠, 𝑎 ) ← 0, 𝑦 (𝑠, 𝑎 ) ← 0, 𝑛 𝑠𝑎 ← 1, and 𝑏 ← 0 
+
+> 2:
+
+Use one epoch to estimate ℓavg , ℓmin , and ℓmax ; add its samples to 𝑏  
+
+> 3:
+
+𝑦 min ← 𝑥 min ← ℓmin /( 1 − 𝛾 ) and 𝑦 max ← 𝑥 max ← ℓmax /( 1 − 𝛾 ) 
+
+> 4:
+
+Set 𝜂 , ℎ𝑦 , and 𝐿 using Equations (11), (12), and (14)  
+
+> 5:
+
+while 𝑏 < 𝐵 do  
+
+> 6:
+
+Freeze 𝑄 − (𝑠, 𝑎 ) ← 𝑄 (𝑠, 𝑎 ) and set 𝑉 − (𝑠 ) ← min 𝑎 𝑄 − (𝑠, 𝑎 ) 
+
+> 7:
+
+Reset 𝑘 𝑠𝑎 ← 0 and the queues Y𝑠𝑎 , H𝑠𝑎 ← ∅  
+
+> 8:
+
+for 𝑗 = 1, . . . , min {𝐿, 𝐵 − 𝑏 } do  
+
+> 9:
+
+Observe 𝑠 and set 𝑇 ← 𝑏 /𝐵  
+
+> 10:
+
+Select 𝑎 using Equation (9)  
+
+> 11:
+
+Observe loss ℓ and next state 𝑠 ′; set 𝑏 ← 𝑏 + 1 and 𝑘 𝑠𝑎 ←
+
+𝑘 𝑠𝑎 + 1 
+
+> 12:
+
+Append 𝑦 (𝑠, 𝑎 ) to Y𝑠𝑎  
+
+> 13:
+
+Calculate ¯ 𝑦 𝑠𝑎 by averaging the latter half of Y𝑠𝑎  
+
+> 14:
+
+𝑥 ← ℓ + 𝛾𝑉 − (𝑠 ′) and b𝑞 𝑠𝑎 ← 𝐺 𝛼 (𝑥, ¯𝑦 𝑠𝑎 ) 
+
+> 15:
+
+Calculate 𝜆 𝑠𝑎 by Equation (7)  
+
+> 16:
+
+𝑦 (𝑠, 𝑎 ) ← clip  𝑦 (𝑠, 𝑎 ) − 𝜆 𝑠𝑎 ℎ𝑦 𝑔 𝑦 (𝑥, ¯𝑦 𝑠𝑎 ), 𝑦 min , 𝑦 max 
+
+ 
+
+> 17:
+
+if 𝑇 ≤ 0.05 then  
+
+> 18:
+
+Correct 𝑦 (𝑠, 𝑎 ) by Equation (8)  
+
+> 19:
+
+end if  
+
+> 20:
+
+Append b𝑞 𝑠𝑎 to H𝑠𝑎  
+
+> 21:
+
+end for  
+
+> 22:
+
+for all (𝑠, 𝑎 ) visited in this outer iteration do  
+
+> 23:
+
+Calculate b𝑞 agg ,𝑠𝑎 using Equation (10)  
+
+> 24:
+
+𝑄 (𝑠, 𝑎 ) ← ( 1 − 𝑛 −𝜂 𝑠𝑎 )𝑄 − (𝑠, 𝑎 ) + 𝑛 −𝜂 𝑠𝑎 b𝑞 agg ,𝑠𝑎  
+
+> 25:
+
+𝑛 𝑠𝑎 ← 𝑛 𝑠𝑎 + 1 
+
+> 26:
+
+end for  
+
+> 27:
+
+end while  
+
+> 28:
+
+return 𝑄 and its greedy policy denotes the step size, 𝑛 𝑠𝑎 denotes the number of times that cell has been updated in the outer loop, and 𝑘 𝑠𝑎 denotes the number of times it has been visited in the inner loop of the current outer iteration. The queues Y𝑠𝑎 and H𝑠𝑎 store the sequences of 𝑦 (𝑠, 𝑎 ) estimates and b𝑞 𝑠𝑎 estimates, respectively, in the current outer iteration. 
+
+## 2.2 Tracking-Stability Module 
+
+Inner-Loop Decay. The baseline decays the step size by a global inner-loop counter 𝑗 . However, the per-cell inner-update counter 
+
+𝑘 𝑠𝑎 , rather than the global inner-update counter 𝑗 , better reflects the progress in estimating the minimizer for each state–action cell. In the baseline, if a state–action cell is sampled for the first time when 𝑗 is large, the step size used for its first update has already decayed significantly. This can destabilize training. We instead use 
+
+𝜆 𝑠𝑎 = 𝑘 −𝑝 𝑠𝑎 , (6) This can better match the step size to the progress in estimating the minimizer for each state–action cell. 
+
+Outer-Loop Decay. The outer loop estimates the Q-table, while the inner loop tracks the minimizer of the risk subproblem. Each Q-table update shifts this minimizer. The inner loop must then track its new location. As the outer learning rate decays, later Q-updates 
+
+> 3Wu, Lei, and Huang
+
+become smaller and the minimizer changes more slowly. The inner step size 𝜆 𝑠𝑎 should therefore decay with the outer-update count at the same rate as the Q-update step size. The baseline has no such outer-scale decay. For the same inner visit count ( 𝑘 𝑠𝑎 ), a late-stage update (large 𝑛 𝑠𝑎 ) uses the same step size as an early-stage update (small 𝑛 𝑠𝑎 ). This can push an accurate estimate away from the current minimizer and continually introduce noise. We therefore use 
+
+𝜆 𝑠𝑎 = 𝑘 −𝑝 𝑠𝑎 𝑛 −𝜂 𝑠𝑎 , (7) where 𝜂 is matched to the outer Q-learning exponent. This couples the inner step size to the Q-update rate. 
+
+Early 𝑦 Correction. As shown in Equation (5), using a 𝑦 estimate that is far below its minimizer 𝑦 ★ in the Q update can amplify estimation errors and cause training to diverge. Early in training, an inappropriate inner risk scale ℎ𝑦 , an unsuitable step size 𝜆 𝑠𝑎 , an insufficient inner-loop depth 𝐿 , or limited updates for a hard-to-reach state–action cell can leave 𝑦 far below its current minimizer 
+
+𝑦 ★. At this stage, the Q-table is initialized at zero and changes rapidly, causing 𝑦 ★ to shift rapidly as well. Consequently, 𝑦 may fail to track the moving minimizer 𝑦 ★. For CVaR, 𝑦 ★ is the VaR of 
+
+𝑋 (𝑠, 𝑎 ). Thus, 𝑦 ★ and the sampled target 𝑥 (𝑠, 𝑎 ) are on the same scale. We use the clipped 𝑥 (𝑠, 𝑎 ) only as a reference and pull the early-stage 𝑦 estimate toward it: 
+
+𝑦 ← 𝑦 + 1
+
+𝑛 𝑠𝑎 + 2 0.5𝑘 𝑠𝑎 −1 (clip (𝑥, 𝑦 min , 𝑦 max ) − 𝑦 ) . (8) Because the clipped target is not an accurate estimate of 𝑦 ★ and the risk of divergence is greatest in early training, we apply the correction only during the first 5% of the budget. Its strength also decays with both outer and inner visits ( 𝑛 𝑠𝑎 , 𝑘 𝑠𝑎 ). The correction therefore weakens as the estimate becomes more accurate and does not affect late-stage convergence. 
+
+## 2.3 Sampling-Efficiency Module 
+
+Two-Phase Action Selection. As Equation (2) shows, the estimate of a cell (𝑠, 𝑎 ) depends on the value 𝑉 𝑄 (𝑠 ′). Early in training, the greedy action that determines 𝑉 𝑄 (𝑠 ′) is not yet stable. Any action could eventually become the greedy action. Accurate estimation therefore requires sufficient training across a broad range of Q-table cells. Concentrating updates on certain cells in the early stage may also deteriorate the training performance. The outer visit counts 𝑛 𝑠𝑎 
+
+of these cells can grow rapidly while the corresponding next-state values 𝑉 𝑄 (𝑠 ′) remain inaccurate. Their step sizes may then decay excessively. As the rest of the Q- table becomes more accurate and the targets change, the Q-value update and minimizer estimates for these cells become difficult. In the late stage, the greedy ac-tions are generally stable. At this stage, non-greedy cells do not propagate errors or determine state values. Their importance there-fore decreases. The budget should then shift toward the greedy cells that determine 𝑉 𝑄 . These observations motivate the following two-phase action selector: 
+
+𝑎 inner (𝑠 ) =
+
+(
+
+arg min 𝑎 ∈ A 𝑛 𝑠𝑎 , 𝑇 < 0.60 ,𝜖 -greedy with greedy probability 0 .90 , 𝑇 ≥ 0.60 . (9) 
+
+Progressive Suffix Aggregation. Let b𝑞 1,𝑠𝑎 , . . . , b𝑞 𝑘 𝑠𝑎 ,𝑠𝑎 be the se-quence of inner CVaR targets for a given (𝑠, 𝑎 ) in one outer iteration. The baseline uses only b𝑞 𝑘 𝑠𝑎 ,𝑠𝑎 . We instead use a progress-dependent suffix average: 
+
+b𝑞 agg ,𝑠𝑎 = 1
+
+𝑚 
+
+> 𝑘 𝑠𝑎
+
+∑︁  
+
+> 𝑖 =𝑘 𝑠𝑎 −𝑚 +1
+
+b𝑞 𝑖,𝑠𝑎 , 𝑚 = ⌈𝜔 (𝑇 )𝑘 𝑠𝑎 ⌉, (10) where 𝜔 (𝑇 ) = 0.1 + 0.1 min {9, ⌊10 𝑇 ⌋} . Early in training, the inner variables are biased and only the tail of the sequence is trusted; later, more estimates are averaged to reduce target variance. As training progresses and the inner variable starts closer to its current minimizer, the expanding window reuses more of the targets already computed. This reduces target variance without allowing strongly transient early iterates to dominate the outer update, motivated by the variance-reduction principle of iterate averaging [24]. 
+
+## 2.4 Observable-Calibration Module 
+
+To reduce manual tuning across different settings, the controller calibrates the learning-rate exponent( 𝜂 ), inner risk scale, and inner-loop depth separately. 
+
+Discount-aware outer learning-rate decay. The outer Q-learning step-size is 𝑛 −𝜂 𝑠𝑎 . A larger 𝛾 extends the effective horizon, so losses occurring further in the future retain greater weight in the current value estimate. The outer Q-learning step-size should therefore remain responsive for longer and decay more slowly as 𝛾 increases. RaQL requires the exponent to lie in (1/2, 1] [21]. We set 
+
+𝜂 = clip (0.5 + 𝑘 𝑤 (1 − 𝛾 ), 0.5 + 𝜀, 1.0) . (11) As 𝛾 increases, 𝜂 decreases and the outer Q-learning rate decays more slowly. The clipping keeps 𝜂 within the admissible RaQL range. 
+
+Loss-aware inner risk scale. Early in training, 𝑦 must track the moving minimizer 𝑦 ★. We set the expected unattenuated one-step movement, ℎ𝑦 E[| 𝑔 𝑦 |] , to a fixed fraction of the scale of 𝑦 . This scale is approximately ℓavg /( 1 − 𝛾 ). Since E[| 𝑔 𝑦 |] = 2𝛼 at 𝑦 ★, we set 
+
+ℎ𝑦 = 𝜅 ℎ
+
+ℓavg 
+
+𝛼 (1 − 𝛾 ) . (12) For Δ𝑦 = −𝜆 𝑠𝑎 ℎ𝑦 𝑔 𝑦 , the resulting update also satisfies 
+
+
+
+E[Δ𝑦 | 𝑦 ] > 0, 𝑦 < 𝑦 ★,
+
+E[Δ𝑦 | 𝑦 ] = 0, 𝑦 = 𝑦 ★,
+
+E[Δ𝑦 | 𝑦 ] < 0, 𝑦 > 𝑦 ★.
+
+(13) The rule therefore improves early tracking without changing the convergence point 𝑦 ★. To estimate ℓavg , we use a short warmup before training. Because the trading loss is signed, we compute ℓavg 
+
+as the mean absolute loss over the warmup epoch, rather than as the signed sample mean, so that it provides a positive magnitude scale. The identity E[| 𝑔 𝑦 |] = 2𝛼 is exact at 𝑦 ★ when the target distribution is continuous at the quantile and P(𝑋 > 𝑦 ★) = 1 − 𝛼 .Here, it is used only for scale calibration, and the resulting rule is evaluated across the reported 𝛼 sweep. 
+
+> 4Adaptive Finite-Budget Training for CVaR Risk-Aware Q-Learning
+
+Budget-aware inner-loop depth. Under a fixed budget, 𝐿 balances inner-target accuracy against the number of outer Q-learning up-dates. Too few inner transitions leave an inaccurate CVaR target, while too many reduce the available outer updates. Motivated by the cube-root budget-allocation rule for nested simulation in Gordy and Juneja [19], we use the average per-cell budget 𝐵 /( 𝑆𝐴 ) and set 
+
+𝐿 = round 𝑘 𝑇 
+
+ 𝐵 𝑆𝐴 
+
+1/3 !
+
+. (14) Because the nested-simulation allocation rule is not derived specif-ically for RaQL, we use the cube-root expression as an observ-able budget-scaling heuristic rather than claim that it is theoret-ically optimal for this setting. Its practical behavior is evaluated in the reported budget sweep. Together, these three rules form the observable-calibration module. They set the learning-rate expo-nent, inner risk scale, and inner-loop depth from known or observed quantities. The coefficients 𝑘 𝑤 , 𝜅 ℎ , and 𝑘 𝑇 are selected once and kept fixed across the reported parameter sweeps. 
+
+## 3 Cryptocurrency Trading Experiment 3.1 Data and Market Environment 
+
+We construct a daily cryptocurrency dataset by aligning Bitcoin market data with sentiment information. The Crypto Fear and Greed Index is retrieved from the Alternative.me public API [4]; it ranges from 0 to 100 and is accompanied by a categorical label such as Extreme Fear, Fear, Neutral, Greed, or Extreme Greed. Daily BTCUSDT closing prices are retrieved from the Binance public market-data API [8]. From the closing-price series, we compute daily return as 𝑟 𝑡 = 𝑃 𝑡 /𝑃 𝑡 −1 − 1, where 𝑃 𝑡 is the BTCUSDT close on day 𝑡 . We also construct a sentiment-momentum feature, defined as the seven-day change in the Fear and Greed Index. After aligning both sources by UTC calendar date and removing missing feature values, the dataset contains 3,059 daily observations from February 8, 2018 to June 28, 2026. We use a chronological split: the first 70% of observations form the training set and the remaining 30% form the out-of-sample test set. The state space is obtained by discretizing market sentiment, sentiment momentum, and recent return into 3 3 = 27 discrete states. The action set consists of six portfolio positions, 
+
+A = {− 1, −0.6, −0.2, 0.2, 0.6, 1},
+
+where 𝑤 (𝑎 ) denotes the BTC exposure associated with action 𝑎 .
+
+## 3.2 Training Protocol 
+
+During training, the generic immediate loss ℓ (𝑠 𝑡 , 𝑎, 𝑠 𝑡 +1) is instanti-ated as 
+
+ℓ𝑡 (𝑎 ) = −100 𝑤 (𝑎 )𝑟 𝑡 +1.
+
+The factor 100 rescales daily returns to a numerically convenient range. Transaction costs are not included in the tabular training loss because they depend on the previous position; including them would require augmenting the Markov state with the previous action. In the out-of-sample trading evaluation, however, we deduct turnover costs: 
+
+𝑅 net  
+
+> 𝑡
+
+= 𝑤 (𝑎 𝑡 )𝑟 𝑡 +1 − 𝑐 tc |𝑤 (𝑎 𝑡 ) − 𝑤 (𝑎 𝑡 −1)| . (15) This makes the trading evaluation conservative relative to the train-ing objective. All main ablation experiments use 20 random seeds, 400 epochs, and a total training sample budget of 𝐵 =856,000 inner-transition samples. One epoch consists of one pass through the 2,140 adja-cent transitions in the training set. Thus, 400 epochs correspond to 
+
+𝐵 =856,000 inner-transition samples, including the warmup samples. Multiple seeds reduce the risk that an apparent improvement is caused by training randomness or a favorable run [2, 20]; paired ablations additionally isolate the incremental effect of each con-troller component. The baseline, Scheme 0, is the fixed-parameter two-timescale CVaR RaQL implementation in Algorithm 1. It uses an inner-loop depth of 𝐿 = 80 and an inner risk scale of ℎ𝑦 = 10, both of which remain fixed throughout training. Schemes 1–6 form a cumulative ablation sequence. Scheme 𝑟 
+
+retains all mechanisms included in Scheme 𝑟 − 1 and adds only the new mechanism listed in row 𝑟 of Table 1. Every later scheme contains all mechanisms introduced in the earlier schemes. 
+
+## 3.3 Evaluation Protocol and Metrics 
+
+We evaluate fixed-point accuracy using a sample-based empirical CVaR Bellman residual on the training set. We do not estimate or use an explicit transition matrix for evaluation. For a learned table 
+
+𝑄 , define 
+
+( bT𝜌 𝑄 )( 𝑠, 𝑎 ) = b𝜌 𝛼 
+
+  ℓ𝑡 (𝑎 ) + 𝛾𝑉 𝑄 (𝑠 𝑡 +1) : 𝑡 ∈ I ( 𝑠 )  , (16) where I ( 𝑠 ) is the set of training indices with state 𝑠 and b𝜌 𝛼 is the empirical CVaR operator 
+
+b𝜌 𝛼 ({ 𝑥 𝑖 }𝑚 𝑖 =1) = min  
+
+> 𝑦 ∈R
+
+(
+
+𝑦 + 1
+
+(1 − 𝛼 )𝑚 
+
+> 𝑚
+
+∑︁ 
+
+> 𝑖 =1
+
+(𝑥 𝑖 − 𝑦 )+
+
+)
+
+. (17) We report Q-level and V-level residuals, 
+
+𝑒 𝑄 (𝑠, 𝑎 ) = ( bT𝜌 𝑄 )( 𝑠, 𝑎 ) − 𝑄 (𝑠, 𝑎 ) , (18) 
+
+𝑒 𝑉 (𝑠 ) = min  
+
+> 𝑎
+
+( bT𝜌 𝑄 )( 𝑠, 𝑎 ) − 𝑉 𝑄 (𝑠 ) . (19) The tables focus on mean Bellman residuals, with maximum residu-als used as a robustness diagnostic. We summarize these quantities using the mean empirical Q-level Bellman residual (MeanBEQ), maximum empirical Q-level Bellman residual (MaxBEQ), mean empirical value-level Bellman residual (MeanBEV), and maximum empirical value-level Bellman residual (MaxBEV). For out-of-sample financial performance, the learned table in-duces the deterministic policy 
+
+𝑎 𝑡 = arg min  
+
+> 𝑎 ∈ A
+
+𝑄 (𝑠 𝑡 , 𝑎 ). (20) The policy is evaluated once on the 918 observations in the chrono-logical test set, with no Q-updates on test observations. We use a transaction cost of 𝑐 tc = 0.0005 (5 basis points) and set the po-sition immediately before the test period to zero. For each of the 20 trained tables, we report cumulative return, annualized return, annualized volatility, the Sharpe ratio with zero risk-free rate, max-imum drawdown, average turnover, and empirical CVaR of daily loss. Scheme results are summarized by their mean and sample standard deviation across seeds. These standard deviations mea-sure variation due to training randomness on the same market path. 
+
+> 5Wu, Lei, and Huang
+
+Table 1: Ablation results at the 100% checkpoint. Lower is better.                                           
+
+> Scheme Added mechanism MaxBEQ MeanBEQ MaxBEV MeanBEV 0Fixed baseline 4.6889 1.2202 1.9789 1.1624 1Inner-Loop Decay 6.6569 3.5297 4.7099 3.3499 2Outer-Loop Decay 3.9745 0.6122 0.3134 0.1211 3Early 𝑦 Correction 3.9438 0.6080 0.3133 0.1207 4Two-Phase Action Selection 1.4916 0.2369 0.2819 0.0950 5Progressive Suffix Aggregation 1.4361 0.2251 0.1667 0.0601 6Observable-Calibration Module 1.3302 0.1854 0.1959 0.0535
+
+Buy-and-hold and cash/no-trade are deterministic baselines. We also include fixed-exposure policies with 𝑤 = 0.2 and 𝑤 = −0.2 as deterministic baselines. For daily net return 𝑅 net  
+
+> 𝑡
+
+, cumulative and annualized returns are CumRet =
+
+> 𝑁
+
+Ö
+
+> 𝑡 =1
+
+(1 + 𝑅 net  
+
+> 𝑡
+
+) − 1, (21) AnnRet =
+
+" 𝑁 Ö
+
+> 𝑡 =1
+
+(1 + 𝑅 net  
+
+> 𝑡
+
+)
+
+#365 
+
+/𝑁 − 1. (22) If ¯ 𝑅 and 𝑠 𝑅 are the sample mean and standard deviation of daily net returns, then AnnVol = √365 𝑠 𝑅 , Sharpe = √365 ¯𝑅 𝑠 𝑅 
+
+. (23) Thus, the reported annualized metrics use a 365-observation financial-market convention.Because Bitcoin trades continuously, this annu-alization uses 365 calendar-day observations. Maximum drawdown is computed from the net-return wealth path, and average turnover is Turnover = 1
+
+𝑁 
+
+> 𝑁
+
+∑︁ 
+
+> 𝑡 =1
+
+|𝑤 𝑡 − 𝑤 𝑡 −1 |. (24) where 𝑤 𝑡 := 𝑤 (𝑎 𝑡 ) denote the BTC exposure selected on day 𝑡 .Finally, test CVaR is the empirical upper-tail CVaR of daily loss 
+
+𝐿 𝑡 = −𝑅 net  
+
+> 𝑡
+
+at 𝛼 = 0.6; lower values indicate less severe tail loss. 
+
+## 4 Results 4.1 Ablation of Controller Components 
+
+Table 1 reports the ablation results at the end of training. The final adaptive controller, Scheme 6, reduces MeanBEQ from 1.2202 to 0.1854 and MeanBEV from 1.1624 to 0.0535 relative to the fixed-parameter baseline. The gains do not come from a single mechanism. The Inner-Loop Decay alone reduces the effective decay relative to the global-counter baseline. This leaves larger steps late in training and in-creases the terminal residuals. Introducing Outer-Loop Decay sub-stantially reduces all four residual metrics. Two-Phase Action Selec-tion and Progressive Suffix Aggregation then improve sample effi-ciency and further reduce the residuals. The Observable-Calibration Module preserves this accuracy with fewer hand-set constants. 
+
+## 4.2 Mechanism-Specific Evaluation 
+
+Scheme 3 introduces the early 𝑦 correction to improve training stability and reduce failures. A training is considered failed if its MeanBEQ diverges. Figure 1 presents the stress-test results for 
+
+Table 2: Mean residual ranges for Schemes 5 and 6 across the 
+
+𝛼 and 𝛾 sweeps.                        
+
+> Sweep Method MeanBEQ range MeanBEV range
+> 𝛼 ∈ [ 0.50 ,0.90 ],𝛾 =0.80 Scheme 5 0.1910–0.6702 0.0528–0.1997 Scheme 6 0.1663–0.4005 0.0500–0.1108
+> 𝛾 ∈ [ 0.70 ,0.90 ],𝛼 =0.60 Scheme 5 0.2224–0.2269 0.0594–0.0641 Scheme 6 0.1856–0.1940 0.0520–0.0576
+
+Scheme 2 and Scheme 3 across a range of small inner risk scales (ℎ𝑦 ). At ℎ𝑦 = 0.03 and 0 .04, all Scheme 2 seeds fail.Scheme 3 suc-ceeds for all seeds at every tested scale and keeps the 5%-budget MeanBEQ between 0.89 and 0.91. The correction therefore improves both training stability and early estimation accuracy, with clearer benefits under stressful settings, particularly when ℎ𝑦 is small. Scheme 4 and Scheme 5 improve sample efficiency. Figure 2 presents their MeanBEQ trajectories together with Scheme 3. In Scheme 4, balanced coverage during the first 60% builds broad Q-table accuracy and avoids excessive step-size decay in individual cells. Once action selection shifts toward greedy actions, MeanBEQ drops from 0.69 at 60% to 0.46 at 65%. Scheme 5 uses progressive suffix aggregation to reduce sampling variance. It holds the lowest MeanBEQ at nearly every checkpoint and achieves the highest sample efficiency. Scheme 6 is designed to adapt its training parameters when the risk level 𝛼 , discount factor 𝛾 , or training budget changes. Table 2 compares Scheme 5 and Scheme 6 across the complete 𝛼 and 𝛾 
+
+sweeps. Scheme 6 has lower MeanBEQ and MeanBEV at every tested setting. It is also less sensitive to changes in 𝛼 , while both schemes remain stable across 𝛾 . Figure 3 reports the budget sweep. Scheme 6 achieves lower MeanBEV than Scheme 5 at every tested budget. As the training budget decreases, Scheme 6 remains more stable than Scheme 5. Overall, Scheme 6 performs better across all tested settings. 
+
+## 4.3 Out-of-Sample Trading Performance 
+
+Table 3 reports performance on the chronological test set after transaction costs. Scheme 6 achieves the highest risk-adjusted per-formance among all evaluated policies. Its mean Sharpe ratio is 0.9281, compared with 0.5628 for Scheme 0 and 0.4902 for buy-and-hold. It also lowers annualized volatility from 14.53% for Scheme 0 to 9.57%, maximum drawdown from 17.77% to 6.46%, and daily CVaR loss from 0.0050 to 0.0041. Scheme 6 also has much lower volatility, drawdown, and CVaR loss than buy-and-hold. Scheme 6 earns a lower cumulative return than buy-and-hold (23.61% versus 35.43%), so the result does not indicate dominance in raw return. Instead, it shows a different risk-return profile: Scheme 6 accepts less market exposure and gives up part of the upside while reducing annualized volatility from 47.93% to 9.57% and maximum drawdown from 52.21% to 6.46%. Compared with the fixed 𝑤 = 0.2baseline, Scheme 6 achieves a higher cumulative return (23.61% ver-sus 11.25%). It also has a lower maximum drawdown (6.46% versus 12.61%). These results show that maintaining a low market expo-sure alone does not reproduce Scheme 6’s improved risk–return profile. Scheme 6 is also more stable across seeds than Scheme 0. The standard deviations of its cumulative return, Sharpe ratio, and      
+
+> 6Adaptive Finite-Budget Training for CVaR Risk-Aware Q-Learning 0.03 0.04 0.05 0.06 0.07 0.08
+
+Inner risk scale hy
+
+> 0.8 1.0 1.2 1.4 1.6 1.8 2.0 2.2
+> MeanBEQ
+
+(a) 5% training budget      
+
+> Scheme 2 Scheme 3 0.03 0.04 0.05 0.06 0.07 0.08
+
+Inner risk scale hy
+
+> 0.625 0.650 0.675 0.700 0.725
+> MeanBEQ
+
+(b) 100% training budget 
+
+> Failed
+> Scheme 2 Scheme 3
+
+Figure 1: Stability across inner risk scales. Table 3: Out-of-sample trading performance after transaction costs. Scheme entries are mean (sample standard deviation) across 20 seeds; values are rounded to four decimals. 
+
+Policy CumRet AnnRet AnnVol Sharpe MaxDD Turnover CVaR loss Scheme 6 0.2361 (0.0118) 0.0879 (0.0041) 0.0957 (0.0000) 0.9281 (0.0401) 0.0646 (0.0038) 0.1740 (0.0016) 0.0041 (0.0000) Scheme 0 0.1922 (0.1121) 0.0714 (0.0389) 0.1453 (0.0482) 0.5628 (0.2281) 0.1777 (0.0648) 0.1278 (0.0577) 0.0050 (0.0007) Fixed 𝑤 = 0.2 0.1125 0.0433 0.0959 0.4902 0.1261 0.0002 0.0042 Fixed 𝑤 = −0.2 -0.1219 -0.0504 0.0959 -0.4910 0.2415 0.0002 0.0045 Buy-and-hold 0.3543 0.1282 0.4793 0.4902 0.5221 0.0011 0.0210 Cash/no-trade 0.0000 0.0000 0.0000 0.0000 0.0000 0.0000 0.0000 20 40 60 80 100 
+
+Training budget (%) 
+
+> 0.2 0.3 0.4 0.5 0.6 0.7
+> MeanBEQ
+> Scheme 3 Scheme 4 Scheme 5
+
+Figure 2: Mean Q residual during training. 
+
+maximum drawdown are 0.0118, 0.0401, and 0.0038, respectively, compared with 0.1121, 0.2281, and 0.0648 for Scheme 0. Overall, the adaptive controller achieves smaller Bellman residuals, reduces variation in out-of-sample performance across training seeds, and lowers volatility, maximum drawdown, and CVaR loss. 
+
+## 5 Discussion, Limitations, and Conclusion 
+
+This paper studies a finite-budget instability in CVaR RaQL caused by three interacting factors: (i) the asymptotic convergence theory prescribes no rule for allocating a fixed sampling budget between 100 200 300 400 500 600 700 800 
+
+Training budget (epochs) 
+
+> 0.06 0.07 0.08 0.09
+> MeanBEV
+
+Mean V residual 
+
+> Scheme 5 Scheme 6
+
+Figure 3: Mean residuals across training budgets. 
+
+inner and outer recursions, or across state–action cells with un-equal visitation; (ii) inner and outer estimation errors are coupled through bootstrapping and can amplify under fixed hyperparame-ters; and (iii) uniform inner-loop configurations ignore per-cell visitation asymmetry, leaving some cells over-trained and oth-ers under-trained. The proposed adaptive controller addresses all three without changing the CVaR estimator or Bellman fixed point: per-cell step sizing and rate-matched decay counter the coupling, coverage-first-then-greedy allocation counters the asymmetry, and 
+
+> 7
+
+Wu, Lei, and Huang 
+
+observable calibration replaces hand-tuned constants for porta-bility. Under 856,000 inner-transition samples, the controller re-duces MeanBEQ from 1.2202 to 0.1854 and MeanBEV from 1.1624 to 0.0535; the cumulative ablation confirms that no single mecha-nism dominates, consistent with the three-factor diagnosis. On the chronological test set, the Sharpe ratio rises from 0.5628 to 0.9281 and maximum drawdown drops from 17.77% to 6.46%; the return remains below buy-and-hold, confirming improved risk-adjusted rather than raw-return performance. The main limitations of this work are: the controller lacks con-vergence guarantees for the coupled adaptive recursions, and the evaluation is confined to one asset with tabular states. Future work should develop this theory, extend to multi-asset and function-approximation settings, and examine whether the factor decompo-sition generalizes to other risk-aware RL algorithms. 
+
+## References 
+
+[1] Carlo Acerbi. 2002. Spectral Measures of Risk: A Coherent Representation of Subjective Risk Aversion. Journal of Banking & Finance 26, 7 (2002), 1505–1518. [2] Rishabh Agarwal, Max Schwarzer, Pablo Samuel Castro, Aaron Courville, and Marc G. Bellemare. 2021. Deep Reinforcement Learning at the Edge of the Statistical Precipice. In Advances in Neural Information Processing Systems , Vol. 34. 29304–29320. [3] Ali Alameer and Khaled Alshehri. 2022. Conditional Value-at-Risk for Quan-titative Trading: A Direct Reinforcement Learning Approach. In 2022 IEEE Conference on Control Technology and Applications (CCTA) . IEEE, 1208–1213. doi:10.1109/CCTA49430.2022.9966017 [4] Alternative.me. n.d.. Crypto Fear & Greed Index. https://alternative.me/crypto/ fear-and-greed-index/. Accessed 26 July 2026. [5] Philippe Artzner, Freddy Delbaen, Jean-Marc Eber, and David Heath. 1999. Co-herent Measures of Risk. Mathematical Finance 9, 3 (1999), 203–228. [6] Marc G. Bellemare, Sriram Srinivasan, Georg Ostrovski, Tom Schaul, David Saxton, and Rémi Munos. 2016. Unifying Count-Based Exploration and Intrinsic Motivation. In Advances in Neural Information Processing Systems , Vol. 29. [7] Aharon Ben-Tal and Marc Teboulle. 2007. An Old-New Concept of Convex Risk Measures: The Optimized Certainty Equivalent. Mathematical Finance 17, 3 (2007), 449–476. [8] Binance. n.d.. Binance Spot REST API: Kline/Candlestick Data. https://developers.binance.com/en/docs/catalog/core-trading-spot-trading/api/rest-api/market#klinecandlestick-data. Accessed 26 July 2026. [9] Lorenzo Bisi, Pierre Liotet, Luca Sabbioni, Gianmarco Reho, Nico Montali, Mar-cello Restelli, and Cristiana Corno. 2020. Foreign Exchange Trading: A Risk-Averse Batch Reinforcement Learning Approach. In Proceedings of the First ACM International Conference on AI in Finance . Association for Computing Machinery, Article 26, 8 pages. doi:10.1145/3383455.3422571 [10] Vivek S. Borkar and Sean P. Meyn. 2000. The O.D.E. Method for Convergence of Stochastic Approximation and Reinforcement Learning. SIAM Journal on Control and Optimization 38, 2 (2000), 447–469. [11] Yu Chen, Xiangcheng Zhang, Siwei Wang, and Longbo Huang. 2024. Provable Risk-Sensitive Distributional Reinforcement Learning with General Function Approximation. In Proceedings of the 41st International Conference on Machine Learning (Proceedings of Machine Learning Research, Vol. 235) . PMLR, 7748–7791. [12] Yinlam Chow and Mohammad Ghavamzadeh. 2014. Algorithms for CVaR Opti-mization in MDPs. In Advances in Neural Information Processing Systems , Vol. 27. [13] Anthony Coache, Sebastian Jaimungal, and Álvaro Cartea. 2023. Conditionally Elicitable Dynamic Risk Measures for Deep Reinforcement Learning. SIAM Jour-nal on Financial Mathematics 14, 4 (2023), 1249–1289. doi:10.1137/22M1527209 [14] Tianxiang Cui, Shusheng Ding, Huan Jin, and Yongmin Zhang. 2023. Portfo-lio Constructions in Cryptocurrency Market: A CVaR-Based Deep Reinforce-ment Learning Approach. Economic Modelling 119 (2023), 106078. doi:10.1016/j. econmod.2022.106078 [15] Will Dabney, Mark Rowland, Marc G. Bellemare, and Rémi Munos. 2018. Distri-butional Reinforcement Learning with Quantile Regression. In Proceedings of the AAAI Conference on Artificial Intelligence , Vol. 32. doi:10.1609/aaai.v32i1.11791 [16] John Duchi, Elad Hazan, and Yoram Singer. 2011. Adaptive Subgradient Methods for Online Learning and Stochastic Optimization. Journal of Machine Learning Research 12 (2011), 2121–2159. [17] Bayaraa Enkhsaikhan and Ohyun Jo. 2024. Risk-Averse Reinforcement Learning for Portfolio Optimization. ICT Express 10, 4 (2024), 857–862. doi:10.1016/j.icte. 2024.04.010 [18] Eyal Even-Dar and Yishay Mansour. 2003. Learning Rates for Q-Learning. Journal of Machine Learning Research 5 (2003), 1–25. [19] Michael B. Gordy and Sandeep Juneja. 2010. Nested Simulation in Portfolio Risk Measurement. Management Science 56, 10 (2010), 1833–1848. [20] Peter Henderson, Riashat Islam, Philip Bachman, Joelle Pineau, Doina Precup, and David Meger. 2018. Deep Reinforcement Learning That Matters. In Proceedings of the AAAI Conference on Artificial Intelligence , Vol. 32. [21] Wenjie Huang and William B. Haskell. 2021. Stochastic Approximation for Risk-Aware Markov Decision Processes. IEEE Trans. Automat. Control 66, 3 (2021), 1314–1320. [22] Chi Jin, Zeyuan Allen-Zhu, Sébastien Bubeck, and Michael I. Jordan. 2018. Is Q-Learning Provably Efficient?. In Advances in Neural Information Processing Systems , Vol. 31. [23] Vijay R. Konda and John N. Tsitsiklis. 1999. Actor-Critic Algorithms. In Advances in Neural Information Processing Systems , Vol. 12. 1008–1014. [24] Xiang Li, Wenhao Yang, Jiadong Liang, Zhihua Zhang, and Michael I. Jordan. 2023. A Statistical Analysis of Polyak–Ruppert Averaged Q-Learning. In Proceed-ings of the 26th International Conference on Artificial Intelligence and Statistics (Proceedings of Machine Learning Research, Vol. 206) . 2207–2261. [25] Shiau Hong Lim and Ilyas Malik. 2022. Distributional Reinforcement Learning for Risk-Sensitive Policies. In Advances in Neural Information Processing Systems ,Vol. 35. [26] Andrew W. Moore and Christopher G. Atkeson. 1993. Prioritized Sweeping: Reinforcement Learning with Less Data and Less Time. Machine Learning 13, 1 (1993), 103–130. [27] L. A. Prashanth. 2014. Policy Gradients for CVaR-Constrained MDPs. In Algo-rithmic Learning Theory (Lecture Notes in Computer Science, Vol. 8776) . Springer, 155–169. [28] R. Tyrrell Rockafellar and Stanislav Uryasev. 2000. Optimization of Conditional Value-at-Risk. Journal of Risk 2, 3 (2000), 21–41. doi:10.21314/JOR.2000.038 [29] Tom Schaul, Georg Ostrovski, Iurii Kemaev, and Diana Borsa. 2021. Return-Based Scaling: Yet Another Normalisation Trick for Deep RL. arXiv preprint arXiv:2105.05347. [30] Tom Schaul, John Quan, Ioannis Antonoglou, and David Silver. 2016. Prioritized Experience Replay. In International Conference on Learning Representations .[31] Yun Shen, Ruihong Huang, Chang Yan, and Klaus Obermayer. 2014. Risk-Averse Reinforcement Learning for Algorithmic Trading. In 2014 IEEE Conference on Computational Intelligence for Financial Engineering & Economics (CIFEr) . IEEE, 391–398. doi:10.1109/CIFEr.2014.6924100 [32] Michel Tokic. 2010. Adaptive 𝜖 -Greedy Exploration in Reinforcement Learning Based on Value Differences. In KI 2010: Advances in Artificial Intelligence (Lecture Notes in Computer Science, Vol. 6359) . Springer, 203–210. [33] Nelson Vadori, Sumitra Ganesh, Prashant P. Reddy, and Manuela Veloso. 2020. Risk-Sensitive Reinforcement Learning: A Martingale Approach to Reward Un-certainty. In Proceedings of the First ACM International Conference on AI in Finance .Association for Computing Machinery, Article 28, 9 pages. doi:10.1145/3383455. 3422519 [34] Hado van Hasselt, Arthur Guez, Matteo Hessel, Volodymyr Mnih, and David Silver. 2016. Learning Values across Many Orders of Magnitude. In Advances in Neural Information Processing Systems , Vol. 29. [35] Edoardo Vittori, Michele Trapletti, and Marcello Restelli. 2020. Option Hedging with Risk Averse Reinforcement Learning. In Proceedings of the First ACM In-ternational Conference on AI in Finance . Association for Computing Machinery, Article 27, 8 pages. doi:10.1145/3383455.3422532 [36] Yuheng Wang and Margaret P Chapman. 2022. Risk-averse autonomous systems: A brief history and recent developments from the perspective of optimal control. 
+
+Artificial Intelligence 311 (2022), 103743. [37] Christopher J. C. H. Watkins and Peter Dayan. 1992. Q-Learning. Machine Learning 8, 3–4 (1992), 279–292. 8
