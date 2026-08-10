@@ -6,52 +6,58 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-08-09
-- 运行时间：2026-08-09 20:52:27 UTC
+- 最新运行日期：2026-08-10
+- 运行时间：2026-08-10 20:17:40 UTC
 - 运行状态：成功
-- 本次总论文数：10
+- 本次总论文数：12
 - 精读区：6
-- 速读区：4
+- 速读区：6
 
 ### 今日简报（AI）
-今日聚焦智能体强化学习与关键步骤感知，辅以金融自进化与隐私保护预测。
-最值得留意的是让Web智能体从反思和失败模式中自我改进，以及用关键步骤感知训练高效搜索智能体。
-下一步可关注如何将失败反思机制引入你的任务流，并尝试识别关键步骤来提升复杂AI应用的表现。
-- 详情：[/202608/09/README](/202608/09/README)
+今日聚焦隐私保护时序预测与AI搜索代理优化，精读6篇前沿论文。  
+FedChronos用联邦学习在敏感数据上微调时序基础模型，CIPO让搜索代理学会上下文信息策略，两个方向都给出极强实用信号。  
+推荐跟进GDPevo等Agent自我进化评估，把“越用越聪明”落地到你的业务里。
+- 详情：[/202608/10/README](/202608/10/README)
 
 ### 精读区论文标签
-1. [RMSWeb: Reflection, Failure-Mode Mining, and Salvage-DS for Web Agent Reinforcement Learning](/202608/09/2608.00335v1-rmsweb-reflection-failure-mode-mining-and-salvage-ds-for-web-agent-reinforcement-learning)  
+1. [FedChronos: Federated Fine-Tuning of Time-Series Foundation Models for Privacy-Preserving Commodity Price Forecasting](/202608/10/2608.01290v1-fedchronos-federated-fine-tuning-of-time-series-foundation-models-for-privacy-preserving-commodity-price-forecasting)  
    标签：评分：9.0/10、query:fla
-   evidence：面向Web智能体的后SFT强化学习，采用反思与失败模式挖掘
-2. [CRISP: Critical Step Perception for Training Efficient Deep Search Agents](/202608/09/2608.01867v2-crisp-critical-step-perception-for-training-efficient-deep-search-agents)  
+   evidence：金融预测基础模型的联邦微调
+2. [Contextual Information Policy Optimization for Search Agents](/202608/10/2608.06128v2-contextual-information-policy-optimization-for-search-agents)  
    标签：评分：9.0/10、query:fla
-   evidence：提出CRISP训练框架，通过关键步骤感知训练高效深度搜索智能体。
-3. [Adaptive Finite-Budget Training for CVaR Risk-Aware Q-Learning](/202608/09/2608.04305v1-adaptive-finite-budget-training-for-cvar-risk-aware-q-learning)  
+   evidence：面向搜索智能体的策略优化，增强基于证据的推理
+3. [IB-RL: Isolated Bilateral Reinforcement Learning for Strategic Dialogue Agents](/202608/10/2608.06735v1-ib-rl-isolated-bilateral-reinforcement-learning-for-strategic-dialogue-agents)  
    标签：评分：9.0/10、query:fla
-   evidence：面向比特币交易的风险感知Q学习智能体，任务导向的金融智能体。
-4. [Learning to Coordinate Symbolic Tools: LLM Agents for Verified Sum-of-Squares Certificates](/202608/09/2608.00326v1-learning-to-coordinate-symbolic-tools-llm-agents-for-verified-sum-of-squares-certificates)  
+   evidence：提出孤立双边强化学习训练策略对话智能体，属自主智能体后训练技术。
+4. [DiDPO: Diff-in-Diff Policy Optimization for Coding Agent Training](/202608/10/2608.07147v1-didpo-diff-in-diff-policy-optimization-for-coding-agent-training)  
+   标签：评分：9.0/10、query:fla
+   evidence：基于差异的RL后训练编智能体信用分配
+5. [EASy: Towards Efficient LLM-Based Agentic System](/202608/10/2608.04588v1-easy-towards-efficient-llm-based-agentic-system)  
    标签：评分：8.0/10、query:fla
-   evidence：通过验证器接地优化进行代理后训练用于符号数学
-5. [Evolving in the Agent Jungle via History-Informed Opponent Awareness](/202608/09/2608.02005v1-evolving-in-the-agent-jungle-via-history-informed-opponent-awareness)  
+   evidence：通过强化学习训练LLM编排器实现高效智能体系统，属智能体协调后训练技术。
+6. [Gated-BEPO: Confidence-Gated Bellman Credit Assignment for Large Language Model Agents](/202608/10/2608.06861v1-gated-bepo-confidence-gated-bellman-credit-assignment-for-large-language-model-agents)  
    标签：评分：8.0/10、query:fla
-   evidence：动态多智能体环境中的代理技能演化方法
-6. [Enhancing Social Intelligence in LLMs with Hierarchical Reasoning and Utterance-Level Goal Rewarding](/202608/09/2608.05832v1-enhancing-social-intelligence-in-llms-with-hierarchical-reasoning-and-utterance-level-goal-rewarding)  
-   标签：评分：8.0/10、query:fla
-   evidence：分层强化学习训练多轮对话智能体
+   evidence：基于强化学习的信用分配方法Gated-BEPO用于训练长程LLM智能体
 
 ### 速读区论文标签
-1. [FinEvo-Bench: A Longitudinal Benchmark for Self-Evolving Agents in Professional Financial Workflows](/202608/09/2608.06144v1-finevo-bench-a-longitudinal-benchmark-for-self-evolving-agents-in-professional-financial-workflows)  
+1. [GDPevo: Evaluating Agent Self-Evolution on Real Business Tasks](/202608/10/2608.03764v1-gdpevo-evaluating-agent-self-evolution-on-real-business-tasks)  
    标签：评分：8.0/10、query:fla
-   evidence：面向金融工作流自进化智能体的长期基准，评测后训练进步
-2. [FedChronos: Federated Fine-Tuning of Time-Series Foundation Models for Privacy-Preserving Commodity Price Forecasting](/202608/09/2608.01290v1-fedchronos-federated-fine-tuning-of-time-series-foundation-models-for-privacy-preserving-commodity-price-forecasting)  
+   evidence：基于GDP相关企业工作流的智能体自我进化基准，能够评价后训练改进效果。
+2. [SkillProx: Self-Evolving Agent Skills via Proximal Textual Gradient Descent](/202608/10/2608.07449v1-skillprox-self-evolving-agent-skills-via-proximal-textual-gradient-descent)  
+   标签：评分：8.0/10、query:fla
+   evidence：受近端梯度启发用于智能体后训练改进的技能进化方法
+3. [Training Documents Reranker with Search Rubrics for Deep Research Agent](/202608/10/2608.03527v1-training-documents-reranker-with-search-rubrics-for-deep-research-agent)  
    标签：评分：7.0/10、query:fla
-   evidence：联邦微调时间序列基础模型用于商品价格预测，金融后训练方法。
-3. [BAP-SQL: Budget-Aware Observation Planning for Agentic Text-to-SQL](/202608/09/2608.02876v1-bap-sql-budget-aware-observation-planning-for-agentic-text-to-sql)  
+   evidence：基于搜索评分标准训练重排序器RubricRanker用于智能体检索，组件级后训练技术
+4. [InsightEmb: Learning Action-Intent Embeddings for Agentic Insight Retrieval](/202608/10/2608.04761v1-insightemb-learning-action-intent-embeddings-for-agentic-insight-retrieval)  
    标签：评分：7.0/10、query:fla
-   evidence：金融SQL智能体的后训练SFT
-4. [From Financial Sentiment Classification to Return Predictability: A QLoRA Benchmark of Large Language Models](/202608/09/2608.04200v1-from-financial-sentiment-classification-to-return-predictability-a-qlora-benchmark-of-large-language-models)  
+   evidence：对比学习动作-意图嵌入，用于基于经验的智能体改进，属于后训练方法
+5. [AgentPatch: Coarse-to-Fine Weak-Task Repair for Merging Agentic Multimodal Large Language Models](/202608/10/2608.06699v1-agentpatch-coarse-to-fine-weak-task-repair-for-merging-agentic-multimodal-large-language-models)  
+   标签：评分：7.0/10、query:fla
+   evidence：针对智能体多模态大模型合并的无训练修复是一种后训练整合技术。
+6. [CoEvo-Mem: Co-Evolving Retrieval Policy and Memory Bank for LLM Agents](/202608/10/2608.01739v1-coevo-mem-co-evolving-retrieval-policy-and-memory-bank-for-llm-agents)  
    标签：评分：6.0/10、query:fla
-   evidence：QLoRA微调大语言模型用于金融情感分类，一种金融后训练技术。
+   evidence：协同演化检索策略与记忆库是一种面向大模型智能体的后训练适应技术。
 
 
 <div class="dpr-home-promo-card">
